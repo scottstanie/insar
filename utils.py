@@ -203,7 +203,11 @@ def split_and_save(filename):
 
 def combine_cor_amp(corfilename, save=True):
     """Takes a .cor file from UAVSAR (which doesn't contain amplitude),
-    and creates a new file with amplitude data interleaved for dismph
+    and creates a new file with amplitude data interleaved for dishgt
+
+    dishgt brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01_withamp.cor 3300 1 5000 1
+      where 3300 is number of columns/samples, and we want the first 5000 rows. the final
+      1 is needed for the contour interval to set a max of 1 for .cor data
 
     Inputs:
         corfilename (str): string filename of the .cor from UAVSAR
@@ -224,9 +228,8 @@ def combine_cor_amp(corfilename, save=True):
     amp = np.abs(intdata)
 
     cordata = load_file(corfilename)
-    # TODO: is amplitude first? then correlation?
-    cor_with_amp = combine_real_imag(amp, cordata)
-    # cor_with_amp = combine_real_imag(cordata, amp)
+    # For dishgt, it expects the two matrices stacked [[amp]; [cor]]
+    cor_with_amp = np.vstack((amp, cordata))
 
     outfilename = corfilename.replace('.cor', '_withamp.cor')
     save_array(outfilename, cor_with_amp)
