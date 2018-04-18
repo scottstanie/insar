@@ -43,7 +43,21 @@ def load_real(filename, ann_info):
     Valid filetypes: .amp, .cor (for UAVSAR)
     """
     data = np.fromfile(filename, '<f4')
+    rows = ann_info['rows']
+    cols = ann_info['cols']
     return data.reshape([rows, cols])
+
+
+def parse_complex_data(complex_data, rows, cols):
+    """Splits a 1-D array of real/imag bytes to 2 square arrays"""
+    real_data = complex_data[::2].reshape([rows, cols])
+    imag_data = complex_data[1::2].reshape([rows, cols])
+    return real_data, imag_data
+
+
+def combine_real_imag(real_data, imag_data):
+    """Combines two float data arrays into one complex64 array"""
+    return real_data + 1j * imag_data
 
 
 def load_complex(filename, ann_info):
@@ -54,28 +68,27 @@ def load_complex(filename, ann_info):
     data = np.fromfile(filename, '<f4')
     rows = ann_info['rows']
     cols = ann_info['cols']
-    real_data = data[::2].reshape([rows, cols])
-    imag_data = data[1::2].reshape([rows, cols])
-    return real_data + 1j * imag_data
+    real_data, imag_data = parse_complex_data(data, rows, cols)
+    return combine_real_imag(real_data, imag_data)
 
 
-def save_array(amplitude_array, outfilename):
+def save_array(filename, amplitude_array):
     """Save the numpy array as a .png file
 
 
     amplitude_array (np.array, dtype=float32)
-    outfilename (str)
+    filename (str)
     """
 
     def _is_little_endian():
         """All UAVSAR data products save in little endian byte order"""
         return sys.byteorder == 'little'
 
-    ext = get_file_ext(outfilename)
+    ext = get_file_ext(filename)
 
     if ext == '.png':
         plt.imsave(
-            outfilename,
+            filename,
             amplitude_array,
             cmap='gray',
             vmin=0,
@@ -87,7 +100,7 @@ def save_array(amplitude_array, outfilename):
         if not _is_little_endian():
             amplitude_array.byteswap(inplace=True)
 
-        amplitude_array.tofile(outfilename)
+        amplitude_array.tofile(filename)
     else:
         raise NotImplementedError("{} saving not implemented.".format(ext))
 
@@ -129,7 +142,12 @@ def parse_ann_file(filename, ext=None):
     ann_filename = make_ann_filename(filename)
 
     ann_data = {}
-    line_keywords = {'.slc': 'slc_mag', '.mlc': 'mlc_pwr', '.int': 'slt'}
+    line_keywords = {
+        '.slc': 'slc_mag',
+        '.mlc': 'mlc_pwr',
+        '.int': 'slt',
+        '.cor': 'slt',
+    }
     row_starts = {k: v + '.set_rows' for k, v in line_keywords.items()}
     col_starts = {k: v + '.set_cols' for k, v in line_keywords.items()}
     row_key = row_starts[ext]
@@ -149,6 +167,70 @@ def parse_ann_file(filename, ext=None):
             # TODO: Add more parsing! whatever is useful from .ann file
 
     return ann_data
+
+
+def split_array_into_blocks(data):
+    """Takes a long rectangular array (like UAVSAR) and creates blocks
+
+    Useful to look at small data pieces at a time in dismph
+    Returns:
+        blocks (list[np.ndarray])
+    """
+    rows, cols = data.shape
+    blocks = np.array_split(data, rows // cols + 1)
+    return blocks
+
+
+def split_and_save(filename):
+    """Creates several files from one long data file
+    
+    Saves them with same filename with .1,.2,.3... at end before ext
+    e.g. brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.int produces
+        brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.1.int
+        brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.2.int...
+    """
+
+    data = load_file(filename)
+    blocks = split_array_into_blocks(data)
+    nblocks = len(blocks)
+
+    ext = get_file_ext(filename)
+    for idx, block in enumerate(blocks, start=1):
+        fname = filename.replace(ext, ".{}{}".format(str(idx), ext))
+        print("Saving {}".format(fname))
+        save_array(fname, block)
+
+
+def combine_cor_amp(corfilename, save=True):
+    """Takes a .cor file from UAVSAR (which doesn't contain amplitude),
+    and creates a new file with amplitude data interleaved for dismph
+
+    Inputs:
+        corfilename (str): string filename of the .cor from UAVSAR
+        save (bool): True if you want to save the combined array
+
+    Returns:
+        cor_with_amp (np.ndarray) combined correlation + amplitude (as complex64)
+        outfilename (str): same name as corfilename, but _withamp.cor
+            Saves a new file under outfilename
+    Note: .ann and .int files must be in same directory as .cor
+    """
+    ext = get_file_ext(corfilename)
+    assert ext == '.cor', 'corfilename must be a .cor file'
+
+    intfilename = corfilename.replace('.cor', '.int')
+
+    intdata = load_file(intfilename)
+    amp = np.abs(intdata)
+
+    cordata = load_file(corfilename)
+    # TODO: is amplitude first? then correlation?
+    cor_with_amp = combine_real_imag(amp, cordata)
+    # cor_with_amp = combine_real_imag(cordata, amp)
+
+    outfilename = corfilename.replace('.cor', '_withamp.cor')
+    save_array(outfilename, cor_with_amp)
+    return cor_with_amp, outfilename
 
 
 def main():
