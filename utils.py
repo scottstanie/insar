@@ -4,11 +4,13 @@ Helper functions to prepare and process UAVSAR data
 Email: scott.stanie@utexas.edu
 """
 
+import argparse
 import os.path
+import re
 import sys
 import glob
-import argparse
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 def get_file_ext(filename):
@@ -50,8 +52,9 @@ def load_real(filename, ann_info):
 
 def parse_complex_data(complex_data, rows, cols):
     """Splits a 1-D array of real/imag bytes to 2 square arrays"""
-    real_data = complex_data[::2].reshape([rows, cols])
-    imag_data = complex_data[1::2].reshape([rows, cols])
+    # TODO: double check if I don't need rows all the time
+    real_data = complex_data[::2].reshape([-1, cols])
+    imag_data = complex_data[1::2].reshape([-1, cols])
     return real_data, imag_data
 
 
@@ -74,7 +77,6 @@ def load_complex(filename, ann_info):
 
 def save_array(filename, amplitude_array):
     """Save the numpy array as a .png file
-
 
     amplitude_array (np.array, dtype=float32)
     filename (str)
@@ -105,12 +107,36 @@ def save_array(filename, amplitude_array):
         raise NotImplementedError("{} saving not implemented.".format(ext))
 
 
+def downsample_im(image, rate=10):
+    """Takes a numpy matrix of an image and returns a smaller version
+
+    inputs:
+        image (np.array) 2D array of an image
+        rate (int) the reduction rate to downsample
+    """
+    return image[::rate, ::rate]
+
+
+def clip(image):
+    """Convert float image to only range 0 to 1 (clips)"""
+    return np.clip(np.abs(image), 0, 1)
+
+
+def log(image):
+    """Converts magnitude amplitude image to log scale"""
+    return 20 * np.log10(image)
+
+
 def make_ann_filename(filename):
     """Take the name of a data file and return corresponding .ann name"""
 
     # The .mlc files have polarizations added, which .ann files don't have
     shortname = filename.replace('HHHH', '').replace('HVHV', '').replace(
         'VVVV', '')
+    # If this is a block we split up and names .1.int, remove that since
+    # all have the same .ann file
+    shortname = re.sub(r'\.\d\.int', '.int', shortname)
+
     ext = get_file_ext(filename)
     return shortname.replace(ext, '.ann')
 
@@ -123,9 +149,9 @@ def parse_ann_file(filename, ext=None):
     """
 
     def _parse_line(line):
-        l = line.split()
+        wordlist = line.split()
         # Pick the entry after the equal sign when splitting the line
-        return l[l.index('=') + 1]
+        return wordlist[wordlist.index('=') + 1]
 
     def _parse_int(line):
         return int(_parse_line(line))
@@ -183,7 +209,7 @@ def split_array_into_blocks(data):
 
 def split_and_save(filename):
     """Creates several files from one long data file
-    
+
     Saves them with same filename with .1,.2,.3... at end before ext
     e.g. brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.int produces
         brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.1.int
@@ -192,7 +218,6 @@ def split_and_save(filename):
 
     data = load_file(filename)
     blocks = split_array_into_blocks(data)
-    nblocks = len(blocks)
 
     ext = get_file_ext(filename)
     for idx, block in enumerate(blocks, start=1):
