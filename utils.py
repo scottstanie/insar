@@ -95,7 +95,7 @@ def save_array(filename, amplitude_array):
             cmap='gray',
             vmin=0,
             vmax=0,
-            format='.png')
+            format='png')
 
     elif ext in ('.cor', '.amp', '.int', '.mlc', '.slc'):
         # If machine order is big endian, need to byteswap (TODO: test on big-endian)
@@ -173,6 +173,7 @@ def parse_ann_file(filename, ext=None):
         '.mlc': 'mlc_pwr',
         '.int': 'slt',
         '.cor': 'slt',
+        '.amp': 'slt',
     }
     row_starts = {k: v + '.set_rows' for k, v in line_keywords.items()}
     col_starts = {k: v + '.set_cols' for k, v in line_keywords.items()}
@@ -264,11 +265,16 @@ def combine_cor_amp(corfilename, save=True):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "command", type=str, help="Specify command to run on file.")
+    parser.add_argument(
         "filename", type=str, help="Specify the input UAVSAR filename")
     args = parser.parse_args()
 
-    ann_data = parse_ann_file(args.filename)
-    print(ann_data)
+    if args.command == 'info':
+        ann_data = parse_ann_file(args.filename)
+        print(ann_data)
+    elif args.command == 'split':
+        split_and_save(args.filename)
 
 
 if __name__ == "__main__":
