@@ -88,14 +88,18 @@ def save_array(filename, amplitude_array):
 
     ext = get_file_ext(filename)
 
-    if ext == '.png':
+    if ext == '.png':  # TODO: or ext == '.jpg':
+        # TODO
+        # from PIL import Image
+        # im = Image.fromarray(amplitude_array)
+        # im.save(filename)
         plt.imsave(
             filename,
             amplitude_array,
             cmap='gray',
             vmin=0,
-            vmax=0,
-            format='png')
+            vmax=1,
+            format=ext.strip('.'))
 
     elif ext in ('.cor', '.amp', '.int', '.mlc', '.slc'):
         # If machine order is big endian, need to byteswap (TODO: test on big-endian)
@@ -215,16 +219,24 @@ def split_and_save(filename):
     e.g. brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.int produces
         brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.1.int
         brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.2.int...
+
+    Output:
+        newpaths (list[str]): full paths to new files created 
     """
 
     data = load_file(filename)
     blocks = split_array_into_blocks(data)
 
     ext = get_file_ext(filename)
+    newpaths = []
+
     for idx, block in enumerate(blocks, start=1):
         fname = filename.replace(ext, ".{}{}".format(str(idx), ext))
         print("Saving {}".format(fname))
         save_array(fname, block)
+        newpaths.append(fname)
+
+    return newpaths
 
 
 def combine_cor_amp(corfilename, save=True):
