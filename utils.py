@@ -47,7 +47,7 @@ def load_real(filename, ann_info):
     data = np.fromfile(filename, '<f4')
     rows = ann_info['rows']
     cols = ann_info['cols']
-    return data.reshape([rows, cols])
+    return data.reshape([-1, cols])
 
 
 def parse_complex_data(complex_data, rows, cols):
@@ -140,6 +140,7 @@ def make_ann_filename(filename):
     # If this is a block we split up and names .1.int, remove that since
     # all have the same .ann file
     shortname = re.sub(r'\.\d\.int', '.int', shortname)
+    shortname = re.sub(r'\.\d\.cor', '.cor', shortname)
 
     ext = get_file_ext(filename)
     return shortname.replace(ext, '.ann')

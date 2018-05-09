@@ -19,8 +19,9 @@ if __name__ == '__main__':
 
     filepath = os.path.expanduser(args.filename)
     ext = utils.get_file_ext(filepath)
-    if ext != '.int':
-        print('Error: Only taking .int files for now.')
+    allowed_exts = ('.int', '.cor')
+    if ext not in allowed_exts:
+        print('Error: Only taking {} files for now.'.format(', '.join(allowed_exts)))
         print('Cannot process {}'.format(ext))
         sys.exit(-1)
 
@@ -35,6 +36,7 @@ if __name__ == '__main__':
         print('Processing', cur_filepath)
         cur_file = utils.load_file(cur_filepath)
 
+        # Note: abs for complex files, but also fine for .cor magnitude files
         ampfile = np.abs(cur_file)
 
         mask = ampfile < args.threshold
