@@ -8,7 +8,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-from utils import get_file_ext
+from sar.utils import get_file_ext
 
 
 def load_file(filename, ann_info=None):

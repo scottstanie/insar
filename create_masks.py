@@ -96,6 +96,6 @@ if __name__ == '__main__':
         maskfile = cur_filepath.replace(ext, ext + '.png')
 
         if args.downsample:
-            utils.save_array(maskfile, utils.downsample_im(mask, args.downsample))
+            io.save_array(maskfile, utils.downsample_im(mask, args.downsample))
         else:
-            utils.save_array(maskfile, mask)
+            io.save_array(maskfile, mask)
