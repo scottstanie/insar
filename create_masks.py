@@ -22,10 +22,10 @@ import numpy as np
 from scipy.ndimage.filters import uniform_filter
 from scipy.ndimage.measurements import variance
 # for morphological operations
-from skimage.morphology import erosion
-from skimage.morphology import disk
+# from skimage.morphology import erosion
+# from skimage.morphology import disk
 
-import utils
+from sar import utils, io
 
 
 # TODO: figure out better module to put this function
@@ -78,18 +78,16 @@ if __name__ == '__main__':
 
     for cur_filepath in block_paths:
         print('Processing', cur_filepath)
-        cur_file = utils.load_file(cur_filepath)
+        cur_file = io.load_file(cur_filepath)
 
         # Note: abs for complex files, but also fine for .cor magnitude files
         ampfile = np.abs(cur_file)
-
-        if args.despeckle:
-            ampfile = remove_speckles(ampfile)
 
         mask = ampfile < args.threshold
 
         # To run a morphological closure on the mask:
         # if args.despeckle:
+        #     ampfile = remove_speckles(ampfile)
         #     strel = disk(1)
         #     mask = erosion(mask, strel)
 
