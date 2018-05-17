@@ -3,8 +3,8 @@
 Author: Scott Staniewicz
 
 Script to create binary image masks of flooding from .int or .cor files.
-Breaks the very long UAVSAR image into approximately square blocks first, 
-saves these as .1.int, .2.int, etc. in same file location, 
+Breaks the very long UAVSAR image into approximately square blocks first,
+saves these as .1.int, .2.int, etc. in same file location,
 then creates a mask on each of these new files.
 
 Example Usage:
@@ -25,7 +25,8 @@ from scipy.ndimage.measurements import variance
 # from skimage.morphology import erosion
 # from skimage.morphology import disk
 
-from sar import utils, io
+import sar.io
+import sar.utils
 
 
 # TODO: figure out better module to put this function
@@ -63,8 +64,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     filepath = os.path.expanduser(args.filename)
-    ext = utils.get_file_ext(filepath)
-    allowed_exts = ('.int', '.cor')
+    ext = sar.io.get_file_ext(filepath)
+    allowed_exts = ('.int', '.cor', '.mlc')
     if ext not in allowed_exts:
         print('Error: Only taking {} files for now.'.format(', '.join(allowed_exts)))
         print('Cannot process {}'.format(ext))
@@ -72,13 +73,13 @@ if __name__ == '__main__':
 
     block1_path = filepath.replace(ext, '.1' + ext)
     if not os.path.exists(block1_path):
-        block_paths = utils.split_and_save(filepath)
+        block_paths = sar.utils.split_and_save(filepath)
     else:
         block_paths = glob.glob(filepath.replace(ext, '.[0-9]{}'.format(ext)))
 
     for cur_filepath in block_paths:
         print('Processing', cur_filepath)
-        cur_file = io.load_file(cur_filepath)
+        cur_file = sar.io.load_file(cur_filepath)
 
         # Note: abs for complex files, but also fine for .cor magnitude files
         ampfile = np.abs(cur_file)
@@ -96,6 +97,6 @@ if __name__ == '__main__':
         maskfile = cur_filepath.replace(ext, ext + '.png')
 
         if args.downsample:
-            io.save_array(maskfile, utils.downsample_im(mask, args.downsample))
+            sar.io.save_array(maskfile, sar.utils.downsample_im(mask, args.downsample))
         else:
-            io.save_array(maskfile, mask)
+            sar.io.save_array(maskfile, mask)

@@ -5,14 +5,9 @@ Email: scott.stanie@utexas.edu
 """
 
 import argparse
-import os.path
 import numpy as np
 
-import io
-
-
-def get_file_ext(filename):
-    return os.path.splitext(filename)[1]
+import sar.io
 
 
 def downsample_im(image, rate=10):
@@ -59,16 +54,16 @@ def split_and_save(filename):
         newpaths (list[str]): full paths to new files created
     """
 
-    data = io.load_file(filename)
+    data = sar.io.load_file(filename)
     blocks = split_array_into_blocks(data)
 
-    ext = get_file_ext(filename)
+    ext = sar.io.get_file_ext(filename)
     newpaths = []
 
     for idx, block in enumerate(blocks, start=1):
         fname = filename.replace(ext, ".{}{}".format(str(idx), ext))
         print("Saving {}".format(fname))
-        io.save_array(fname, block)
+        sar.io.save_array(fname, block)
         newpaths.append(fname)
 
     return newpaths
@@ -92,20 +87,20 @@ def combine_cor_amp(corfilename, save=True):
             Saves a new file under outfilename
     Note: .ann and .int files must be in same directory as .cor
     """
-    ext = get_file_ext(corfilename)
+    ext = sar.io.get_file_ext(corfilename)
     assert ext == '.cor', 'corfilename must be a .cor file'
 
     intfilename = corfilename.replace('.cor', '.int')
 
-    intdata = io.load_file(intfilename)
+    intdata = sar.io.load_file(intfilename)
     amp = np.abs(intdata)
 
-    cordata = io.load_file(corfilename)
+    cordata = sar.io.load_file(corfilename)
     # For dishgt, it expects the two matrices stacked [[amp]; [cor]]
     cor_with_amp = np.vstack((amp, cordata))
 
     outfilename = corfilename.replace('.cor', '_withamp.cor')
-    io.save_array(outfilename, cor_with_amp)
+    sar.io.save_array(outfilename, cor_with_amp)
     return cor_with_amp, outfilename
 
 
@@ -116,7 +111,7 @@ def main():
     args = parser.parse_args()
 
     if args.command == 'info':
-        ann_data = io.parse_ann_file(args.filename)
+        ann_data = sar.io.parse_ann_file(args.filename)
         print(ann_data)
     elif args.command == 'split':
         split_and_save(args.filename)

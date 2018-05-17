@@ -3,12 +3,41 @@
 Functions to assist input and output of SAR data
 Email: scott.stanie@utexas.edu
 """
+import os.path
+from pprint import pprint
 import re
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-from sar.utils import get_file_ext
+REAL_POLs = ('HHHH', 'HVHV', 'VVVV')
+COMPLEX_POLS = ('HHHV', 'HHVV', 'HVVV')
+POLARIZATIONS = REAL_POLs + COMPLEX_POLS
+
+
+def get_file_ext(filename):
+    return os.path.splitext(filename)[1]
+
+
+def is_complex(filename, ann_info):
+    """Helper to determine if file data is real or complex
+    
+    Based on https://uavsar.jpl.nasa.gov/science/documents/polsar-format.html
+    Note: differences between 3 polarizations for .mlc files: half real, half complex
+    """
+    # TODO: are there other filetypes we want?
+    complex_exts = ['.int', '.mlc', '.slc']
+    real_exts = ['.amp', '.cor']  # NOTE: .cor might only be real for UAVSAR
+
+    ext = get_file_ext(filename)
+    if ext not in complex_exts and ext not in real_exts:
+        raise ValueError('Invalid filetype for load_file: %s\n '
+                         'Allowed types: %s' % (ext, ' '.join(complex_exts + real_exts)))
+    if ext == '.mlc':
+        # Check if filename has one of the complex polarizations
+        return any(pol in filename for pol in COMPLEX_POLS)
+    else:
+        return ext in complex_exts
 
 
 def load_file(filename, ann_info=None):
@@ -17,19 +46,10 @@ def load_file(filename, ann_info=None):
     if not ann_info:
         ann_info = parse_ann_file(filename)
 
-    # TODO: are there other filetypes we want?
-    complex_exts = ['.int', '.mlc', '.slc']
-    real_exts = ['.amp', '.cor']  # NOTE: .cor might only be real for UAVSAR
-
-    ext = get_file_ext(filename)
-
-    if ext in complex_exts:
+    if is_complex(filename, ann_info):
         return load_complex(filename, ann_info)
-    elif ext in real_exts:
-        return load_real(filename, ann_info)
     else:
-        raise ValueError('Invalid filetype for load_file: %s\n '
-                         'Allowed types: %s' % (ext, ' '.join(complex_exts + real_exts)))
+        return load_real(filename, ann_info)
 
 
 def load_real(filename, ann_info):
@@ -102,18 +122,21 @@ def save_array(filename, amplitude_array):
 def make_ann_filename(filename):
     """Take the name of a data file and return corresponding .ann name"""
 
-    # The .mlc files have polarizations added, which .ann files don't have
-    shortname = filename.replace('HHHH', '').replace('HVHV', '').replace('VVVV', '')
+    # The .mlc files have polarization added to filename, .ann files don't
+    shortname = filename
+    for p in POLARIZATIONS:
+        shortname = shortname.replace(p, '')
     # If this is a block we split up and names .1.int, remove that since
     # all have the same .ann file
-    shortname = re.sub(r'\.\d\.int', '.int', shortname)
-    shortname = re.sub(r'\.\d\.cor', '.cor', shortname)
 
+    # TODO: figure out where to get this list from
     ext = get_file_ext(filename)
+    shortname = re.sub('\.\d' + ext, ext, shortname)
+
     return shortname.replace(ext, '.ann')
 
 
-def parse_ann_file(filename, ext=None):
+def parse_ann_file(filename, ext=None, verbose=False):
     """Returns the requested info from the annotation in ann_filename
 
     Returns:
@@ -163,4 +186,6 @@ def parse_ann_file(filename, ext=None):
                 ann_data['mlcHHHH'] = _parse_line(line)
             # TODO: Add more parsing! whatever is useful from .ann file
 
+    if verbose:
+        pprint(ann_data)
     return ann_data
