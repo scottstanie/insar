@@ -46,29 +46,41 @@ def lee_filter(img, size=5):
     return img_output
 
 
-def mask(filepath):
-    print('Processing', filepath)
+def mask(filepath, threshold=0.002):
     cur_file = sar.io.load_file(filepath)
 
     # Note: abs for complex files, but also fine for .cor magnitude files
     ampfile = np.abs(cur_file)
 
-    mask = ampfile < args.threshold
+    binary_im = ampfile < threshold
 
     # To run a morphological closure on the mask:
     # if args.despeckle:
     #     ampfile = remove_speckles(ampfile)
     #     strel = disk(1)
-    #     mask = erosion(mask, strel)
+    #     binary_im = erosion(binary_im, strel)
+    return binary_im
 
+
+def save(filepath, mask, downsample=0):
+    print('ok')
     # maskfile = filepath.replace(ext, '.jpg')
     # Keep old .ext so we know what type was masked
+    ext = sar.io.get_file_ext(filepath)
     maskfile = filepath.replace(ext, ext + '.png')
 
     if args.downsample:
         sar.io.save_array(maskfile, sar.utils.downsample_im(mask, args.downsample))
     else:
         sar.io.save_array(maskfile, mask)
+    return True
+
+
+def mask_and_save(arglist):
+    filepath, args = arglist
+    print('Processing', filepath)
+    binary_im = mask(filepath, args)
+    save(filepath, binary_im, args)
     return True
 
 
@@ -105,4 +117,5 @@ if __name__ == '__main__':
         block_paths = glob.glob(filepath.replace(ext, '.[0-9]{}'.format(ext)))
 
     with ProcessPoolExecutor() as executor:
-        executor.map(mask, block_paths)
+        print('oo')
+        executor.map(lambda x: mask_and_save(x, args), [block_paths, args])
