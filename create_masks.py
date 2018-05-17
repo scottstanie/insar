@@ -14,6 +14,7 @@ Example Usage:
 Note: Adding --despeckle will run a lee filter on the image first before creating mask
 """
 import argparse
+from concurrent.futures import ProcessPoolExecutor
 import glob
 import os
 import sys
@@ -43,6 +44,32 @@ def lee_filter(img, size=5):
     img_weights = img_variance**2 / (img_variance**2 + overall_variance**2)
     img_output = img_mean + img_weights * (img - img_mean)
     return img_output
+
+
+def mask(filepath):
+    print('Processing', filepath)
+    cur_file = sar.io.load_file(filepath)
+
+    # Note: abs for complex files, but also fine for .cor magnitude files
+    ampfile = np.abs(cur_file)
+
+    mask = ampfile < args.threshold
+
+    # To run a morphological closure on the mask:
+    # if args.despeckle:
+    #     ampfile = remove_speckles(ampfile)
+    #     strel = disk(1)
+    #     mask = erosion(mask, strel)
+
+    # maskfile = filepath.replace(ext, '.jpg')
+    # Keep old .ext so we know what type was masked
+    maskfile = filepath.replace(ext, ext + '.png')
+
+    if args.downsample:
+        sar.io.save_array(maskfile, sar.utils.downsample_im(mask, args.downsample))
+    else:
+        sar.io.save_array(maskfile, mask)
+    return True
 
 
 if __name__ == '__main__':
@@ -77,26 +104,5 @@ if __name__ == '__main__':
     else:
         block_paths = glob.glob(filepath.replace(ext, '.[0-9]{}'.format(ext)))
 
-    for cur_filepath in block_paths:
-        print('Processing', cur_filepath)
-        cur_file = sar.io.load_file(cur_filepath)
-
-        # Note: abs for complex files, but also fine for .cor magnitude files
-        ampfile = np.abs(cur_file)
-
-        mask = ampfile < args.threshold
-
-        # To run a morphological closure on the mask:
-        # if args.despeckle:
-        #     ampfile = remove_speckles(ampfile)
-        #     strel = disk(1)
-        #     mask = erosion(mask, strel)
-
-        # maskfile = cur_filepath.replace(ext, '.jpg')
-        # Keep old .ext so we know what type was masked
-        maskfile = cur_filepath.replace(ext, ext + '.png')
-
-        if args.downsample:
-            sar.io.save_array(maskfile, sar.utils.downsample_im(mask, args.downsample))
-        else:
-            sar.io.save_array(maskfile, mask)
+    with ProcessPoolExecutor() as executor:
+        executor.map(mask, block_paths)
