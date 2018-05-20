@@ -6,6 +6,7 @@ Email: scott.stanie@utexas.edu
 
 import argparse
 import numpy as np
+from scipy.interpolate import RegularGridInterpolator
 
 import sar.io
 
@@ -13,11 +14,37 @@ import sar.io
 def downsample_im(image, rate=10):
     """Takes a numpy matrix of an image and returns a smaller version
 
-    inputs:
+    Args:
         image (np.array) 2D array of an image
         rate (int) the reduction rate to downsample
     """
     return image[::rate, ::rate]
+
+
+def upsample_dem(dem_img, rate=3):
+    """Interpolates a DEM to higher resolution for better InSAR quality
+
+    Args:
+        dem_img: numpy.ndarray
+        rate: int, default = 3
+
+    Returns:
+        numpy.ndarray: original dem_img upsampled by `rate`
+
+    """
+
+    s1, s2 = dem_img.shape
+    orig_points = (np.arange(0, s1), np.arange(0, s2))
+    rgi = RegularGridInterpolator(points=orig_points, values=dem_img)
+
+    # Make a grid from 0 to (size-1) inclusive, in both directions
+    # 1j used to say "make s1*rate number of points exactly"
+    numx = s1 * rate
+    numy = s2 * rate
+    X, Y = np.mgrid[0:(s1 - 1):numx * 1j, 0:(s2 - 1):numy * 1j]
+    new_points = np.vstack([X.ravel(), Y.ravel()])
+
+    return rgi(new_points.T).reshape(numx, numy)
 
 
 def clip(image):
@@ -34,6 +61,7 @@ def split_array_into_blocks(data):
     """Takes a long rectangular array (like UAVSAR) and creates blocks
 
     Useful to look at small data pieces at a time in dismph
+
     Returns:
         blocks (list[np.ndarray])
     """
