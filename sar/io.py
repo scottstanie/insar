@@ -58,7 +58,7 @@ def load_elevation(filename):
     # Either get info from .dem.rsc
     if ext == '.dem':
         info = load_dem_rsc(filename)
-        data.reshape((info['file_length'], info['width']))
+        dem_img = data.reshape((info['file_length'], info['width']))
     # Or check if we are using STRM1 (3601x3601) or SRTM3 (1201x1201)
     else:
         if (data.shape[0] / 3601) == 3601:
@@ -89,6 +89,15 @@ def load_dem_rsc(filename):
     Z_SCALE       1
     PROJECTION    LL
     """
+    info = {}
+    with open('{}.rsc'.format(filename), 'r') as f:
+        for line in f.readlines():
+            if line.startswith('WIDTH'):
+                info['width'] = int(line.split()[1])
+            elif line.startswith('FILE_LENGTH'):
+                info['file_length'] = int(line.split()[1])
+
+    return info
 
 
 def load_real(filename, ann_info):
