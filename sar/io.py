@@ -16,12 +16,95 @@ POLARIZATIONS = REAL_POLs + COMPLEX_POLS
 
 
 def get_file_ext(filename):
+    """Extracts the file extension, including the '.' (e.g.: .slc)"""
     return os.path.splitext(filename)[1]
+
+
+def load_file(filename, ann_info=None):
+    """Examines file type for real/complex and runs appropriate load"""
+
+    if get_file_ext(filename) in ('.hgt', '.dem'):
+        return load_elevation(filename)
+
+    if not ann_info:
+        ann_info = parse_ann_file(filename)
+
+    if is_complex(filename, ann_info):
+        return load_complex(filename, ann_info)
+    else:
+        return load_real(filename, ann_info)
+
+
+def load_elevation(filename):
+    """Loads a digital elevation map from either .hgt file or .dem
+
+    .hgt is the NASA SRTM files given. Documentation on format here:
+    https://dds.cr.usgs.gov/srtm/version2_1/Documentation/SRTM_Topo.pdf
+    Key point: Big-endian 2byte integers
+
+    .dem is format used by Zebker geo-coded SAR software
+    Only difference is data is stored little-endian (like other SAR data)
+
+    Note on both formats: gaps in coverage are given by INT_MIN -32768,
+    so either manually set data(data == np.min(data)) = 0,
+        data = np.clip(data, 0, None), or when plotting, plt.imshow(data, vmin=0)
+    """
+
+    ext = get_file_ext(filename)
+    data_type = "<i2" if ext == '.dem' else ">i2"
+    data = np.fromfile(filename, data_type)
+
+    # Reshape to correct size.
+    # Either get info from .dem.rsc
+    if ext == '.dem':
+        info = load_dem_rsc(filename)
+        data.reshape((info['file_length'], info['width']))
+    # Or check if we are using STRM1 (3601x3601) or SRTM3 (1201x1201)
+    else:
+        if (data.shape[0] / 3601) == 3601:
+            # STRM1- 1 arc second data, 30 meter data
+            dem_img = data.reshape((3601, 3601))
+        elif (data.shape[0] / 1201) == 1201:
+            # STRM3- 3 arc second data, 90 meter data
+            dem_img = data.reshape((1201, 1201))
+        else:
+            raise ValueError("Invalid .hgt data size: must be square size 1201 or 3601")
+
+    return dem_img
+
+
+def load_dem_rsc(filename):
+    """Loads and parses the .dem.rsc file
+
+    example file:
+    WIDTH         10801
+    FILE_LENGTH   7201
+    X_FIRST       -157.0
+    Y_FIRST       21.0
+    X_STEP        0.000277777777
+    Y_STEP        -0.000277777777
+    X_UNIT        degrees
+    Y_UNIT        degrees
+    Z_OFFSET      0
+    Z_SCALE       1
+    PROJECTION    LL
+    """
+
+
+def load_real(filename, ann_info):
+    """Reads in real 4-byte per pixel files""
+
+    Valid filetypes: .amp, .cor (for UAVSAR)
+    """
+    data = np.fromfile(filename, '<f4')
+    # rows = ann_info['rows']
+    cols = ann_info['cols']
+    return data.reshape([-1, cols])
 
 
 def is_complex(filename, ann_info):
     """Helper to determine if file data is real or complex
-    
+
     Based on https://uavsar.jpl.nasa.gov/science/documents/polsar-format.html
     Note: differences between 3 polarizations for .mlc files: half real, half complex
     """
@@ -38,29 +121,6 @@ def is_complex(filename, ann_info):
         return any(pol in filename for pol in COMPLEX_POLS)
     else:
         return ext in complex_exts
-
-
-def load_file(filename, ann_info=None):
-    """Examines file type for real/complex and runs appropriate load"""
-
-    if not ann_info:
-        ann_info = parse_ann_file(filename)
-
-    if is_complex(filename, ann_info):
-        return load_complex(filename, ann_info)
-    else:
-        return load_real(filename, ann_info)
-
-
-def load_real(filename, ann_info):
-    """Reads in real 4-byte per pixel files""
-
-    Valid filetypes: .amp, .cor (for UAVSAR)
-    """
-    data = np.fromfile(filename, '<f4')
-    # rows = ann_info['rows']
-    cols = ann_info['cols']
-    return data.reshape([-1, cols])
 
 
 def parse_complex_data(complex_data, rows, cols):
