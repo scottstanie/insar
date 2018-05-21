@@ -21,31 +21,14 @@ Full doumentation:
 https://earth.esa.int/documents/247904/349490/GMES_Sentinels_POD_Service_File_Format_Specification_GMES-GSEG-EOPG-FS-10-0075_Issue1-3.pdf
 
 """
-
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
 import bs4
-
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
 
 BASE_URL = "https://qc.sentinel1.eo.esa.int/aux_poeorb/"
-
-
-def eof_link_list(start_date=None):
-    """
-    """
-    if isinstance(start_date, str):
-        start_date = parse(start_date)
-
-    url = BASE_URL + '?validity_start_time={}'.format(start_date.strftime('%Y-%m-%d'))
-    response = requests.get(url)
-    response.raise_for_status()
-
-    soup = bs4.BeautifulSoup(response.text, 'html.parser')
-    links = soup.find_all('a', href=lambda link: link.endswith('.EOF'))
-
-    return [link.text for link in links]
 
 
 def download_eofs(orbit_dates, mission=None):
@@ -72,20 +55,46 @@ def download_eofs(orbit_dates, mission=None):
 
     eof_links = []
     for date in validity_dates:
-        cur_links = eof_link_list(validity_dates)
+        cur_links = eof_link_list(date)
         if mission:
             cur_links = [link for link in cur_links if link.startswith(mission)]
         eof_links.extend(cur_links)
 
-    for link in eof_links:
-        _download_and_write(link)
+    # Download and save all links in parallel
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        # Make a dict to refer back to which link is finished downloading
+        future_to_link = {executor.submit(_download_and_write, link): link for link in eof_links}
+        for future in as_completed(future_to_link):
+            print('Finished {}'.format(future_to_link[future]))
+
+
+def eof_link_list(start_date=None):
+    """
+    """
+    if isinstance(start_date, str):
+        start_date = parse(start_date)
+
+    url = BASE_URL + '?validity_start_time={}'.format(start_date.strftime('%Y-%m-%d'))
+    response = requests.get(url)
+    response.raise_for_status()
+
+    soup = bs4.BeautifulSoup(response.text, 'html.parser')
+    links = soup.find_all('a', href=lambda link: link.endswith('.EOF'))
+
+    return [link.text for link in links]
 
 
 def _download_and_write(link):
-    """Wrapper function to run the link downloading in parallel if needed"""
-    print('Downloading {}'.format(link))
+    """Wrapper function to run the link downloading in parallel
+
+    Args:
+        link (str) name of EOF file to download
+
+    Returns:
+        None
+    """
+    print('Downloading and saving {}'.format(link))
     response = requests.get(BASE_URL + link)
     response.raise_for_status()
     with open(link, 'wb') as f:
-        print('Saving {} to file'.format(link))
         f.write(response.content)
