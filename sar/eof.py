@@ -25,13 +25,16 @@ https://earth.esa.int/documents/247904/349490/GMES_Sentinels_POD_Service_File_Fo
 import requests
 
 import bs4
+
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
 
 BASE_URL = "https://qc.sentinel1.eo.esa.int/aux_poeorb/"
 
 
-def download_eof_list(start_date=None):
+def eof_link_list(start_date=None):
+    """
+    """
     if isinstance(start_date, str):
         start_date = parse(start_date)
 
@@ -45,21 +48,44 @@ def download_eof_list(start_date=None):
     return [link.text for link in links]
 
 
-def download_eof(orbit_date, sentinel_mission=None):
-    if isinstance(orbit_date, str):
-        orbit_date = parse(orbit_date)
+def download_eofs(orbit_dates, mission=None):
+    """Downloads and saves EOF files for specific dates
 
-    # Subtract one day from desired orbit to get correct file
-    validity_date = orbit_date + relativedelta(days=-1)
+    Args:
+        orbit_dates (list[str] or list[datetime.datetime])
+        mission (str): optional to specify S1A or S1B. No input downloads both
 
-    eof_links = download_eof_list(validity_date)
-    if sentinel_mission:
-        eof_links = [link for link in eof_links if sentinel_mission in link]
+    Returns:
+        None
+
+    Raises:
+        ValueError - for mission argument not being one of 'S1A', 'S1B'
+    """
+    if mission and mission not in ('S1A', 'S1B'):
+        raise ValueError('mission argument must be "S1A" or "S1B"')
+
+    # Conver any string dates to a datetime
+    orbit_dates = [parse(date) for date in orbit_dates if isinstance(date, str)]
+
+    # Subtract one day from desired orbits to get correct files
+    validity_dates = [date + relativedelta(days=-1) for date in orbit_dates]
+
+    eof_links = []
+    for date in validity_dates:
+        cur_links = eof_link_list(validity_dates)
+        if mission:
+            cur_links = [link for link in cur_links if link.startswith(mission)]
+        eof_links.extend(cur_links)
 
     for link in eof_links:
-        print('Downloading {}'.format(link))
-        response = requests.get(BASE_URL + link)
-        response.raise_for_status()
-        with open(link, 'wb') as f:
-            print('Saving {} to file'.format(link))
-            f.write(response.content)
+        _download_and_write(link)
+
+
+def _download_and_write(link):
+    """Wrapper function to run the link downloading in parallel if needed"""
+    print('Downloading {}'.format(link))
+    response = requests.get(BASE_URL + link)
+    response.raise_for_status()
+    with open(link, 'wb') as f:
+        print('Saving {} to file'.format(link))
+        f.write(response.content)
