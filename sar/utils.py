@@ -24,12 +24,14 @@ def downsample_im(image, rate=10):
 def upsample_dem(dem_img, rate=3):
     """Interpolates a DEM to higher resolution for better InSAR quality
 
+
     Args:
-        dem_img: numpy.ndarray
+        dem_img: numpy.ndarray (int16)
         rate: int, default = 3
 
     Returns:
-        numpy.ndarray: original dem_img upsampled by `rate`
+        numpy.ndarray (int16): original dem_img upsampled by `rate`. Needs
+            to return same type since downstream scripts expect int16 DEMs
 
     """
 
@@ -42,9 +44,11 @@ def upsample_dem(dem_img, rate=3):
     numx = s1 * rate
     numy = s2 * rate
     X, Y = np.mgrid[0:(s1 - 1):numx * 1j, 0:(s2 - 1):numy * 1j]
+    # new_points will be a 2xN matrix, N=(numx*numy)
     new_points = np.vstack([X.ravel(), Y.ravel()])
 
-    return rgi(new_points.T).reshape(numx, numy)
+    # rgi expects Nx2 as input, and will output as a 1D vector
+    return rgi(new_points.T).reshape(numx, numy).astype(dem_img.dtype)
 
 
 def clip(image):
