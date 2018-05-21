@@ -3,6 +3,7 @@
 Functions to assist input and output of SAR data
 Email: scott.stanie@utexas.edu
 """
+import collections
 import os.path
 from pprint import pprint
 import re
@@ -76,6 +77,10 @@ def load_elevation(filename):
 def load_dem_rsc(filename):
     """Loads and parses the .dem.rsc file
 
+    Args:
+        filename (str) path to either the .dem or .dem.rsc file.
+            Function will add .rsc to path if passed .dem file
+
     example file:
     WIDTH         10801
     FILE_LENGTH   7201
@@ -89,15 +94,52 @@ def load_dem_rsc(filename):
     Z_SCALE       1
     PROJECTION    LL
     """
-    info = {}
-    with open('{}.rsc'.format(filename), 'r') as f:
-        for line in f.readlines():
-            if line.startswith('WIDTH'):
-                info['width'] = int(line.split()[1])
-            elif line.startswith('FILE_LENGTH'):
-                info['file_length'] = int(line.split()[1])
 
-    return info
+    # Use OrderedDict so that upsample_dem_rsc creates with same ordering as old
+    output_data = collections.OrderedDict()
+    # Second part in tuple is used to cast string to correct type
+    field_tups = (('WIDTH', int), ('FILE_LENGTH', int), ('X_STEP', float), ('Y_STEP', float),
+                  ('X_FIRST', float), ('Y_FIRST', float), ('X_UNIT', str), ('Y_UNIT', str),
+                  ('Z_OFFSET', int), ('Z_SCALE', int), ('PROJECTION', str))
+
+    rsc_filename = '{}.rsc'.format(filename) if not filename.endswith('.rsc') else filename
+    with open(rsc_filename, 'r') as f:
+        for line in f.readlines():
+            for field, num_type in field_tups:
+                if line.startswith(field):
+                    output_data[field.lower()] = num_type(line.split()[1])
+
+    return output_data
+
+
+def upsample_dem_rsc(filepath, rate):
+    """Creates a new .dem.rsc file for upsampled version
+
+    Adjusts the FILE_LENGTH, WIDTH, X_STEP, Y_STEP for new rate
+
+    Args:
+        filepath (str) location of .dem.rsc file
+        rate (int)
+
+    Returns:
+        str: file same as original with upsample adjusted numbers
+
+    """
+    outstring = ""
+    rsc_data = load_dem_rsc(filepath)
+    for field, value in rsc_data.items():
+        # Files seemed to be left justified with 13 spaces? Not sure why 13
+        if field in ('width', 'file_length'):
+            value *= rate
+            outstring += "{field:<13s}{val}\n".format(field=field.upper(), val=value)
+        elif field in ('x_step', 'y_step'):
+            value /= rate
+            # Also give step floats proper sig figs to not output scientific notation
+            outstring += "{field:<13s}{val:0.12f}\n".format(field=field.upper(), val=value)
+        else:
+            outstring += "{field:<13s}{val}\n".format(field=field.upper(), val=value)
+
+    return outstring
 
 
 def load_real(filename, ann_info):
@@ -179,6 +221,7 @@ def save_array(filename, amplitude_array):
 
     elif ext in ('.cor', '.amp', '.int', '.mlc', '.slc'):
         # If machine order is big endian, need to byteswap (TODO: test on big-endian)
+        # TODO: Do we need to do this at all??
         if not _is_little_endian():
             amplitude_array.byteswap(inplace=True)
 
@@ -206,7 +249,7 @@ def make_ann_filename(filename):
 
 
 def parse_ann_file(filename, ext=None, verbose=False):
-    """Returns the requested info from the annotation in ann_filename
+    """Returns the requested data from the annotation in ann_filename
 
     Returns:
         ann_data (dict): key-values of requested data from .ann file
