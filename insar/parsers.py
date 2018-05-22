@@ -41,6 +41,7 @@ class Sentinel:
 
     def __init__(self, filename):
         self.filename = filename
+        self.full_parse()  # Run a parse to check validity of filename
 
     def full_parse(self):
         """Returns all parts of the sentinel data contained in filename
@@ -54,10 +55,11 @@ class Sentinel:
         Raises:
             ValueError: if filename string is invalid
         """
-        try:
-            return re.match(self.FILE_REGEX, self.filename).groups()
-        except AttributeError:  # Nonetype has no attribute 'groups'
+        match = re.match(self.FILE_REGEX, self.filename)
+        if not match:
             raise ValueError('Invalid sentinel product filename: {}'.format(self.filename))
+        else:
+            return match.groups()
 
     @staticmethod
     def field_meanings():
@@ -82,3 +84,8 @@ class Sentinel:
         stop_time = datetime.strptime(start_time_str, time_format)
 
         return start_time, stop_time
+
+    def polarization(self):
+        """Returns type of polarization of product"""
+        polarization_entry = 6
+        return self.full_parse()[polarization_entry]
