@@ -13,14 +13,14 @@ File name format:
 
 MMM: mission/satellite S1A or S1B
 BB: Mode/beam identifier. The S1-S6 beams apply to SM products
-    IW, EW and WV identifiers appply to products from the respective modes.  
+    IW, EW and WV identifiers appply to products from the respective modes.
 TTT: Product Type: RAW, SLC, GRD, OCN
 R: Resolution class: F,M, or _ (N/A)
 L: Processing Level: 0, 1, 2
 F: Product class: S (standard), A (annotation, only used internally)
 PP: Polarization: SH (single HH), SV (single VV), DH (dual HH+HV), DV (dual VV+VH)
 Start date + time (date/time separated by T)
-Stop date + time 
+Stop date + time
 OOOOOO: absolute orbit number: 000001-999999
 DDDDDD: mission data-take identifier: 000001-FFFFFF.
 CCCC: product unique identifier: hexadecimal string from CRC-16 the manifest file using CRC-CCITT.
@@ -31,6 +31,7 @@ import re
 from datetime import datetime
 
 SENTINEL_PARTS = r'([\w\d]{3})_([\w\d]{2})_([\w_]{4})_(\d[SA])([SDHV]{2})_([T\d]{15})_([T\d]{15})_([\d]{6})_([\d\w]{6})_([\d\w]{4})'
+
 
 def parse_start_stop(sentinel_filename):
     """Returns start datetime and stop datetime from a sentinel file name
@@ -45,10 +46,9 @@ def parse_start_stop(sentinel_filename):
         ValueError: if sentinel_filename string is invalid
 
     """
-    
+
     fileparts = sentinel_filename.split('_')[4:6]  #4th, 5th parts are dates
     start_time = datetime.strptime(fileparts[0])
     start_time = parse(fileparts[1])
 
     return start_time, stop_time
-
