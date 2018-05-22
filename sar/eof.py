@@ -5,8 +5,7 @@ Utilities for handling precise orbit ephemerides (EOF) files
 Example filtering URL:
 ?validity_start_time=2014-08&page=2
 
-
-Example: 'S1A_OPER_AUX_POEORB_OPOD_20140828T122040_V20140806T225944_20140808T005944.EOF'
+Example EOF: 'S1A_OPER_AUX_POEORB_OPOD_20140828T122040_V20140806T225944_20140808T005944.EOF'
 
  'S1A' : mission id (satellite it applies to)
  'OPER' : OPER for "Routine Operations" file
@@ -17,7 +16,7 @@ Example: 'S1A_OPER_AUX_POEORB_OPOD_20140828T122040_V20140806T225944_20140808T005
  'V20140806T225944' Validity start time (when orbit is valid)
  '20140808T005944' Validity end time
 
-Full doumentation:
+Full EOF sentinel doumentation:
 https://earth.esa.int/documents/247904/349490/GMES_Sentinels_POD_Service_File_Format_Specification_GMES-GSEG-EOPG-FS-10-0075_Issue1-3.pdf
 
 """
@@ -55,7 +54,13 @@ def download_eofs(orbit_dates, mission=None):
 
     eof_links = []
     for date in validity_dates:
-        cur_links = eof_link_list(date)
+        try:
+            cur_links = eof_link_list(date)
+        except ValueError as e:
+            print(e.args[0])
+            print('Skipping {}'.format(date.strftime('%Y-%m-%d')))
+            continue
+
         if mission:
             cur_links = [link for link in cur_links if link.startswith(mission)]
         eof_links.extend(cur_links)
@@ -68,8 +73,17 @@ def download_eofs(orbit_dates, mission=None):
             print('Finished {}'.format(future_to_link[future]))
 
 
-def eof_link_list(start_date=None):
-    """
+def eof_link_list(start_date):
+    """Download the list of .EOF files for a specific date
+
+    Args:
+        start_date (str or datetime): Year month day of validity start for orbit file
+
+    Returns:
+        list: names of EOF files
+
+    Raises:
+        ValueError: if start_date returns no results
     """
     if isinstance(start_date, str):
         start_date = parse(start_date)
@@ -79,7 +93,11 @@ def eof_link_list(start_date=None):
     response.raise_for_status()
 
     soup = bs4.BeautifulSoup(response.text, 'html.parser')
-    links = soup.find_all('a', href=lambda link: link.endswith('.EOF'))
+    try:
+        links = soup.find_all('a', href=lambda link: link.endswith('.EOF'))
+    except AttributeError:  # NoneType has no attribute .endswith
+        raise ValueError('No EOF files found for {} at {}'.format(
+            start_date.strftime('%Y-%m-%d'), url))
 
     return [link.text for link in links]
 

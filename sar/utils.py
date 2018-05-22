@@ -36,14 +36,16 @@ def upsample_dem(dem_img, rate=3):
     """
 
     s1, s2 = dem_img.shape
-    orig_points = (np.arange(0, s1), np.arange(0, s2))
+    # TODO: figure out whether makeDEM.m really needs to form using
+    # points 1:size and then interpolate with points 0:size
+    orig_points = (np.arange(1, s1 + 1), np.arange(1, s2 + 1))
     rgi = RegularGridInterpolator(points=orig_points, values=dem_img)
 
     # Make a grid from 0 to (size-1) inclusive, in both directions
     # 1j used to say "make s1*rate number of points exactly"
-    numx = s1 * rate
-    numy = s2 * rate
-    X, Y = np.mgrid[0:(s1 - 1):numx * 1j, 0:(s2 - 1):numy * 1j]
+    numx = s1 * rate + 1
+    numy = s2 * rate + 1
+    X, Y = np.mgrid[1:s1:numx * 1j, 1:s2:numy * 1j]
     # new_points will be a 2xN matrix, N=(numx*numy)
     new_points = np.vstack([X.ravel(), Y.ravel()])
 
