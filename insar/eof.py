@@ -55,7 +55,7 @@ def download_eofs(orbit_dates, mission=None):
     eof_links = []
     for date in validity_dates:
         try:
-            cur_links = eof_link_list(date)
+            cur_links = eof_list(date)
         except ValueError as e:
             print(e.args[0])
             print('Skipping {}'.format(date.strftime('%Y-%m-%d')))
@@ -73,7 +73,7 @@ def download_eofs(orbit_dates, mission=None):
             print('Finished {}'.format(future_to_link[future]))
 
 
-def eof_link_list(start_date):
+def eof_list(start_date):
     """Download the list of .EOF files for a specific date
 
     Args:

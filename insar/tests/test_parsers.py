@@ -4,10 +4,10 @@ from datetime import datetime
 from insar.parsers import Sentinel
 
 
-class TestSentinal(unittest.TestCase):
+class TestSentinel(unittest.TestCase):
     def setUp(self):
         filename = 'S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70.zip'
-        self.sentinel = Sentinel(filename)
+        self.parser = Sentinel(filename)
 
     def test_bad_filename(self):
         self.assertRaises(ValueError, Sentinel, 'asdf')
@@ -17,13 +17,13 @@ class TestSentinal(unittest.TestCase):
         expected_output = ('S1A', 'IW', 'SLC', '_', '1', 'S', 'DV', '20180408T043025',
                            '20180408T043053', '021371', '024C9B', '1B70')
 
-        self.assertEqual(self.sentinel.full_parse(), expected_output)
-        self.assertEqual(len(self.sentinel.full_parse()), 12)
+        self.assertEqual(self.parser.full_parse(), expected_output)
+        self.assertEqual(len(self.parser.full_parse()), 12)
 
     def test_start_stop_time(self):
         expected_start = datetime(2018, 4, 8, 4, 30, 25)
         expected_stop = datetime(2018, 4, 8, 4, 30, 25)
-        self.assertEqual(self.sentinel.start_stop_time(), (expected_start, expected_stop))
+        self.assertEqual(self.parser.start_stop_time(), (expected_start, expected_stop))
 
     def test_polarization(self):
-        self.assertEqual(self.sentinel.polarization(), 'DV')
+        self.assertEqual(self.parser.polarization(), 'DV')
