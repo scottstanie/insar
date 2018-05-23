@@ -6,8 +6,8 @@ from insar.parsers import Sentinel
 
 class TestSentinel(unittest.TestCase):
     def setUp(self):
-        filename = 'S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70.zip'
-        self.parser = Sentinel(filename)
+        self.filename = 'S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70.zip'
+        self.parser = Sentinel(self.filename)
 
     def test_bad_filename(self):
         self.assertRaises(ValueError, Sentinel, 'asdf')
@@ -20,6 +20,10 @@ class TestSentinel(unittest.TestCase):
         self.assertEqual(self.parser.full_parse(), expected_output)
         self.assertEqual(len(self.parser.full_parse()), 12)
 
+    def test_path_parse(self):
+        path_filename = '/some/path/' + self.filename
+        self.assertEqual(Sentinel(path_filename).full_parse(), self.parser.full_parse())
+
     def test_start_stop_time(self):
         expected_start = datetime(2018, 4, 8, 4, 30, 25)
         expected_stop = datetime(2018, 4, 8, 4, 30, 25)
@@ -27,3 +31,4 @@ class TestSentinel(unittest.TestCase):
 
     def test_polarization(self):
         self.assertEqual(self.parser.polarization(), 'DV')
+

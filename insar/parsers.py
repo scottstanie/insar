@@ -55,7 +55,7 @@ class Sentinel:
         Raises:
             ValueError: if filename string is invalid
         """
-        match = re.match(self.FILE_REGEX, self.filename)
+        match = re.search(self.FILE_REGEX, self.filename)
         if not match:
             raise ValueError('Invalid sentinel product filename: {}'.format(self.filename))
         else:
