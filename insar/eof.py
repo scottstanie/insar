@@ -20,7 +20,11 @@ Full EOF sentinel doumentation:
 https://earth.esa.int/documents/247904/349490/GMES_Sentinels_POD_Service_File_Format_Specification_GMES-GSEG-EOPG-FS-10-0075_Issue1-3.pdf
 
 """
-from concurrent.futures import ThreadPoolExecutor, as_completed
+try:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    CONCURRENT = True
+except ImportError:  # Python 2 doesn't have this :(
+    CONCURRENT = False
 import requests
 
 import bs4
@@ -65,12 +69,18 @@ def download_eofs(orbit_dates, mission=None):
             cur_links = [link for link in cur_links if link.startswith(mission)]
         eof_links.extend(cur_links)
 
-    # Download and save all links in parallel
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        # Make a dict to refer back to which link is finished downloading
-        future_to_link = {executor.submit(_download_and_write, link): link for link in eof_links}
-        for future in as_completed(future_to_link):
-            print('Finished {}'.format(future_to_link[future]))
+    if CONCURRENT:
+        # Download and save all links in parallel
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            # Make a dict to refer back to which link is finished downloading
+            future_to_link = {executor.submit(_download_and_write, link): link for link in eof_links}
+            for future in as_completed(future_to_link):
+                print('Finished {}'.format(future_to_link[future]))
+    else:
+        # Fall back for python 2:
+        for link in eof_links:
+            _download_and_write(link)
+            print('Finished {}'.format(link))
 
 
 def eof_list(start_date):
