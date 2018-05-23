@@ -1,10 +1,39 @@
 """Digital Elevation Map (DEM) downloading/stitching/upsampling
+
+Example .dem.rsc (for N19W156.hgt and N19W155.hgt stitched horizontally):
+        WIDTH         7201
+        FILE_LENGTH   3601
+        X_FIRST       -156.0
+        Y_FIRST       20.0
+        X_STEP        0.000277777777
+        Y_STEP        -0.000277777777
+        X_UNIT        degrees
+        Y_UNIT        degrees
+        Z_OFFSET      0
+        Z_SCALE       1
+        PROJECTION    LL
+
 """
+import collections
 import re
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
 from insar import sario
+
+RSC_KEYS = [
+    'WIDTH',
+    'FILE_LENGTH',
+    'X_FIRST',
+    'Y_FIRST',
+    'X_STEP',
+    'Y_STEP',
+    'X_UNIT',
+    'Y_UNIT',
+    'Z_OFFSET',
+    'Z_SCALE',
+    'PROJECTION',
+]
 
 
 def _up_size(cur_size, rate):
@@ -30,7 +59,7 @@ def start_lon_lat(tilename):
         tilename (str): name of .hgt file for SRTM1 tile
 
     Returns:
-        tuple (lon, lat) of first data point in .hgt file (top right of block)
+        tuple (float, float) of first (lon, lat) point in .hgt file
 
     Raises:
         ValueError: if regex match fails on tilename
@@ -46,7 +75,7 @@ def start_lon_lat(tilename):
     left_lon = -1 * float(lon) if lon_str == 'W' else float(lon)
     # No additions needed to lon: bottom left and top left are same
     # Only the lat gets added or subtracted
-    top_lat = float(lat) + 1 if lat_str == 'N' else float(lat) - 1
+    top_lat = float(lat) + 1 if lat_str == 'num_pixels' else float(lat) - 1
     return (left_lon, top_lat)
 
 
@@ -75,7 +104,7 @@ def upsample_dem(dem_img, rate=3):
     numy = _up_size(s2, rate)
     X, Y = np.mgrid[1:s1:(numx * 1j), 1:s2:(numy * 1j)]
 
-    # vstack makes 2XN, N=(numx*numy): new_points will be a Nx2 matrix
+    # vstack makes 2XN, num_pixels=(numx*numy): new_points will be a Nx2 matrix
     new_points = np.vstack([X.ravel(), Y.ravel()]).T
 
     # rgi expects Nx2 as input, and will output as a 1D vector
@@ -84,10 +113,85 @@ def upsample_dem(dem_img, rate=3):
 
 
 def mosaic_dem(d1, d2):
+    """Joins two .hgt files side by side, d1 left, d2 right"""
     D = np.concatenate((d1, d2), axis=1)
     nrows, ncols = d1.shape
     D = np.delete(D, nrows, axis=1)
     return D
+
+
+def create_dem_rsc(SRTM1_tile_list):
+    """Takes a list of the SRTM1 tile names and outputs .dem.rsc file values
+
+    See module docstring for example .dem.rsc file.
+
+    Args:
+        SRTM1_tile_list (list[str]): names of tiles (e.g. N19W156)
+
+    Returns:
+        OrderedDict: key/value pairs in order to write to a .dem.rsc file
+    """
+
+    def _calc_x_y_firsts(tile_list):
+        x_first = np.inf  # Start all the way east, take min (west)
+        y_first = -np.inf  # Start all the way south, max is north
+        for tile in tile_list:
+            lon, lat = start_lon_lat(tile)
+            x_first = min(x_first, lon)
+            y_first = min(y_first, lat)
+        return x_first, y_first
+
+    # Use an OrderedDict for the key/value pairs so writing to file easy
+    rsc_data = collections.OrderedDict(RSC_KEYS)
+    rsc_data.update({
+        'X_UNIT': 'degrees',
+        'Y_UNIT': 'degrees',
+        'Z_OFFSET': 0,
+        'Z_SCALE': 1,
+        'PROJECTION': 'LL',
+    })
+
+    x_first, y_first = _calc_x_y_firsts(SRTM1_tile_list)
+    # TODO: first out generalized way to get nx, ny.
+    # Only using one pair left/right for now
+    nx = 2
+    ny = 1
+    # TODO: figure out where to generalize for SRTM3
+    num_pixels = 3601
+    rsc_data.update({'WIDTH': nx * num_pixels, 'FILE_LENGTH': ny * num_pixels})
+    rsc_data.update({'X_FIRST': x_first, 'Y_FIRST': y_first})
+    return rsc_data
+
+
+def format_dem_rsc(rsc_data):
+    """Creates the .dem.rsc file string from key/value pairs of an OrderedDict
+
+    Output of function can be written to a file as follows
+        with open('my.dem.rsc', 'w') as f:
+            f.write(outstring)
+
+    Args:
+        rsc_data (OrderedDict): data about dem in ordered key/value format
+            See `create_dem_rsc` output for example
+
+    Returns:
+        outstring (str) formatting string to be written to .dem.rsc
+
+    """
+    outstring = ""
+    for field, value in rsc_data.items():
+        # Files seemed to be left justified with 13 spaces? Not sure why 13
+        if field.lower() in ('width', 'file_length'):
+            outstring += "{field:<13s}{val}\n".format(field=field.upper(), val=new_size)
+        elif field.lower() in ('x_step', 'y_step'):
+            # New is 1 + (size - 1) * rate, old is size, old rate is 1/(size-1)
+            value /= rate
+            # Also give step floats proper sig figs to not output scientific notation
+            outstring += "{field:<13s}{val:0.12f}\n".format(field=field.upper(), val=value)
+        else:
+            outstring += "{field:<13s}{val}\n".format(field=field.upper(), val=value)
+
+    return outstring
 
 
 def upsample_dem_rsc(filepath, rate):
@@ -107,10 +211,10 @@ def upsample_dem_rsc(filepath, rate):
     rsc_data = sario.load_dem_rsc(filepath)
     for field, value in rsc_data.items():
         # Files seemed to be left justified with 13 spaces? Not sure why 13
-        if field in ('width', 'file_length'):
+        if field.lower() in ('width', 'file_length'):
             new_size = _up_size(value, rate)
             outstring += "{field:<13s}{val}\n".format(field=field.upper(), val=new_size)
-        elif field in ('x_step', 'y_step'):
+        elif field.lower() in ('x_step', 'y_step'):
             # New is 1 + (size - 1) * rate, old is size, old rate is 1/(size-1)
             value /= rate
             # Also give step floats proper sig figs to not output scientific notation
