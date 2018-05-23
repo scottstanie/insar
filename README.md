@@ -7,8 +7,8 @@ So far mostly helper functions for loading the many binary data types produced b
 Also contains several ad-hoc scripts for different remote sensing projects.
 
 ```bash
-    mkvirtualenv insar
-    pip install -r requirements.txt
+mkvirtualenv insar
+pip install -r requirements.txt
 ```
 
 
@@ -19,10 +19,10 @@ Also contains several ad-hoc scripts for different remote sensing projects.
 Functions for dealing with precise orbit files (Sentinel 1)
 
 ```python
-	from insar.eof import download_eofs
+from insar.eof import download_eofs
 
-    download_eofs('20180503')
-    download_eofs(datetime.datetime(2018, 05, 03, 0, 0, 0))
+download_eofs('20180503')
+download_eofs(datetime.datetime(2018, 05, 03, 0, 0, 0))
 ```
 
 #### sario.py
@@ -33,8 +33,8 @@ Mostly UAVSAR functions for now.
 Main function: 
 
 ```python
-	import insar.sario
-    insar.sario.load_file('/file/path')
+import insar.sario
+insar.sario.load_file('/file/path')
 ```
 
 
@@ -49,12 +49,12 @@ Classes to deal with extracting relevant data from SAR filenames.
 Example:
 
 ```python
-	parser = Sentinel('S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70.zip')
-	parser.start_stop_time()
-	parser.mission()
-	parser.polarization()
-	parser.full_parse()
-	parser.field_meanings()
+parser = Sentinel('S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70.zip')
+parser.start_stop_time()
+parser.mission()
+parser.polarization()
+parser.full_parse()
+parser.field_meanings()
 ```
 
 
