@@ -87,5 +87,10 @@ class Sentinel:
 
     def polarization(self):
         """Returns type of polarization of product"""
-        polarization_entry = 6
-        return self.full_parse()[polarization_entry]
+        polarization_index = 6
+        return self.full_parse()[polarization_index]
+
+    def mission(self):
+        """Returns satellite/mission of product (S1A/S1B)"""
+        mission_index = 0
+        return self.full_parse()[mission_index]

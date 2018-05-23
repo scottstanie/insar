@@ -12,12 +12,19 @@ import glob
 def main():
     orbit_dates = []
     for filename in glob.glob("./*.zip"):
-        start_date = Sentinel(filename).start_stop_time()[0]
+        try:
+            parser = Sentinel(filename)
+        except ValueError:  # Not a sentinel zip file
+            print('Skipping {}'.format(filename))
+            continue
+
+        start_date = parser.start_stop_time()[0]
+        mission = parser.mission()
+        print("Downloading precise orbits for {} on {}".format(
+            mission, start_date.strftime('%Y-%m-%d')))
         orbit_dates.append(start_date)
 
-    print("Downloading precise orbits for the following dates:")
-    print([d.strftime('%Y-%m-%d') for d in orbit_dates])
-    insar.eof.download_eofs(orbit_dates)
+    insar.eof.download_eofs(orbit_dates, mission=mission)
 
 
 if __name__ == '__main__':
