@@ -7,7 +7,6 @@ Email: scott.stanie@utexas.edu
 
 import argparse
 import numpy as np
-from scipy.interpolate import RegularGridInterpolator
 
 import insar.sario
 
@@ -20,46 +19,6 @@ def downsample_im(image, rate=10):
         rate (int) the reduction rate to downsample
     """
     return image[::rate, ::rate]
-
-
-def upsample_dem(dem_img, rate=3):
-    """Interpolates a DEM to higher resolution for better InSAR quality
-
-
-    Args:
-        dem_img: numpy.ndarray (int16)
-        rate: int, default = 3
-
-    Returns:
-        numpy.ndarray (int16): original dem_img upsampled by `rate`. Needs
-            to return same type since downstream scripts expect int16 DEMs
-
-    """
-
-    s1, s2 = dem_img.shape
-    # TODO: figure out whether makeDEM.m really needs to form using
-    # points 1:size and then interpolate with points 0:size
-    orig_points = (np.arange(1, s1 + 1), np.arange(1, s2 + 1))
-    rgi = RegularGridInterpolator(points=orig_points, values=dem_img)
-
-    # Make a grid from 0 to (size-1) inclusive, in both directions
-    # 1j used to say "make s1*rate number of points exactly"
-    numx = 1 + (s1 - 1) * rate
-    numy = 1 + (s2 - 1) * rate
-    X, Y = np.mgrid[1:s1:numx * 1j, 1:s2:numy * 1j]
-
-    # new_points will be a 2xN matrix, N=(numx*numy)
-    new_points = np.vstack([X.ravel(), Y.ravel()])
-
-    # rgi expects Nx2 as input, and will output as a 1D vector
-    return rgi(new_points.T).reshape(numx, numy).round().astype(dem_img.dtype)
-
-
-def mosaic_dem(d1, d2):
-    D = np.concatenate((d1, d2), axis=1)
-    nrows, ncols = d1.shape
-    D = np.delete(D, nrows, axis=1)
-    return D
 
 
 def clip(image):

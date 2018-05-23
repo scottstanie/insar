@@ -112,36 +112,6 @@ def load_dem_rsc(filename):
     return output_data
 
 
-def upsample_dem_rsc(filepath, rate):
-    """Creates a new .dem.rsc file for upsampled version
-
-    Adjusts the FILE_LENGTH, WIDTH, X_STEP, Y_STEP for new rate
-
-    Args:
-        filepath (str) location of .dem.rsc file
-        rate (int)
-
-    Returns:
-        str: file same as original with upsample adjusted numbers
-
-    """
-    outstring = ""
-    rsc_data = load_dem_rsc(filepath)
-    for field, value in rsc_data.items():
-        # Files seemed to be left justified with 13 spaces? Not sure why 13
-        if field in ('width', 'file_length'):
-            value *= rate
-            outstring += "{field:<13s}{val}\n".format(field=field.upper(), val=value)
-        elif field in ('x_step', 'y_step'):
-            value /= rate
-            # Also give step floats proper sig figs to not output scientific notation
-            outstring += "{field:<13s}{val:0.12f}\n".format(field=field.upper(), val=value)
-        else:
-            outstring += "{field:<13s}{val}\n".format(field=field.upper(), val=value)
-
-    return outstring
-
-
 def load_real(filename, ann_info):
     """Reads in real 4-byte per pixel files""
 
