@@ -8,7 +8,7 @@ import argparse
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
-import insar.io
+import insar.sario
 
 
 def downsample_im(image, rate=10):
@@ -88,16 +88,16 @@ def split_and_save(filename):
         newpaths (list[str]): full paths to new files created
     """
 
-    data = insar.io.load_file(filename)
+    data = insar.sario.load_file(filename)
     blocks = split_array_into_blocks(data)
 
-    ext = insar.io.get_file_ext(filename)
+    ext = insar.sario.get_file_ext(filename)
     newpaths = []
 
     for idx, block in enumerate(blocks, start=1):
         fname = filename.replace(ext, ".{}{}".format(str(idx), ext))
         print("Saving {}".format(fname))
-        insar.io.save_array(fname, block)
+        insar.sario.save_array(fname, block)
         newpaths.append(fname)
 
     return newpaths
@@ -121,20 +121,20 @@ def combine_cor_amp(corfilename, save=True):
             Saves a new file under outfilename
     Note: .ann and .int files must be in same directory as .cor
     """
-    ext = insar.io.get_file_ext(corfilename)
+    ext = insar.sario.get_file_ext(corfilename)
     assert ext == '.cor', 'corfilename must be a .cor file'
 
     intfilename = corfilename.replace('.cor', '.int')
 
-    intdata = insar.io.load_file(intfilename)
+    intdata = insar.sario.load_file(intfilename)
     amp = np.abs(intdata)
 
-    cordata = insar.io.load_file(corfilename)
+    cordata = insar.sario.load_file(corfilename)
     # For dishgt, it expects the two matrices stacked [[amp]; [cor]]
     cor_with_amp = np.vstack((amp, cordata))
 
     outfilename = corfilename.replace('.cor', '_withamp.cor')
-    insar.io.save_array(outfilename, cor_with_amp)
+    insar.sario.save_array(outfilename, cor_with_amp)
     return cor_with_amp, outfilename
 
 
@@ -145,7 +145,7 @@ def main():
     args = parser.parse_args()
 
     if args.command == 'info':
-        ann_data = insar.io.parse_ann_file(args.filename)
+        ann_data = insar.sario.parse_ann_file(args.filename)
         print(ann_data)
     elif args.command == 'split':
         split_and_save(args.filename)

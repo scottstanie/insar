@@ -26,7 +26,7 @@ from scipy.ndimage.measurements import variance
 # from skimage.morphology import erosion
 # from skimage.morphology import disk
 
-import insar.io
+import insar.sario
 import insar.utils
 
 
@@ -47,7 +47,7 @@ def lee_filter(img, size=5):
 
 
 def mask(filepath, threshold=0.002):
-    cur_file = insar.io.load_file(filepath)
+    cur_file = insar.sario.load_file(filepath)
 
     # Note: abs for complex files, but also fine for .cor magnitude files
     ampfile = np.abs(cur_file)
@@ -66,13 +66,13 @@ def save(filepath, mask, downsample=0):
     print('ok')
     # maskfile = filepath.replace(ext, '.jpg')
     # Keep old .ext so we know what type was masked
-    ext = insar.io.get_file_ext(filepath)
+    ext = insar.sario.get_file_ext(filepath)
     maskfile = filepath.replace(ext, ext + '.png')
 
     if args.downsample:
-        insar.io.save_array(maskfile, insar.utils.downsample_im(mask, args.downsample))
+        insar.sario.save_array(maskfile, insar.utils.downsample_im(mask, args.downsample))
     else:
-        insar.io.save_array(maskfile, mask)
+        insar.sario.save_array(maskfile, mask)
     return True
 
 
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     filepath = os.path.expanduser(args.filename)
-    ext = insar.io.get_file_ext(filepath)
+    ext = insar.sario.get_file_ext(filepath)
     allowed_exts = ('.int', '.cor', '.mlc')
     if ext not in allowed_exts:
         print('Error: Only taking {} files for now.'.format(', '.join(allowed_exts)))
