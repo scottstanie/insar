@@ -11,12 +11,13 @@ import json
 
 def geojson_to_bounds(geojson):
     try:
-        assert geojson['features'][0]['geometry']['type'] == 'Polygon', 'Must use polygon geojson'
+        assert geojson['type'] == 'Polygon', 'Must use polygon geojson'
     except KeyError as exc:
         print("Invalid geojson")
         raise
 
-    coordinates = geojson['features'][0]['geometry']['coordinates'][0]
+    # Note: we are assuming a simple polygon with no holes
+    coordinates = geojson['coordinates'][0]
 
     left = min(float(lon) for (lon, lat) in coordinates)
     right = max(float(lon) for (lon, lat) in coordinates)

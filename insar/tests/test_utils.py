@@ -3,7 +3,6 @@ import numpy as np
 
 from insar.utils import (
     downsample_im,
-    upsample_dem,
     clip,
     log,
     split_array_into_blocks,

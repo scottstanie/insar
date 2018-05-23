@@ -1,7 +1,7 @@
 import unittest
 
-from insar.sario import (get_file_ext, load_dem_rsc, load_file, load_real, load_complex,
-                         load_elevation, is_complex, parse_ann_file, make_ann_filename)
+from insar.sario import (get_file_ext, load_file, load_real, load_complex, load_elevation,
+                         is_complex, parse_ann_file, make_ann_filename)
 """Functions todo:
 def get_file_ext(filename):
 def load_file(filename, ann_info=None):

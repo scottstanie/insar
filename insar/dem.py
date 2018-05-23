@@ -21,22 +21,22 @@ def upsample_dem(dem_img, rate=3):
     """
 
     s1, s2 = dem_img.shape
-    # TODO: figure out whether makeDEM.m really needs to form using
-    # points 1:size and then interpolate with points 0:size
     orig_points = (np.arange(1, s1 + 1), np.arange(1, s2 + 1))
+
     rgi = RegularGridInterpolator(points=orig_points, values=dem_img)
 
-    # Make a grid from 0 to (size-1) inclusive, in both directions
-    # 1j used to say "make s1*rate number of points exactly"
+    # Make a grid from 1 to size (inclusive for mgrid), in both directions
+    # 1j used by mgrid: makes numx/numy number of points exactly (like linspace)
     numx = 1 + (s1 - 1) * rate
     numy = 1 + (s2 - 1) * rate
-    X, Y = np.mgrid[1:s1:numx * 1j, 1:s2:numy * 1j]
+    X, Y = np.mgrid[1:s1:(numx * 1j), 1:s2:(numy * 1j)]
 
-    # new_points will be a 2xN matrix, N=(numx*numy)
-    new_points = np.vstack([X.ravel(), Y.ravel()])
+    # vstack makes 2XN, N=(numx*numy): new_points will be a Nx2 matrix
+    new_points = np.vstack([X.ravel(), Y.ravel()]).T
 
-    # rgi expects Nx2 as input, and will output as a 1D vector
-    return rgi(new_points.T).reshape(numx, numy).round().astype(dem_img.dtype)
+    # rgi expects Nx2 as input, and will output as a 1D vector 
+    # Should be same dtype (int16), and round used to not truncate 2.9 to 2
+    return rgi(new_points).reshape(numx, numy).round().astype(dem_img.dtype)
 
 
 def mosaic_dem(d1, d2):
