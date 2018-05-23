@@ -15,6 +15,7 @@ Example .dem.rsc (for N19W156.hgt and N19W155.hgt stitched horizontally):
 
 """
 import collections
+import os
 import re
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
@@ -75,7 +76,7 @@ def start_lon_lat(tilename):
     left_lon = -1 * float(lon) if lon_str == 'W' else float(lon)
     # No additions needed to lon: bottom left and top left are same
     # Only the lat gets added or subtracted
-    top_lat = float(lat) + 1 if lat_str == 'num_pixels' else float(lat) - 1
+    top_lat = float(lat) + 1 if lat_str == 'N' else float(lat) - 1
     return (left_lon, top_lat)
 
 
@@ -138,11 +139,11 @@ def create_dem_rsc(SRTM1_tile_list):
         for tile in tile_list:
             lon, lat = start_lon_lat(tile)
             x_first = min(x_first, lon)
-            y_first = min(y_first, lat)
+            y_first = max(y_first, lat)
         return x_first, y_first
 
     # Use an OrderedDict for the key/value pairs so writing to file easy
-    rsc_data = collections.OrderedDict(RSC_KEYS)
+    rsc_data = collections.OrderedDict.fromkeys(RSC_KEYS)
     rsc_data.update({
         'X_UNIT': 'degrees',
         'Y_UNIT': 'degrees',
@@ -151,15 +152,21 @@ def create_dem_rsc(SRTM1_tile_list):
         'PROJECTION': 'LL',
     })
 
-    x_first, y_first = _calc_x_y_firsts(SRTM1_tile_list)
+    # Remove paths from tile filenames, if they exist
+    tile_names = [os.path.split(t)[1] for t in SRTM1_tile_list]
+    x_first, y_first = _calc_x_y_firsts(tile_names)
     # TODO: first out generalized way to get nx, ny.
     # Only using one pair left/right for now
     nx = 2
     ny = 1
     # TODO: figure out where to generalize for SRTM3
     num_pixels = 3601
-    rsc_data.update({'WIDTH': nx * num_pixels, 'FILE_LENGTH': ny * num_pixels})
+    rsc_data.update({
+        'WIDTH': nx * num_pixels - (nx - 1),
+        'FILE_LENGTH': ny * num_pixels - (ny - 1)
+    })
     rsc_data.update({'X_FIRST': x_first, 'Y_FIRST': y_first})
+    rsc_data.update({'X_STEP': 1 / num_pixels, 'Y_STEP': -1 / num_pixels})
     return rsc_data
 
 
@@ -181,12 +188,8 @@ def format_dem_rsc(rsc_data):
     outstring = ""
     for field, value in rsc_data.items():
         # Files seemed to be left justified with 13 spaces? Not sure why 13
-        if field.lower() in ('width', 'file_length'):
-            outstring += "{field:<13s}{val}\n".format(field=field.upper(), val=new_size)
-        elif field.lower() in ('x_step', 'y_step'):
-            # New is 1 + (size - 1) * rate, old is size, old rate is 1/(size-1)
-            value /= rate
-            # Also give step floats proper sig figs to not output scientific notation
+        if field.lower() in ('x_step', 'y_step'):
+            # give step floats proper sig figs to not output scientific notation
             outstring += "{field:<13s}{val:0.12f}\n".format(field=field.upper(), val=value)
         else:
             outstring += "{field:<13s}{val}\n".format(field=field.upper(), val=value)
