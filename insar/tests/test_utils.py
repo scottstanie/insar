@@ -21,11 +21,11 @@ def combine_cor_amp(corfilename, save=True):
 
 class TestHelpers(unittest.TestCase):
     def setUp(self):
-        self.im = np.array([[.1, 0, 2], [3, 4, 1 + 1j]])
+        self.im = np.array([[.1, 0.01, 2], [3, 4, 1 + 1j]])
 
     def test_clip(self):
-        self.assertTrue(np.all(clip(self.im) == np.array([[.1, 0, 1], [1, 1, 1]])))
+        self.assertTrue(np.all(clip(self.im) == np.array([[.1, 0.01, 1], [1, 1, 1]])))
 
     def test_log(self):
-        out = np.array([[-20., -np.inf, 6.020599], [9.542425, 12.041199, 3.010299]])
+        out = np.array([[-20., -40, 6.020599], [9.542425, 12.041199, 3.010299]])
         self.assertTrue(np.allclose(out, log(np.abs(self.im))))
