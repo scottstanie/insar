@@ -47,7 +47,7 @@ def download_eofs(orbit_dates, mission=None):
         raise ValueError('mission argument must be "S1A" or "S1B"')
 
     # Conver any string dates to a datetime
-    orbit_dates = [parse(date) for date in orbit_dates if isinstance(date, str)]
+    orbit_dates = [parse(date) if isinstance(date, str) else date for date in orbit_dates]
 
     # Subtract one day from desired orbits to get correct files
     validity_dates = [date + relativedelta(days=-1) for date in orbit_dates]
