@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 """Author: Scott Staniewicz
 Helper functions to prepare and process UAVSAR data
+Most functions will be stuck in here until there's a more sensible module.
 Email: scott.stanie@utexas.edu
 """
 
@@ -43,8 +44,8 @@ def upsample_dem(dem_img, rate=3):
 
     # Make a grid from 0 to (size-1) inclusive, in both directions
     # 1j used to say "make s1*rate number of points exactly"
-    numx = (s1 * rate) + 1
-    numy = (s2 * rate) + 1
+    numx = 1 + (s1 - 1) * rate
+    numy = 1 + (s2 - 1) * rate
     X, Y = np.mgrid[1:s1:numx * 1j, 1:s2:numy * 1j]
 
     # new_points will be a 2xN matrix, N=(numx*numy)
