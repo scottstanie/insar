@@ -43,14 +43,22 @@ def upsample_dem(dem_img, rate=3):
 
     # Make a grid from 0 to (size-1) inclusive, in both directions
     # 1j used to say "make s1*rate number of points exactly"
-    numx = s1 * rate + 1
-    numy = s2 * rate + 1
+    numx = (s1 * rate) + 1
+    numy = (s2 * rate) + 1
     X, Y = np.mgrid[1:s1:numx * 1j, 1:s2:numy * 1j]
+
     # new_points will be a 2xN matrix, N=(numx*numy)
     new_points = np.vstack([X.ravel(), Y.ravel()])
 
     # rgi expects Nx2 as input, and will output as a 1D vector
-    return rgi(new_points.T).reshape(numx, numy).astype(dem_img.dtype)
+    return rgi(new_points.T).reshape(numx, numy).round().astype(dem_img.dtype)
+
+
+def mosaic_dem(d1, d2):
+    D = np.concatenate((d1, d2), axis=1)
+    nrows, ncols = d1.shape
+    D = np.delete(D, nrows, axis=1)
+    return D
 
 
 def clip(image):
