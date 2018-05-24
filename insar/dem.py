@@ -105,7 +105,7 @@ def upsample_dem(dem_img, rate=3):
     numy = _up_size(s2, rate)
     X, Y = np.mgrid[1:s1:(numx * 1j), 1:s2:(numy * 1j)]
 
-    # vstack makes 2XN, num_pixels=(numx*numy): new_points will be a Nx2 matrix
+    # vstack makes 2xN, num_pixels=(numx*numy): new_points will be a Nx2 matrix
     new_points = np.vstack([X.ravel(), Y.ravel()]).T
 
     # rgi expects Nx2 as input, and will output as a 1D vector
@@ -166,7 +166,7 @@ def create_dem_rsc(SRTM1_tile_list):
         'FILE_LENGTH': ny * num_pixels - (ny - 1)
     })
     rsc_data.update({'X_FIRST': x_first, 'Y_FIRST': y_first})
-    rsc_data.update({'X_STEP': 1 / num_pixels, 'Y_STEP': -1 / num_pixels})
+    rsc_data.update({'X_STEP': 1 / (num_pixels - 1), 'Y_STEP': -1 / (num_pixels - 1)})
     return rsc_data
 
 
