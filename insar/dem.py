@@ -20,6 +20,7 @@ import re
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
+from insar.log import get_log, log_runtime
 from insar import sario
 
 RSC_KEYS = [
@@ -80,6 +81,7 @@ def start_lon_lat(tilename):
     return (left_lon, top_lat)
 
 
+@log_runtime
 def upsample_dem(dem_img, rate=3):
     """Interpolates a DEM to higher resolution for better InSAR quality
 

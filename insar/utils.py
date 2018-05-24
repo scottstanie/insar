@@ -9,6 +9,9 @@ import argparse
 import numpy as np
 
 import insar.sario
+from insar.log import get_log
+
+logger = get_log()
 
 
 def downsample_im(image, rate=10):

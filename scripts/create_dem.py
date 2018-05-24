@@ -5,6 +5,7 @@ import sys
 import os.path
 from insar.sario import load_file
 import insar.dem
+from insar.log import get_log
 
 
 def positive_integer(argstring):
@@ -15,6 +16,7 @@ def positive_integer(argstring):
 
 
 def main():
+    logger = get_log()
     parser = argparse.ArgumentParser()
     parser.add_argument("left", help="Left .hgt block for the dem")
     parser.add_argument("right", help="Right .hgt block in mosaic")
@@ -23,17 +25,18 @@ def main():
     args = parser.parse_args()
 
     if not all(insar.sario.get_file_ext(f) == '.hgt' for f in (args.left, args.right)):
-        print('Both files must be .hgt files.')
+        logger.error('Both files must be .hgt files.')
         sys.exit(1)
 
     left_block = load_file(args.left)
     right_block = load_file(args.right)
     if not left_block.shape == right_block.shape:
-        print('Both files must be same data type/shape, either 1 degree (30 m) or 3 degree (90 m)')
+        logger.error(
+            'Both files must be same data type/shape, either 1 degree (30 m) or 3 degree (90 m)')
         sys.exit(1)
 
     if left_block.shape == (3601, 3601):
-        print('SRTM type for {}: 1 degree data, 30 m'.format(args.left))
+        logger.info('SRTM type for {}: 1 degree data, 30 m'.format(args.left))
 
     big_output_path = os.path.join(os.path.dirname(args.left), args.output)
     big_rsc_output_path = big_output_path + '.rsc'
@@ -41,24 +44,24 @@ def main():
     small_rsc_output_path = small_output_path + '.rsc'
 
     full_block = insar.dem.mosaic_dem(left_block, right_block)
-    print('Writing stitched DEM to {}'.format(small_output_path))
+    logger.info('Writing stitched DEM to {}'.format(small_output_path))
     full_block.tofile(small_output_path)
 
     small_rsc_dict = insar.dem.create_dem_rsc([args.left, args.right])
     with open(small_rsc_output_path, 'w') as f:
-        print('Writing rsc to {}'.format(small_rsc_output_path))
+        logger.info('Writing rsc to {}'.format(small_rsc_output_path))
         f.write(insar.dem.format_dem_rsc(small_rsc_dict))
 
     rate = args.rate
     if rate == 1:
-        print("Rate = 1: No upsampling to do")
-        print("Renaming {} to {}".format(small_output_path, big_output_path))
-        print("Renaming {} to {}".format(small_rsc_output_path, big_rsc_output_path))
+        logger.info("Rate = 1: No upsampling to do")
+        logger.info("Renaming {} to {}".format(small_output_path, big_output_path))
+        logger.info("Renaming {} to {}".format(small_rsc_output_path, big_rsc_output_path))
         os.rename(small_output_path, big_output_path)
         os.rename(small_rsc_output_path, big_rsc_output_path)
         sys.exit(0)
     else:
-        print("Upsampling by {}".format(rate))
+        logger.info("Upsampling by {}".format(rate))
 
     # Now upsample this block
     big_dem = insar.dem.upsample_dem(full_block, rate)

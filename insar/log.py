@@ -6,7 +6,7 @@ nice formatting out of the box.
 
 Usage:
 
-    from log import get_log
+    from insar.log import get_log
     logger = get_log()
 
     logger.info("Something happened")
@@ -17,13 +17,14 @@ Usage:
     # Custom output for this module:
     logger.success("Something great happened: highlight this success")
 """
+import argparse
 import logging
+import time
 
 from colorlog import ColoredFormatter
-import argparse
 
 
-def get_log(debug=False, name=__file__):
+def get_log(debug=False, name=__file__, verbose=False):
     """Creates a nice log format for use across multiple files.
 
     Default logging level is INFO
@@ -34,10 +35,10 @@ def get_log(debug=False, name=__file__):
 
     """
     logger = logging.getLogger(name)
-    return format_log(logger, debug=debug)
+    return format_log(logger, debug=debug, verbose=verbose)
 
 
-def format_log(logger, debug=False):
+def format_log(logger, debug=False, verbose=False):
     """Makes the logging output pretty and colored with times"""
     log_level = logging.DEBUG if debug else logging.INFO
 
@@ -68,12 +69,51 @@ def format_log(logger, debug=False):
         logger.addHandler(handler)
         logger.setLevel(log_level)
 
-        logger.info('Logger initialized: %s' % (logger.name, ))
+        if verbose:
+            logger.info('Logger initialized: %s' % (logger.name, ))
 
     if debug:
         logger.setLevel(debug)
 
     return logger
+
+
+logger = get_log()
+
+
+def log_runtime(f):
+    """
+    Logs how long a decorated function takes to run
+
+    Args:
+        f (function): The function to wrap
+
+    Returns:
+        function: The wrapped function
+
+    Example:
+        >>> @log_runtime
+        >>> def my_func():
+        >>>     ...
+        >>> my_func()
+        "Total elapsed time for my_func (minutes): X.YZ
+
+    """
+
+    def wrapper(*args, **kwargs):
+        t1 = time.time()
+
+        result = f(*args, **kwargs)
+
+        t2 = time.time()
+        elapsed_time = t2 - t1
+        time_string = 'Total elapsed time for {} (minutes): {}'.format(
+            f.__name__, "{0:.2f}".format(elapsed_time / 60.0))
+
+        logger.info(time_string)
+        return result
+
+    return wrapper
 
 
 if __name__ == '__main__':
@@ -90,8 +130,9 @@ if __name__ == '__main__':
     try:
         print(1 / 0)
     except ZeroDivisionError:
-        log.exception('Sample exception')
-        log.error('Sample error', exc_info=True)
+        log.exception('Sample exception (prints traceback by default)')
+        log.error('Sample error (uses exc_info for traceback)', exc_info=True)
+    log.error('Other kind of error.')
     log.warning('Sample warning')
     log.success('Sample SUCCESS!')
     log.debug('Sample debug')
