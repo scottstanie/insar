@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
   int rate = atoi(argv[2]);
 
   // Optional input:
-const char* outfileUp;
+  const char *outfileUp;
   if (argc < 4) {
     outfileUp = "elevation_upsampled.dem";
     printf("Using %s as output file for upsampling.\n", outfileUp);
@@ -32,17 +32,16 @@ const char* outfileUp;
   printf("Upsampling by %d\n", rate);
 
   FILE *fp = fopen(filename, "r");
-  if (fp == NULL){
+  if (fp == NULL) {
     fprintf(stderr, "Failure to open %s. Exiting.\n", filename);
     return EXIT_FAILURE;
   }
-
 
   int nbytes = 2;
   int16_t buf[1];
   int16_t *demGrid = (int16_t *)malloc(DEM_SIZE * DEM_SIZE * sizeof(*demGrid));
 
-  int i=0, j=0;
+  int i = 0, j = 0;
   for (i = 0; i < DEM_SIZE; i++) {
     for (j = 0; j < DEM_SIZE; j++) {
       if (fread(buf, nbytes, 1, fp) != 1) {
@@ -53,7 +52,6 @@ const char* outfileUp;
     }
   }
   fclose(fp);
-
 
   // Interpolation
   short bi = 0, bj = 0;
@@ -120,10 +118,12 @@ const char* outfileUp;
   printf("Finished with upsampling, writing to disk\n");
 
   fp = fopen(outfileUp, "wb");
-  //fwrite(upDemGrid, sizeof(int16_t), upSize * upSize, fp);
+  // fwrite(upDemGrid, sizeof(int16_t), upSize * upSize, fp);
   fwrite(upDemGrid, sizeof(int16_t), upSize * upSize, fp);
   fclose(fp);
   printf("%s write complete.\n", outfileUp);
+  free(demGrid);
+  free(upDemGrid);
   return 0;
 }
 
