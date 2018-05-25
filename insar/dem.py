@@ -14,13 +14,22 @@ Example .dem.rsc (for N19W156.hgt and N19W155.hgt stitched horizontally):
         PROJECTION    LL
 
 """
+try:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    PARALLEL = True
+except ImportError:  # Python 2 doesn't have this :(
+    PARALLEL = False
 import collections
 import math
+import json
 import os
 import re
+import sys
+import requests
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
+from insar.geojson import geojson_to_bounds
 from insar.log import get_log, log_runtime
 from insar import sario
 
@@ -41,49 +50,99 @@ RSC_KEYS = [
 
 
 class Downloader:
-    def __init__(self, left, bottom, right, top):
+    def __init__(self, left, bottom, right, top, margin=0, parallel_ok=PARALLEL):
         self.left = left
         self.right = right
         self.bottom = bottom
         self.top = top
-        self.tile_name_template = '{slat}/{slat}{slon}.tif'
+        self.margin = margin
+        # AWS format for downloading SRTM1 .hgt tiles
+        self.data_url = 'https://s3.amazonaws.com/elevation-tiles-prod/skadi'
+        self.compressed_ext = '.gz'
+        self.parallel_ok = parallel_ok
 
     @staticmethod
     def _get_cache_dir():
+        """Find location of directory to store .hgt downloads"""
         # TODO: Decide assumption that we're on linux (should I just get appdirs?)
         path = os.getenv('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
         path = os.path.join(path, 'insar')  # Make subfolder for our downloads
         if not os.path.exists(path):
             os.makedirs(path)
+        return path
 
     @staticmethod
-    def srtm1_tile_ilonlat(lon, lat):
+    def srtm1_tile_corner(lon, lat):
+        """Integers for the bottom right corner of requested lon/lat"""
         return int(math.floor(lon)), int(math.floor(lat))
 
-    def srtm1_tiles_names(self):
-        ileft, itop = self.srtm1_tile_ilonlat(left, top)
-        iright, ibottom = self.srtm1_tile_ilonlat(right, bottom)
-        # special case often used *integer* top and right to avoid downloading unneeded tiles
-        if isinstance(self.top, int) or self.top.is_integer():
-            itop -= 1
-        if isinstance(self.right, int) or self.right.is_integer():
-            iright -= 1
-        for ilon in range(ileft, iright + 1):
-            slon = '%s%03d' % ('E' if ilon >= 0 else 'W', abs(ilon))
-            for ilat in range(ibottom, itop + 1):
-                slat = '%s%02d' % ('N' if ilat >= 0 else 'S', abs(ilat))
-    yield tile_name_template.format({'slat':slat,'slon':slon})
+    def srtm1_tile_names(self):
+        """Iterator over all tiles needed to cover the requested bounds
 
+        yields:
+            str: tile names to fit into data_url to be downloaded
+                yielded in order of top left to bottom right
+        """
+        left_int, top_int = self.srtm1_tile_corner(self.left, self.top)
+        right_int, bot_int = self.srtm1_tile_corner(self.right, self.bottom)
+        # If exact integer was requested for top/right, assume tile with that number
+        # at the top/right is acceptable (dont download the one above that)
+        if isinstance(self.top, int):
+            top_int -= 1
+        if isinstance(self.right, int):
+            right_int -= 1
 
-    def build_bounds(bounds, margin=MARGIN):
-        left, bottom, right, top = bounds
-        if margin.endswith('%'):
-            margin_percent = float(margin[:-1])
-            margin_lon = (right - left) * margin_percent / 100
-            margin_lat = (top - bottom) * margin_percent / 100
+        tile_name_template = '{lat_str}/{lat_str}{lon_str}.hgt'
+        for ilon in range(left_int, right_int + 1):
+            hemi_ew = 'E' if ilon >= 0 else 'W'
+            lon_str = '{}{:03d}'.format(hemi_ew, abs(ilon))
+            for ilat in range(bot_int, top_int + 1):
+                hemi_ns = 'N' if ilat >= 0 else 'S'
+                lat_str = '{}{:02d}'.format(hemi_ns, abs(ilat))
+
+                yield tile_name_template.format(lat_str=lat_str, lon_str=lon_str)
+
+    def build_bounds(self):
+        """Adds margin to the existing founds by either pct. or float value"""
+        if self.margin.endswith('%'):
+            margin_percent = float(self.margin[:-1])
+            margin_lon = (self.right - self.left) * margin_percent / 100
+            margin_lat = (self.top - self.bottom) * margin_percent / 100
         else:
-            margin_lon = margin_lat = float(margin)
-    return (left - margin_lon, bottom - margin_lat, right + margin_lon, top + margin_lat)
+            margin_lon = margin_lat = float(self.margin)
+
+        return (self.left - margin_lon, self.bottom - margin_lat, self.right + margin_lon,
+                self.top + margin_lat)
+
+    def _download_hgt_tile(self, tile_name_str):
+        url = '{base}/{tile}{ext}'.format(
+            base=self.data_url, tile=tile_name_str, ext=self.compressed_ext)
+        logger.info("Downloading {}".format(url))
+        return requests.get(url)
+
+    def download_and_save(self, tile_name_str):
+        local_filename = os.path.join(self._get_cache_dir(), os.path.split(tile_name_str)[1])
+        if os.path.exists(local_filename):
+            logger.info("{} alread exists, skipping.".format(local_filename))
+        else:
+            with open(local_filename, 'wb') as f:
+                response = self._download_hgt_tile(tile_name_str)
+                f.write(response.content)
+                logger.info("Writing to {}".format(local_filename))
+
+    def download_all(self):
+        if self.parallel_ok:
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                future_to_tile = {
+                    executor.submit(self.download_and_save, tile): tile
+                    for tile in self.srtm1_tile_names()
+                }
+                for future in as_completed(future_to_tile):
+                    logger.info('Finished {}'.format(future_to_tile[future]))
+
+        else:
+            for tile_name_str in self.srtm1_tile_names():
+                self.download_and_save(tile_name_str)
 
 
 def _up_size(cur_size, rate):
@@ -279,3 +338,13 @@ def upsample_dem(dem_img, rate=3):
     # Should be same dtype (int16), and round used to not truncate 2.9 to 2
     return rgi(new_points).reshape(numx, numy).round().astype(dem_img.dtype)
 
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        with open(sys.argv[1], 'r') as f:
+            geojson = json.load(f)
+    else:
+        geojson = json.load(sys.stdin)
+
+    d = Downloader(*geojson_to_bounds(geojson))
+    d.download_all()
