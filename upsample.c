@@ -58,15 +58,22 @@ int main(int argc, char **argv) {
   printf("New size of upsampled DEM: %d\n", upSize);
   int16_t *upDemGrid = (int16_t *)malloc(upSize * upSize * sizeof(*upDemGrid));
 
-  for (i = 0; i < upSize - 1; i++) {
-    for (j = 0; j < upSize - 1; j++) {
-	  bi = i % rate;
-	  bj = j % rate;
-      int origI = i / rate;  // int division
-      int origJ = j / rate;  // int division
-      int16_t interpValue = calcInterp(demGrid, origI, origJ, bi, bj, rate);
-      int curBigj = rate * j + bj;
-      upDemGrid[getIdx(i, j, upSize)] = interpValue;
+  for (int i = 0; i < DEM_SIZE - 1; i++) {
+    for (int j = 0; j < DEM_SIZE - 1; j++) {
+      // At each point of the smaller DEM, walk bi, bj up to rate and find
+      // interp value
+      while (bi < rate) {
+        int curBigi = rate * i + bi;
+        while (bj < rate) {
+          int16_t interpValue = calcInterp(demGrid, i, j, bi, bj, rate);
+          int curBigj = rate * j + bj;
+          upDemGrid[getIdx(curBigi, curBigj, upSize)] = interpValue;
+          ++bj;
+        }
+        bj = 0; // reset the bj column back to 0 for this (i, j)
+        ++bi;
+      }
+      bi = 0; // reset the bi row back to 0 for this (i, j)
     }
   }
 
