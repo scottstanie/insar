@@ -82,38 +82,34 @@ int main(int argc, char **argv) {
   }
 
   // Finally, copy over the last row and last column
-  // Copy last row:
-  for (int i = 0; i < DEM_SIZE; i++) {
-    int j = (DEM_SIZE - 1); // Last row
+  // Copy last col:
+  bi = 0;
+  for (i = 0; i < DEM_SIZE; i++) {
+    j = (DEM_SIZE - 1); // Last col
+    bj = 0;             // bj stays at 0 when j is max index
+    int curBigj = rate * j + bj;
     while (bi < rate) {
+      int16_t interpValue = calcInterp(demGrid, i, j, bi, bj, rate);
       int curBigi = rate * i + bi;
-      while (bj < rate) {
-        int curBigj = rate * j + bj;
-        upDemGrid[getIdx(curBigi, curBigj, upSize)] =
-            demGrid[getIdx(i, j, DEM_SIZE)];
-        ++bj;
-      }
-      bj = 0; // reset the bj column back to 0 for this (i, j)
+      upDemGrid[getIdx(curBigi, curBigj, upSize)] = interpValue;
       ++bi;
     }
     bi = 0; // reset the bi row back to 0 for this (i, j)
   }
 
-  // Copy last column:
-  for (int j = 0; j < DEM_SIZE; j++) {
-    int i = (DEM_SIZE - 1); // Last col
-    while (bi < rate) {
-      int curBigi = rate * i + bi;
-      while (bj < rate) {
-        int curBigj = rate * j + bj;
-        upDemGrid[getIdx(curBigi, curBigj, upSize)] =
-            demGrid[getIdx(i, j, DEM_SIZE)];
-        ++bj;
-      }
-      bj = 0; // reset the bj column back to 0 for this (i, j)
-      ++bi;
+  // Copy last row:
+  bj = 0;
+  for (j = 0; j < DEM_SIZE; j++) {
+    i = (DEM_SIZE - 1); // Last row
+    bi = 0;             // bi stays at 0 when i is max index
+    int curBigi = rate * i + bi;
+    while (bj < rate) {
+      int16_t interpValue = calcInterp(demGrid, i, j, bi, bj, rate);
+      int curBigj = rate * j + bj;
+      upDemGrid[getIdx(curBigi, curBigj, upSize)] = interpValue;
+      ++bj;
     }
-    bi = 0; // reset the bi row back to 0 for this (i, j)
+    bj = 0; // reset the bj column back to 0 for this (i, j)
   }
   printf("Finished with upsampling, writing to disk\n");
 
