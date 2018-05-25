@@ -26,6 +26,7 @@ import os
 import re
 import sys
 import requests
+import subprocess
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
@@ -49,6 +50,16 @@ RSC_KEYS = [
 ]
 
 
+def _get_cache_dir():
+    """Find location of directory to store .hgt downloads"""
+    # TODO: Decide assumption that we're on linux (should I just get appdirs?)
+    path = os.getenv('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
+    path = os.path.join(path, 'insar')  # Make subfolder for our downloads
+    if not os.path.exists(path):
+        os.makedirs(path)
+    return path
+
+
 class Downloader:
     def __init__(self, left, bottom, right, top, margin=0, parallel_ok=PARALLEL):
         self.left = left
@@ -60,16 +71,6 @@ class Downloader:
         self.data_url = 'https://s3.amazonaws.com/elevation-tiles-prod/skadi'
         self.compressed_ext = '.gz'
         self.parallel_ok = parallel_ok
-
-    @staticmethod
-    def _get_cache_dir():
-        """Find location of directory to store .hgt downloads"""
-        # TODO: Decide assumption that we're on linux (should I just get appdirs?)
-        path = os.getenv('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
-        path = os.path.join(path, 'insar')  # Make subfolder for our downloads
-        if not os.path.exists(path):
-            os.makedirs(path)
-        return path
 
     @staticmethod
     def srtm1_tile_corner(lon, lat):
@@ -102,35 +103,54 @@ class Downloader:
 
                 yield tile_name_template.format(lat_str=lat_str, lon_str=lon_str)
 
-    def build_bounds(self):
-        """Adds margin to the existing founds by either pct. or float value"""
-        if self.margin.endswith('%'):
-            margin_percent = float(self.margin[:-1])
-            margin_lon = (self.right - self.left) * margin_percent / 100
-            margin_lat = (self.top - self.bottom) * margin_percent / 100
-        else:
-            margin_lon = margin_lat = float(self.margin)
-
-        return (self.left - margin_lon, self.bottom - margin_lat, self.right + margin_lon,
-                self.top + margin_lat)
-
     def _download_hgt_tile(self, tile_name_str):
+        """Downloads a singles from AWS
+
+        Args:
+            tile_name_str (str): string name of tile on AWS (e.g. N19/N19W156.hgt)
+
+        Returns:
+            None
+        """
         url = '{base}/{tile}{ext}'.format(
             base=self.data_url, tile=tile_name_str, ext=self.compressed_ext)
         logger.info("Downloading {}".format(url))
         return requests.get(url)
 
+    @staticmethod
+    def unzip_file(filepath):
+        ext = sario.get_file_ext(filepath)
+        if ext == '.gz':
+            unzip_cmd = 'gunzip'
+        elif ext == '.zip':
+            unzip_cmd = 'unzip'
+        subprocess.check_call([unzip_cmd, filepath])
+
     def download_and_save(self, tile_name_str):
-        local_filename = os.path.join(self._get_cache_dir(), os.path.split(tile_name_str)[1])
+        """Download and save one single tile
+
+        Args:
+            tile_name_str (str): string name of tile on AWS (e.g. N19/N19W156.hgt)
+
+        Returns:
+            None
+        """
+        # Remove extra latitude portion N19: keep all in one folder, gzipped
+        local_filename = os.path.join(_get_cache_dir(), tile_name_str.split('/')[1])
         if os.path.exists(local_filename):
             logger.info("{} alread exists, skipping.".format(local_filename))
         else:
+            # On AWS these are gzipped: download, then unzip
+            local_filename += self.compressed_ext
             with open(local_filename, 'wb') as f:
                 response = self._download_hgt_tile(tile_name_str)
                 f.write(response.content)
                 logger.info("Writing to {}".format(local_filename))
+            logger.info("Unzipping {}".format(local_filename))
+            self.unzip_file(local_filename)
 
     def download_all(self):
+        """Downloads and saves all tiles from tile list"""
         if self.parallel_ok:
             with ThreadPoolExecutor(max_workers=4) as executor:
                 future_to_tile = {
@@ -138,11 +158,46 @@ class Downloader:
                     for tile in self.srtm1_tile_names()
                 }
                 for future in as_completed(future_to_tile):
+                    future.result()
                     logger.info('Finished {}'.format(future_to_tile[future]))
 
         else:
             for tile_name_str in self.srtm1_tile_names():
                 self.download_and_save(tile_name_str)
+
+
+class Stitcher:
+    """Class to combine separate .hgt tiles into one .dem file"""
+
+    def __init__(self, tile_file_list):
+        """List should come from Downloader.srtm1_tile_list()"""
+        self.tile_file_list = [t.split('/')[1] for t in tile_file_list]
+
+    def compute_shape(self):
+        """Takes the tile list and computes the number of rows and columns"""
+        lon_lat_tups = [start_lon_lat(t) for t in self.tile_file_list]
+        # Unique each lat/lon: length of lats = num rows, lons = cols
+        num_lons = len(set(tup[0] for tup in lon_lat_tups))
+        num_lats = len(set(tup[1] for tup in lon_lat_tups))
+        return (num_lats, num_lons)
+
+    def load_tiles(self):
+        file_list = [os.path.join(_get_cache_dir(), tile) for tile in self.tile_file_list]
+        nrows, ncols = self.compute_shape()
+        flist = np.array(file_list).reshape((nrows, ncols))
+        row_list = []
+        for idx, row in enumerate(flist):
+            cur_row = np.hstack(sario.load_file(f) for f in row)
+            # TODO: where to get 3601 from, magic number now
+            cur_row = np.delete(cur_row, 3601 * list(range(1, ncols)), axis=1)
+            if idx > 0:
+                # For all except first block-row, delete repeated first row of data
+                cur_row = np.delete(cur_row, 0, axis=0)
+            row_list.append(cur_row)
+        return np.vstack(row_list)
+
+    def reshape(self):
+        pass
 
 
 def _up_size(cur_size, rate):
@@ -196,13 +251,13 @@ def mosaic_dem(d1, d2):
     return D
 
 
-def create_dem_rsc(SRTM1_tile_list):
+def create_dem_rsc(srtm1_tile_list):
     """Takes a list of the SRTM1 tile names and outputs .dem.rsc file values
 
     See module docstring for example .dem.rsc file.
 
     Args:
-        SRTM1_tile_list (list[str]): names of tiles (e.g. N19W156)
+        srtm1_tile_list (list[str]): names of tiles (e.g. N19W156)
 
     Returns:
         OrderedDict: key/value pairs in order to write to a .dem.rsc file
@@ -228,7 +283,7 @@ def create_dem_rsc(SRTM1_tile_list):
     })
 
     # Remove paths from tile filenames, if they exist
-    tile_names = [os.path.split(t)[1] for t in SRTM1_tile_list]
+    tile_names = [os.path.split(t)[1] for t in srtm1_tile_list]
     x_first, y_first = _calc_x_y_firsts(tile_names)
     # TODO: first out generalized way to get nx, ny.
     # Only using one pair left/right for now
