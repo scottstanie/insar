@@ -11,20 +11,32 @@ int16_t calcInterp(int16_t *demGrid, int i, int j, int bi, int bj, int rate);
 
 int main(int argc, char **argv) {
 
-  // Parse input filename and rate
+  // Parse input filename, rate, and optional output filename
   if (argc < 3) {
-    fprintf(stderr, "Usage: ./dem filename.hgt rate \n");
+    fprintf(stderr, "Usage: ./dem filename.hgt rate [outfilename.dem] \n");
     return EXIT_FAILURE;
   }
   char *filename = argv[1];
   int rate = atoi(argv[2]);
 
+  // Optional input:
+const char* outfileUp;
+  if (argc < 4) {
+    outfileUp = "elevation_upsampled.dem";
+    printf("Using %s as output file for upsampling.\n", outfileUp);
+  } else {
+    outfileUp = "elevation_upsampled.dem";
+  }
+
   printf("Reading from %s\n", filename);
   printf("Upsampling by %d\n", rate);
 
   FILE *fp = fopen(filename, "r");
-  if (fp == NULL)
+  if (fp == NULL){
+    fprintf(stderr, "Failure to open %s. Exiting.\n", filename);
     return EXIT_FAILURE;
+  }
+
 
   int nbytes = 2;
   int16_t buf[1];
@@ -35,7 +47,6 @@ int main(int argc, char **argv) {
     for (j = 0; j < DEM_SIZE; j++) {
       if (fread(buf, nbytes, 1, fp) != 1) {
         fprintf(stderr, "Read failure from %s\n", filename);
-        printf("Read failure from %s\n", filename);
         return EXIT_FAILURE;
       }
       demGrid[getIdx(i, j, DEM_SIZE)] = be16toh(*buf);
@@ -43,11 +54,6 @@ int main(int argc, char **argv) {
   }
   fclose(fp);
 
-  fp = fopen("out.dem", "wb");
-  fwrite(demGrid, sizeof(int16_t), DEM_SIZE * DEM_SIZE, fp);
-  fclose(fp);
-  printf("Read complete\n");
-  printf("%d\n", time(0));
 
   // Interpolation
   short bi = 0, bj = 0;
@@ -77,8 +83,6 @@ int main(int argc, char **argv) {
     }
   }
 
-  printf("Done with bulk, just ends\n");
-  printf("%d\n", time(0));
   // Finally, copy over the last row and last column
   // Copy last row:
   for (int i = 0; i < DEM_SIZE; i++) {
@@ -96,8 +100,7 @@ int main(int argc, char **argv) {
     }
     bi = 0; // reset the bi row back to 0 for this (i, j)
   }
-  printf("last row done\n");
-  printf("%d\n", time(0));
+
   // Copy last column:
   for (int j = 0; j < DEM_SIZE; j++) {
     int i = (DEM_SIZE - 1); // Last col
@@ -114,15 +117,13 @@ int main(int argc, char **argv) {
     }
     bi = 0; // reset the bi row back to 0 for this (i, j)
   }
-  printf("last col done\n");
-  printf("%d\n", time(0));
+  printf("Finished with upsampling, writing to disk\n");
 
-  fp = fopen("out_up.dem", "wb");
+  fp = fopen(outfileUp, "wb");
   //fwrite(upDemGrid, sizeof(int16_t), upSize * upSize, fp);
   fwrite(upDemGrid, sizeof(int16_t), upSize * upSize, fp);
   fclose(fp);
-  printf("file write done\n");
-  printf("%d\n", time(0));
+  printf("%s write complete.\n", outfileUp);
   return 0;
 }
 
