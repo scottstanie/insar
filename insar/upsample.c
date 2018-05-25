@@ -118,8 +118,8 @@ int main(int argc, char **argv) {
   fwrite(upDemGrid, sizeof(int16_t), upSize * upSize, fp);
   fclose(fp);
   printf("%s write complete.\n", outfileUp);
-  free(demGrid);
-  free(upDemGrid);
+  // free(demGrid);
+  // free(upDemGrid);
   return 0;
 }
 
