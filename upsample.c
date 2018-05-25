@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #define DEM_SIZE 3601 // Square DEM
 
@@ -29,8 +30,9 @@ int main(int argc, char **argv) {
   int16_t buf[1];
   int16_t *demGrid = (int16_t *)malloc(DEM_SIZE * DEM_SIZE * sizeof(*demGrid));
 
-  for (int i = 0; i < DEM_SIZE; i++) {
-    for (int j = 0; j < DEM_SIZE; j++) {
+  int i=0, j=0;
+  for (i = 0; i < DEM_SIZE; i++) {
+    for (j = 0; j < DEM_SIZE; j++) {
       if (fread(buf, nbytes, 1, fp) != 1) {
         fprintf(stderr, "Read failure from %s\n", filename);
         printf("Read failure from %s\n", filename);
@@ -44,6 +46,8 @@ int main(int argc, char **argv) {
   fp = fopen("out.dem", "wb");
   fwrite(demGrid, sizeof(int16_t), DEM_SIZE * DEM_SIZE, fp);
   fclose(fp);
+  printf("Read complete\n");
+  printf("%d\n", time(0));
 
   // Interpolation
   short bi = 0, bj = 0;
@@ -54,23 +58,20 @@ int main(int argc, char **argv) {
   printf("New size of upsampled DEM: %d\n", upSize);
   int16_t *upDemGrid = (int16_t *)malloc(upSize * upSize * sizeof(*upDemGrid));
 
-  for (int i = 0; i < DEM_SIZE - 1; i++) {
-    for (int j = 0; j < DEM_SIZE - 1; j++) {
-      while (bi < rate) {
-        int curBigi = rate * i + bi;
-        while (bj < rate) {
-          int16_t interpValue = calcInterp(demGrid, i, j, bi, bj, rate);
-          int curBigj = rate * j + bj;
-          upDemGrid[getIdx(curBigi, curBigj, upSize)] = interpValue;
-          ++bj;
-        }
-        bj = 0; // reset the bj column back to 0 for this (i, j)
-        ++bi;
-      }
-      bi = 0; // reset the bi row back to 0 for this (i, j)
+  for (i = 0; i < upSize - 1; i++) {
+    for (j = 0; j < upSize - 1; j++) {
+	  bi = i % rate;
+	  bj = j % rate;
+      int origI = i / rate;  // int division
+      int origJ = j / rate;  // int division
+      int16_t interpValue = calcInterp(demGrid, origI, origJ, bi, bj, rate);
+      int curBigj = rate * j + bj;
+      upDemGrid[getIdx(i, j, upSize)] = interpValue;
     }
   }
 
+  printf("Done with bulk, just ends\n");
+  printf("%d\n", time(0));
   // Finally, copy over the last row and last column
   // Copy last row:
   for (int i = 0; i < DEM_SIZE; i++) {
@@ -88,6 +89,8 @@ int main(int argc, char **argv) {
     }
     bi = 0; // reset the bi row back to 0 for this (i, j)
   }
+  printf("last row done\n");
+  printf("%d\n", time(0));
   // Copy last column:
   for (int j = 0; j < DEM_SIZE; j++) {
     int i = (DEM_SIZE - 1); // Last col
@@ -104,10 +107,15 @@ int main(int argc, char **argv) {
     }
     bi = 0; // reset the bi row back to 0 for this (i, j)
   }
+  printf("last col done\n");
+  printf("%d\n", time(0));
 
   fp = fopen("out_up.dem", "wb");
+  //fwrite(upDemGrid, sizeof(int16_t), upSize * upSize, fp);
   fwrite(upDemGrid, sizeof(int16_t), upSize * upSize, fp);
   fclose(fp);
+  printf("file write done\n");
+  printf("%d\n", time(0));
   return 0;
 }
 

@@ -98,21 +98,41 @@ def upsample_dem(dem_img, rate=3):
 
     s1, s2 = dem_img.shape
     orig_points = (np.arange(1, s1 + 1), np.arange(1, s2 + 1))
+    import time
 
+    t1 = time.time()
     rgi = RegularGridInterpolator(points=orig_points, values=dem_img)
+    t2 = time.time()
+    print('rgi {}'.format(t1 - t2))
 
     # Make a grid from 1 to size (inclusive for mgrid), in both directions
     # 1j used by mgrid: makes numx/numy number of points exactly (like linspace)
     numx = _up_size(s1, rate)
     numy = _up_size(s2, rate)
+    t1 = time.time()
     X, Y = np.mgrid[1:s1:(numx * 1j), 1:s2:(numy * 1j)]
+    t2 = time.time()
+    print('mgrid {}'.format(t1 - t2))
 
     # vstack makes 2xN, num_pixels=(numx*numy): new_points will be a Nx2 matrix
     new_points = np.vstack([X.ravel(), Y.ravel()]).T
 
     # rgi expects Nx2 as input, and will output as a 1D vector
     # Should be same dtype (int16), and round used to not truncate 2.9 to 2
-    return rgi(new_points).reshape(numx, numy).round().astype(dem_img.dtype)
+
+    t1 = time.time()
+    d1 = rgi(new_points)
+    t2 = time.time()
+    print('rgi {}'.format(t1 - t2))
+    t1 = time.time()
+    d1 = d1.reshape(numx, numy)
+    t2 = time.time()
+    print('reshape {}'.format(t1 - t2))
+    t1 = time.time()
+    d1 = d1.round()
+    t2 = time.time()
+    print('roudn {}'.format(t1 - t2))
+    return d1.astype(dem_img.dtype)
 
 
 def mosaic_dem(d1, d2):
