@@ -57,10 +57,10 @@ int main(int argc, char **argv) {
   for (int i = 0; i < DEM_SIZE - 1; i++) {
     for (int j = 0; j < DEM_SIZE - 1; j++) {
       while (bi < rate) {
-        short curBigi = rate * i + bi;
+        int curBigi = rate * i + bi;
         while (bj < rate) {
           int16_t interpValue = calcInterp(demGrid, i, j, bi, bj, rate);
-          short curBigj = rate * j + bj;
+          int curBigj = rate * j + bj;
           upDemGrid[getIdx(curBigi, curBigj, upSize)] = interpValue;
           ++bj;
         }
@@ -76,9 +76,9 @@ int main(int argc, char **argv) {
   for (int i = 0; i < DEM_SIZE; i++) {
     int j = (DEM_SIZE - 1); // Last row
     while (bi < rate) {
-      short curBigi = rate * i + bi;
+      int curBigi = rate * i + bi;
       while (bj < rate) {
-        short curBigj = rate * j + bj;
+        int curBigj = rate * j + bj;
         upDemGrid[getIdx(curBigi, curBigj, upSize)] =
             demGrid[getIdx(i, j, DEM_SIZE)];
         ++bj;
@@ -92,9 +92,9 @@ int main(int argc, char **argv) {
   for (int j = 0; j < DEM_SIZE; j++) {
     int i = (DEM_SIZE - 1); // Last col
     while (bi < rate) {
-      short curBigi = rate * i + bi;
+      int curBigi = rate * i + bi;
       while (bj < rate) {
-        short curBigj = rate * j + bj;
+        int curBigj = rate * j + bj;
         upDemGrid[getIdx(curBigi, curBigj, upSize)] =
             demGrid[getIdx(i, j, DEM_SIZE)];
         ++bj;
