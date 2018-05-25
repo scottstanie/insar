@@ -56,6 +56,8 @@ int main(int argc, char **argv) {
 
   for (int i = 0; i < DEM_SIZE - 1; i++) {
     for (int j = 0; j < DEM_SIZE - 1; j++) {
+      // At each point of the smaller DEM, walk bi, bj up to rate and find
+      // interp value
       while (bi < rate) {
         int curBigi = rate * i + bi;
         while (bj < rate) {
