@@ -94,12 +94,14 @@ class Downloader:
             right_int -= 1
 
         tile_name_template = '{lat_str}/{lat_str}{lon_str}.hgt'
-        for ilon in range(left_int, right_int + 1):
-            hemi_ew = 'E' if ilon >= 0 else 'W'
-            lon_str = '{}{:03d}'.format(hemi_ew, abs(ilon))
-            for ilat in range(bot_int, top_int + 1):
-                hemi_ns = 'N' if ilat >= 0 else 'S'
-                lat_str = '{}{:02d}'.format(hemi_ns, abs(ilat))
+
+        # Now iterate in same order in which they'll be stithced together
+        for ilat in range(top_int, bot_int - 1, -1):  # north to south
+            hemi_ns = 'N' if ilat >= 0 else 'S'
+            lat_str = '{}{:02d}'.format(hemi_ns, abs(ilat))
+            for ilon in range(left_int, right_int + 1):  # West to east
+                hemi_ew = 'E' if ilon >= 0 else 'W'
+                lon_str = '{}{:03d}'.format(hemi_ew, abs(ilon))
 
                 yield tile_name_template.format(lat_str=lat_str, lon_str=lon_str)
 
