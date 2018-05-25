@@ -8,6 +8,8 @@
 
 int getIdx(int r, int c, int ncols) { return ncols * r + c; }
 int16_t calcInterp(int16_t *demGrid, int i, int j, int bi, int bj, int rate);
+int16_t interpRow(int16_t *demGrid, int i, int j, int bj, int rate);
+int16_t interpCol(int16_t *demGrid, int i, int j, int bi, int rate);
 
 int main(int argc, char **argv) {
 
@@ -40,6 +42,7 @@ int main(int argc, char **argv) {
   int nbytes = 2;
   int16_t buf[1];
   int16_t *demGrid = (int16_t *)malloc(DEM_SIZE * DEM_SIZE * sizeof(*demGrid));
+  printf("demGrid: %p\n", demGrid);
 
   int i = 0, j = 0;
   for (i = 0; i < DEM_SIZE; i++) {
@@ -61,6 +64,7 @@ int main(int argc, char **argv) {
   int upSize = rate * (DEM_SIZE - 1) + 1;
   printf("New size of upsampled DEM: %d\n", upSize);
   int16_t *upDemGrid = (int16_t *)malloc(upSize * upSize * sizeof(*upDemGrid));
+  printf("upDemGrid: %p\n", demGrid);
 
   for (int i = 0; i < DEM_SIZE - 1; i++) {
     for (int j = 0; j < DEM_SIZE - 1; j++) {
@@ -81,15 +85,15 @@ int main(int argc, char **argv) {
     }
   }
 
-  // Finally, copy over the last row and last column
+  // Also must interpolate the last row/column: OOB for 2D interp, use 1D
   // Copy last col:
   bi = 0;
-  for (i = 0; i < DEM_SIZE; i++) {
+  for (i = 0; i < (DEM_SIZE - 1); i++) {
     j = (DEM_SIZE - 1); // Last col
     bj = 0;             // bj stays at 0 when j is max index
     int curBigj = rate * j + bj;
     while (bi < rate) {
-      int16_t interpValue = calcInterp(demGrid, i, j, bi, bj, rate);
+      int16_t interpValue = interpCol(demGrid, i, j, bi, rate);
       int curBigi = rate * i + bi;
       upDemGrid[getIdx(curBigi, curBigj, upSize)] = interpValue;
       ++bi;
@@ -99,18 +103,22 @@ int main(int argc, char **argv) {
 
   // Copy last row:
   bj = 0;
-  for (j = 0; j < DEM_SIZE; j++) {
+  for (j = 0; j < (DEM_SIZE - 1); j++) {
     i = (DEM_SIZE - 1); // Last row
     bi = 0;             // bi stays at 0 when i is max index
     int curBigi = rate * i + bi;
     while (bj < rate) {
-      int16_t interpValue = calcInterp(demGrid, i, j, bi, bj, rate);
+      int16_t interpValue = interpRow(demGrid, i, j, bj, rate);
       int curBigj = rate * j + bj;
       upDemGrid[getIdx(curBigi, curBigj, upSize)] = interpValue;
       ++bj;
     }
     bj = 0; // reset the bj column back to 0 for this (i, j)
   }
+  // Last, copy bottom right point
+  upDemGrid[getIdx(upSize - 1, upSize - 1, upSize)] =
+      demGrid[getIdx(DEM_SIZE - 1, DEM_SIZE - 1, DEM_SIZE)];
+
   printf("Finished with upsampling, writing to disk\n");
 
   fp = fopen(outfileUp, "wb");
@@ -118,8 +126,8 @@ int main(int argc, char **argv) {
   fwrite(upDemGrid, sizeof(int16_t), upSize * upSize, fp);
   fclose(fp);
   printf("%s write complete.\n", outfileUp);
-  // free(demGrid);
-  // free(upDemGrid);
+  free(demGrid);
+  free(upDemGrid);
   return 0;
 }
 
@@ -134,7 +142,28 @@ int16_t calcInterp(int16_t *demGrid, int i, int j, int bi, int bj, int rate) {
   int a01 = h3 - h1;
   int a11 = h1 - h2 - h3 + h4;
   // x and y are between 0 and 1: how far in the 1x1 cell we are
-  float x = bj / rate;
-  float y = bi / rate;
+  float x = (float)bj / rate;
+  float y = (float)bi / rate;
+  // Final result is cast back to int16_t by return type
   return a00 + (a10 * x) + (a01 * y) + (a11 * x * y);
+}
+
+int16_t interpRow(int16_t *demGrid, int i, int j, int bj, int rate) {
+  // x is between 0 and 1: how far along row between orig points
+  float x = (float)bj / rate;
+
+  int16_t h1 = demGrid[getIdx(i, j, DEM_SIZE)];
+  int16_t h2 = demGrid[getIdx(i, j + 1, DEM_SIZE)];
+
+  return x * h2 + (1 - x) * h1;
+}
+
+int16_t interpCol(int16_t *demGrid, int i, int j, int bi, int rate) {
+  // y is between 0 and 1: how far along column
+  float y = (float)bi / rate;
+
+  int16_t h1 = demGrid[getIdx(i, j, DEM_SIZE)];
+  int16_t h2 = demGrid[getIdx(i + 1, j, DEM_SIZE)];
+
+  return y * h2 + (1 - y) * h1;
 }
