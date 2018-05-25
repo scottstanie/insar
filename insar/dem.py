@@ -401,5 +401,7 @@ if __name__ == '__main__':
     else:
         geojson = json.load(sys.stdin)
 
-    d = Downloader(*geojson_to_bounds(geojson))
+    bounds = geojson_to_bounds(geojson)
+    logger.info("Bounds: %s", " ".join(str(b) for b in bounds))
+    d = Downloader(*bounds)
     d.download_all()
