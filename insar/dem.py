@@ -15,6 +15,7 @@ Example .dem.rsc (for N19W156.hgt and N19W155.hgt stitched horizontally):
 
 """
 import collections
+import math
 import os
 import re
 import numpy as np
@@ -23,6 +24,7 @@ from scipy.interpolate import RegularGridInterpolator
 from insar.log import get_log, log_runtime
 from insar import sario
 
+logger = get_log()
 RSC_KEYS = [
     'WIDTH',
     'FILE_LENGTH',
@@ -36,6 +38,52 @@ RSC_KEYS = [
     'Z_SCALE',
     'PROJECTION',
 ]
+
+
+class Downloader:
+    def __init__(self, left, bottom, right, top):
+        self.left = left
+        self.right = right
+        self.bottom = bottom
+        self.top = top
+        self.tile_name_template = '{slat}/{slat}{slon}.tif'
+
+    @staticmethod
+    def _get_cache_dir():
+        # TODO: Decide assumption that we're on linux (should I just get appdirs?)
+        path = os.getenv('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
+        path = os.path.join(path, 'insar')  # Make subfolder for our downloads
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+    @staticmethod
+    def srtm1_tile_ilonlat(lon, lat):
+        return int(math.floor(lon)), int(math.floor(lat))
+
+    def srtm1_tiles_names(self):
+        ileft, itop = self.srtm1_tile_ilonlat(left, top)
+        iright, ibottom = self.srtm1_tile_ilonlat(right, bottom)
+        # special case often used *integer* top and right to avoid downloading unneeded tiles
+        if isinstance(self.top, int) or self.top.is_integer():
+            itop -= 1
+        if isinstance(self.right, int) or self.right.is_integer():
+            iright -= 1
+        for ilon in range(ileft, iright + 1):
+            slon = '%s%03d' % ('E' if ilon >= 0 else 'W', abs(ilon))
+            for ilat in range(ibottom, itop + 1):
+                slat = '%s%02d' % ('N' if ilat >= 0 else 'S', abs(ilat))
+    yield tile_name_template.format({'slat':slat,'slon':slon})
+
+
+    def build_bounds(bounds, margin=MARGIN):
+        left, bottom, right, top = bounds
+        if margin.endswith('%'):
+            margin_percent = float(margin[:-1])
+            margin_lon = (right - left) * margin_percent / 100
+            margin_lat = (top - bottom) * margin_percent / 100
+        else:
+            margin_lon = margin_lat = float(margin)
+    return (left - margin_lon, bottom - margin_lat, right + margin_lon, top + margin_lat)
 
 
 def _up_size(cur_size, rate):
@@ -79,60 +127,6 @@ def start_lon_lat(tilename):
     # Only the lat gets added or subtracted
     top_lat = float(lat) + 1 if lat_str == 'N' else float(lat) - 1
     return (left_lon, top_lat)
-
-
-@log_runtime
-def upsample_dem(dem_img, rate=3):
-    """Interpolates a DEM to higher resolution for better InSAR quality
-
-
-    Args:
-        dem_img: numpy.ndarray (int16)
-        rate: int, default = 3
-
-    Returns:
-        numpy.ndarray (int16): original dem_img upsampled by `rate`. Needs
-            to return same type since downstream scripts expect int16 DEMs
-
-    """
-
-    s1, s2 = dem_img.shape
-    orig_points = (np.arange(1, s1 + 1), np.arange(1, s2 + 1))
-    import time
-
-    t1 = time.time()
-    rgi = RegularGridInterpolator(points=orig_points, values=dem_img)
-    t2 = time.time()
-    print('rgi {}'.format(t1 - t2))
-
-    # Make a grid from 1 to size (inclusive for mgrid), in both directions
-    # 1j used by mgrid: makes numx/numy number of points exactly (like linspace)
-    numx = _up_size(s1, rate)
-    numy = _up_size(s2, rate)
-    t1 = time.time()
-    X, Y = np.mgrid[1:s1:(numx * 1j), 1:s2:(numy * 1j)]
-    t2 = time.time()
-    print('mgrid {}'.format(t1 - t2))
-
-    # vstack makes 2xN, num_pixels=(numx*numy): new_points will be a Nx2 matrix
-    new_points = np.vstack([X.ravel(), Y.ravel()]).T
-
-    # rgi expects Nx2 as input, and will output as a 1D vector
-    # Should be same dtype (int16), and round used to not truncate 2.9 to 2
-
-    t1 = time.time()
-    d1 = rgi(new_points)
-    t2 = time.time()
-    print('rgi {}'.format(t1 - t2))
-    t1 = time.time()
-    d1 = d1.reshape(numx, numy)
-    t2 = time.time()
-    print('reshape {}'.format(t1 - t2))
-    t1 = time.time()
-    d1 = d1.round()
-    t2 = time.time()
-    print('roudn {}'.format(t1 - t2))
-    return d1.astype(dem_img.dtype)
 
 
 def mosaic_dem(d1, d2):
@@ -248,3 +242,40 @@ def upsample_dem_rsc(filepath, rate):
             outstring += "{field:<13s}{val}\n".format(field=field.upper(), val=value)
 
     return outstring
+
+
+@log_runtime
+def upsample_dem(dem_img, rate=3):
+    """Interpolates a DEM to higher resolution for better InSAR quality
+
+    TOO SLOW: scipy's interp for some reason isn't great
+    Use upsample.c instead
+
+    Args:
+        dem_img: numpy.ndarray (int16)
+        rate: int, default = 3
+
+    Returns:
+        numpy.ndarray (int16): original dem_img upsampled by `rate`. Needs
+            to return same type since downstream scripts expect int16 DEMs
+
+    """
+
+    s1, s2 = dem_img.shape
+    orig_points = (np.arange(1, s1 + 1), np.arange(1, s2 + 1))
+
+    rgi = RegularGridInterpolator(points=orig_points, values=dem_img)
+
+    # Make a grid from 1 to size (inclusive for mgrid), in both directions
+    # 1j used by mgrid: makes numx/numy number of points exactly (like linspace)
+    numx = _up_size(s1, rate)
+    numy = _up_size(s2, rate)
+    X, Y = np.mgrid[1:s1:(numx * 1j), 1:s2:(numy * 1j)]
+
+    # vstack makes 2xN, num_pixels=(numx*numy): new_points will be a Nx2 matrix
+    new_points = np.vstack([X.ravel(), Y.ravel()]).T
+
+    # rgi expects Nx2 as input, and will output as a 1D vector
+    # Should be same dtype (int16), and round used to not truncate 2.9 to 2
+    return rgi(new_points).reshape(numx, numy).round().astype(dem_img.dtype)
+

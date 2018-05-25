@@ -122,7 +122,7 @@ int main(int argc, char **argv) {
   printf("Finished with upsampling, writing to disk\n");
 
   fp = fopen(outfileUp, "wb");
-  // fwrite(upDemGrid, sizeof(int16_t), upSize * upSize, fp);
+
   fwrite(upDemGrid, sizeof(int16_t), upSize * upSize, fp);
   fclose(fp);
   printf("%s write complete.\n", outfileUp);
