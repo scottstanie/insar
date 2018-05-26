@@ -2,10 +2,6 @@
 
 Utilities for SAR and InSAR processing
 
-So far mostly helper functions for loading the many binary data types produced by sar, downloading and manipulating auxiliary data (like DEMs or orbit files).
-
-Also contains several ad-hoc scripts for different remote sensing projects.
-
 ```bash
 mkvirtualenv insar
 pip install -r requirements.txt
@@ -13,6 +9,19 @@ pip install -r requirements.txt
 
 
 ### Modules and example uses
+
+#### dem.py
+Functions for working with digital elevation maps (DEMs).
+Contains the `Downloader` and `Stitcher` classes.
+
+In order to download a cropped (and possibly upsampled) dem,
+see `scripts/create_dem.py`
+
+
+```bash
+$ python scripts/create_dem.py --geojson data/hawaii.geojson --rate 2 --output elevation.dem
+```
+
 
 #### eof.py
 
@@ -39,10 +48,6 @@ my_dem = insar.sario.load_file('/file/path/elevation.hgt')
 ```
 
 
-#### dem.py
-Functions for working with digital elevation maps (DEMs).
-
-Useful functions: `upsample_dem`, `upsample_dem_rsc`, `mosaic_dem`
 
 #### parsers.py
 
