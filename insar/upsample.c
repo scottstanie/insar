@@ -1,29 +1,40 @@
 #include <endian.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
-#define DEM_SIZE 3601 // Square DEM
-
 int getIdx(int r, int c, int ncols) { return ncols * r + c; }
-int16_t calcInterp(int16_t *demGrid, int i, int j, int bi, int bj, int rate);
-int16_t interpRow(int16_t *demGrid, int i, int j, int bj, int rate);
-int16_t interpCol(int16_t *demGrid, int i, int j, int bi, int rate);
+const char *getFileExt(const char *filename);
+int16_t calcInterp(int16_t *demGrid, int i, int j, int bi, int bj, int rate,
+                   int ncols);
+int16_t interpRow(int16_t *demGrid, int i, int j, int bj, int rate, int ncols);
+int16_t interpCol(int16_t *demGrid, int i, int j, int bi, int rate, int ncols);
 
 int main(int argc, char **argv) {
 
   // Parse input filename, rate, and optional output filename
   if (argc < 3) {
-    fprintf(stderr, "Usage: ./dem filename.hgt rate [outfilename.dem] \n");
+    fprintf(stderr, "Usage: ./dem filename rate [ncols] [nrows] "
+                    "[outfilename] \n");
+    fprintf(stderr, "filename must be .hgt or .dem extension.\n");
+    fprintf(stderr, "Rate must be a positive integer.\n");
+    fprintf(stderr, "ncols = width of DEM/HGT, ncows = height\n");
     return EXIT_FAILURE;
   }
   char *filename = argv[1];
   int rate = atoi(argv[2]);
+  int ncols = atoi(argv[3]);
+  int nrows = atoi(argv[4]);
+
+  // If reading in a .hgt, must swap bytes of integers
+  bool swapBytes = (strcmp(getFileExt(filename), "hgt") == 0);
 
   // Optional input:
   const char *outfileUp;
-  if (argc < 4) {
+  if (argc < 6) {
     outfileUp = "elevation_upsampled.dem";
     printf("Using %s as output file for upsampling.\n", outfileUp);
   } else {
@@ -41,17 +52,21 @@ int main(int argc, char **argv) {
 
   int nbytes = 2;
   int16_t buf[1];
-  int16_t *demGrid = (int16_t *)malloc(DEM_SIZE * DEM_SIZE * sizeof(*demGrid));
+  int16_t *demGrid = (int16_t *)malloc(nrows * ncols * sizeof(*demGrid));
   printf("demGrid: %p\n", demGrid);
 
   int i = 0, j = 0;
-  for (i = 0; i < DEM_SIZE; i++) {
-    for (j = 0; j < DEM_SIZE; j++) {
+  for (i = 0; i < nrows; i++) {
+    for (j = 0; j < ncols; j++) {
       if (fread(buf, nbytes, 1, fp) != 1) {
         fprintf(stderr, "Read failure from %s\n", filename);
         return EXIT_FAILURE;
       }
-      demGrid[getIdx(i, j, DEM_SIZE)] = be16toh(*buf);
+      if (swapBytes) {
+        demGrid[getIdx(i, j, ncols)] = be16toh(*buf);
+      } else {
+        demGrid[getIdx(i, j, ncols)] = *buf;
+      }
     }
   }
   fclose(fp);
@@ -61,21 +76,22 @@ int main(int argc, char **argv) {
   // Size of one side for upsampled
   // Example: 3 points at x = (0, 1, 2), rate = 2 becomes 5 points:
   //    x = (0, .5, 1, 1.5, 2)
-  int upSize = rate * (DEM_SIZE - 1) + 1;
-  printf("New size of upsampled DEM: %d\n", upSize);
-  int16_t *upDemGrid = (int16_t *)malloc(upSize * upSize * sizeof(*upDemGrid));
-  printf("upDemGrid: %p\n", demGrid);
+  int upNrows = rate * (nrows - 1) + 1;
+  int upNcols = rate * (ncols - 1) + 1;
+  printf("New size of upsampled DEM: %d rows, %d cols.\n", upNrows, upNcols);
+  int16_t *upDemGrid =
+      (int16_t *)malloc(upNrows * upNcols * sizeof(*upDemGrid));
 
-  for (int i = 0; i < DEM_SIZE - 1; i++) {
-    for (int j = 0; j < DEM_SIZE - 1; j++) {
+  for (int i = 0; i < nrows - 1; i++) {
+    for (int j = 0; j < ncols - 1; j++) {
       // At each point of the smaller DEM, walk bi, bj up to rate and find
       // interp value
       while (bi < rate) {
         int curBigi = rate * i + bi;
         while (bj < rate) {
-          int16_t interpValue = calcInterp(demGrid, i, j, bi, bj, rate);
+          int16_t interpValue = calcInterp(demGrid, i, j, bi, bj, rate, ncols);
           int curBigj = rate * j + bj;
-          upDemGrid[getIdx(curBigi, curBigj, upSize)] = interpValue;
+          upDemGrid[getIdx(curBigi, curBigj, upNcols)] = interpValue;
           ++bj;
         }
         bj = 0; // reset the bj column back to 0 for this (i, j)
@@ -88,14 +104,14 @@ int main(int argc, char **argv) {
   // Also must interpolate the last row/column: OOB for 2D interp, use 1D
   // Copy last col:
   bi = 0;
-  for (i = 0; i < (DEM_SIZE - 1); i++) {
-    j = (DEM_SIZE - 1); // Last col
-    bj = 0;             // bj stays at 0 when j is max index
+  for (i = 0; i < (nrows - 1); i++) {
+    j = (ncols - 1); // Last col
+    bj = 0;          // bj stays at 0 when j is max index
     int curBigj = rate * j + bj;
     while (bi < rate) {
-      int16_t interpValue = interpCol(demGrid, i, j, bi, rate);
+      int16_t interpValue = interpCol(demGrid, i, j, bi, rate, ncols);
       int curBigi = rate * i + bi;
-      upDemGrid[getIdx(curBigi, curBigj, upSize)] = interpValue;
+      upDemGrid[getIdx(curBigi, curBigj, upNcols)] = interpValue;
       ++bi;
     }
     bi = 0; // reset the bi row back to 0 for this (i, j)
@@ -103,27 +119,27 @@ int main(int argc, char **argv) {
 
   // Copy last row:
   bj = 0;
-  for (j = 0; j < (DEM_SIZE - 1); j++) {
-    i = (DEM_SIZE - 1); // Last row
-    bi = 0;             // bi stays at 0 when i is max index
+  for (j = 0; j < (ncols - 1); j++) {
+    i = (nrows - 1); // Last row
+    bi = 0;          // bi stays at 0 when i is max index
     int curBigi = rate * i + bi;
     while (bj < rate) {
-      int16_t interpValue = interpRow(demGrid, i, j, bj, rate);
+      int16_t interpValue = interpRow(demGrid, i, j, bj, rate, ncols);
       int curBigj = rate * j + bj;
-      upDemGrid[getIdx(curBigi, curBigj, upSize)] = interpValue;
+      upDemGrid[getIdx(curBigi, curBigj, upNcols)] = interpValue;
       ++bj;
     }
     bj = 0; // reset the bj column back to 0 for this (i, j)
   }
   // Last, copy bottom right point
-  upDemGrid[getIdx(upSize - 1, upSize - 1, upSize)] =
-      demGrid[getIdx(DEM_SIZE - 1, DEM_SIZE - 1, DEM_SIZE)];
+  upDemGrid[getIdx(upNrows - 1, upNcols - 1, upNcols)] =
+      demGrid[getIdx(nrows - 1, ncols - 1, ncols)];
 
   printf("Finished with upsampling, writing to disk\n");
 
   fp = fopen(outfileUp, "wb");
 
-  fwrite(upDemGrid, sizeof(int16_t), upSize * upSize, fp);
+  fwrite(upDemGrid, sizeof(int16_t), upNrows * upNcols, fp);
   fclose(fp);
   printf("%s write complete.\n", outfileUp);
   free(demGrid);
@@ -131,11 +147,19 @@ int main(int argc, char **argv) {
   return 0;
 }
 
-int16_t calcInterp(int16_t *demGrid, int i, int j, int bi, int bj, int rate) {
-  int16_t h1 = demGrid[getIdx(i, j, DEM_SIZE)];
-  int16_t h2 = demGrid[getIdx(i, j + 1, DEM_SIZE)];
-  int16_t h3 = demGrid[getIdx(i + 1, j, DEM_SIZE)];
-  int16_t h4 = demGrid[getIdx(i + 1, j + 1, DEM_SIZE)];
+const char *getFileExt(const char *filename) {
+  const char *dot = strrchr(filename, '.');
+  if (!dot || dot == filename)
+    return "";
+  return dot + 1;
+}
+
+int16_t calcInterp(int16_t *demGrid, int i, int j, int bi, int bj, int rate,
+                   int ncols) {
+  int16_t h1 = demGrid[getIdx(i, j, ncols)];
+  int16_t h2 = demGrid[getIdx(i, j + 1, ncols)];
+  int16_t h3 = demGrid[getIdx(i + 1, j, ncols)];
+  int16_t h4 = demGrid[getIdx(i + 1, j + 1, ncols)];
 
   int a00 = h1;
   int a10 = h2 - h1;
@@ -148,22 +172,22 @@ int16_t calcInterp(int16_t *demGrid, int i, int j, int bi, int bj, int rate) {
   return a00 + (a10 * x) + (a01 * y) + (a11 * x * y);
 }
 
-int16_t interpRow(int16_t *demGrid, int i, int j, int bj, int rate) {
+int16_t interpRow(int16_t *demGrid, int i, int j, int bj, int rate, int ncols) {
   // x is between 0 and 1: how far along row between orig points
   float x = (float)bj / rate;
 
-  int16_t h1 = demGrid[getIdx(i, j, DEM_SIZE)];
-  int16_t h2 = demGrid[getIdx(i, j + 1, DEM_SIZE)];
+  int16_t h1 = demGrid[getIdx(i, j, ncols)];
+  int16_t h2 = demGrid[getIdx(i, j + 1, ncols)];
 
   return x * h2 + (1 - x) * h1;
 }
 
-int16_t interpCol(int16_t *demGrid, int i, int j, int bi, int rate) {
+int16_t interpCol(int16_t *demGrid, int i, int j, int bi, int rate, int ncols) {
   // y is between 0 and 1: how far along column
   float y = (float)bi / rate;
 
-  int16_t h1 = demGrid[getIdx(i, j, DEM_SIZE)];
-  int16_t h2 = demGrid[getIdx(i + 1, j, DEM_SIZE)];
+  int16_t h1 = demGrid[getIdx(i, j, ncols)];
+  int16_t h2 = demGrid[getIdx(i + 1, j, ncols)];
 
   return y * h2 + (1 - y) * h1;
 }
