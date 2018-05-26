@@ -374,6 +374,12 @@ class Stitcher:
 
         return outstring
 
+    def _find_bounding_idxs(self):
+        top_idx = math.floor((top - y_first) / y_step)
+        bot_idx = math.ceil((top - y_first) / y_step)
+        left_idx = math.floor((left - x_first) / x_step)
+        right_idx = math.ceil((right - x_first) / x_step)
+
 
 def _up_size(cur_size, rate):
     """Calculates the number of points to be computed in the upsampling
