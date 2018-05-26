@@ -21,16 +21,13 @@ except ImportError:  # Python 2 doesn't have this :(
     PARALLEL = False
 import collections
 import math
-import json
 import os
 import re
-import sys
 import requests
 import subprocess
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
-from insar.geojson import geojson_to_bounds
 from insar.log import get_log, log_runtime
 from insar import sario
 
@@ -51,8 +48,11 @@ RSC_KEYS = [
 
 
 def _get_cache_dir():
-    """Find location of directory to store .hgt downloads"""
-    # TODO: Decide assumption that we're on linux (should I just get appdirs?)
+    """Find location of directory to store .hgt downloads
+
+    Assuming linux, uses ~/.cache/insar/
+
+    """
     path = os.getenv('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
     path = os.path.join(path, 'insar')  # Make subfolder for our downloads
     if not os.path.exists(path):
@@ -61,12 +61,17 @@ def _get_cache_dir():
 
 
 class Downloader:
-    def __init__(self, left, bottom, right, top, margin=0, parallel_ok=PARALLEL):
-        self.left = left
-        self.right = right
-        self.bottom = bottom
-        self.top = top
-        self.margin = margin
+    """Class to download and save SRTM1 tiles to create DEMs
+
+    Attributes:
+        bounds (tuple): lon, lat boundaries of a rectangle to download
+        data_url (str): Base url where .hgt tiles are stored
+        compressed_ext (str): format .hgt files are stored in online
+        parallel_ok (bool): true if using python3 or concurrent.futures installed
+
+    """
+    def __init__(self, left, bottom, right, top, parallel_ok=PARALLEL):
+        self.bounds = (left, bottom, right, top)
         # AWS format for downloading SRTM1 .hgt tiles
         self.data_url = 'https://s3.amazonaws.com/elevation-tiles-prod/skadi'
         self.compressed_ext = '.gz'
@@ -74,23 +79,39 @@ class Downloader:
 
     @staticmethod
     def srtm1_tile_corner(lon, lat):
-        """Integers for the bottom right corner of requested lon/lat"""
+        """Integers for the bottom right corner of requested lon/lat
+
+        Examples:
+            >>> Downloader.srtm1_tile_corner(3.5, 5.6)
+            (3, 5)
+            >>> Downloader.srtm1_tile_corner(-3.5, -5.6)
+            (-4, -6)
+        """
         return int(math.floor(lon)), int(math.floor(lat))
 
-    def srtm1_tile_names(self):
+    def srtm1_tile_names(self, left, bottom, right, top):
         """Iterator over all tiles needed to cover the requested bounds
 
-        yields:
+        Yields:
             str: tile names to fit into data_url to be downloaded
                 yielded in order of top left to bottom right
+
+        Examples:
+            >>> bounds = (-155.7, 19.1, -154.7, 19.7)
+            >>> d = Downloader(*bounds)
+            >>> type(d.srtm1_tile_names(*bounds))
+            <class 'generator'>
+            >>> list(d.srtm1_tile_names(*bounds))
+            ['N19/N19W156.hgt', 'N19/N19W155.hgt']
         """
-        left_int, top_int = self.srtm1_tile_corner(self.left, self.top)
-        right_int, bot_int = self.srtm1_tile_corner(self.right, self.bottom)
+
+        left_int, top_int = self.srtm1_tile_corner(left, top)
+        right_int, bot_int = self.srtm1_tile_corner(right, bottom)
         # If exact integer was requested for top/right, assume tile with that number
         # at the top/right is acceptable (dont download the one above that)
-        if isinstance(self.top, int):
+        if isinstance(top, int):
             top_int -= 1
-        if isinstance(self.right, int):
+        if isinstance(right, int):
             right_int -= 1
 
         tile_name_template = '{lat_str}/{lat_str}{lon_str}.hgt'
@@ -120,7 +141,8 @@ class Downloader:
         return requests.get(url)
 
     @staticmethod
-    def unzip_file(filepath):
+    def _unzip_file(filepath):
+        """Unzips in place the .hgt files downloaded"""
         ext = sario.get_file_ext(filepath)
         if ext == '.gz':
             unzip_cmd = 'gunzip'
@@ -149,7 +171,7 @@ class Downloader:
                 f.write(response.content)
                 logger.info("Writing to {}".format(local_filename))
             logger.info("Unzipping {}".format(local_filename))
-            self.unzip_file(local_filename)
+            self._unzip_file(local_filename)
 
     def download_all(self):
         """Downloads and saves all tiles from tile list"""
@@ -157,26 +179,37 @@ class Downloader:
             with ThreadPoolExecutor(max_workers=4) as executor:
                 future_to_tile = {
                     executor.submit(self.download_and_save, tile): tile
-                    for tile in self.srtm1_tile_names()
+                    for tile in self.srtm1_tile_names(*self.bounds)
                 }
                 for future in as_completed(future_to_tile):
                     future.result()
                     logger.info('Finished {}'.format(future_to_tile[future]))
 
         else:
-            for tile_name_str in self.srtm1_tile_names():
+            for tile_name_str in self.srtm1_tile_names(*self.bounds):
                 self.download_and_save(tile_name_str)
 
 
 class Stitcher:
-    """Class to combine separate .hgt tiles into one .dem file"""
+    """Class to combine separate .hgt tiles into one .dem file
+
+    Attributes:
+        tile_file_list (list[str]) names of .hgt tiles as saved from download
+            E.g.: ['N19W156.hgt', 'N19W155.hgt'] (not ['N19/N19W156.hgt',...])
+    """
 
     def __init__(self, tile_file_list):
         """List should come from Downloader.srtm1_tile_list()"""
         self.tile_file_list = [t.split('/')[1] for t in tile_file_list]
 
     def compute_shape(self):
-        """Takes the tile list and computes the number of rows and columns"""
+        """Takes the tile list and computes the number of rows and columns
+
+        Examples:
+            >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt'])
+            >>> s.compute_shape()
+            (1, 2)
+        """
         lon_lat_tups = [start_lon_lat(t) for t in self.tile_file_list]
         # Unique each lat/lon: length of lats = num rows, lons = cols
         num_lons = len(set(tup[0] for tup in lon_lat_tups))
@@ -207,6 +240,8 @@ def _up_size(cur_size, rate):
 
     Example: 3 points at x = (0, 1, 2), rate = 2 becomes 5 points:
         x = (0, .5, 1, 1.5, 2)
+        >>> _up_size(3, 2)
+        5
     """
     return 1 + (cur_size - 1) * rate
 
@@ -229,6 +264,10 @@ def start_lon_lat(tilename):
 
     Raises:
         ValueError: if regex match fails on tilename
+
+    Examples:
+        >>> start_lon_lat('N19W156.hgt')
+        (-156.0, 20.0)
     """
     lon_lat_regex = r'([NS])(\d+)([EW])(\d+)'
     match = re.match(lon_lat_regex, tilename)
@@ -394,16 +433,3 @@ def upsample_dem(dem_img, rate=3):
     # rgi expects Nx2 as input, and will output as a 1D vector
     # Should be same dtype (int16), and round used to not truncate 2.9 to 2
     return rgi(new_points).reshape(numx, numy).round().astype(dem_img.dtype)
-
-
-if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        with open(sys.argv[1], 'r') as f:
-            geojson = json.load(f)
-    else:
-        geojson = json.load(sys.stdin)
-
-    bounds = geojson_to_bounds(geojson)
-    logger.info("Bounds: %s", " ".join(str(b) for b in bounds))
-    d = Downloader(*bounds)
-    d.download_all()
