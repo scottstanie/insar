@@ -1,9 +1,7 @@
 import unittest
 
-from insar.dem import (start_lon_lat, upsample_dem, upsample_dem_rsc, mosaic_dem)
+from insar.dem import (start_lon_lat, upsample_dem_rsc)
 """Functions todo:
-def upsample_dem(dem_img, rate=3):
-def mosaic_dem(d1, d2):
 def upsample_dem_rsc(filepath, rate):
 """
 
@@ -20,7 +18,7 @@ class TestStartLatLon(unittest.TestCase):
 
     def test_southeast(self):
         lon, lat = start_lon_lat(self.southeast)
-        self.assertEqual((lon, lat), (156.0, 18.0))
+        self.assertEqual((lon, lat), (156.0, -18.0))
 
     def test_fail(self):
         self.assertRaises(ValueError, start_lon_lat, self.bad_tilename)

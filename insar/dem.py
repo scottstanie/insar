@@ -249,6 +249,8 @@ def _up_size(cur_size, rate):
 def start_lon_lat(tilename):
     """Takes an SRTM1 data tilename and returns the first (lon, lat) point
 
+    The reverse of Downloader.srtm1_tile_names()
+
     Used for .rsc file formation to make X_FIRST and Y_FIRST
     The names of individual data tiles refer to the longitude
     and latitude of the lower-left (southwest) corner of the tile.
@@ -268,8 +270,15 @@ def start_lon_lat(tilename):
     Examples:
         >>> start_lon_lat('N19W156.hgt')
         (-156.0, 20.0)
+        >>> start_lon_lat('S5E6.hgt')
+        (6.0, -4.0)
+        >>> start_lon_lat('Notrealname.hgt')
+        Traceback (most recent call last):
+           ...
+        ValueError: Invalid SRTM1 tilename: must match ([NS])(\d+)([EW])(\d+).hgt
+
     """
-    lon_lat_regex = r'([NS])(\d+)([EW])(\d+)'
+    lon_lat_regex = r'([NS])(\d+)([EW])(\d+).hgt'
     match = re.match(lon_lat_regex, tilename)
     if not match:
         raise ValueError('Invalid SRTM1 tilename: must match {}'.format(lon_lat_regex))
@@ -280,16 +289,8 @@ def start_lon_lat(tilename):
     left_lon = -1 * float(lon) if lon_str == 'W' else float(lon)
     # No additions needed to lon: bottom left and top left are same
     # Only the lat gets added or subtracted
-    top_lat = float(lat) + 1 if lat_str == 'N' else float(lat) - 1
+    top_lat = float(lat) + 1 if lat_str == 'N' else -float(lat) + 1
     return (left_lon, top_lat)
-
-
-def mosaic_dem(d1, d2):
-    """Joins two .hgt files side by side, d1 left, d2 right"""
-    D = np.concatenate((d1, d2), axis=1)
-    nrows, ncols = d1.shape
-    D = np.delete(D, nrows, axis=1)
-    return D
 
 
 def create_dem_rsc(srtm1_tile_list):
@@ -299,19 +300,12 @@ def create_dem_rsc(srtm1_tile_list):
 
     Args:
         srtm1_tile_list (list[str]): names of tiles (e.g. N19W156)
+            must be sorted with top-left tile first, as in from
+            output of Downloader.srtm1_tile_names
 
     Returns:
         OrderedDict: key/value pairs in order to write to a .dem.rsc file
     """
-
-    def _calc_x_y_firsts(tile_list):
-        x_first = np.inf  # Start all the way east, take min (west)
-        y_first = -np.inf  # Start all the way south, max is north
-        for tile in tile_list:
-            lon, lat = start_lon_lat(tile)
-            x_first = min(x_first, lon)
-            y_first = max(y_first, lat)
-        return x_first, y_first
 
     # Use an OrderedDict for the key/value pairs so writing to file easy
     rsc_data = collections.OrderedDict.fromkeys(RSC_KEYS)
@@ -325,7 +319,7 @@ def create_dem_rsc(srtm1_tile_list):
 
     # Remove paths from tile filenames, if they exist
     tile_names = [os.path.split(t)[1] for t in srtm1_tile_list]
-    x_first, y_first = _calc_x_y_firsts(tile_names)
+    x_first, y_first = start_lon_lat(tile_names[0])
     # TODO: first out generalized way to get nx, ny.
     # Only using one pair left/right for now
     nx = 2
