@@ -98,8 +98,3 @@ parser.field_meanings()
 
 ```
 
-
-### Scripts:
-
-Most useful script for now: `download_eofs.py`.
-Grabs relevant EOF data for all Sentinel 1 products in the current directory.
