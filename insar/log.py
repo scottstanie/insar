@@ -93,10 +93,13 @@ def log_runtime(f):
 
     Example:
         >>> @log_runtime
-        >>> def my_func():
-        >>>     ...
-        >>> my_func()
-        "Total elapsed time for my_func (minutes): X.YZ
+        ... def test_func():
+        ...    return 2 + 4
+        >>> test_func()
+        6
+
+    This prints out the following in addition to the answer:
+    [05/26 10:05:51] [INFO log.py] Total elapsed time for test_func (minutes): 0.00
 
     """
 

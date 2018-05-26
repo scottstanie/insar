@@ -17,7 +17,11 @@ $(TARGET): $(SRCS)
 	$(CC) $(SRCS) $(CFLAGS) -o $@
 
 
-.PHONY: clean
+.PHONY: test clean
+
+test:
+	@echo "Running doctests and unittests: nose must be installed"
+	nosetests -v --with-doctest
 
 clean:
 	rm -f *.o
