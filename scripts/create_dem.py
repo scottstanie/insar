@@ -23,8 +23,14 @@ def positive_integer(argstring):
 def main():
     logger = get_log()
     parser = argparse.ArgumentParser()
-    parser.add_argument("--geojson", "-g", required=True, help="File containing the geojson object for DEM bounds")
-    parser.add_argument("--rate", "-r", default=1, type=positive_integer, help="Rate at which to upsample DEM (default=1, no upsampling)")
+    parser.add_argument(
+        "--geojson", "-g", required=True, help="File containing the geojson object for DEM bounds")
+    parser.add_argument(
+        "--rate",
+        "-r",
+        default=1,
+        type=positive_integer,
+        help="Rate at which to upsample DEM (default=1, no upsampling)")
     parser.add_argument("--output", "-o", default="elevation.dem", help="Name of output dem file")
     args = parser.parse_args()
 
@@ -70,7 +76,11 @@ def main():
         f.write(s.format_dem_rsc(rsc_dict))
 
     # Now upsample this block
-    subprocess.check_call(['bin/upsample', filename, str(rate)])
+    nrows, ncols = s.shape
+    upsample_cmd = ['bin/upsample', filename, str(rate), str(nrows), str(ncols)]
+    logger.info("Upsampling through %s:", upsample_cmd[0])
+    logger.info(' '.join(upsample_cmd))
+    subprocess.check_call(upsample_cmd)
 
     # Redo a new .rsc file for it
     logger.info("Writing new upsampled dem to %s", rsc_filename)

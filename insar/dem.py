@@ -74,6 +74,7 @@ class Downloader:
         parallel_ok (bool): true if using python3 or concurrent.futures installed
 
     """
+
     def __init__(self, left, bottom, right, top, parallel_ok=PARALLEL):
         self.bounds = (left, bottom, right, top)
         # AWS format for downloading SRTM1 .hgt tiles
@@ -219,13 +220,33 @@ class Stitcher:
 
     @property
     def shape(self):
-        """Number of rows/columns for the tile list (from _compute_shape)"""
+        """Number of rows/columns in pixels for stitched .dem
+
+        Uses the blockshape property, along with num_pixels property
+        Returned as a tuple
+
+        Examples:
+            >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt'])
+            >>> s.shape
+            (3601, 7201)
+        """
+        blockrows, blockcols = self.blockshape
+        return (self._total_length(blockrows), self._total_length(blockcols))
+
+    def _total_length(self, numblocks):
+        """Computes the total number of pixels in one dem from numblocks"""
+        return numblocks * self.num_pixels - (numblocks - 1)
+
+    @property
+    def blockshape(self):
+        """Number of tile in rows cols"""
         return self._compute_shape()
 
     def _compute_shape(self):
-        """Takes the tile list and computes the number of rows and columns
+        """Takes the tile list and computes the number of tile rows and tile cols
 
         Figures out how many lons wide and lats tall the tile array spans
+        Note: This is not the total number of pixels, which can be found in .shape
 
         Examples:
             >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt'])
@@ -239,15 +260,15 @@ class Stitcher:
         return (num_lats, num_lons)
 
     def _create_file_array(self):
-        """Finds filenames and shapes into numpy.array matching DEM shape
+        """Finds filenames and reshapes into numpy.array matching DEM shape
 
         Examples:
             >>> s2 = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt', 'N18/N18W156.hgt', 'N18/N18W155.hgt'])
-            >>> s2._create_file_array()
-            array([['N19W156.hgt', 'N19W155.hgt'],
-                   ['N18W156.hgt', 'N18W155.hgt']], dtype='<U11')
+            >>> print(s2._create_file_array())
+            [['N19W156.hgt' 'N19W155.hgt']
+             ['N18W156.hgt' 'N18W155.hgt']]
         """
-        nrows, ncols = self.shape
+        nrows, ncols = self.blockshape
         return np.array(self.tile_file_list).reshape((nrows, ncols))
 
     def load_and_stitch(self):
@@ -261,7 +282,7 @@ class Stitcher:
         """
         row_list = []
         flist = self._create_file_array()
-        _, ncols = self.shape
+        _, ncols = self.blockshape
         for idx, row in enumerate(flist):
             cur_row = np.hstack(sario.load_file(os.path.join(_get_cache_dir(), f)) for f in row)
             cur_row = np.delete(cur_row, self.num_pixels * list(range(1, ncols)), axis=1)
@@ -304,10 +325,7 @@ class Stitcher:
         x_first, y_first = start_lon_lat(self.tile_file_list[0])
         nrows, ncols = self.shape
         # TODO: figure out where to generalize for SRTM3
-        rsc_dict.update({
-            'WIDTH': ncols * self.num_pixels - (ncols - 1),
-            'FILE_LENGTH': nrows * self.num_pixels - (nrows - 1)
-        })
+        rsc_dict.update({'WIDTH': ncols, 'FILE_LENGTH': nrows})
         rsc_dict.update({'X_FIRST': x_first, 'Y_FIRST': y_first})
         rsc_dict.update({'X_STEP': 1 / (self.num_pixels - 1), 'Y_STEP': -1 / (self.num_pixels - 1)})
         return rsc_dict
