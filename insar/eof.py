@@ -34,21 +34,25 @@ from dateutil.relativedelta import relativedelta
 BASE_URL = "https://qc.sentinel1.eo.esa.int/aux_poeorb/"
 
 
-def download_eofs(orbit_dates, mission=None):
+def download_eofs(orbit_dates, missions=None):
     """Downloads and saves EOF files for specific dates
 
     Args:
         orbit_dates (list[str] or list[datetime.datetime])
-        mission (str): optional to specify S1A or S1B. No input downloads both
+        missions (list[str]): optional, to specify S1A or S1B
+            No input downloads both, must be same len as orbit_dates
 
     Returns:
         None
 
     Raises:
-        ValueError - for mission argument not being one of 'S1A', 'S1B'
+        ValueError - for missions argument not being one of 'S1A', 'S1B',
+            or having different length
     """
-    if mission and mission not in ('S1A', 'S1B'):
-        raise ValueError('mission argument must be "S1A" or "S1B"')
+    if missions and all(m not in ('S1A', 'S1B') for m in missions):
+        raise ValueError('missions argument must be "S1A" or "S1B"')
+    if len(missions) != len(orbit_dates):
+        raise ValueError("missions arg must be same length as orbit_dates")
 
     # Conver any string dates to a datetime
     orbit_dates = [parse(date) if isinstance(date, str) else date for date in orbit_dates]
@@ -57,7 +61,7 @@ def download_eofs(orbit_dates, mission=None):
     validity_dates = [date + relativedelta(days=-1) for date in orbit_dates]
 
     eof_links = []
-    for date in validity_dates:
+    for mission, date in zip(missions, validity_dates):
         try:
             cur_links = eof_list(date)
         except ValueError as e:
