@@ -1,5 +1,9 @@
 """Digital Elevation Map (DEM) downloading/stitching/upsampling
 
+Module contains utilities for downloading all necessary .hgt files
+for a lon/lat rectangle, stiches them into one DEM, and creates a
+.dem.rsc file for SAR processing.
+
 Example .dem.rsc (for N19W156.hgt and N19W155.hgt stitched horizontally):
         WIDTH         7201
         FILE_LENGTH   3601
@@ -89,8 +93,11 @@ class Downloader:
         """
         return int(math.floor(lon)), int(math.floor(lat))
 
-    def srtm1_tile_names(self, left, bottom, right, top):
+    def srtm1_tile_names(self):
         """Iterator over all tiles needed to cover the requested bounds
+
+        Args:
+            None: bounds provided to Downloader __init__()
 
         Yields:
             str: tile names to fit into data_url to be downloaded
@@ -99,12 +106,15 @@ class Downloader:
         Examples:
             >>> bounds = (-155.7, 19.1, -154.7, 19.7)
             >>> d = Downloader(*bounds)
-            >>> type(d.srtm1_tile_names(*bounds))
+            >>> type(d.srtm1_tile_names())
             <class 'generator'>
-            >>> list(d.srtm1_tile_names(*bounds))
+            >>> list(d.srtm1_tile_names())
             ['N19/N19W156.hgt', 'N19/N19W155.hgt']
+            >>> list(Downloader(*(10.1, -44.9, 10.1, -44.9)).srtm1_tile_names())
+            ['S45/S45E010.hgt']
         """
 
+        left, bottom, right, top = self.bounds
         left_int, top_int = self.srtm1_tile_corner(left, top)
         right_int, bot_int = self.srtm1_tile_corner(right, bottom)
         # If exact integer was requested for top/right, assume tile with that number
@@ -196,18 +206,30 @@ class Stitcher:
     Attributes:
         tile_file_list (list[str]) names of .hgt tiles as saved from download
             E.g.: ['N19W156.hgt', 'N19W155.hgt'] (not ['N19/N19W156.hgt',...])
+        num_pixels (int): size of the squares of the .hgt files
+            Assumes 3601 fo SRTM1 (SRTM3 not yet implemented)
+
     """
 
-    def __init__(self, tile_file_list):
+    def __init__(self, tile_file_list, num_pixels=3601):
         """List should come from Downloader.srtm1_tile_list()"""
         self.tile_file_list = [t.split('/')[1] for t in tile_file_list]
+        # Assuming SRTM1: 3601 x 3601 squares
+        self.num_pixels = num_pixels
 
-    def compute_shape(self):
+    @property
+    def shape(self):
+        """Number of rows/columns for the tile list (from _compute_shape)"""
+        return self._compute_shape()
+
+    def _compute_shape(self):
         """Takes the tile list and computes the number of rows and columns
+
+        Figures out how many lons wide and lats tall the tile array spans
 
         Examples:
             >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt'])
-            >>> s.compute_shape()
+            >>> s._compute_shape()
             (1, 2)
         """
         lon_lat_tups = [start_lon_lat(t) for t in self.tile_file_list]
@@ -216,22 +238,122 @@ class Stitcher:
         num_lats = len(set(tup[1] for tup in lon_lat_tups))
         return (num_lats, num_lons)
 
-    def load_tiles(self):
-        file_list = [os.path.join(_get_cache_dir(), tile) for tile in self.tile_file_list]
-        nrows, ncols = self.compute_shape()
-        flist = np.array(file_list).reshape((nrows, ncols))
+    def _create_file_array(self):
+        """Finds filenames and shapes into numpy.array matching DEM shape
+
+        Examples:
+            >>> s2 = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt', 'N18/N18W156.hgt', 'N18/N18W155.hgt'])
+            >>> s2._create_file_array()
+            array([['N19W156.hgt', 'N19W155.hgt'],
+                   ['N18W156.hgt', 'N18W155.hgt']], dtype='<U11')
+        """
+        nrows, ncols = self.shape
+        return np.array(self.tile_file_list).reshape((nrows, ncols))
+
+    def load_and_stitch(self):
+        """Function to load combine .hgt tiles
+
+        Uses hstack first on rows, then vstacks rows together.
+        Also handles the deleting of overlapped rows/columns of SRTM tiles
+        """
         row_list = []
+        flist = self._create_file_array()
+        _, ncols = self.shape
         for idx, row in enumerate(flist):
-            cur_row = np.hstack(sario.load_file(f) for f in row)
-            # TODO: where to get 3601 from, magic number now
-            cur_row = np.delete(cur_row, 3601 * list(range(1, ncols)), axis=1)
+            cur_row = np.hstack(sario.load_file(os.path.join(_get_cache_dir(), f)) for f in row)
+            cur_row = np.delete(cur_row, self.num_pixels * list(range(1, ncols)), axis=1)
             if idx > 0:
                 # For all except first block-row, delete repeated first row of data
                 cur_row = np.delete(cur_row, 0, axis=0)
             row_list.append(cur_row)
         return np.vstack(row_list)
 
-    def reshape(self):
+    def create_dem_rsc(self):
+        """Takes a list of the SRTM1 tile names and outputs .dem.rsc file values
+
+        See module docstring for example .dem.rsc file.
+
+        Args:
+            srtm1_tile_list (list[str]): names of tiles (e.g. N19W156)
+                must be sorted with top-left tile first, as in from
+                output of Downloader.srtm1_tile_names
+
+        Returns:
+            OrderedDict: key/value pairs in order to write to a .dem.rsc file
+
+        Examples:
+            >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt'])
+            >>> s.create_dem_rsc()
+            OrderedDict([('WIDTH', 7201), ('FILE_LENGTH', 3601), ('X_FIRST', -156.0), ('Y_FIRST', 20.0), ('X_STEP', 0.0002777777777777778), ('Y_STEP', -0.0002777777777777778), ('X_UNIT', 'degrees'), ('Y_UNIT', 'degrees'), ('Z_OFFSET', 0), ('Z_SCALE', 1), ('PROJECTION', 'LL')])
+        """
+
+        # Use an OrderedDict for the key/value pairs so writing to file easy
+        rsc_dict = collections.OrderedDict.fromkeys(RSC_KEYS)
+        rsc_dict.update({
+            'X_UNIT': 'degrees',
+            'Y_UNIT': 'degrees',
+            'Z_OFFSET': 0,
+            'Z_SCALE': 1,
+            'PROJECTION': 'LL',
+        })
+
+        # Remove paths from tile filenames, if they exist
+        x_first, y_first = start_lon_lat(self.tile_file_list[0])
+        nrows, ncols = self.shape
+        # TODO: figure out where to generalize for SRTM3
+        rsc_dict.update({
+            'WIDTH': ncols * self.num_pixels - (ncols - 1),
+            'FILE_LENGTH': nrows * self.num_pixels - (nrows - 1)
+        })
+        rsc_dict.update({'X_FIRST': x_first, 'Y_FIRST': y_first})
+        rsc_dict.update({'X_STEP': 1 / (self.num_pixels - 1), 'Y_STEP': -1 / (self.num_pixels - 1)})
+        return rsc_dict
+
+    def format_dem_rsc(self, rsc_dict):
+        """Creates the .dem.rsc file string from key/value pairs of an OrderedDict
+
+        Output of function can be written to a file as follows
+            with open('my.dem.rsc', 'w') as f:
+                f.write(outstring)
+
+        Args:
+            rsc_dict (OrderedDict): data about dem in ordered key/value format
+                See `create_dem_rsc` output for example
+
+        Returns:
+            outstring (str) formatting string to be written to .dem.rsc
+
+        Examples:
+            >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt'])
+            >>> rsc_dict = s.create_dem_rsc()
+            >>> print(s.format_dem_rsc(rsc_dict))
+            WIDTH        7201
+            FILE_LENGTH  3601
+            X_FIRST      -156.0
+            Y_FIRST      20.0
+            X_STEP       0.000277777778
+            Y_STEP       -0.000277777778
+            X_UNIT       degrees
+            Y_UNIT       degrees
+            Z_OFFSET     0
+            Z_SCALE      1
+            PROJECTION   LL
+            <BLANKLINE>
+
+        Note: ^^ <BLANKLINE> is doctest's way of saying it ends in newline
+        """
+        outstring = ""
+        for field, value in rsc_dict.items():
+            # Files seemed to be left justified with 13 spaces? Not sure why 13
+            if field.lower() in ('x_step', 'y_step'):
+                # give step floats proper sig figs to not output scientific notation
+                outstring += "{field:<13s}{val:0.12f}\n".format(field=field.upper(), val=value)
+            else:
+                outstring += "{field:<13s}{val}\n".format(field=field.upper(), val=value)
+
+        return outstring
+
+    def run():
         pass
 
 
@@ -293,75 +415,6 @@ def start_lon_lat(tilename):
     return (left_lon, top_lat)
 
 
-def create_dem_rsc(srtm1_tile_list):
-    """Takes a list of the SRTM1 tile names and outputs .dem.rsc file values
-
-    See module docstring for example .dem.rsc file.
-
-    Args:
-        srtm1_tile_list (list[str]): names of tiles (e.g. N19W156)
-            must be sorted with top-left tile first, as in from
-            output of Downloader.srtm1_tile_names
-
-    Returns:
-        OrderedDict: key/value pairs in order to write to a .dem.rsc file
-    """
-
-    # Use an OrderedDict for the key/value pairs so writing to file easy
-    rsc_data = collections.OrderedDict.fromkeys(RSC_KEYS)
-    rsc_data.update({
-        'X_UNIT': 'degrees',
-        'Y_UNIT': 'degrees',
-        'Z_OFFSET': 0,
-        'Z_SCALE': 1,
-        'PROJECTION': 'LL',
-    })
-
-    # Remove paths from tile filenames, if they exist
-    tile_names = [os.path.split(t)[1] for t in srtm1_tile_list]
-    x_first, y_first = start_lon_lat(tile_names[0])
-    # TODO: first out generalized way to get nx, ny.
-    # Only using one pair left/right for now
-    nx = 2
-    ny = 1
-    # TODO: figure out where to generalize for SRTM3
-    num_pixels = 3601
-    rsc_data.update({
-        'WIDTH': nx * num_pixels - (nx - 1),
-        'FILE_LENGTH': ny * num_pixels - (ny - 1)
-    })
-    rsc_data.update({'X_FIRST': x_first, 'Y_FIRST': y_first})
-    rsc_data.update({'X_STEP': 1 / (num_pixels - 1), 'Y_STEP': -1 / (num_pixels - 1)})
-    return rsc_data
-
-
-def format_dem_rsc(rsc_data):
-    """Creates the .dem.rsc file string from key/value pairs of an OrderedDict
-
-    Output of function can be written to a file as follows
-        with open('my.dem.rsc', 'w') as f:
-            f.write(outstring)
-
-    Args:
-        rsc_data (OrderedDict): data about dem in ordered key/value format
-            See `create_dem_rsc` output for example
-
-    Returns:
-        outstring (str) formatting string to be written to .dem.rsc
-
-    """
-    outstring = ""
-    for field, value in rsc_data.items():
-        # Files seemed to be left justified with 13 spaces? Not sure why 13
-        if field.lower() in ('x_step', 'y_step'):
-            # give step floats proper sig figs to not output scientific notation
-            outstring += "{field:<13s}{val:0.12f}\n".format(field=field.upper(), val=value)
-        else:
-            outstring += "{field:<13s}{val}\n".format(field=field.upper(), val=value)
-
-    return outstring
-
-
 def upsample_dem_rsc(filepath, rate):
     """Creates a new .dem.rsc file for upsampled version
 
@@ -376,8 +429,8 @@ def upsample_dem_rsc(filepath, rate):
 
     """
     outstring = ""
-    rsc_data = sario.load_dem_rsc(filepath)
-    for field, value in rsc_data.items():
+    rsc_dict = sario.load_dem_rsc(filepath)
+    for field, value in rsc_dict.items():
         # Files seemed to be left justified with 13 spaces? Not sure why 13
         if field.lower() in ('width', 'file_length'):
             new_size = _up_size(value, rate)
