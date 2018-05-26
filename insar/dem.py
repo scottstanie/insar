@@ -189,14 +189,14 @@ class Downloader:
             with ThreadPoolExecutor(max_workers=4) as executor:
                 future_to_tile = {
                     executor.submit(self.download_and_save, tile): tile
-                    for tile in self.srtm1_tile_names(*self.bounds)
+                    for tile in self.srtm1_tile_names()
                 }
                 for future in as_completed(future_to_tile):
                     future.result()
                     logger.info('Finished {}'.format(future_to_tile[future]))
 
         else:
-            for tile_name_str in self.srtm1_tile_names(*self.bounds):
+            for tile_name_str in self.srtm1_tile_names():
                 self.download_and_save(tile_name_str)
 
 
@@ -212,7 +212,7 @@ class Stitcher:
     """
 
     def __init__(self, tile_file_list, num_pixels=3601):
-        """List should come from Downloader.srtm1_tile_list()"""
+        """List should come from Downloader.srtm1_tile_names()"""
         self.tile_file_list = [t.split('/')[1] for t in tile_file_list]
         # Assuming SRTM1: 3601 x 3601 squares
         self.num_pixels = num_pixels
@@ -255,6 +255,9 @@ class Stitcher:
 
         Uses hstack first on rows, then vstacks rows together.
         Also handles the deleting of overlapped rows/columns of SRTM tiles
+
+        Returns:
+            numpy.array: the stitched .hgt tiles in 2D np.array
         """
         row_list = []
         flist = self._create_file_array()
@@ -352,9 +355,6 @@ class Stitcher:
                 outstring += "{field:<13s}{val}\n".format(field=field.upper(), val=value)
 
         return outstring
-
-    def run():
-        pass
 
 
 def _up_size(cur_size, rate):
