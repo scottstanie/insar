@@ -7,9 +7,6 @@ Output: left, bottom, right, top (floats)
 
 import sys
 import json
-from insar.log import get_log
-
-logger = get_log()
 
 
 def geojson_to_bounds(geojson):

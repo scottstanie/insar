@@ -16,12 +16,16 @@ int16_t interpCol(int16_t *demGrid, int i, int j, int bi, int rate, int ncols);
 int main(int argc, char **argv) {
 
   // Parse input filename, rate, and optional output filename
+  const char *defaultOutfile = "elevation_upsampled.dem";
   if (argc < 3) {
-    fprintf(stderr, "Usage: ./dem filename rate [ncols] [nrows] "
-                    "[outfilename] \n");
-    fprintf(stderr, "filename must be .hgt or .dem extension.\n");
-    fprintf(stderr, "Rate must be a positive integer.\n");
-    fprintf(stderr, "ncols = width of DEM/HGT, ncows = height\n");
+    fprintf(stderr,
+            "Usage: ./dem filename rate [ncols] [nrows] "
+            "[outfilename] \n"
+            "filename must be .hgt or .dem extension.\n"
+            "Rate must be a positive integer.\n"
+            "ncols = width of DEM/HGT, ncows = height\n"
+            "Default outfile name: %s\n",
+            defaultOutfile);
     return EXIT_FAILURE;
   }
   char *filename = argv[1];
@@ -30,15 +34,19 @@ int main(int argc, char **argv) {
   int nrows = atoi(argv[4]);
 
   // If reading in a .hgt, must swap bytes of integers
-  bool swapBytes = (strcmp(getFileExt(filename), "hgt") == 0);
+  bool swapBytes = (strcmp(getFileExt(filename), ".hgt") == 0);
 
   // Optional input:
   const char *outfileUp;
   if (argc < 6) {
-    outfileUp = "elevation_upsampled.dem";
+    outfileUp = defaultOutfile;
     printf("Using %s as output file for upsampling.\n", outfileUp);
   } else {
-    outfileUp = "elevation_upsampled.dem";
+    outfileUp = argv[5];
+    if (strcmp(getFileExt(outfileUp), ".dem") != 0) {
+      fprintf(stderr, "Error: Outfile name must be .dem: %s\n", outfileUp);
+      return EXIT_FAILURE;
+    }
   }
 
   printf("Reading from %s\n", filename);
@@ -53,7 +61,6 @@ int main(int argc, char **argv) {
   int nbytes = 2;
   int16_t buf[1];
   int16_t *demGrid = (int16_t *)malloc(nrows * ncols * sizeof(*demGrid));
-  printf("demGrid: %p\n", demGrid);
 
   int i = 0, j = 0;
   for (i = 0; i < nrows; i++) {
@@ -148,10 +155,11 @@ int main(int argc, char **argv) {
 }
 
 const char *getFileExt(const char *filename) {
+  // Finds the last . in a char*
   const char *dot = strrchr(filename, '.');
   if (!dot || dot == filename)
     return "";
-  return dot + 1;
+  return dot;
 }
 
 int16_t calcInterp(int16_t *demGrid, int i, int j, int bi, int bj, int rate,
