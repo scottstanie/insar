@@ -415,21 +415,36 @@ def start_lon_lat(tilename):
     return (left_lon, top_lat)
 
 
-def upsample_dem_rsc(filepath, rate):
+def upsample_dem_rsc(rate=None, rsc_dict=None, rsc_filepath=None):
     """Creates a new .dem.rsc file for upsampled version
 
     Adjusts the FILE_LENGTH, WIDTH, X_STEP, Y_STEP for new rate
 
     Args:
-        filepath (str) location of .dem.rsc file
-        rate (int)
+        rate (int): rate by which to upsample the DEM
+        rsc_dict (str): Optional, the rsc data from Stitcher.create_dem_rsc()
+        filepath (str): Optional, location of .dem.rsc file
+
+    Note: Must supply only one of rsc_dict or rsc_filepath
 
     Returns:
         str: file same as original with upsample adjusted numbers
 
+    Raises:
+        TypeError: if neither (or both) rsc_filepath and rsc_dict are given
+
     """
+    if rsc_dict and rsc_filepath:
+        raise TypeError("Can only give one of rsc_dict or rsc_filepath")
+    elif not rsc_dict and not rsc_filepath:
+        raise TypeError("Must give at least one of rsc_dict or rsc_filepath")
+    elif not rate:
+        raise TypeError("Must supply rate for upsampling")
+
+    if rsc_filepath:
+        rsc_dict = sario.load_dem_rsc(rsc_filepath)
+
     outstring = ""
-    rsc_dict = sario.load_dem_rsc(filepath)
     for field, value in rsc_dict.items():
         # Files seemed to be left justified with 13 spaces? Not sure why 13
         if field.lower() in ('width', 'file_length'):
