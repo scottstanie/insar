@@ -1,14 +1,20 @@
 # InSAR utils
 
-Utilities for SAR and InSAR processing
+Utilities for Synthetic apeture radar (SAR) and Interferometric SAR (InSAR) processing
+
+
+## Setup and installation
+
+or for development use (to add on and not make the installation fixed):
 
 ```bash
 mkvirtualenv insar
 pip install -r requirements.txt
+python setup.py develop
 ```
 
 
-### Modules and example uses
+### Modules and example usage
 
 #### dem.py
 Functions for working with digital elevation maps (DEMs).
@@ -25,7 +31,7 @@ $ python scripts/create_dem.py --geojson data/hawaii.geojson --rate 2 --output e
 
 #### eof.py
 
-Functions for dealing with precise orbit files (Sentinel 1)
+Functions for dealing with precise orbit files (POE) for Sentinel 1
 
 ```python
 from insar.eof import download_eofs
@@ -46,7 +52,6 @@ import insar.sario
 my_slc = insar.sario.load_file('/file/path/radar.slc')
 my_dem = insar.sario.load_file('/file/path/elevation.hgt')
 ```
-
 
 
 #### parsers.py
