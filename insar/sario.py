@@ -53,21 +53,23 @@ def load_elevation(filename):
 
     ext = get_file_ext(filename)
     data_type = "<i2" if ext == '.dem' else ">i2"
-    data = np.fromfile(filename, data_type)
+    print('dtype for ', ext, data_type)
+    data = np.fromfile(filename, dtype=data_type)
 
     # Reshape to correct size.
     # Either get info from .dem.rsc
     if ext == '.dem':
         info = load_dem_rsc(filename)
         dem_img = data.reshape((info['file_length'], info['width']))
+
     # Or check if we are using STRM1 (3601x3601) or SRTM3 (1201x1201)
     else:
         if (data.shape[0] / 3601) == 3601:
             # STRM1- 1 arc second data, 30 meter data
-            dem_img = data.reshape((3601, 3601))
+            dem_img = data.reshape((3601, 3601)).astype('<i2')
         elif (data.shape[0] / 1201) == 1201:
             # STRM3- 3 arc second data, 90 meter data
-            dem_img = data.reshape((1201, 1201))
+            dem_img = data.reshape((1201, 1201)).astype('<i2')
         else:
             raise ValueError("Invalid .hgt data size: must be square size 1201 or 3601")
 
