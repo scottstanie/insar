@@ -25,6 +25,8 @@ try:
     CONCURRENT = True
 except ImportError:  # Python 2 doesn't have this :(
     CONCURRENT = False
+
+import itertools
 import requests
 
 import bs4
@@ -51,8 +53,10 @@ def download_eofs(orbit_dates, missions=None):
     """
     if missions and all(m not in ('S1A', 'S1B') for m in missions):
         raise ValueError('missions argument must be "S1A" or "S1B"')
-    if len(missions) != len(orbit_dates):
+    if missions and len(missions) != len(orbit_dates):
         raise ValueError("missions arg must be same length as orbit_dates")
+    if not missions:
+        missions = itertools.repeat(None)
 
     # Conver any string dates to a datetime
     orbit_dates = [parse(date) if isinstance(date, str) else date for date in orbit_dates]
@@ -77,7 +81,10 @@ def download_eofs(orbit_dates, missions=None):
         # Download and save all links in parallel
         with ThreadPoolExecutor(max_workers=10) as executor:
             # Make a dict to refer back to which link is finished downloading
-            future_to_link = {executor.submit(_download_and_write, link): link for link in eof_links}
+            future_to_link = {
+                executor.submit(_download_and_write, link): link
+                for link in eof_links
+            }
             for future in as_completed(future_to_link):
                 print('Finished {}'.format(future_to_link[future]))
     else:
