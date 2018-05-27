@@ -53,39 +53,49 @@ def main():
     rsc_dict = s.create_dem_rsc()
 
     # Cropping: get very close to the bounds asked for:
-    stitched_dem, new_starts = crop_stitched_dem(bounds, stitched_dem, rsc_data)
+    logger.info("Cropping stitched DEM to boundaries")
+    stitched_dem, new_starts, new_sizes = insar.dem.crop_stitched_dem(bounds, stitched_dem,
+                                                                      rsc_dict)
     new_x_first, new_y_first = new_starts
-    # Now adjust the .dem.rsc data to reflect new top-left corner
-    rsc_data['X_FIRST'] = new_x_first
-    rsc_data['Y_FIRST'] = new_y_first
+    new_rows, new_cols = new_sizes
+    # Now adjust the .dem.rsc data to reflect new top-left corner and new shape
+    rsc_dict['X_FIRST'] = new_x_first
+    rsc_dict['Y_FIRST'] = new_y_first
+    rsc_dict['FILE_LENGTH'] = new_rows
+    rsc_dict['WIDTH'] = new_cols
 
     # Upsampling:
     rate = args.rate
-    filename = args.output
-    rsc_filename = filename + '.rsc'
-    if rate == 1:
+    dem_filename = args.output
+    rsc_filename = dem_filename + '.rsc'
+    if rate == 1 and False:
         logger.info("Rate = 1: No upsampling to do")
-        logger.info("Writing DEM to %s", filename)
-        stitched_dem.tofile(filename)
+        logger.info("Writing DEM to %s", dem_filename)
+        stitched_dem.tofile(dem_filename)
         logger.info("Writing .dem.rsc file to %s", rsc_filename)
         with open(rsc_filename, "w") as f:
             f.write(s.format_dem_rsc(rsc_dict))
         sys.exit(0)
 
     logger.info("Upsampling by {}".format(rate))
-    filename_small = filename.replace(".dem", "_small.dem")
+    dem_filename_small = dem_filename.replace(".dem", "_small.dem")
     rsc_filename_small = rsc_filename.replace(".dem.rsc", "_small.dem.rsc")
 
-    logger.info("Writing non-upsampled dem to %s", filename_small)
-    stitched_dem.tofile(filename_small)
+    logger.info("Writing non-upsampled dem to %s", dem_filename_small)
+    stitched_dem.tofile(dem_filename_small)
     logger.info("Writing non-upsampled dem.rsc to %s", rsc_filename_small)
     with open(rsc_filename_small, "w") as f:
         f.write(s.format_dem_rsc(rsc_dict))
 
     # Now upsample this block
-    nrows, ncols = s.shape
-    upsample_cmd = ['bin/upsample', filename, str(rate), str(nrows), str(ncols)]
-    logger.info("Upsampling through %s:", upsample_cmd[0])
+    nrows, ncols = stitched_dem.shape
+    upsample_cmd = [
+        'bin/upsample', dem_filename_small,
+        str(rate),
+        str(nrows),
+        str(ncols), dem_filename
+    ]
+    logger.info("Upsampling using %s:", upsample_cmd[0])
     logger.info(' '.join(upsample_cmd))
     subprocess.check_call(upsample_cmd)
 

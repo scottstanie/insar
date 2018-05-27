@@ -235,7 +235,7 @@ class Stitcher:
 
     def _total_length(self, numblocks):
         """Computes the total number of pixels in one dem from numblocks"""
-        return numblocks * self.num_pixels - (numblocks - 1)
+        return numblocks * (self.num_pixels - 1) + 1
 
     @property
     def blockshape(self):
@@ -498,12 +498,13 @@ def find_bounding_idxs(bounds, x_step, y_step, x_first, y_first):
     """
 
     left, bot, right, top = bounds
-    top_idx = math.floor((top - y_first) / y_step)
-    bot_idx = math.ceil((bot - y_first) / y_step)
     left_idx = math.floor((left - x_first) / x_step)
     right_idx = math.ceil((right - x_first) / x_step)
+    # Note: y_step will be negative for these
+    top_idx = math.floor((top - y_first) / y_step)
+    bot_idx = math.ceil((bot - y_first) / y_step)
     new_x_first = x_first + x_step * left_idx
-    new_y_first = y_first + y_step * top_idx
+    new_y_first = y_first + y_step * top_idx  # Again: y_step negative
     return (left_idx, bot_idx, right_idx, top_idx), (new_x_first, new_y_first)
 
 
@@ -527,10 +528,13 @@ def crop_stitched_dem(bounds, stitched_dem, rsc_data):
         rsc_data['X_FIRST'],
         rsc_data['Y_FIRST'],
     )
+    print(indexes)
     left_idx, bot_idx, right_idx, top_idx = indexes
 
     # Need to add 1 because slicing is not inclusive
-    return stitched_dem[top_idx:bot_idx + 1, left_idx:right_idx + 1], new_starts
+    cropped_dem = stitched_dem[top_idx:bot_idx + 1, left_idx:right_idx + 1]
+    new_sizes = cropped_dem.shape
+    return cropped_dem, new_starts, new_sizes
 
 
 @log_runtime

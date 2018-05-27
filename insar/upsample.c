@@ -16,7 +16,7 @@ int16_t interpCol(int16_t *demGrid, int i, int j, int bi, int rate, int ncols);
 int main(int argc, char **argv) {
 
   // Parse input filename, rate, and optional output filename
-  const char *defaultOutfile = "elevation_upsampled.dem";
+  const char *defaultOutfile = "elevation.dem";
   if (argc < 3) {
     fprintf(stderr,
             "Usage: ./dem filename rate [ncols] [nrows] "
@@ -35,6 +35,7 @@ int main(int argc, char **argv) {
 
   // If reading in a .hgt, must swap bytes of integers
   bool swapBytes = (strcmp(getFileExt(filename), ".hgt") == 0);
+  printf("Swapping bytes: %d\n", swapBytes);
 
   // Optional input:
   const char *outfileUp;
