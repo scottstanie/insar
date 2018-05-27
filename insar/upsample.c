@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
     }
   }
 
-  printf("Reading from %s\n", filename);
+  printf("Reading from %s: %d rows, %d cols\n", filename, nrows, ncols);
   printf("Upsampling by %d\n", rate);
 
   FILE *fp = fopen(filename, "r");

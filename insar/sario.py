@@ -53,7 +53,6 @@ def load_elevation(filename):
 
     ext = get_file_ext(filename)
     data_type = "<i2" if ext == '.dem' else ">i2"
-    print('dtype for ', ext, data_type)
     data = np.fromfile(filename, dtype=data_type)
 
     # Reshape to correct size.

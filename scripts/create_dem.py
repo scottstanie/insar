@@ -92,8 +92,8 @@ def main():
     upsample_cmd = [
         'bin/upsample', dem_filename_small,
         str(rate),
-        str(nrows),
-        str(ncols), dem_filename
+        str(ncols),
+        str(nrows), dem_filename
     ]
     logger.info("Upsampling using %s:", upsample_cmd[0])
     logger.info(' '.join(upsample_cmd))
