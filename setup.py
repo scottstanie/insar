@@ -3,21 +3,9 @@ import setuptools
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-CLASSIFIERS = """\
-        Development Status :: 2 - Pre-Alpha
-        Intended Audience :: Science/Research
-        License :: OSI Approved :: MIT License
-        Programming Language :: C
-        Programming Language :: Python
-        Programming Language :: Python :: 2
-        Programming Language :: Python :: 3
-        Topic :: Scientific/Engineering
-        Operating System :: POSIX
-        """
-
 setuptools.setup(
     name="insar",
-    version="0.0.1",
+    version="0.0.3",
     author="Scott",
     author_email="scott.stanie@utexas.com",
     description="Tools for gathering and preprocessing InSAR data",
@@ -27,9 +15,16 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     include_package_data=True,
     classifiers=(
-        "Programming Language :: Python :: 3",
+        "Programming Language :: Python",
+        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3.3",
+        "Programming Language :: Python :: 3.4",
+        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: C",
         "License :: OSI Approved :: MIT License",
-        "Operating System :: OS Independent",
+        "Topic :: Scientific/Engineering",
+        "Intended Audience :: Science/Research",
     ),
     install_requires=['numpy', 'scipy', 'requests', 'matplotlib', 'beautifulsoup4'],
     entry_points={
