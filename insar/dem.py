@@ -374,12 +374,6 @@ class Stitcher:
 
         return outstring
 
-    def _find_bounding_idxs(self):
-        top_idx = math.floor((top - y_first) / y_step)
-        bot_idx = math.ceil((top - y_first) / y_step)
-        left_idx = math.floor((left - x_first) / x_step)
-        right_idx = math.ceil((right - x_first) / x_step)
-
 
 def _up_size(cur_size, rate):
     """Calculates the number of points to be computed in the upsampling
@@ -483,6 +477,60 @@ def upsample_dem_rsc(rate=None, rsc_dict=None, rsc_filepath=None):
             outstring += "{field:<13s}{val}\n".format(field=field.upper(), val=value)
 
     return outstring
+
+
+def find_bounding_idxs(bounds, x_step, y_step, x_first, y_first):
+    """Finds the indices of stitched dem to crop bounding box
+    Also finds the new x_start and y_start after cropping.
+
+    Note: x_start, y_start could be different from bounds
+    if steps didnt exactly match, but should be further up and left
+
+    Takes the desired bounds, .rsc data from stitched dem,
+    Examples:
+        >>> bounds = (-155.49, 19.0, -154.5, 19.51)
+        >>> x_step = 0.1
+        >>> y_step = -0.1
+        >>> x_first = -156
+        >>> y_first = 20.0
+        >>> print(find_bounding_idxs(bounds, x_step, y_step, x_first, y_first))
+        ((5, 10, 15, 4), (-155.5, 19.6))
+    """
+
+    left, bot, right, top = bounds
+    top_idx = math.floor((top - y_first) / y_step)
+    bot_idx = math.ceil((bot - y_first) / y_step)
+    left_idx = math.floor((left - x_first) / x_step)
+    right_idx = math.ceil((right - x_first) / x_step)
+    new_x_first = x_first + x_step * left_idx
+    new_y_first = y_first + y_step * top_idx
+    return (left_idx, bot_idx, right_idx, top_idx), (new_x_first, new_y_first)
+
+
+def crop_stitched_dem(bounds, stitched_dem, rsc_data):
+    """Takes the output of Stitcher.load_and_stitch, crops to bounds
+
+    Args:
+        bounds (tuple[float]): (left, bot, right, top) lats and lons of
+            desired bounding box for the DEM
+        stitched_dem (numpy.array, 2D): result from .hgt files
+            through Stitcher.load_and_stitch()
+        rsc_data (dict): data from .dem.rsc file, from Stitcher.create_dem_rsc
+
+    Returns:
+        numpy.array: a cropped version of the bigger stitched_dem
+    """
+    indexes, new_starts = find_bounding_idxs(
+        bounds,
+        rsc_data['X_STEP'],
+        rsc_data['Y_STEP'],
+        rsc_data['X_FIRST'],
+        rsc_data['Y_FIRST'],
+    )
+    left_idx, bot_idx, right_idx, top_idx = indexes
+
+    # Need to add 1 because slicing is not inclusive
+    return stitched_dem[top_idx:bot_idx + 1, left_idx:right_idx + 1], new_starts
 
 
 @log_runtime

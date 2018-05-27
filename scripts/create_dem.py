@@ -52,6 +52,13 @@ def main():
     # Now create corresponding rsc file
     rsc_dict = s.create_dem_rsc()
 
+    # Cropping: get very close to the bounds asked for:
+    stitched_dem, new_starts = crop_stitched_dem(bounds, stitched_dem, rsc_data)
+    new_x_first, new_y_first = new_starts
+    # Now adjust the .dem.rsc data to reflect new top-left corner
+    rsc_data['X_FIRST'] = new_x_first
+    rsc_data['Y_FIRST'] = new_y_first
+
     # Upsampling:
     rate = args.rate
     filename = args.output
