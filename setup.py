@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="insar",
-    version="0.0.3",
+    version="0.0.1",
     author="Scott",
     author_email="scott.stanie@utexas.com",
     description="Tools for gathering and preprocessing InSAR data",
