@@ -21,7 +21,12 @@ import argparse
 import logging
 import time
 
-from colorlog import ColoredFormatter
+try:
+    from colorlog import ColoredFormatter
+    COLORS = True
+except ImportError:
+    from logging import Formatter
+    COLORS = False
 
 
 def get_log(debug=False, name=__file__, verbose=False):
@@ -41,23 +46,21 @@ def get_log(debug=False, name=__file__, verbose=False):
 def format_log(logger, debug=False, verbose=False):
     """Makes the logging output pretty and colored with times"""
     log_level = logging.DEBUG if debug else logging.INFO
+    log_colors = {
+        'DEBUG': 'blue',
+        'INFO': 'cyan',
+        'WARNING': 'yellow',
+        'ERROR': 'red',
+        'CRITICAL': 'black,bg_red',
+        'SUCCESS': 'white,bg_blue'
+    }
 
-    if debug:
-        format_ = '[%(asctime)s] [%(log_color)s%(levelname)s/%(process)d %(filename)s %(reset)s] %(message)s%(reset)s'
-    else:
+    if COLORS:
         format_ = '[%(asctime)s] [%(log_color)s%(levelname)s %(filename)s%(reset)s] %(message)s%(reset)s'
-    formatter = ColoredFormatter(
-        format_,
-        datefmt='%m/%d %H:%M:%S',
-        reset=True,
-        log_colors={
-            'DEBUG': 'blue',
-            'INFO': 'cyan',
-            'WARNING': 'yellow',
-            'ERROR': 'red',
-            'CRITICAL': 'black,bg_red',
-            'SUCCESS': 'white,bg_blue'
-        })
+        formatter = ColoredFormatter(format_, datefmt='%m/%d %H:%M:%S', log_colors=log_colors)
+    else:
+        format_ = '[%(asctime)s] [%(levelname)s %(filename)s] %(message)s'
+        formatter = Formatter(format_, datefmt='%m/%d %H:%M:%S')
 
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
