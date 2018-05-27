@@ -1,5 +1,21 @@
 #!/usr/bin/env python
-"""Stiches two .hgt files to make one DEM and .dem.rsc file"""
+"""Stiches .hgt files to make one DEM and .dem.rsc file
+
+Pick a lat/lon bounding box for a DEM, and it will download
+the necessary SRTM1 tile, combine into one array,
+then upsample using upsample.c
+
+Suggestion for box: http://geojson.io gives you geojson for any polygon
+Take the output of that and save to a file (e.g. mybox.geojson
+
+
+Usage:
+    python scripts/create_dem.py --geojson data/mybox.geojson --rate 2
+    python scripts/create_dem.py -g data/mybox.geojson -r 2 -o elevation.dem
+
+Default out is elevation.dem for upsampled version, elevation_small.dem
+Also creates elevation.dem.rsc with start lat/lon, stride, and other info.
+"""
 import argparse
 import json
 import sys
