@@ -17,7 +17,9 @@ Example .dem.rsc (for N19W156.hgt and N19W155.hgt stitched horizontally):
         Z_SCALE       1
         PROJECTION    LL
 
+Make for python3, compatible with python2
 """
+from __future__ import division
 try:
     from concurrent.futures import ThreadPoolExecutor, as_completed
     PARALLEL = True
@@ -498,11 +500,11 @@ def find_bounding_idxs(bounds, x_step, y_step, x_first, y_first):
     """
 
     left, bot, right, top = bounds
-    left_idx = math.floor((left - x_first) / x_step)
-    right_idx = math.ceil((right - x_first) / x_step)
+    left_idx = int(math.floor((left - x_first) / x_step))
+    right_idx = int(math.ceil((right - x_first) / x_step))
     # Note: y_step will be negative for these
-    top_idx = math.floor((top - y_first) / y_step)
-    bot_idx = math.ceil((bot - y_first) / y_step)
+    top_idx = int(math.floor((top - y_first) / y_step))
+    bot_idx = int(math.ceil((bot - y_first) / y_step))
     new_x_first = x_first + x_step * left_idx
     new_y_first = y_first + y_step * top_idx  # Again: y_step negative
     return (left_idx, bot_idx, right_idx, top_idx), (new_x_first, new_y_first)
@@ -528,9 +530,7 @@ def crop_stitched_dem(bounds, stitched_dem, rsc_data):
         rsc_data['X_FIRST'],
         rsc_data['Y_FIRST'],
     )
-    print(indexes)
     left_idx, bot_idx, right_idx, top_idx = indexes
-
     # Need to add 1 because slicing is not inclusive
     cropped_dem = stitched_dem[top_idx:bot_idx + 1, left_idx:right_idx + 1]
     new_sizes = cropped_dem.shape
