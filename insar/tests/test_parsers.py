@@ -34,4 +34,3 @@ class TestSentinel(unittest.TestCase):
 
     def test_mission(self):
         self.assertEqual(self.parser.mission(), 'S1A')
-

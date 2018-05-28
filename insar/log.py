@@ -101,7 +101,7 @@ def log_runtime(f):
         >>> test_func()
         6
 
-    This prints out the following in addition to the answer:
+    This prints out to stderr the following in addition to the answer:
     [05/26 10:05:51] [INFO log.py] Total elapsed time for test_func (minutes): 0.00
 
     """
