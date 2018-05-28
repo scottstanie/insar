@@ -21,7 +21,6 @@ import json
 import sys
 import subprocess
 from os.path import abspath, dirname
-sys.path.insert(0, dirname(dirname(abspath(__file__))))
 from insar.sario import load_file
 import insar.dem
 import insar.geojson

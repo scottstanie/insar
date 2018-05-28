@@ -5,7 +5,6 @@ import glob
 import sys
 from os.path import dirname, abspath
 from datetime import date
-sys.path.insert(0, dirname(dirname(abspath(__file__))))
 import insar.eof
 from insar.parsers import Sentinel
 from insar.log import get_log, log_runtime

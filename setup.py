@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="insar",
-    version="0.0.1",
+    version="0.0.2",
     author="Scott",
     author_email="scott.stanie@utexas.com",
     description="Tools for gathering and preprocessing InSAR data",
@@ -27,7 +27,10 @@ setuptools.setup(
         "Intended Audience :: Science/Research",
     ),
     install_requires=['numpy', 'scipy', 'requests', 'matplotlib', 'beautifulsoup4'],
-    entry_points={
-        'console_scripts':
-        ['create-dem=scripts.create_dem:main', 'download-eofs=scripts.download_eofs:main'],
-    })
+    # If I decide to move "scripts/" to main package, go back to this:
+    # entry_points={
+    #     'console_scripts':
+    #     ['create-dem=insar.dem:main', 'download-eofs=insar.eof:main'],
+    # },
+    scripts=['scripts/create_dem.py', 'scripts/download_eofs.py'],
+    zip_safe=False)

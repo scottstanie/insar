@@ -2,3 +2,5 @@ include README.md
 include LICENSE.txt
 include insar/upsample.c
 include Makefile
+include scripts/create_dem.py
+include scripts/download_eofs.py
