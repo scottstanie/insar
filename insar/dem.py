@@ -175,7 +175,7 @@ class Downloader:
         # Remove extra latitude portion N19: keep all in one folder, gzipped
         local_filename = os.path.join(_get_cache_dir(), tile_name_str.split('/')[1])
         if os.path.exists(local_filename):
-            logger.info("{} alread exists, skipping.".format(local_filename))
+            logger.info("{} already exists, skipping.".format(local_filename))
         else:
             # On AWS these are gzipped: download, then unzip
             local_filename += self.compressed_ext

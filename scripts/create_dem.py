@@ -20,7 +20,13 @@ import argparse
 import json
 import sys
 import subprocess
-from os.path import abspath, dirname
+from os.path import abspath, dirname, join, exists
+
+try:
+    import insar
+except ImportError:  # add root to pythonpath if script is erroring
+    sys.path.insert(0, dirname(dirname(abspath(__file__))))
+
 from insar.sario import load_file
 import insar.dem
 import insar.geojson
@@ -104,8 +110,9 @@ def main():
 
     # Now upsample this block
     nrows, ncols = stitched_dem.shape
+    upsample_path = 'bin/upsample' if exists('bin/upsample') else 'upsample'
     upsample_cmd = [
-        'bin/upsample', dem_filename_small,
+        upsample_path, dem_filename_small,
         str(rate),
         str(ncols),
         str(nrows), dem_filename

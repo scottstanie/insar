@@ -5,7 +5,15 @@ Utilities for Synthetic apeture radar (SAR) and Interferometric SAR (InSAR) proc
 
 ## Setup and installation
 
-or for development use (to add on and not make the installation fixed):
+```bash
+pip install insar
+```
+
+This will put two scripts as executables on your path: `create-dem` and `download-eofs`
+Other functionality is explained below.
+
+
+Or for development use (to change code and have the reflected in what is installed):
 
 ```bash
 mkvirtualenv insar
@@ -13,37 +21,53 @@ pip install -r requirements.txt
 python setup.py develop
 ```
 
+virtualenv is optional but recommended.
+
 
 ### Modules and example usage
 
 #### dem.py
-Functions for working with digital elevation maps (DEMs).
-Contains the `Downloader` and `Stitcher` classes.
-
 In order to download a cropped (and possibly upsampled) dem,
 see `scripts/create_dem.py`
 
 
 ```bash
-$ python scripts/create_dem.py --geojson data/hawaii.geojson --rate 2 --output elevation.dem
+$ create_dem.py --geojson data/hawaii.geojson --rate 2 --output elevation.dem
+$ create_dem.py -g data/hawaii_bigger.geojson -r 5 --output elevation.dem
 ```
+
+Functions for working with digital elevation maps (DEMs) are mostly contained in the `Downloader` and `Stitcher` classes.
 
 
 #### eof.py
 
 Functions for dealing with precise orbit files (POE) for Sentinel 1
 
+```bash
+$ download_eofs.py
+```
+
+The script without arguments will look in the current directory for .EOF files.
+You can also specify dates, with or without a mission (S1A/S1B):
+
+```bash
+$ download_eofs.py --date 20180301 
+$ download_eofs.py -d 2018-03-01 --mission S1A
+```
+
+Using it from python, you can pass a list of dates:
+
 ```python
 from insar.eof import download_eofs
 
-download_eofs('20180503')
-download_eofs(datetime.datetime(2018, 5, 3, 0, 0, 0))
+download_eofs([datetime.datetime(2018, 5, 3, 0, 0, 0)])
+download_eofs(['20180503', '20180507'], ['S1A', 'S1B'])
 ```
 
 #### sario.py
 
 Input/Output functions for SAR data.
-Mostly UAVSAR functions for now.
+Mostly UAVSAR or DEM functions for now.
 
 Main function: 
 
@@ -102,4 +126,6 @@ parser.field_meanings()
  'product unique id')
 
 ```
+
+More will be added in the future.
 
