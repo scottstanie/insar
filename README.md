@@ -32,8 +32,8 @@ see `scripts/create_dem.py`
 
 
 ```bash
-$ create_dem.py --geojson data/hawaii.geojson --rate 2 --output elevation.dem
-$ create_dem.py -g data/hawaii_bigger.geojson -r 5 --output elevation.dem
+create-dem --geojson data/hawaii.geojson --rate 2 --output elevation.dem
+create-dem -g data/hawaii_bigger.geojson -r 5 --output elevation.dem
 ```
 
 Functions for working with digital elevation maps (DEMs) are mostly contained in the `Downloader` and `Stitcher` classes.
@@ -44,15 +44,15 @@ Functions for working with digital elevation maps (DEMs) are mostly contained in
 Functions for dealing with precise orbit files (POE) for Sentinel 1
 
 ```bash
-$ download_eofs.py
+$ download-eofs
 ```
 
 The script without arguments will look in the current directory for .EOF files.
 You can also specify dates, with or without a mission (S1A/S1B):
 
 ```bash
-$ download_eofs.py --date 20180301 
-$ download_eofs.py -d 2018-03-01 --mission S1A
+download-eofs --date 20180301 
+download-eofs -d 2018-03-01 --mission S1A
 ```
 
 Using it from python, you can pass a list of dates:
