@@ -535,39 +535,3 @@ def crop_stitched_dem(bounds, stitched_dem, rsc_data):
     cropped_dem = stitched_dem[top_idx:bot_idx + 1, left_idx:right_idx + 1]
     new_sizes = cropped_dem.shape
     return cropped_dem, new_starts, new_sizes
-
-
-@log_runtime
-def upsample_dem(dem_img, rate=3):
-    """Interpolates a DEM to higher resolution for better InSAR quality
-
-    TOO SLOW: scipy's interp for some reason isn't great
-    Use upsample.c instead
-
-    Args:
-        dem_img: numpy.ndarray (int16)
-        rate: int, default = 3
-
-    Returns:
-        numpy.ndarray (int16): original dem_img upsampled by `rate`. Needs
-            to return same type since downstream scripts expect int16 DEMs
-
-    """
-
-    s1, s2 = dem_img.shape
-    orig_points = (np.arange(1, s1 + 1), np.arange(1, s2 + 1))
-
-    rgi = RegularGridInterpolator(points=orig_points, values=dem_img)
-
-    # Make a grid from 1 to size (inclusive for mgrid), in both directions
-    # 1j used by mgrid: makes numx/numy number of points exactly (like linspace)
-    numx = _up_size(s1, rate)
-    numy = _up_size(s2, rate)
-    X, Y = np.mgrid[1:s1:(numx * 1j), 1:s2:(numy * 1j)]
-
-    # vstack makes 2xN, num_pixels=(numx*numy): new_points will be a Nx2 matrix
-    new_points = np.vstack([X.ravel(), Y.ravel()]).T
-
-    # rgi expects Nx2 as input, and will output as a 1D vector
-    # Should be same dtype (int16), and round used to not truncate 2.9 to 2
-    return rgi(new_points).reshape(numx, numy).round().astype(dem_img.dtype)

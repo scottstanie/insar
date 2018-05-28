@@ -89,7 +89,7 @@ def main():
     rate = args.rate
     dem_filename = args.output
     rsc_filename = dem_filename + '.rsc'
-    if rate == 1 and False:
+    if rate == 1:
         logger.info("Rate = 1: No upsampling to do")
         logger.info("Writing DEM to %s", dem_filename)
         stitched_dem.tofile(dem_filename)

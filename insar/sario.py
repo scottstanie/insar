@@ -54,6 +54,9 @@ def load_elevation(filename):
     ext = get_file_ext(filename)
     data_type = "<i2" if ext == '.dem' else ">i2"
     data = np.fromfile(filename, dtype=data_type)
+    # Make sure we're working with little endian
+    if data_type == '>i2':
+        data = data.astype('<i2')
 
     # Reshape to correct size.
     # Either get info from .dem.rsc
@@ -65,12 +68,15 @@ def load_elevation(filename):
     else:
         if (data.shape[0] / 3601) == 3601:
             # STRM1- 1 arc second data, 30 meter data
-            dem_img = data.reshape((3601, 3601)).astype('<i2')
+            dem_img = data.reshape((3601, 3601))
         elif (data.shape[0] / 1201) == 1201:
             # STRM3- 3 arc second data, 90 meter data
-            dem_img = data.reshape((1201, 1201)).astype('<i2')
+            dem_img = data.reshape((1201, 1201))
         else:
             raise ValueError("Invalid .hgt data size: must be square size 1201 or 3601")
+        # TODO: makeDEM.m did this... do always want?? Why does AWS have so many more
+        # negative values in their SRTM1 tile than NASA?
+        dem_img = np.clip(dem_img, 0)
 
     return dem_img
 
