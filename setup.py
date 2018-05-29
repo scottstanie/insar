@@ -59,8 +59,11 @@ setuptools.setup(
     ),
     install_requires=['numpy', 'scipy', 'requests', 'matplotlib', 'beautifulsoup4'],
     entry_points={
-        'console_scripts':
-        ['create-dem=scripts.create_dem:main', 'download-eofs=scripts.download_eofs:main'],
+        'console_scripts': [
+            'create-dem=scripts.create_dem:main',
+            'download-eofs=scripts.download_eofs:main',
+            'view-dem=scripts.view_dem:main',
+        ],
     },
     data_files=[('bin', ['bin/upsample'])],
     zip_safe=False)
