@@ -32,10 +32,9 @@ import re
 import requests
 import subprocess
 import numpy as np
-from scipy.interpolate import RegularGridInterpolator
 
-from insar.log import get_log, log_runtime
-from insar.util import floor_float
+from insar.log import get_log
+from insar.utils import floor_float
 from insar import sario
 
 logger = get_log()
