@@ -6,6 +6,7 @@ Email: scott.stanie@utexas.edu
 """
 
 import argparse
+import math
 import numpy as np
 
 import insar.sario
@@ -22,6 +23,21 @@ def downsample_im(image, rate=10):
         rate (int) the reduction rate to downsample
     """
     return image[::rate, ::rate]
+
+
+def floor_float(num, ndigits):
+    """Like rounding to ndigits, but flooring
+
+    Used for .dem.rsc creation, because rounding to 12 sigfigs
+    causes the fortran routines to overstep the matrix and fail,
+    since 0.000277777778*3600 = 1.00000000079.. , but
+    0.000277777777*3600 = 0.99999999719
+
+    Example:
+        >>> floor_float(1/3600, 12)
+        0.000277777777
+    """
+    return math.floor((10**ndigits) * num) / (10**ndigits)
 
 
 def clip(image):

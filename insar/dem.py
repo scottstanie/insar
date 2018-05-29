@@ -35,6 +35,7 @@ import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
 from insar.log import get_log, log_runtime
+from insar.util import floor_float
 from insar import sario
 
 logger = get_log()
@@ -329,7 +330,9 @@ class Stitcher:
         # TODO: figure out where to generalize for SRTM3
         rsc_dict.update({'WIDTH': ncols, 'FILE_LENGTH': nrows})
         rsc_dict.update({'X_FIRST': x_first, 'Y_FIRST': y_first})
-        rsc_dict.update({'X_STEP': 1 / (self.num_pixels - 1), 'Y_STEP': -1 / (self.num_pixels - 1)})
+        ndigits = 12
+        step_size = floor_float(1 / (self.num_pixels - 1), ndigits)
+        rsc_dict.update({'X_STEP': step_size, 'Y_STEP': -1 * step_size})
         return rsc_dict
 
     def format_dem_rsc(self, rsc_dict):
