@@ -9,10 +9,38 @@ import sys
 import json
 
 
-def geojson_to_bounds(geojson):
-    """From a geojson object, compute bounding lon/lats
+def _read_json(input_string):
+    """Loads a json_dict from either a filename or a json string
 
-    Valid geojson types: Polygon (necessary at some depth), Feature, FeatureCollection
+    Args:
+        geojson (str): either path to file, or full parsable string
+
+    Returns:
+        dict: json loaded into a dict
+    """
+    if '{' in input_string:
+        # Assuming not a filename:
+        json_dict = json.loads(input_string)
+    else:
+        with open(input_string, 'r') as f:
+            json_dict = json.load(f)
+    return json_dict
+
+
+def _parse_coordinates(geojson):
+    """Finds the coordinates of a geojson polygon
+
+    Note: we are assuming one simple polygon with no holes
+
+    Args:
+        geojson (dict): loaded geojson dict
+
+    Returns:
+        list: coordinates of polygon in the geojson
+
+    Raises:
+        KeyError: if invalid geojson type (no 'geometry' in the json)
+        AssertionError: if the geojson 'type' is not 'Polygon'
     """
     # First, if given a deeper object (e.g. from geojson.io), extract just polygon
     try:
@@ -25,8 +53,15 @@ def geojson_to_bounds(geojson):
         raise
 
     assert geojson['type'] == 'Polygon', 'Must use polygon geojson'
-    # Note: we are assuming a simple polygon with no holes
-    coordinates = geojson['coordinates'][0]
+    return geojson['coordinates'][0]
+
+
+def bounding_box(geojson):
+    """From a geojson object, compute bounding lon/lats
+
+    Valid geojson types: Polygon (necessary at some depth), Feature, FeatureCollection
+    """
+    coordinates = _parse_coordinates(geojson)
 
     left = min(float(lon) for (lon, lat) in coordinates)
     right = max(float(lon) for (lon, lat) in coordinates)
@@ -38,9 +73,8 @@ def geojson_to_bounds(geojson):
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
-        with open(sys.argv[1], 'r') as f:
-            geojson = json.load(f)
+        json_dict = _read_json(sys.argv[1])
     else:
-        geojson = json.load(sys.stdin)
+        json_dict = _read_json(sys.stdin)
 
-    print(' '.join(str(c) for c in geojson_to_bounds(geojson)))
+    print(' '.join(str(c) for c in bounding_box(geojson)))

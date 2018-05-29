@@ -61,7 +61,7 @@ def main():
         with open(args.geojson, 'r') as f:
             geojson = json.load(f)
 
-    bounds = insar.geojson.geojson_to_bounds(geojson)
+    bounds = insar.geojson.bounding_box(geojson)
     logger.info("Bounds: %s", " ".join(str(b) for b in bounds))
 
     d = insar.dem.Downloader(*bounds)
