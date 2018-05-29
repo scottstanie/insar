@@ -9,7 +9,7 @@ Utilities for Synthetic apeture radar (SAR) and Interferometric SAR (InSAR) proc
 pip install insar
 ```
 
-This will put two scripts as executables on your path: `create-dem` and `download-eofs`
+This will put three scripts as executables on your path: `create-dem`,`download-eofs`, and `view-dem`.
 Other functionality is explained below.
 
 
@@ -38,6 +38,14 @@ create-dem -g data/hawaii_bigger.geojson -r 5 --output elevation.dem
 
 Functions for working with digital elevation maps (DEMs) are mostly contained in the `Downloader` and `Stitcher` classes.
 
+Once you have made this, if you want to get a quick look in python, the script `script/view_dem.py` opens the file and plots with matplotlib.
+You can access the script with the entry-point `view-dem`, installed with a `pip install`.
+If you have multiple, you can plot them:
+
+```bash
+view-dem elevation1.dem elevation2.dem
+view-dem  # Looks in the current directory for "elevation.dem"
+```
 
 #### eof.py
 
