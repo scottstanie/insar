@@ -295,7 +295,8 @@ class Stitcher:
         for idx, row in enumerate(flist):
             cur_row = np.hstack(sario.load_file(os.path.join(_get_cache_dir(), f)) for f in row)
             # Delete columns: 3601*[1, 2,... not-including last column]
-            cur_row = np.delete(cur_row, self.num_pixels * list(range(1, ncols)), axis=1)
+            delete_cols = self.num_pixels * np.arange(1, ncols)
+            cur_row = np.delete(cur_row, delete_cols, axis=1)
             if idx > 0:
                 # For all except first block-row, delete repeated first row of data
                 cur_row = np.delete(cur_row, 0, axis=0)
@@ -380,9 +381,9 @@ class Stitcher:
             # Files seemed to be left justified with 13 spaces? Not sure why 13
             if field.lower() in ('x_step', 'y_step'):
                 # give step floats proper sig figs to not output scientific notation
-                outstring += "{field:<13s}{val:0.12f}\n".format(field=field.upper(), val=value)
+                outstring += "{field:<14s}{val:0.12f}\n".format(field=field.upper(), val=value)
             else:
-                outstring += "{field:<13s}{val}\n".format(field=field.upper(), val=value)
+                outstring += "{field:<14s}{val}\n".format(field=field.upper(), val=value)
 
         return outstring
 
@@ -512,7 +513,6 @@ def find_bounding_idxs(bounds, x_step, y_step, x_first, y_first):
     left, bot, right, top = bounds
     left_idx = int(math.floor((left - x_first) / x_step))
     right_idx = int(math.ceil((right - x_first) / x_step))
-    print(right_idx)
     # Note: y_step will be negative for these
     top_idx = int(math.floor((top - y_first) / y_step))
     bot_idx = int(math.ceil((bot - y_first) / y_step))
