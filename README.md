@@ -13,7 +13,7 @@ This will put three scripts as executables on your path: `create-dem`,`download-
 Other functionality is explained below.
 
 
-Or for development use (to change code and have the reflected in what is installed):
+Or for development use (to change code and have it be reflected in what is installed):
 
 ```bash
 mkvirtualenv insar
