@@ -137,3 +137,66 @@ parser.field_meanings()
 
 More will be added in the future.
 
+
+#### geojson.py
+
+Simple functions for getting handling geojson inputs:
+
+
+```python
+from insar.geojson import read_json, bounding_box, print_coordinates
+json_dict = read_json(input_string)
+```
+
+Running the module as a script will give you both the bounding box, and the comma-joined lon,lat pairs of the polygon:
+
+```bash
+$ cat data/hawaii.geojson | python insar/geojson.py 
+-155.67626953125,19.077692991868297,-154.77264404296875,19.077692991868297,-154.77264404296875,19.575317892869453,-155.67626953125,19.575317892869453,-155.67626953125,19.077692991868297
+-155.67626953125 19.077692991868297 -154.77264404296875 19.575317892869453
+
+$ cat data/hawaii.geojson 
+{
+  "type": "Polygon",
+  "coordinates": [
+    [
+		  [
+		    -155.67626953125,
+		    19.077692991868297
+		  ],
+		  [
+		    -154.77264404296875,
+		    19.077692991868297
+		  ],
+		  [
+		    -154.77264404296875,
+		    19.575317892869453
+		  ],
+		  [
+		    -155.67626953125,
+		    19.575317892869453
+		  ],
+		  [
+		    -155.67626953125,
+		    19.077692991868297
+		  ]
+    ]
+  ]
+}
+```
+
+#### log.py
+
+Module to make logging pretty with times and module names.
+
+If you also `pip install colorlog`, it will become colored (didn't require this in case people like non-color logs.)
+
+```python
+from insar.log import get_log
+logger = get_log()
+logger.info("Better than printing")
+```
+
+```bash
+[05/29 16:28:19] [INFO log.py] Better than printing
+```

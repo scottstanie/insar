@@ -6,10 +6,11 @@ Output: left, bottom, right, top (floats)
 """
 
 import sys
+import itertools
 import json
 
 
-def _read_json(input_string):
+def read_json(input_string):
     """Loads a json_dict from either a filename or a json string
 
     Args:
@@ -27,7 +28,7 @@ def _read_json(input_string):
     return json_dict
 
 
-def _parse_coordinates(geojson):
+def parse_coordinates(geojson):
     """Finds the coordinates of a geojson polygon
 
     Note: we are assuming one simple polygon with no holes
@@ -60,8 +61,16 @@ def bounding_box(geojson):
     """From a geojson object, compute bounding lon/lats
 
     Valid geojson types: Polygon (necessary at some depth), Feature, FeatureCollection
+
+    Args:
+        geojson (dict): json pre-loaded into a dict
+
+    Returns:
+        tuple[float]: the left,bottom,right,top bounding box of the Polygon
     """
-    coordinates = _parse_coordinates(geojson)
+    geojson = read_json(geojson) if isinstance(geojson, str) else geojson
+
+    coordinates = parse_coordinates(geojson)
 
     left = min(float(lon) for (lon, lat) in coordinates)
     right = max(float(lon) for (lon, lat) in coordinates)
@@ -71,10 +80,28 @@ def bounding_box(geojson):
     return left, bottom, right, top
 
 
+def print_coordinates(geojson_dict):
+    """Prints out the lon,lat points in the polygon joined in one string
+
+    Used for ASF API queries: https://www.asf.alaska.edu/get-data/learn-by-doing/
+    E.g. (from their example api request, the following URL params are used)
+    polygon=-155.08,65.82,-153.5,61.91,-149.50,63.07,-149.94,64.55,-153.28,64.47,-155.08,65.82
+
+    Args:
+        geojson (dict): json pre-loaded into a dict
+
+    Returns:
+        str: lon,lat points of the Polygon in order as 'lon1,lat1,lon2,lat2,...'
+    """
+    c = parse_coordinates(geojson_dict)
+    return ','.join(str(coord) for coord in itertools.chain.from_iterable(c))
+
+
 if __name__ == '__main__':
     if len(sys.argv) > 1:
-        json_dict = _read_json(sys.argv[1])
+        json_dict = read_json(sys.argv[1])
     else:
-        json_dict = _read_json(sys.stdin)
+        json_dict = read_json(sys.stdin.read())
 
-    print(' '.join(str(c) for c in bounding_box(geojson)))
+    print(print_coordinates(json_dict))
+    print(' '.join(str(c) for c in bounding_box(json_dict)))
