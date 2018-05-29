@@ -478,16 +478,17 @@ def upsample_dem_rsc(rate=None, rsc_dict=None, rsc_filepath=None):
     outstring = ""
     for field, value in rsc_dict.items():
         # Files seemed to be left justified with 13 spaces? Not sure why 13
+        # TODO: its 14- but fix this and previous formatting to be DRY
         if field.lower() in ('width', 'file_length'):
             new_size = _up_size(value, rate)
-            outstring += "{field:<13s}{val}\n".format(field=field.upper(), val=new_size)
+            outstring += "{field:<14s}{val}\n".format(field=field.upper(), val=new_size)
         elif field.lower() in ('x_step', 'y_step'):
             # New is 1 + (size - 1) * rate, old is size, old rate is 1/(size-1)
             value /= rate
             # Also give step floats proper sig figs to not output scientific notation
-            outstring += "{field:<13s}{val:0.12f}\n".format(field=field.upper(), val=value)
+            outstring += "{field:<14s}{val:0.12f}\n".format(field=field.upper(), val=value)
         else:
-            outstring += "{field:<13s}{val}\n".format(field=field.upper(), val=value)
+            outstring += "{field:<14s}{val}\n".format(field=field.upper(), val=value)
 
     return outstring
 
