@@ -283,15 +283,18 @@ class Stitcher:
 
         Uses hstack first on rows, then vstacks rows together.
         Also handles the deleting of overlapped rows/columns of SRTM tiles
+        TODO: break this up to more testable chunks
 
         Returns:
             numpy.array: the stitched .hgt tiles in 2D np.array
         """
         row_list = []
-        flist = self._create_file_array()
+        # ncols in the number of .hgt blocks wide
         _, ncols = self.blockshape
+        flist = self._create_file_array()
         for idx, row in enumerate(flist):
             cur_row = np.hstack(sario.load_file(os.path.join(_get_cache_dir(), f)) for f in row)
+            # Delete columns: 3601*[1, 2,... not-including last column]
             cur_row = np.delete(cur_row, self.num_pixels * list(range(1, ncols)), axis=1)
             if idx > 0:
                 # For all except first block-row, delete repeated first row of data
@@ -509,6 +512,7 @@ def find_bounding_idxs(bounds, x_step, y_step, x_first, y_first):
     left, bot, right, top = bounds
     left_idx = int(math.floor((left - x_first) / x_step))
     right_idx = int(math.ceil((right - x_first) / x_step))
+    print(right_idx)
     # Note: y_step will be negative for these
     top_idx = int(math.floor((top - y_first) / y_step))
     bot_idx = int(math.ceil((bot - y_first) / y_step))
@@ -538,7 +542,6 @@ def crop_stitched_dem(bounds, stitched_dem, rsc_data):
         rsc_data['Y_FIRST'],
     )
     left_idx, bot_idx, right_idx, top_idx = indexes
-    # Need to add 1 because slicing is not inclusive
-    cropped_dem = stitched_dem[top_idx:bot_idx + 1, left_idx:right_idx + 1]
+    cropped_dem = stitched_dem[top_idx:bot_idx, left_idx:right_idx]
     new_sizes = cropped_dem.shape
     return cropped_dem, new_starts, new_sizes
