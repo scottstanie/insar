@@ -115,6 +115,11 @@ class Downloader:
             ['N19/N19W156.hgt', 'N19/N19W155.hgt']
             >>> list(Downloader(*(10.1, -44.9, 10.1, -44.9)).srtm1_tile_names())
             ['S45/S45E010.hgt']
+
+            >>> bounds = [-156.0, 19.0, -154.0, 20.0]  # Show int bounds
+            >>> list(d.srtm1_tile_names())
+            ['N19/N19W156.hgt', 'N19/N19W155.hgt']
+
         """
 
         left, bottom, right, top = self.bounds
@@ -122,9 +127,9 @@ class Downloader:
         right_int, bot_int = self.srtm1_tile_corner(right, bottom)
         # If exact integer was requested for top/right, assume tile with that number
         # at the top/right is acceptable (dont download the one above that)
-        if isinstance(top, int):
+        if isinstance(top, int) or int(top) == top:
             top_int -= 1
-        if isinstance(right, int):
+        if isinstance(right, int) or int(right) == right:
             right_int -= 1
 
         tile_name_template = '{lat_str}/{lat_str}{lon_str}.hgt'
@@ -310,7 +315,7 @@ class Stitcher:
         Examples:
             >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt'])
             >>> s.create_dem_rsc()
-            OrderedDict([('WIDTH', 7201), ('FILE_LENGTH', 3601), ('X_FIRST', -156.0), ('Y_FIRST', 20.0), ('X_STEP', 0.0002777777777777778), ('Y_STEP', -0.0002777777777777778), ('X_UNIT', 'degrees'), ('Y_UNIT', 'degrees'), ('Z_OFFSET', 0), ('Z_SCALE', 1), ('PROJECTION', 'LL')])
+            OrderedDict([('WIDTH', 7201), ('FILE_LENGTH', 3601), ('X_FIRST', -156.0), ('Y_FIRST', 20.0), ('X_STEP', 0.000277777777), ('Y_STEP', -0.000277777777), ('X_UNIT', 'degrees'), ('Y_UNIT', 'degrees'), ('Z_OFFSET', 0), ('Z_SCALE', 1), ('PROJECTION', 'LL')])
         """
 
         # Use an OrderedDict for the key/value pairs so writing to file easy
@@ -356,8 +361,8 @@ class Stitcher:
             FILE_LENGTH  3601
             X_FIRST      -156.0
             Y_FIRST      20.0
-            X_STEP       0.000277777778
-            Y_STEP       -0.000277777778
+            X_STEP       0.000277777777
+            Y_STEP       -0.000277777777
             X_UNIT       degrees
             Y_UNIT       degrees
             Z_OFFSET     0
