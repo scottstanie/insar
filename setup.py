@@ -10,9 +10,9 @@ class PostDevelopCommand(develop):
     """Post-installation for development mode, installs from Makefile."""
 
     def run(self):
-        print('=========================================================')
+        print("=========================================================")
         check_call("make")
-        print('=========================================================')
+        print("=========================================================")
         develop.run(self)
 
 
@@ -20,9 +20,9 @@ class PostInstallCommand(install):
     """Post-installation for installation mode."""
 
     def run(self):
-        print('=========================================================')
+        print("=========================================================")
         check_call("make")
-        print('=========================================================')
+        print("=========================================================")
         install.run(self)
 
 
@@ -42,8 +42,8 @@ setuptools.setup(
     include_package_data=True,
     # Extra command to compile the upsample.c script
     cmdclass={
-        'develop': PostDevelopCommand,
-        'install': PostInstallCommand,
+        "develop": PostDevelopCommand,
+        "install": PostInstallCommand,
     },
     classifiers=(
         "Programming Language :: Python",
@@ -57,13 +57,13 @@ setuptools.setup(
         "Topic :: Scientific/Engineering",
         "Intended Audience :: Science/Research",
     ),
-    install_requires=['numpy', 'scipy', 'requests', 'matplotlib', 'beautifulsoup4'],
+    install_requires=["numpy", "scipy", "requests", "matplotlib", "beautifulsoup4"],
     entry_points={
-        'console_scripts': [
-            'create-dem=scripts.create_dem:main',
-            'download-eofs=scripts.download_eofs:main',
-            'view-dem=scripts.view_dem:main',
+        "console_scripts": [
+            "create-dem=scripts.create_dem:main",
+            "download-eofs=scripts.download_eofs:main",
+            "view-dem=scripts.view_dem:main",
         ],
     },
-    data_files=[('bin', ['bin/upsample'])],
+    data_files=[("bin", ["bin/upsample"])],
     zip_safe=False)
