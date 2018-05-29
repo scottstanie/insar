@@ -361,17 +361,17 @@ class Stitcher:
             >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt'])
             >>> rsc_dict = s.create_dem_rsc()
             >>> print(s.format_dem_rsc(rsc_dict))
-            WIDTH        7201
-            FILE_LENGTH  3601
-            X_FIRST      -156.0
-            Y_FIRST      20.0
-            X_STEP       0.000277777777
-            Y_STEP       -0.000277777777
-            X_UNIT       degrees
-            Y_UNIT       degrees
-            Z_OFFSET     0
-            Z_SCALE      1
-            PROJECTION   LL
+            WIDTH         7201
+            FILE_LENGTH   3601
+            X_FIRST       -156.0
+            Y_FIRST       20.0
+            X_STEP        0.000277777777
+            Y_STEP        -0.000277777777
+            X_UNIT        degrees
+            Y_UNIT        degrees
+            Z_OFFSET      0
+            Z_SCALE       1
+            PROJECTION    LL
             <BLANKLINE>
 
         Note: ^^ <BLANKLINE> is doctest's way of saying it ends in newline
