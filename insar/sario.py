@@ -76,7 +76,7 @@ def load_elevation(filename):
             raise ValueError("Invalid .hgt data size: must be square size 1201 or 3601")
         # TODO: makeDEM.m did this... do always want?? Why does AWS have so many more
         # negative values in their SRTM1 tile than NASA?
-        dem_img = np.clip(dem_img, 0)
+        dem_img = np.clip(dem_img, 0, None)
 
     return dem_img
 
