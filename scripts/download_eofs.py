@@ -25,7 +25,7 @@ def find_sentinel_products():
         try:
             parser = Sentinel(filename)
         except ValueError:  # Not a sentinel zip file
-            print('Skipping {}'.format(filename))
+            logger.info('Skipping {}'.format(filename))
             continue
 
         start_date = parser.start_stop_time()[0]

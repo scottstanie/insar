@@ -69,8 +69,8 @@ def download_eofs(orbit_dates, missions=None):
         try:
             cur_links = eof_list(date)
         except ValueError as e:
-            print(e.args[0])
-            print('Skipping {}'.format(date.strftime('%Y-%m-%d')))
+            logger.warning(e.args[0])
+            logger.warning('Skipping {}'.format(date.strftime('%Y-%m-%d')))
             continue
 
         if mission:
@@ -86,12 +86,12 @@ def download_eofs(orbit_dates, missions=None):
                 for link in eof_links
             }
             for future in as_completed(future_to_link):
-                print('Finished {}'.format(future_to_link[future]))
+                logger.info('Finished {}'.format(future_to_link[future]))
     else:
         # Fall back for python 2:
         for link in eof_links:
             _download_and_write(link)
-            print('Finished {}'.format(link))
+            logger.info('Finished {}'.format(link))
 
 
 def eof_list(start_date):
@@ -132,7 +132,7 @@ def _download_and_write(link):
     Returns:
         None
     """
-    print('Downloading and saving {}'.format(link))
+    logger.info('Downloading and saving {}'.format(link))
     response = requests.get(BASE_URL + link)
     response.raise_for_status()
     with open(link, 'wb') as f:
