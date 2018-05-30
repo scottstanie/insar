@@ -114,7 +114,7 @@ def load_dem_rsc(filename):
         for line in f.readlines():
             for field, num_type in field_tups:
                 if line.startswith(field):
-                    output_data[field.lower()] = num_type(line.split()[1])
+                    output_data[field] = num_type(line.split()[1])
 
     return output_data
 

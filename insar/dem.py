@@ -303,6 +303,25 @@ class Stitcher:
             row_list.append(cur_row)
         return np.vstack(row_list)
 
+    def _find_step_sizes(self, ndigits=12):
+        """Calculates the step size for the dem.rsc
+
+        Note: assuming same step size in x and y direction
+
+        Args:
+            ndigits (int) default=12 because that's what was given
+
+        Returns:
+            (float, float): x_step, y_step
+
+        Example:
+            >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt'])
+            >>> print(s._find_step_sizes())
+            (0.000277777777, -0.000277777777)
+        """
+        step_size = floor_float(1 / (self.num_pixels - 1), ndigits)
+        return (step_size, -1 * step_size)
+
     def create_dem_rsc(self):
         """Takes a list of the SRTM1 tile names and outputs .dem.rsc file values
 
@@ -338,9 +357,9 @@ class Stitcher:
         # TODO: figure out where to generalize for SRTM3
         rsc_dict.update({'WIDTH': ncols, 'FILE_LENGTH': nrows})
         rsc_dict.update({'X_FIRST': x_first, 'Y_FIRST': y_first})
-        ndigits = 12
-        step_size = floor_float(1 / (self.num_pixels - 1), ndigits)
-        rsc_dict.update({'X_STEP': step_size, 'Y_STEP': -1 * step_size})
+
+        x_step, y_step = self._find_step_sizes()
+        rsc_dict.update({'X_STEP': x_step, 'Y_STEP': y_step})
         return rsc_dict
 
     def format_dem_rsc(self, rsc_dict):
@@ -357,7 +376,7 @@ class Stitcher:
         Returns:
             outstring (str) formatting string to be written to .dem.rsc
 
-        Examples:
+        Example:
             >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt'])
             >>> rsc_dict = s.create_dem_rsc()
             >>> print(s.format_dem_rsc(rsc_dict))
@@ -546,3 +565,38 @@ def crop_stitched_dem(bounds, stitched_dem, rsc_data):
     cropped_dem = stitched_dem[top_idx:bot_idx, left_idx:right_idx]
     new_sizes = cropped_dem.shape
     return cropped_dem, new_starts, new_sizes
+
+
+def rsc_bounds(rsc_data):
+    """Uses the x/y and step data from a .rsc file to generate LatLonBox for .kml"""
+    north = rsc_data['Y_FIRST']
+    west = rsc_data['X_FIRST']
+    east = west + rsc_data['WIDTH'] * rsc_data['X_STEP']
+    south = north + rsc_data['FILE_LENGTH'] * rsc_data['Y_STEP']
+    return {'north': north, 'south': south, 'east': east, 'west': west}
+
+
+def create_kml(rsc_data, tif_filename, title="Int", desc="An interferogram"):
+    north, south, east, west = rsc_bounds(rsc_data)
+    template = """\
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://earth.google.com/kml/2.2">
+<GroundOverlay>
+    <name> {title} </name>
+    <description> {description} </description>
+    <Icon>
+          <href> {tif_filename} </href>
+    </Icon>
+    <LatLonBox>
+        <north> {north} </north>
+        <south> {south} </south>
+        <east> {east} </east>
+        <west> {west} </west>
+    </LatLonBox>
+</GroundOverlay>
+</kml>
+"""
+    output = template.format(
+        title=title, description=desc, tif_filename=tif_filename, **rsc_bounds(rsc_data))
+
+    return output
