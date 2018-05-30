@@ -576,7 +576,7 @@ def rsc_bounds(rsc_data):
     return {'north': north, 'south': south, 'east': east, 'west': west}
 
 
-def create_kml(rsc_data, tif_filename, title="Int", desc="An interferogram"):
+def create_kml(rsc_data, tif_filename, title="Title", desc="Description"):
     north, south, east, west = rsc_bounds(rsc_data)
     template = """\
 <?xml version="1.0" encoding="UTF-8"?>

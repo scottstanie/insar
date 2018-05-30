@@ -36,6 +36,8 @@ create-dem --geojson data/hawaii.geojson --rate 2 --output elevation.dem
 create-dem -g data/hawaii_bigger.geojson -r 5 --output elevation.dem
 ```
 
+The geojson can be any valid simple Polygon- you can get one easily from http://geojson.io , for example.
+
 Functions for working with digital elevation maps (DEMs) are mostly contained in the `Downloader` and `Stitcher` classes.
 
 Once you have made this, if you want to get a quick look in python, the script `script/view_dem.py` opens the file and plots with matplotlib.
