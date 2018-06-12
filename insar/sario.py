@@ -11,6 +11,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
+# For UAVSAR:
 REAL_POLs = ('HHHH', 'HVHV', 'VVVV')
 COMPLEX_POLS = ('HHHV', 'HHVV', 'HVVV')
 POLARIZATIONS = REAL_POLs + COMPLEX_POLS
