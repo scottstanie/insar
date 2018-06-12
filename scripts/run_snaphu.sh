@@ -16,5 +16,3 @@ for INTFILE in `ls -1 *.int`; do
 	~/phase_upwrap/bin/snaphu -s $INTFILE $LENGTH -c $CORNAME -o $OUTNAME;
 done
 
-
-for i in *.int ; do dismphfile $i 800 ; mv dismph.tif `echo $i | sed 's/int$/tif/'` ; done
