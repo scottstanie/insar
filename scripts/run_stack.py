@@ -52,8 +52,8 @@ def _mkdir_p(path):
 
 
 def calc_sizes(rate, width, length):
-    xsize = math.floor(width / rate) * rate
-    ysize = math.floor(length / rate) * rate
+    xsize = int(math.floor(width / rate) * rate)
+    ysize = int(math.floor(length / rate) * rate)
     return (xsize, ysize)
 
 
@@ -64,6 +64,7 @@ def main():
     parser.add_argument(
         "--rate",
         "-r",
+        type=int,
         required=True,
         help="Rate at which to upsample DEM (default=1, no upsampling)")
     parser.add_argument(
@@ -78,7 +79,7 @@ def main():
     subprocess.check_call(['download-eofs'])
 
     # 2. Create an upsampled DEM
-    subprocess.check_call(['create-dem', '-g', args.geojson, '-r', args.rate])
+    subprocess.check_call(['create-dem', '-g', args.geojson, '-r', str(args.rate)])
 
     # 3. Produce a .geo file for each .zipped SLC
     logger.info("Starting sentinel_stack.py")
@@ -86,6 +87,7 @@ def main():
 
     # 4. Post processing for sentinel stack
     logger.info("Making igrams directory and moving into igrams")
+    # dir_path = os.path.dirname(os.path.realpath(__file__))  # save for later reference
     _mkdir_p('igrams')
     os.chdir('igrams')
 
@@ -93,12 +95,14 @@ def main():
     logger.info("Creating sbas_list")
     max_time = '500'
     max_spatial = '500'
-    subprocess.check_call(['~/sentinel/sbas_list.py', max_time, max_spatial])
+    sbas_cmd = '~/sentinel/sbas_list.py {} {}'.format(max_time, max_spatial)
+    logger.info(sbas_cmd)
+    subprocess.call(sbas_cmd, shell=True)
 
     logger.info("Gathering file size info from elevation.dem.rsc")
     elevation_dem_rsc_file = '../elevation.dem.rsc'
     rsc_data = insar.sario.load_dem_rsc(elevation_dem_rsc_file)
-    xsize, ysize = calc_sizes(args.rate, rsc_data['WIDTH'], rsc_data['LENGTH'])
+    xsize, ysize = calc_sizes(args.rate, rsc_data['WIDTH'], rsc_data['FILE_LENGTH'])
 
     # 6. ps_sbas_igrams
     # the "1 1" is xstart ystart
@@ -108,7 +112,7 @@ def main():
     ps_sbas_cmd = "~/sentinel/ps_sbas_igrams.py sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
         rsc_file=elevation_dem_rsc_file, xsize=xsize, ysize=ysize, looks=args.rate)
     logger.info(ps_sbas_cmd)
-    subprocess.check_call(ps_sbas_cmd.split(' '))
+    subprocess.check_call(ps_sbas_cmd, shell=True)
 
     # Default name by ps_sbas_igrams
     igram_rsc = insar.sario.load_dem_rsc('dem.rsc')
@@ -124,7 +128,7 @@ def main():
 
     # 9. Convert snaphu outputs to .tif files
     subprocess.call(
-        '~/repos/insar/scripts/convert_snaphu.sh --max-height {}'.format(args.max_height),
+        '~/repos/insar/scripts/convert_snaphu.py --max-height {}'.format(args.max_height),
         shell=True)
 
 
