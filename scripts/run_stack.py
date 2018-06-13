@@ -51,6 +51,25 @@ def _mkdir_p(path):
             raise
 
 
+
+def pywhich(program):
+    """Mimic UNIX which, but for the python sys.path"""
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in sys.path:
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+
+    return None
+
+
 def calc_sizes(rate, width, length):
     xsize = int(math.floor(width / rate) * rate)
     ysize = int(math.floor(length / rate) * rate)
@@ -59,6 +78,8 @@ def calc_sizes(rate, width, length):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--working-dir", "-d", default=".", help="Directory where sentinel .zip are located")
     parser.add_argument(
         "--geojson", "-g", required=True, help="File containing the geojson object for DEM bounds")
     parser.add_argument(
@@ -74,12 +95,17 @@ def main():
         help="Maximum height/max absolute phase in .unw files "
         "(used for contour_interval option to dishgt)")
     args = parser.parse_args()
+    os.chdir(args.working_dir)
+    dir_path = os.path.realpath(args.working_dir)  # save for later reference
+    logger.info("Running scripts in {}".format(dir_path))
 
     # 1. Download precision orbit files
-    subprocess.check_call(['download-eofs'])
+    download_eof_exe = pywhich('download-eofs') or pywhich('download_eofs.py')
+    subprocess.check_call(download_eof_exe, shell=True)
 
     # 2. Create an upsampled DEM
-    subprocess.check_call(['create-dem', '-g', args.geojson, '-r', str(args.rate)])
+    create_dem_exe = pywhich('create-dem') or pywhich('create_dem.py')
+    subprocess.check_call('{} -g args.geojson -r {}'.format(create_dem_exe, args.rate), shell=True)
 
     # 3. Produce a .geo file for each .zipped SLC
     logger.info("Starting sentinel_stack.py")
@@ -87,7 +113,6 @@ def main():
 
     # 4. Post processing for sentinel stack
     logger.info("Making igrams directory and moving into igrams")
-    # dir_path = os.path.dirname(os.path.realpath(__file__))  # save for later reference
     _mkdir_p('igrams')
     os.chdir('igrams')
 
