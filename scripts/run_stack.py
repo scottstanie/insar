@@ -1,10 +1,22 @@
 #!/usr/bin/env python
-"""Change .unw outputs into .tif files using dishgtfile
+"""Runs all steps of interferogram processing
 
-    Usage: convert_snaphu.py [--file "/path/to/unwrapped.unw"] [--output unwrapped.unw.tif]
-        convert_snaph.py [--path "/path/to/igrams/"] # will convert all files in path
+    Usage: convert_snaphu.py --geojson "/path/to/dem.geojson" --rate 10 --max-height 10
 
-    With no arguments, converts all .unw files in current directory
+    geojson used for bounding box of DEM
+    rate passed to dem upsampling routine
+    max_height passed to snaphu phase unwrapping
+
+    Steps:
+    1. Download precise orbits EOF files
+    2. Create an upsampled DEM
+    3. run sentinel_stack to produce .geo file for all sentinel .zips
+    4. Post processing for sentinel stack (igrams folder prep)
+    5. create the sbas_list
+    6. run ps_sbas_igrams.py
+    7. convert .int files to .tif
+    8. run snaphu to unwrap all .int files
+    9. Convert snaphu outputs to .tif files
 
 """
 
@@ -62,21 +74,22 @@ def main():
         "(used for contour_interval option to dishgt)")
     args = parser.parse_args()
 
-    # Download precision orbit files
+    # 1. Download precision orbit files
     subprocess.check_call(['download-eofs'])
 
-    # Create an upsampled DEM
+    # 2. Create an upsampled DEM
     subprocess.check_call(['create-dem', '-g', args.geojson, '-r', args.rate])
 
-    # Produce a .geo file for each .zipped SLC
+    # 3. Produce a .geo file for each .zipped SLC
     logger.info("Starting sentinel_stack.py")
     subprocess.check_call(['~/sentinel/sentinel_stack.py'])
 
-    # Post processing for sentinel stack
+    # 4. Post processing for sentinel stack
     logger.info("Making igrams directory and moving into igrams")
     _mkdir_p('igrams')
     os.chdir('igrams')
 
+    # 5. Sbas_list
     logger.info("Creating sbas_list")
     max_time = 500
     max_spatial = 500
@@ -87,6 +100,7 @@ def main():
     rsc_data = insar.sario.load_dem_rsc(elevation_dem_rsc_file)
     xsize, ysize = calc_sizes(args.rate, rsc_data['WIDTH'], rsc_data['LENGTH'])
 
+    # 6. ps_sbas_igrams
     # the "1 1" is xstart ystart
     # We are using the upsampling rate as the number of looks so that
     # the igram is the size of the original DEM (elevation_small.dem)
@@ -98,13 +112,17 @@ def main():
 
     # Default name by ps_sbas_igrams
     igram_rsc = insar.sario.load_dem_rsc('dem.rsc')
+    # 7. convert .int files to .tif
     # TODO: Make this into the script like the convert_snaphu
     convert1 = "for i in *.int ; do dismphfile $i {igram_width} ; mv dismph.tif `echo $i | sed 's/int$/tif/'` ; done".format(
         igram_width=igram_rsc['WIDTH'])
     subprocess.call(convert1, shell=True)
 
+    # 8. run snaphu to unwrap all .int files
     # TODO: probably can't call these like this
     subprocess.call('~/repos/insar/scripts/run_snaphu.sh {}'.format(igram_rsc['WIDTH']), shell=True)
+
+    # 9. Convert snaphu outputs to .tif files
     subprocess.call(
         '~/repos/insar/scripts/convert_snaphu.sh --max-height {}'.format(args.max_height),
         shell=True)
