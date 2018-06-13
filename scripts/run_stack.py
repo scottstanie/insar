@@ -82,7 +82,7 @@ def main():
 
     # 3. Produce a .geo file for each .zipped SLC
     logger.info("Starting sentinel_stack.py")
-    subprocess.check_call(['~/sentinel/sentinel_stack.py'])
+    subprocess.call('~/sentinel/sentinel_stack.py', shell=True)
 
     # 4. Post processing for sentinel stack
     logger.info("Making igrams directory and moving into igrams")
@@ -91,8 +91,8 @@ def main():
 
     # 5. Sbas_list
     logger.info("Creating sbas_list")
-    max_time = 500
-    max_spatial = 500
+    max_time = '500'
+    max_spatial = '500'
     subprocess.check_call(['~/sentinel/sbas_list.py', max_time, max_spatial])
 
     logger.info("Gathering file size info from elevation.dem.rsc")
