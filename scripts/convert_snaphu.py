@@ -32,6 +32,7 @@ def _find_unw_files(dir_path):
 
 def unw_to_tif(filename, num_cols, num_rows, max_height):
     """Uses dishgtfile program to convert a .unw to .tif"""
+    # The "1" is "firstline" option
     convert_command = "dishgtfile {filename} {num_cols} 1 {num_rows} {max_height}"
     convert_cmd = convert_command.format(
         filename=filename, num_cols=num_cols, num_rows=num_rows, max_height=max_height)
