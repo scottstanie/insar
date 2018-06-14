@@ -20,6 +20,7 @@ import argparse
 import json
 import sys
 import subprocess
+import os
 from os.path import abspath, dirname, join, exists
 
 try:
@@ -28,6 +29,7 @@ except ImportError:  # add root to pythonpath if script is erroring
     sys.path.insert(0, dirname(dirname(abspath(__file__))))
 
 from insar.sario import load_file
+from insar.utils import which
 import insar.dem
 import insar.geojson
 from insar.log import get_log
@@ -112,7 +114,7 @@ def main():
     nrows, ncols = stitched_dem.shape
     upsample_path = 'bin/upsample' if exists('bin/upsample') else 'upsample'
     upsample_cmd = [
-        upsample_path, dem_filename_small,
+        which(upsample_path), dem_filename_small,
         str(rate),
         str(ncols),
         str(nrows), dem_filename
