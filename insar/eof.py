@@ -32,6 +32,9 @@ import requests
 import bs4
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
+from insar.log import get_log
+
+logger = get_log()
 
 BASE_URL = "https://qc.sentinel1.eo.esa.int/aux_poeorb/"
 
