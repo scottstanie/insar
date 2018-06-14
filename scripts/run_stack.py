@@ -63,6 +63,7 @@ def prep_igrams_dir(*a):
     logger.info("Making igrams directory and moving into igrams")
     mkdir_p('igrams')
     os.chdir('igrams')
+    logger.info("Now inside %s", os.path.realpath(os.getcwd()))
 
 
 def create_sbas_list(*a):
@@ -173,9 +174,9 @@ def main():
     logger.info("Running scripts in {}".format(dir_path))
 
     # TODO: maybe let user specify individual steps?
-    for stepnum in range(args.step, len(STEPS)):
+    for stepnum in range(args.step - 1, len(STEPS)):
         curfunc = STEPS[stepnum]
-        logger.info("Starting %s", curfunc.__name__)
+        logger.info("Starting step %d: %s", stepnum + 1, curfunc.__name__)
         curfunc(args)
 
 
