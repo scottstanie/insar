@@ -32,8 +32,9 @@ def mkdir_p(path):
 
 def which(program):
     """Mimic UNIX which, but for the python sys.path
-    
+
     Used from https://stackoverflow.com/a/377028"""
+
     def is_exe(fpath):
         return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
 
@@ -42,7 +43,6 @@ def which(program):
         if is_exe(program):
             return program
     else:
-        print os.environ.get("PATH")
         for path in os.environ["PATH"].split(os.pathsep):
             exe_file = os.path.join(path, program)
             if is_exe(exe_file):
