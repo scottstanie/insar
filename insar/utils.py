@@ -7,12 +7,48 @@ Email: scott.stanie@utexas.edu
 
 import argparse
 import math
+import os
+import sys
 import numpy as np
 
 import insar.sario
 from insar.log import get_log
 
 logger = get_log()
+
+
+def mkdir_p(path):
+    """Emulates bash `mkdir -p`, in python style
+    Used for igrams directory creation
+    """
+    try:
+        os.makedirs(path)
+    except OSError as exc:
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
+
+def which(program):
+    """Mimic UNIX which, but for the python sys.path
+    
+    Used from https://stackoverflow.com/a/377028"""
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        print os.environ.get("PATH")
+        for path in os.environ["PATH"].split(os.pathsep):
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+
+    return None
 
 
 def downsample_im(image, rate=10):
