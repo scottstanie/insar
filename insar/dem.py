@@ -245,7 +245,7 @@ class Downloader:
 
                 yield tile_name_template.format(lat_str=lat_str, lon_str=lon_str)
 
-    def _download_hgt_tile(self, tile_name_str):
+    def _form_tile_url(self, tile_name_str):
         """Downloads a singles from AWS
 
         Args:
@@ -253,7 +253,16 @@ class Downloader:
             e.g. N06W001.SRTMGL1.hgt.zip (usgs) or N19/N19W156.hgt.gz (aws)
 
         Returns:
-            None
+            url: formatted url string with tile name
+
+        Examples:
+            >>> bounds = (-155.7, 19.1, -154.7, 19.7)
+            >>> d = Downloader(*bounds, data_source='NASA')
+            >>> d._form_tile_url('N19W155.SRTMGL1.hgt')
+            ['N19W156.SRTMGL1.hgt', 'N19W155.SRTMGL1.hgt']
+            >>> d = Downloader(*bounds, data_source='AWS')
+            >>> d._form_tile_url('N19/N19W155.hgt')
+            ['N19W156.SRTMGL1.hgt', 'N19W155.SRTMGL1.hgt']
         """
         if self.data_source == 'AWS':
             url = '{base}/{tile}.{ext}'.format(
@@ -261,8 +270,17 @@ class Downloader:
         elif self.data_source == 'NASA':
             url = '{base}/{tile}.{ext}'.format(
                 base=self.data_url, tile=tile_name_str, ext=self.compress_type)
-        logger.info("Downloading {}".format(url))
-        return requests.get(url)
+        return url
+
+    def _download_hgt_tile(self, url):
+        """Example from https://lpdaac.usgs.gov/data_access/daac2disk "command line tips" """
+        with requests.Session() as session:
+            session.auth = (self.username, self.password)
+            r1 = session.request('get', url)
+            r = session.get(r1.url, auth=(self.username, self.password))
+            if r.ok:
+                logger.info("Downloading {}".format(url))
+                return r
 
     @staticmethod
     def _unzip_file(filepath):
