@@ -54,27 +54,22 @@ def create_dem(args):
 
 def run_sentinel_stack(*a):
     """3. Create geocoded slcs as .geo files for each .zip file"""
-    logger.info("Starting sentinel_stack.py")
     subprocess.call('~/sentinel/sentinel_stack.py', shell=True)
 
 
 def prep_igrams_dir(*a):
     """4. prepare directory for igrams"""
-    logger.info("Making igrams directory and moving into igrams")
     mkdir_p('igrams')
     os.chdir('igrams')
-    logger.info("Now inside %s", os.path.realpath(os.getcwd()))
+    logger.info("Changed directory to %s", os.path.realpath(os.getcwd()))
 
 
-def create_sbas_list(*a):
+def create_sbas_list(args):
     """ 5.run the sbas_list script
 
     Uses the outputs of the geo coded SLCS to find files with small baselines"""
 
-    logger.info("Creating sbas_list")
-    max_time = '500'
-    max_spatial = '500'
-    sbas_cmd = '~/sentinel/sbas_list.py {} {}'.format(max_time, max_spatial)
+    sbas_cmd = '~/sentinel/sbas_list.py {} {}'.format(args.max_temporal, args.max_spatial)
     logger.info(sbas_cmd)
     subprocess.call(sbas_cmd, shell=True)
 
@@ -142,8 +137,7 @@ STEPS = [
 STEP_LIST = ',\n'.join("%d:%s" % (num, func.__name__) for (num, func) in enumerate(STEPS, start=1))
 
 
-@log_runtime
-def main():
+def get_cli_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--working-dir", "-d", default=".", help="Directory where sentinel .zip are located")
@@ -159,7 +153,7 @@ def main():
         "--max-height",
         "-m",
         default=10,
-        help="Maximum height/max absolute phase in .unw files "
+        help="Maximum height/max absolute phase for converting .unw files to .tif"
         "(used for contour_interval option to dishgt)")
     parser.add_argument(
         "--step",
@@ -169,7 +163,22 @@ def main():
         choices=range(1,
                       len(STEPS) + 1),
         default=1)
-    args = parser.parse_args()
+    parser.add_argument(
+        "--max-temporal",
+        type=int,
+        default=500,
+        help="Maximum temporal baseline for igrams (fed to sbas_list)")
+    parser.add_argument(
+        "--max-spatial",
+        type=int,
+        default=500,
+        help="Maximum spatial baseline for igrams (fed to sbas_list)")
+    return parser.parse_args()
+
+
+@log_runtime
+def main():
+    args = get_cli_args()
 
     os.chdir(args.working_dir)
     dir_path = os.path.realpath(args.working_dir)  # save for later reference
