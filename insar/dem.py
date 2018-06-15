@@ -4,16 +4,26 @@ Module contains utilities for downloading all necessary .hgt files
 for a lon/lat rectangle, stiches them into one DEM, and creates a
 .dem.rsc file for SAR processing.
 
-By default tiles are downloaded from Mapzen's tile set on AWS:
+Note: NASA Earthdata requires a signup: https://urs.earthdata.nasa.gov/users/new
+Once you have signed up, to avoid a username password prompt create/add to a .netrc
+file in your home directory:
+
+machine urs.earthdata.nasa.gov
+  login yourusername
+  password yourpassword
+
+NASA MEaSUREs SRTM Version 3 (SRTMGL1) houses the data
+    See https://lpdaac.usgs.gov/dataset_discovery/measures/measures_products_table/srtmgl3s_v003
+    more info on SRTMGL1: https://cmr.earthdata.nasa.gov/search/concepts/C1000000240-LPDAAC_ECS.html
+
+Example url: "http://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL1.003/2000.02.11/N06W001.SRTMGL1.hgt.zip"
+
+Other option is to download from Mapzen's tile set on AWS:
     https://mapzen.com/documentation/terrain-tiles/formats/#skadi
 These do not require a username and password.
-They use the SRTM dataset within the US, but combine other sources
-to produce 1 arcsecond (30 m) resolution world wide.
+They use the SRTM dataset within the US, but combine other sources to produce
+1 arcsecond (30 m) resolution world wide.
     Example url: https://s3.amazonaws.com/elevation-tiles-prod/skadi/N19/N19W156.hgt
-
-Other source: NASA MEaSUREs SRTM Version 3 (SRTMGL1)
-    See https://developer.earthdata.nasa.gov/gibs/gibs-available-imagery-products
-    Example: "http://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL1.003/2000.02.11/N06W001.SRTMGL1.hgt.zip"
 
 Example .dem.rsc (for N19W156.hgt and N19W155.hgt stitched horizontally):
         WIDTH         7201
@@ -44,7 +54,6 @@ import requests
 import subprocess
 import numpy as np
 
-PARALLEL = False
 from insar.log import get_log
 from insar.utils import floor_float
 from insar import sario
@@ -626,6 +635,7 @@ def rsc_bounds(rsc_data):
 
 
 def create_kml(rsc_data, tif_filename, title="Title", desc="Description"):
+    """Make a simply kml file to display a tif in Google Earth from rsc_data"""
     north, south, east, west = rsc_bounds(rsc_data)
     template = """\
 <?xml version="1.0" encoding="UTF-8"?>
