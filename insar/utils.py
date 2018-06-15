@@ -4,11 +4,11 @@ Helper functions to prepare and process UAVSAR data
 Most functions will be stuck in here until there's a more sensible module.
 Email: scott.stanie@utexas.edu
 """
-
+from __future__ import division
 import argparse
 import math
+import errno
 import os
-import sys
 import numpy as np
 
 import insar.sario
