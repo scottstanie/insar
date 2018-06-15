@@ -18,13 +18,12 @@ int main(int argc, char **argv) {
   // Parse input filename, rate, and optional output filename
   const char *defaultOutfile = "elevation.dem";
   if (argc < 3) {
-    fprintf(stderr,
-            "Usage: ./dem filename rate [ncols] [nrows] "
-            "[outfilename] \n"
-            "filename must be .hgt or .dem extension.\n"
-            "Rate must be a positive integer.\n"
-            "ncols = width of DEM/HGT, ncows = height\n"
-            "Default outfile name: %s\n",
+    fprintf(stderr, "Usage: ./dem filename rate [ncols] [nrows] "
+                    "[outfilename] \n"
+                    "filename must be .hgt or .dem extension.\n"
+                    "Rate must be a positive integer.\n"
+                    "ncols = width of DEM/HGT, ncows = height\n"
+                    "Default outfile name: %s\n",
             defaultOutfile);
     return EXIT_FAILURE;
   }
@@ -50,7 +49,7 @@ int main(int argc, char **argv) {
     }
   }
 
-  printf("Reading from %s: %d rows, %d cols\n", filename, nrows, ncols);
+  printf("Reading from %s: %ld rows, %ld cols\n", filename, nrows, ncols);
   printf("Upsampling by %d\n", rate);
 
   FILE *fp = fopen(filename, "r");
@@ -63,8 +62,10 @@ int main(int argc, char **argv) {
   int16_t buf[1];
   int16_t *demGrid = (int16_t *)malloc(nrows * ncols * sizeof(*demGrid));
   if (demGrid == NULL) {
-      fprintf(stderr, "malloc failure for demGrid:%ld * %ld * %lu bytes requested\n", nrows, ncols, sizeof(*demGrid));
-      return EXIT_FAILURE;
+    fprintf(stderr,
+            "malloc failure for demGrid:%ld * %ld * %lu bytes requested\n",
+            nrows, ncols, sizeof(*demGrid));
+    return EXIT_FAILURE;
   }
 
   int i = 0, j = 0;
@@ -93,8 +94,10 @@ int main(int argc, char **argv) {
   int16_t *upDemGrid =
       (int16_t *)malloc(upNrows * upNcols * sizeof(*upDemGrid));
   if (upDemGrid == NULL) {
-      fprintf(stderr, "malloc failure for upDemGrid:%ld * %ld * %lu bytes requested\n", upNrows, upNcols, sizeof(*upDemGrid));
-      return EXIT_FAILURE;
+    fprintf(stderr,
+            "malloc failure for upDemGrid:%ld * %ld * %lu bytes requested\n",
+            upNrows, upNcols, sizeof(*upDemGrid));
+    return EXIT_FAILURE;
   }
   printf("New size of upsampled DEM: %ld rows, %ld cols.\n", upNrows, upNcols);
 
