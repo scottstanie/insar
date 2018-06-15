@@ -63,7 +63,7 @@ def load_elevation(filename):
     # Either get info from .dem.rsc
     if ext == '.dem':
         info = load_dem_rsc(filename)
-        dem_img = data.reshape((info['file_length'], info['width']))
+        dem_img = data.reshape((info['FILE_LENGTH'], info['WIDTH']))
 
     # Or check if we are using STRM1 (3601x3601) or SRTM3 (1201x1201)
     else:
