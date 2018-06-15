@@ -26,6 +26,7 @@ try:
 except ImportError:  # Python 2 doesn't have this :(
     CONCURRENT = False
 
+import os
 import itertools
 import requests
 
@@ -135,7 +136,11 @@ def _download_and_write(link):
     Returns:
         None
     """
-    logger.info('Downloading and saving {}'.format(link))
+    if os.path.isfile(link):
+        logger.info("%s already exists, skipping download.", link)
+        return
+
+    logger.info("Downloading and saving %s", link)
     response = requests.get(BASE_URL + link)
     response.raise_for_status()
     with open(link, 'wb') as f:

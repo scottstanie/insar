@@ -4,7 +4,6 @@ import argparse
 import glob
 import sys
 from os.path import dirname, abspath
-from datetime import date
 
 try:
     import insar
