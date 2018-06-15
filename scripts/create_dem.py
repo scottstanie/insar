@@ -55,6 +55,12 @@ def main():
         type=positive_integer,
         help="Rate at which to upsample DEM (default=1, no upsampling)")
     parser.add_argument("--output", "-o", default="elevation.dem", help="Name of output dem file")
+    parser.add_argument(
+        "--data-source",
+        "-d",
+        choices=('NASA', 'AWS'),
+        default='NASA',
+        help="Source of SRTM data. See insar.dem docstring for more.")
     args = parser.parse_args()
 
     if args.geojson == 'stdin':

@@ -4,6 +4,17 @@ Module contains utilities for downloading all necessary .hgt files
 for a lon/lat rectangle, stiches them into one DEM, and creates a
 .dem.rsc file for SAR processing.
 
+By default tiles are downloaded from Mapzen's tile set on AWS:
+    https://mapzen.com/documentation/terrain-tiles/formats/#skadi
+These do not require a username and password.
+They use the SRTM dataset within the US, but combine other sources
+to produce 1 arcsecond (30 m) resolution world wide.
+    Example url: https://s3.amazonaws.com/elevation-tiles-prod/skadi/N19/N19W156.hgt
+
+Other source: NASA MEaSUREs SRTM Version 3 (SRTMGL1)
+    See https://developer.earthdata.nasa.gov/gibs/gibs-available-imagery-products
+    Example: "http://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL1.003/2000.02.11/N06W001.SRTMGL1.hgt.zip"
+
 Example .dem.rsc (for N19W156.hgt and N19W155.hgt stitched horizontally):
         WIDTH         7201
         FILE_LENGTH   3601
@@ -17,7 +28,7 @@ Example .dem.rsc (for N19W156.hgt and N19W155.hgt stitched horizontally):
         Z_SCALE       1
         PROJECTION    LL
 
-Make for python3, compatible with python2
+Made for python3, compatible with python2
 """
 from __future__ import division
 try:
@@ -33,6 +44,7 @@ import requests
 import subprocess
 import numpy as np
 
+PARALLEL = False
 from insar.log import get_log
 from insar.utils import floor_float
 from insar import sario
@@ -72,16 +84,29 @@ class Downloader:
     Attributes:
         bounds (tuple): lon, lat boundaries of a rectangle to download
         data_url (str): Base url where .hgt tiles are stored
-        compressed_ext (str): format .hgt files are stored in online
+        compress_type (str): format .hgt files are stored in online
+        data_source (str): choices: NASA, AWS. See module docstring for explanation of sources
         parallel_ok (bool): true if using python3 or concurrent.futures installed
 
-    """
+    Raises:
+        ValueError: if data_source not a valid source string
 
-    def __init__(self, left, bottom, right, top, parallel_ok=PARALLEL):
+    """
+    VALID_SOURCES = ('NASA', 'AWS')
+    DATA_URLS = {
+        'NASA': "http://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL1.003/2000.02.11",
+        'AWS': "https://s3.amazonaws.com/elevation-tiles-prod/skadi"
+    }
+    COMPRESS_TYPES = {'NASA': 'zip', 'AWS': 'gz'}
+
+    def __init__(self, left, bottom, right, top, data_source='NASA', parallel_ok=PARALLEL):
         self.bounds = (left, bottom, right, top)
         # AWS format for downloading SRTM1 .hgt tiles
-        self.data_url = 'https://s3.amazonaws.com/elevation-tiles-prod/skadi'
-        self.compressed_ext = '.gz'
+        self.data_source = data_source
+        if data_source not in self.VALID_SOURCES:
+            raise ValueError('data_source must be one of: {}'.format(','.join(self.VALID_SOURCES)))
+        self.data_url = self.DATA_URLS[data_source]
+        self.compress_type = self.COMPRESS_TYPES[data_source]
         self.parallel_ok = parallel_ok
 
     @staticmethod
@@ -108,17 +133,18 @@ class Downloader:
 
         Examples:
             >>> bounds = (-155.7, 19.1, -154.7, 19.7)
-            >>> d = Downloader(*bounds)
-            >>> type(d.srtm1_tile_names())
-            <class 'generator'>
+            >>> d = Downloader(*bounds, data_source='NASA')
+            >>> from types import GeneratorType  # To check the type
+            >>> type(d.srtm1_tile_names()) == GeneratorType
+            True
             >>> list(d.srtm1_tile_names())
-            ['N19/N19W156.hgt', 'N19/N19W155.hgt']
-            >>> list(Downloader(*(10.1, -44.9, 10.1, -44.9)).srtm1_tile_names())
-            ['S45/S45E010.hgt']
-
+            ['N19W156.SRTMGL1.hgt', 'N19W155.SRTMGL1.hgt']
             >>> bounds = [-156.0, 19.0, -154.0, 20.0]  # Show int bounds
             >>> list(d.srtm1_tile_names())
-            ['N19/N19W156.hgt', 'N19/N19W155.hgt']
+            ['N19W156.SRTMGL1.hgt', 'N19W155.SRTMGL1.hgt']
+            >>> list(Downloader(*(10.1, -44.9, 10.1, -44.9), data_source='AWS').srtm1_tile_names())
+            ['S45/S45E010.hgt']
+
 
         """
 
@@ -132,7 +158,10 @@ class Downloader:
         if isinstance(right, int) or int(right) == right:
             right_int -= 1
 
-        tile_name_template = '{lat_str}/{lat_str}{lon_str}.hgt'
+        if self.data_source == 'AWS':
+            tile_name_template = '{lat_str}/{lat_str}{lon_str}.hgt'
+        elif self.data_source == 'NASA':
+            tile_name_template = '{lat_str}{lon_str}.SRTMGL1.hgt'
 
         # Now iterate in same order in which they'll be stithced together
         for ilat in range(top_int, bot_int - 1, -1):  # north to south
@@ -148,13 +177,19 @@ class Downloader:
         """Downloads a singles from AWS
 
         Args:
-            tile_name_str (str): string name of tile on AWS (e.g. N19/N19W156.hgt)
+            tile_name_str (str): string name of tile
+            e.g. N06W001.SRTMGL1.hgt.zip (usgs) or N19/N19W156.hgt.gz (aws)
 
         Returns:
             None
         """
-        url = '{base}/{tile}{ext}'.format(
-            base=self.data_url, tile=tile_name_str, ext=self.compressed_ext)
+        print(tile_name_str)
+        if self.data_source == 'AWS':
+            url = '{base}/{tile}.{ext}'.format(
+                base=self.data_url, tile=tile_name_str, ext=self.compress_type)
+        elif self.data_source == 'NASA':
+            url = '{base}/{tile}.{ext}'.format(
+                base=self.data_url, tile=tile_name_str, ext=self.compress_type)
         logger.info("Downloading {}".format(url))
         return requests.get(url)
 
@@ -163,27 +198,31 @@ class Downloader:
         """Unzips in place the .hgt files downloaded"""
         ext = sario.get_file_ext(filepath)
         if ext == '.gz':
-            unzip_cmd = 'gunzip'
+            unzip_cmd = ['gunzip']
         elif ext == '.zip':
-            unzip_cmd = 'unzip'
-        subprocess.check_call([unzip_cmd, filepath])
+            # -o forces overwrite without prompt, -d specifices unzip directory
+            unzip_cmd = 'unzip -o -d {}'.format(_get_cache_dir()).split(' ')
+        print(unzip_cmd + [filepath])
+        subprocess.check_call(unzip_cmd + [filepath])
 
     def download_and_save(self, tile_name_str):
         """Download and save one single tile
 
         Args:
-            tile_name_str (str): string name of tile on AWS (e.g. N19/N19W156.hgt)
+            tile_name_str (str): string name of tile
+            e.g. N06W001.SRTMGL1.hgt.zip (usgs) or N19/N19W156.gz (aws)
 
         Returns:
             None
         """
-        # Remove extra latitude portion N19: keep all in one folder, gzipped
-        local_filename = os.path.join(_get_cache_dir(), tile_name_str.split('/')[1])
+        # Remove extra latitude portion N19: keep all in one folder, compressed
+        local_filename = os.path.join(_get_cache_dir(), tile_name_str.split('/')[-1])
+        print('local file:', local_filename)
         if os.path.exists(local_filename):
             logger.info("{} already exists, skipping.".format(local_filename))
         else:
             # On AWS these are gzipped: download, then unzip
-            local_filename += self.compressed_ext
+            local_filename += '.{}'.format(self.compress_type)
             with open(local_filename, 'wb') as f:
                 response = self._download_hgt_tile(tile_name_str)
                 f.write(response.content)
@@ -215,13 +254,14 @@ class Stitcher:
         tile_file_list (list[str]) names of .hgt tiles as saved from download
             E.g.: ['N19W156.hgt', 'N19W155.hgt'] (not ['N19/N19W156.hgt',...])
         num_pixels (int): size of the squares of the .hgt files
-            Assumes 3601 fo SRTM1 (SRTM3 not yet implemented)
+            Assumes 3601 for SRTM1 (SRTM3 not yet implemented)
 
     """
 
     def __init__(self, tile_file_list, num_pixels=3601):
         """List should come from Downloader.srtm1_tile_names()"""
-        self.tile_file_list = [t.split('/')[1] for t in tile_file_list]
+        # Remove extra stuff from either NASA or AWS
+        self.tile_file_list = [t.replace('SRTMGL1.', '').split('/')[-1] for t in tile_file_list]
         # Assuming SRTM1: 3601 x 3601 squares
         self.num_pixels = num_pixels
 
@@ -259,6 +299,9 @@ class Stitcher:
             >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt'])
             >>> s._compute_shape()
             (1, 2)
+            >>> s = Stitcher(['N19W156.SRTMGL1.hgt', 'N19W155.SRTMGL1.hgt'])
+            >>> s._compute_shape()
+            (1, 2)
         """
         lon_lat_tups = [start_lon_lat(t) for t in self.tile_file_list]
         # Unique each lat/lon: length of lats = num rows, lons = cols
@@ -270,8 +313,12 @@ class Stitcher:
         """Finds filenames and reshapes into numpy.array matching DEM shape
 
         Examples:
-            >>> s2 = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt', 'N18/N18W156.hgt', 'N18/N18W155.hgt'])
-            >>> print(s2._create_file_array())
+            >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt', 'N18/N18W156.hgt', 'N18/N18W155.hgt'])
+            >>> print(s._create_file_array())
+            [['N19W156.hgt' 'N19W155.hgt']
+             ['N18W156.hgt' 'N18W155.hgt']]
+            >>> s = Stitcher(['N19W156.SRTMGL1.hgt', 'N19W155.SRTMGL1.hgt', 'N18W156.SRTMGL1.hgt', 'N18W155.SRTMGL1.hgt'])
+            >>> print(s._create_file_array())
             [['N19W156.hgt' 'N19W155.hgt']
              ['N18W156.hgt' 'N18W155.hgt']]
         """
@@ -447,13 +494,15 @@ def start_lon_lat(tilename):
         >>> start_lon_lat('Notrealname.hgt')
         Traceback (most recent call last):
            ...
-        ValueError: Invalid SRTM1 tilename: must match ([NS])(\d+)([EW])(\d+).hgt
+        ValueError: Invalid SRTM1 tilename: Notrealname.hgt, must match ([NS])(\d+)([EW])(\d+).hgt
 
     """
     lon_lat_regex = r'([NS])(\d+)([EW])(\d+).hgt'
+    tilename = tilename.replace('SRTMGL1.', '')  # Remove NASA addition, if exists
     match = re.match(lon_lat_regex, tilename)
     if not match:
-        raise ValueError('Invalid SRTM1 tilename: must match {}'.format(lon_lat_regex))
+        raise ValueError('Invalid SRTM1 tilename: {}, must match {}'.format(
+            tilename, lon_lat_regex))
 
     lat_str, lat, lon_str, lon = match.groups()
 
