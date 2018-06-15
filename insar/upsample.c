@@ -84,11 +84,15 @@ int main(int argc, char **argv) {
   // Size of one side for upsampled
   // Example: 3 points at x = (0, 1, 2), rate = 2 becomes 5 points:
   //    x = (0, .5, 1, 1.5, 2)
-  int upNrows = rate * (nrows - 1) + 1;
-  int upNcols = rate * (ncols - 1) + 1;
-  printf("New size of upsampled DEM: %d rows, %d cols.\n", upNrows, upNcols);
+  long upNrows = rate * (nrows - 1) + 1;
+  long upNcols = rate * (ncols - 1) + 1;
+  printf("New size of upsampled DEM: %ld rows, %ld cols.\n", upNrows, upNcols);
   int16_t *upDemGrid =
       (int16_t *)malloc(upNrows * upNcols * sizeof(*upDemGrid));
+  if (upDemGrid == NULL) {
+      fprintf(stderr, "malloc failure for upDemGrid:%ld * %ld * %lu bytes requested\n", upNrows, upNcols, sizeof(*upDemGrid));
+      return EXIT_FAILURE;
+  }
 
   for (int i = 0; i < nrows - 1; i++) {
     for (int j = 0; j < ncols - 1; j++) {

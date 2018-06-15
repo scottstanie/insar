@@ -32,7 +32,7 @@ except ImportError:  # add root to pythonpath if import fails
     sys.path.insert(0, dirname(dirname(abspath(__file__))))
 
 import insar.sario
-from insar.log import get_log
+from insar.log import get_log, log_runtime
 from insar.utils import mkdir_p, which
 
 logger = get_log()
@@ -138,9 +138,11 @@ STEPS = [
     run_snaphu,
     convert_snaphu_tif,
 ]
+# Form string for help function "1:download_eof,2:..."
 STEP_LIST = ',\n'.join("%d:%s" % (num, func.__name__) for (num, func) in enumerate(STEPS, start=1))
 
 
+@log_runtime
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
