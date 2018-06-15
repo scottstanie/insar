@@ -30,8 +30,8 @@ int main(int argc, char **argv) {
   }
   char *filename = argv[1];
   int rate = atoi(argv[2]);
-  int ncols = atoi(argv[3]);
-  int nrows = atoi(argv[4]);
+  long ncols = atoi(argv[3]);
+  long nrows = atoi(argv[4]);
 
   // If reading in a .hgt, must swap bytes of integers
   bool swapBytes = (strcmp(getFileExt(filename), ".hgt") == 0);
@@ -62,6 +62,10 @@ int main(int argc, char **argv) {
   int nbytes = 2;
   int16_t buf[1];
   int16_t *demGrid = (int16_t *)malloc(nrows * ncols * sizeof(*demGrid));
+  if (demGrid == NULL) {
+      fprintf(stderr, "malloc failure for demGrid:%ld * %ld * %lu bytes requested\n", nrows, ncols, sizeof(*demGrid));
+      return EXIT_FAILURE;
+  }
 
   int i = 0, j = 0;
   for (i = 0; i < nrows; i++) {
@@ -86,13 +90,13 @@ int main(int argc, char **argv) {
   //    x = (0, .5, 1, 1.5, 2)
   long upNrows = rate * (nrows - 1) + 1;
   long upNcols = rate * (ncols - 1) + 1;
-  printf("New size of upsampled DEM: %ld rows, %ld cols.\n", upNrows, upNcols);
   int16_t *upDemGrid =
       (int16_t *)malloc(upNrows * upNcols * sizeof(*upDemGrid));
   if (upDemGrid == NULL) {
       fprintf(stderr, "malloc failure for upDemGrid:%ld * %ld * %lu bytes requested\n", upNrows, upNcols, sizeof(*upDemGrid));
       return EXIT_FAILURE;
   }
+  printf("New size of upsampled DEM: %ld rows, %ld cols.\n", upNrows, upNcols);
 
   for (int i = 0; i < nrows - 1; i++) {
     for (int j = 0; j < ncols - 1; j++) {
