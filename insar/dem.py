@@ -9,8 +9,11 @@ Once you have signed up, to avoid a username password prompt create/add to a .ne
 file in your home directory:
 
 machine urs.earthdata.nasa.gov
-  login yourusername
-  password yourpassword
+    login yourusername
+    password yourpassword
+
+This will be handled if you run download_all by handle_credentials.
+You can choose to save you username in a netrc file for future use
 
 NASA MEaSUREs SRTM Version 3 (SRTMGL1) houses the data
     See https://lpdaac.usgs.gov/dataset_discovery/measures/measures_products_table/srtmgl3s_v003
@@ -47,7 +50,9 @@ try:
 except ImportError:  # Python 2 doesn't have this :(
     PARALLEL = False
 import collections
+import getpass
 import math
+import netrc
 import os
 import re
 import requests
@@ -58,6 +63,10 @@ from insar.log import get_log
 from insar.utils import floor_float
 from insar import sario
 
+try:
+    input = raw_input  # Check for python 2
+except NameError:
+    pass
 logger = get_log()
 RSC_KEYS = [
     'WIDTH',
@@ -107,8 +116,16 @@ class Downloader:
         'AWS': "https://s3.amazonaws.com/elevation-tiles-prod/skadi"
     }
     COMPRESS_TYPES = {'NASA': 'zip', 'AWS': 'gz'}
+    NASAHOST = 'urs.earthdata.nasa.gov'
 
-    def __init__(self, left, bottom, right, top, data_source='NASA', parallel_ok=PARALLEL):
+    def __init__(self,
+                 left,
+                 bottom,
+                 right,
+                 top,
+                 data_source='NASA',
+                 netrc_file='~/.netrc',
+                 parallel_ok=PARALLEL):
         self.bounds = (left, bottom, right, top)
         # AWS format for downloading SRTM1 .hgt tiles
         self.data_source = data_source
@@ -116,7 +133,53 @@ class Downloader:
             raise ValueError('data_source must be one of: {}'.format(','.join(self.VALID_SOURCES)))
         self.data_url = self.DATA_URLS[data_source]
         self.compress_type = self.COMPRESS_TYPES[data_source]
+        self.netrc_file = os.path.expanduser(netrc_file)
         self.parallel_ok = parallel_ok
+
+    def _get_netrc_file(self):
+        return netrc.netrc(self.netrc_file)
+
+    def _has_nasa_netrc(self):
+        try:
+            n = self._get_netrc_file()
+            # Check account exists, as well is having username and password
+            return (self.NASAHOST in n.hosts and n.authenticators(self.NASAHOST)[0]
+                    and n.authenticators(self.NASAHOST)[2])
+        except (OSError, IOError):
+            return False
+
+    def _get_username_pass(self):
+        """If netrc is not set up, get command line username and password"""
+        print("Please enter NASA Earthdata credentials to download NASA hosted STRM.")
+        print("See https://urs.earthdata.nasa.gov/users/new for signup info.")
+        print("Or choose data_source=AWS for Mapzen tiles.")
+        username = input("Username: ")
+        password = getpass.getpass(prompt="Password (will not be displayed): ")
+        save_to_netrc = input(
+            "Would you like to save these to ~/.netrc (machine={}) for future use (y/n)?".format(
+                self.NASAHOST))
+
+        return username, password, save_to_netrc.lower().startswith('y')
+
+    @staticmethod
+    def _format_netrc(username, password):
+        outstring = "machine {}\n".format(Downloader.NASAHOST)
+        outstring += "\tlogin {}\n".format(username)
+        outstring += "\tpassword {}\n".format(password)
+        return outstring
+
+    def handle_credentials(self):
+        username, pw, do_save = self._get_username_pass()
+        if do_save:
+            try:
+                n = self._get_netrc_file()
+                n.hosts[self.NASAHOST] = (username, None, pw)
+                outstring = n.__repr__()
+            except (OSError, IOError):
+                outstring = self._format_netrc(username, pw)
+
+            with open(self.netrc_file, 'w') as f:
+                f.write(outstring)
 
     @staticmethod
     def srtm1_tile_corner(lon, lat):
@@ -192,7 +255,6 @@ class Downloader:
         Returns:
             None
         """
-        print(tile_name_str)
         if self.data_source == 'AWS':
             url = '{base}/{tile}.{ext}'.format(
                 base=self.data_url, tile=tile_name_str, ext=self.compress_type)
@@ -211,7 +273,6 @@ class Downloader:
         elif ext == '.zip':
             # -o forces overwrite without prompt, -d specifices unzip directory
             unzip_cmd = 'unzip -o -d {}'.format(_get_cache_dir()).split(' ')
-        print(unzip_cmd + [filepath])
         subprocess.check_call(unzip_cmd + [filepath])
 
     def download_and_save(self, tile_name_str):
@@ -226,7 +287,6 @@ class Downloader:
         """
         # Remove extra latitude portion N19: keep all in one folder, compressed
         local_filename = os.path.join(_get_cache_dir(), tile_name_str.split('/')[-1])
-        print('local file:', local_filename)
         if os.path.exists(local_filename):
             logger.info("{} already exists, skipping.".format(local_filename))
         else:
@@ -241,6 +301,9 @@ class Downloader:
 
     def download_all(self):
         """Downloads and saves all tiles from tile list"""
+        if self.data_source == 'NASA' and not self._has_nasa_netrc():
+            self.handle_credentials()
+
         if self.parallel_ok:
             with ThreadPoolExecutor(max_workers=4) as executor:
                 future_to_tile = {

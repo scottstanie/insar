@@ -72,7 +72,7 @@ def main():
     bounds = insar.geojson.bounding_box(geojson)
     logger.info("Bounds: %s", " ".join(str(b) for b in bounds))
 
-    d = insar.dem.Downloader(*bounds)
+    d = insar.dem.Downloader(*bounds, data_source=args.data_source)
     d.download_all()
 
     s = insar.dem.Stitcher(d.srtm1_tile_names())
