@@ -1,8 +1,9 @@
 import unittest
 
-from insar.dem import (start_lon_lat, upsample_dem_rsc)
+from insar.dem import upsample_dem_rsc
 """Functions todo:
-def upsample_dem_rsc(filepath, rate):
+    todo: mock out responses from url request
+          upsample_dem_rsc(filepath, rate):
 """
 
 
@@ -11,14 +12,3 @@ class TestStartLatLon(unittest.TestCase):
         self.northwest = 'N19W156.hgt'
         self.southeast = 'S19E156.hgt'
         self.bad_tilename = 'somethingelse.hgt'
-
-    def test_northwest(self):
-        lon, lat = start_lon_lat(self.northwest)
-        self.assertEqual((lon, lat), (-156.0, 20.0))
-
-    def test_southeast(self):
-        lon, lat = start_lon_lat(self.southeast)
-        self.assertEqual((lon, lat), (156.0, -18.0))
-
-    def test_fail(self):
-        self.assertRaises(ValueError, start_lon_lat, self.bad_tilename)

@@ -342,22 +342,22 @@ class Downloader:
             >>> print(d._form_tile_url('N19W155.hgt'))
             http://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL1.003/2000.02.11/N19W155.SRTMGL1.hgt.zip
 
-            ['N19W156.SRTMGL1.hgt', 'N19W155.SRTMGL1.hgt']
             >>> d = Downloader(*bounds, data_source='AWS')
             >>> print(d._form_tile_url('N19W155.hgt'))
             https://s3.amazonaws.com/elevation-tiles-prod/skadi/N19/N19W155.hgt.gz
         """
         if self.data_source == 'AWS':
-            tile_name_template = '{lat_str}/{lat_str}{lon_str}.hgt'
+            lat_str, lat_int, _, _ = Tile.get_tile_parts(tile_name)
+            url = '{base}/{lat}/{tile}.{ext}'.format(
+                base=self.data_url,
+                lat=lat_str + str(lat_int),
+                tile=tile_name,
+                ext=self.compress_type)
         elif self.data_source == 'NASA':
-            tile_name_template = '{lat_str}{lon_str}.SRTMGL1.hgt'
-
-        if self.data_source == 'AWS':
             url = '{base}/{tile}.{ext}'.format(
-                base=self.data_url, tile=tile_name, ext=self.compress_type)
-        elif self.data_source == 'NASA':
-            url = '{base}/{tile}.{ext}'.format(
-                base=self.data_url, tile=tile_name, ext=self.compress_type)
+                base=self.data_url,
+                tile=tile_name.replace('.hgt', '.SRTMGL1.hgt'),
+                ext=self.compress_type)
         return url
 
     def _download_hgt_tile(self, url):
