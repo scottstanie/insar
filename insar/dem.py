@@ -356,9 +356,11 @@ class Downloader:
         """Example from https://lpdaac.usgs.gov/data_access/daac2disk "command line tips" """
         # Using AWS or a netrc file are the easy cases
         logger.info("Downloading {}".format(url))
-        if self.data_source == 'AWS' or self._has_nasa_netrc():
+        if self.data_source == 'AWS':
             response = requests.get(url)
-
+        elif self.data_source == 'NASA' and self._has_nasa_netrc():
+            logger.info("Using netrc file: %s", self.netrc_file)
+            response = requests.get(url)
         else:
             # NASA without a netrc file needs special auth session handling
             with requests.Session() as session:
@@ -369,12 +371,8 @@ class Downloader:
                 response = session.get(r1.url, auth=(self.username, self.password))
 
         # Now check response for auth issues/ errors
-        if response.ok:
-            return response
-        else:
-            logger.error("Error in requesting url:")
-            logger.error(response.status_code)
-            logger.error(response.text)
+        response.raise_for_status()
+        return response
 
     @staticmethod
     def _unzip_file(filepath):
