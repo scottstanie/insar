@@ -129,39 +129,103 @@ class Netrc(netrc.netrc):
         return repr(self)
 
 
-def get_tile_parts(tile_name):
-    """Parses the lat/lon information of a .hgt tile
+class Tile:
+    """class to handle tile name formation and parsing"""
 
-    Validates that the string is an actual tile name
+    def __init__(self, left, bottom, right, top):
+        self.bounds = (left, bottom, right, top)
 
-    Args:
-        tile_name
+    @staticmethod
+    def get_tile_parts(tile_name):
+        """Parses the lat/lon information of a .hgt tile
 
-    Returns:
-        tuple: lat_str (either 'N' for north, 'S' for south), lat: int latitude from 0 to 90
-            lon_str (either 'W' for west, 'E' for east), lon: int longitude from 0 to 180
+        Validates that the string is an actual tile name
 
-    Raises:
-        ValueError: if regex match fails on tile_name
+        Args:
+            tile_name
 
-    Examples:
-        >>> get_tile_parts('N19W156.hgt')
-        ('N', 19, 'W', 156)
-        >>> get_tile_parts('S5E6.hgt')
-        ('S', 5, 'E', 6)
-        >>> get_tile_parts('Notrealname.hgt')
-        Traceback (most recent call last):
-           ...
-        ValueError: Invalid SRTM1 tile name: Notrealname.hgt, must match ([NS])(\d{1,2})([EW])(\d{1,3}).hgt
-    """
-    lon_lat_regex = r'([NS])(\d{1,2})([EW])(\d{1,3}).hgt'
-    match = re.match(lon_lat_regex, tile_name)
-    if not match:
-        raise ValueError('Invalid SRTM1 tile name: {}, must match {}'.format(
-            tile_name, lon_lat_regex))
+        Returns:
+            tuple: lat_str (either 'N' for north, 'S' for south), lat: int latitude from 0 to 90
+                lon_str (either 'W' for west, 'E' for east), lon: int longitude from 0 to 180
 
-    lat_str, lat, lon_str, lon = match.groups()
-    return lat_str, int(lat), lon_str, int(lon)
+        Raises:
+            ValueError: if regex match fails on tile_name
+
+        Examples:
+            >>> Tile.get_tile_parts('N19W156.hgt')
+            ('N', 19, 'W', 156)
+            >>> Tile.get_tile_parts('S5E6.hgt')
+            ('S', 5, 'E', 6)
+            >>> Tile.get_tile_parts('Notrealname.hgt')
+            Traceback (most recent call last):
+               ...
+            ValueError: Invalid SRTM1 tile name: Notrealname.hgt, must match ([NS])(\d{1,2})([EW])(\d{1,3}).hgt
+        """
+        lon_lat_regex = r'([NS])(\d{1,2})([EW])(\d{1,3}).hgt'
+        match = re.match(lon_lat_regex, tile_name)
+        if not match:
+            raise ValueError('Invalid SRTM1 tile name: {}, must match {}'.format(
+                tile_name, lon_lat_regex))
+
+        lat_str, lat, lon_str, lon = match.groups()
+        return lat_str, int(lat), lon_str, int(lon)
+
+    @staticmethod
+    def srtm1_tile_corner(lon, lat):
+        """Integers for the bottom right corner of requested lon/lat
+
+        Examples:
+            >>> Tile.srtm1_tile_corner(3.5, 5.6)
+            (3, 5)
+            >>> Tile.srtm1_tile_corner(-3.5, -5.6)
+            (-4, -6)
+        """
+        return int(math.floor(lon)), int(math.floor(lat))
+
+    def srtm1_tile_names(self):
+        """Iterator over all tiles needed to cover the requested bounds
+
+        Args:
+            None: bounds provided to Tile __init__()
+
+        Yields:
+            str: .hgt tile names that cover all of bounding box
+                yielded in order of top left to bottom right
+
+        Examples:
+            >>> bounds = (-155.7, 19.1, -154.7, 19.7)
+            >>> d = Tile(*bounds)
+            >>> from types import GeneratorType  # To check the type
+            >>> type(d.srtm1_tile_names()) == GeneratorType
+            True
+            >>> list(d.srtm1_tile_names())
+            ['N19W156.hgt', 'N19W155.hgt']
+            >>> bounds = [-156.0, 19.0, -154.0, 20.0]  # Show int bounds
+            >>> list(d.srtm1_tile_names())
+            ['N19W156.hgt', 'N19W155.hgt']
+
+
+        """
+
+        left, bottom, right, top = self.bounds
+        left_int, top_int = self.srtm1_tile_corner(left, top)
+        right_int, bot_int = self.srtm1_tile_corner(right, bottom)
+        # If exact integer was requested for top/right, assume tile with that number
+        # at the top/right is acceptable (dont download the one above that)
+        if isinstance(top, int) or int(top) == top:
+            top_int -= 1
+        if isinstance(right, int) or int(right) == right:
+            right_int -= 1
+
+        # Now iterate in same order in which they'll be stithced together
+        for ilat in range(top_int, bot_int - 1, -1):  # north to south
+            hemi_ns = 'N' if ilat >= 0 else 'S'
+            lat_str = '{}{:02d}'.format(hemi_ns, abs(ilat))
+            for ilon in range(left_int, right_int + 1):  # West to east
+                hemi_ew = 'E' if ilon >= 0 else 'W'
+                lon_str = '{}{:03d}'.format(hemi_ew, abs(ilon))
+
+                yield '{lat_str}{lon_str}.hgt'.format(lat_str=lat_str, lon_str=lon_str)
 
 
 class Downloader:
@@ -195,7 +259,6 @@ class Downloader:
                  netrc_file='~/.netrc',
                  parallel_ok=PARALLEL):
         self.bounds = (left, bottom, right, top)
-        # AWS format for downloading SRTM1 .hgt tiles
         self.data_source = data_source
         if data_source not in self.VALID_SOURCES:
             raise ValueError('data_source must be one of: {}'.format(','.join(self.VALID_SOURCES)))
@@ -263,70 +326,6 @@ class Downloader:
             self.username = username
             self.password = password
 
-    @staticmethod
-    def srtm1_tile_corner(lon, lat):
-        """Integers for the bottom right corner of requested lon/lat
-
-        Examples:
-            >>> Downloader.srtm1_tile_corner(3.5, 5.6)
-            (3, 5)
-            >>> Downloader.srtm1_tile_corner(-3.5, -5.6)
-            (-4, -6)
-        """
-        return int(math.floor(lon)), int(math.floor(lat))
-
-    def srtm1_tile_names(self):
-        """Iterator over all tiles needed to cover the requested bounds
-
-        Args:
-            None: bounds provided to Downloader __init__()
-
-        Yields:
-            str: tile names to fit into data_url to be downloaded
-                yielded in order of top left to bottom right
-
-        Examples:
-            >>> bounds = (-155.7, 19.1, -154.7, 19.7)
-            >>> d = Downloader(*bounds, data_source='NASA')
-            >>> from types import GeneratorType  # To check the type
-            >>> type(d.srtm1_tile_names()) == GeneratorType
-            True
-            >>> list(d.srtm1_tile_names())
-            ['N19W156.SRTMGL1.hgt', 'N19W155.SRTMGL1.hgt']
-            >>> bounds = [-156.0, 19.0, -154.0, 20.0]  # Show int bounds
-            >>> list(d.srtm1_tile_names())
-            ['N19W156.SRTMGL1.hgt', 'N19W155.SRTMGL1.hgt']
-            >>> list(Downloader(*(10.1, -44.9, 10.1, -44.9), data_source='AWS').srtm1_tile_names())
-            ['S45/S45E010.hgt']
-
-
-        """
-
-        left, bottom, right, top = self.bounds
-        left_int, top_int = self.srtm1_tile_corner(left, top)
-        right_int, bot_int = self.srtm1_tile_corner(right, bottom)
-        # If exact integer was requested for top/right, assume tile with that number
-        # at the top/right is acceptable (dont download the one above that)
-        if isinstance(top, int) or int(top) == top:
-            top_int -= 1
-        if isinstance(right, int) or int(right) == right:
-            right_int -= 1
-
-        if self.data_source == 'AWS':
-            tile_name_template = '{lat_str}/{lat_str}{lon_str}.hgt'
-        elif self.data_source == 'NASA':
-            tile_name_template = '{lat_str}{lon_str}.SRTMGL1.hgt'
-
-        # Now iterate in same order in which they'll be stithced together
-        for ilat in range(top_int, bot_int - 1, -1):  # north to south
-            hemi_ns = 'N' if ilat >= 0 else 'S'
-            lat_str = '{}{:02d}'.format(hemi_ns, abs(ilat))
-            for ilon in range(left_int, right_int + 1):  # West to east
-                hemi_ew = 'E' if ilon >= 0 else 'W'
-                lon_str = '{}{:03d}'.format(hemi_ew, abs(ilon))
-
-                yield tile_name_template.format(lat_str=lat_str, lon_str=lon_str)
-
     def _form_tile_url(self, tile_name):
         """Form the url for a .hgt tile from NASA or AWS
 
@@ -340,14 +339,19 @@ class Downloader:
         Examples:
             >>> bounds = (-155.7, 19.1, -154.7, 19.7)
             >>> d = Downloader(*bounds, data_source='NASA')
-            >>> print(d._form_tile_url('N19W155.SRTMGL1.hgt'))
+            >>> print(d._form_tile_url('N19W155.hgt'))
             http://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL1.003/2000.02.11/N19W155.SRTMGL1.hgt.zip
 
             ['N19W156.SRTMGL1.hgt', 'N19W155.SRTMGL1.hgt']
             >>> d = Downloader(*bounds, data_source='AWS')
-            >>> print(d._form_tile_url('N19/N19W155.hgt'))
+            >>> print(d._form_tile_url('N19W155.hgt'))
             https://s3.amazonaws.com/elevation-tiles-prod/skadi/N19/N19W155.hgt.gz
         """
+        if self.data_source == 'AWS':
+            tile_name_template = '{lat_str}/{lat_str}{lon_str}.hgt'
+        elif self.data_source == 'NASA':
+            tile_name_template = '{lat_str}{lon_str}.SRTMGL1.hgt'
+
         if self.data_source == 'AWS':
             url = '{base}/{tile}.{ext}'.format(
                 base=self.data_url, tile=tile_name, ext=self.compress_type)
@@ -433,18 +437,17 @@ class Stitcher:
     """Class to combine separate .hgt tiles into one .dem file
 
     Attributes:
-        tile_file_list (list[str]) names of .hgt tiles as saved from download
-            E.g.: ['N19W156.hgt', 'N19W155.hgt'] (not ['N19/N19W156.hgt',...])
+        tile_file_list (list[str]) names of .hgt tiles
+            E.g.: ['N19W156.hgt', 'N19W155.hgt']
         num_pixels (int): size of the squares of the .hgt files
-            Assumes 3601 for SRTM1 (SRTM3 not yet implemented)
+            Assumes 3601 for SRTM1 (SRTM3, 3 degree not implemented/tested)
 
     """
 
     def __init__(self, tile_file_list, num_pixels=3601):
-        """List should come from Downloader.srtm1_tile_names()"""
-        # Remove extra stuff from either NASA or AWS
-        self.tile_file_list = [t.replace('SRTMGL1.', '').split('/')[-1] for t in tile_file_list]
-        # Assuming SRTM1: 3601 x 3601 squares
+        """List should come from Tile.srtm1_tile_names()"""
+        self.tile_file_list = tile_file_list
+        # Assuming SRTMGL1: 3601 x 3601 squares
         self.num_pixels = num_pixels
 
     @property
@@ -455,7 +458,7 @@ class Stitcher:
         Returned as a tuple
 
         Examples:
-            >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt'])
+            >>> s = Stitcher(['N19W156.hgt', 'N19W155.hgt'])
             >>> s.shape
             (3601, 7201)
         """
@@ -478,28 +481,65 @@ class Stitcher:
         Note: This is not the total number of pixels, which can be found in .shape
 
         Examples:
-            >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt'])
-            >>> s._compute_shape()
-            (1, 2)
-            >>> s = Stitcher(['N19W156.SRTMGL1.hgt', 'N19W155.SRTMGL1.hgt'])
+            >>> s = Stitcher(['N19W156.hgt', 'N19W155.hgt'])
             >>> s._compute_shape()
             (1, 2)
         """
-        lon_lat_tups = [start_lon_lat(t) for t in self.tile_file_list]
+        lon_lat_tups = [self.start_lon_lat(t) for t in self.tile_file_list]
         # Unique each lat/lon: length of lats = num rows, lons = cols
         num_lons = len(set(tup[0] for tup in lon_lat_tups))
         num_lats = len(set(tup[1] for tup in lon_lat_tups))
         return (num_lats, num_lons)
 
+    @staticmethod
+    def start_lon_lat(tile_name):
+        """Takes an SRTM1 data tile_name and returns the first (lon, lat) point
+
+        The reverse of Tile.srtm1_tile_names()
+
+        Used for .rsc file formation to make X_FIRST and Y_FIRST
+        The names of individual data tiles refer to the longitude
+        and latitude of the lower-left (southwest) corner of the tile.
+
+        Example: N19W156.hgt refers to `bottom left` corner, while data starts
+        at top left. This would return (X_FIRST, Y_FIRST) = (-156.0, 20.0)
+
+        Args:
+            tile_name (str): name of .hgt file for SRTM1 tile
+
+        Returns:
+            tuple (float, float) of first (lon, lat) point in .hgt file
+
+        Raises:
+            ValueError: if regex match fails on tile_name
+
+        Examples:
+            >>> Stitcher.start_lon_lat('N19W156.hgt')
+            (-156.0, 20.0)
+            >>> Stitcher.start_lon_lat('S5E6.hgt')
+            (6.0, -4.0)
+            >>> Stitcher.start_lon_lat('Notrealname.hgt')
+            Traceback (most recent call last):
+               ...
+            ValueError: Invalid SRTM1 tile name: Notrealname.hgt, must match ([NS])(\d{1,2})([EW])(\d{1,3}).hgt
+
+        """
+
+        lat_str, lat, lon_str, lon = Tile.get_tile_parts(tile_name)
+
+        # lat gets added to or subtracted
+        top_lat = float(lat) + 1 if lat_str == 'N' else -float(lat) + 1
+
+        # lon is negative if we're in western hemisphere
+        # No +1 addition needed to lon: bottom left and top left are same
+        left_lon = -1 * float(lon) if lon_str == 'W' else float(lon)
+        return (left_lon, top_lat)
+
     def _create_file_array(self):
         """Finds filenames and reshapes into numpy.array matching DEM shape
 
         Examples:
-            >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt', 'N18/N18W156.hgt', 'N18/N18W155.hgt'])
-            >>> print(s._create_file_array())
-            [['N19W156.hgt' 'N19W155.hgt']
-             ['N18W156.hgt' 'N18W155.hgt']]
-            >>> s = Stitcher(['N19W156.SRTMGL1.hgt', 'N19W155.SRTMGL1.hgt', 'N18W156.SRTMGL1.hgt', 'N18W155.SRTMGL1.hgt'])
+            >>> s = Stitcher(['N19W156.hgt', 'N19W155.hgt', 'N18W156.hgt', 'N18W155.hgt'])
             >>> print(s._create_file_array())
             [['N19W156.hgt' 'N19W155.hgt']
              ['N18W156.hgt' 'N18W155.hgt']]
@@ -544,7 +584,7 @@ class Stitcher:
             (float, float): x_step, y_step
 
         Example:
-            >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt'])
+            >>> s = Stitcher(['N19W156.hgt', 'N19W155.hgt'])
             >>> print(s._find_step_sizes())
             (0.000277777777, -0.000277777777)
         """
@@ -565,7 +605,7 @@ class Stitcher:
             OrderedDict: key/value pairs in order to write to a .dem.rsc file
 
         Examples:
-            >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt'])
+            >>> s = Stitcher(['N19W156.hgt', 'N19W155.hgt'])
             >>> s.create_dem_rsc()
             OrderedDict([('WIDTH', 7201), ('FILE_LENGTH', 3601), ('X_FIRST', -156.0), ('Y_FIRST', 20.0), ('X_STEP', 0.000277777777), ('Y_STEP', -0.000277777777), ('X_UNIT', 'degrees'), ('Y_UNIT', 'degrees'), ('Z_OFFSET', 0), ('Z_SCALE', 1), ('PROJECTION', 'LL')])
         """
@@ -581,7 +621,7 @@ class Stitcher:
         })
 
         # Remove paths from tile filenames, if they exist
-        x_first, y_first = start_lon_lat(self.tile_file_list[0])
+        x_first, y_first = self.start_lon_lat(self.tile_file_list[0])
         nrows, ncols = self.shape
         # TODO: figure out where to generalize for SRTM3
         rsc_dict.update({'WIDTH': ncols, 'FILE_LENGTH': nrows})
@@ -606,7 +646,7 @@ class Stitcher:
             outstring (str) formatting string to be written to .dem.rsc
 
         Example:
-            >>> s = Stitcher(['N19/N19W156.hgt', 'N19/N19W155.hgt'])
+            >>> s = Stitcher(['N19W156.hgt', 'N19W155.hgt'])
             >>> rsc_dict = s.create_dem_rsc()
             >>> print(s.format_dem_rsc(rsc_dict))
             WIDTH         7201
@@ -645,50 +685,6 @@ def _up_size(cur_size, rate):
         5
     """
     return 1 + (cur_size - 1) * rate
-
-
-def start_lon_lat(tile_name):
-    """Takes an SRTM1 data tile_name and returns the first (lon, lat) point
-
-    The reverse of Downloader.srtm1_tile_names()
-
-    Used for .rsc file formation to make X_FIRST and Y_FIRST
-    The names of individual data tiles refer to the longitude
-    and latitude of the lower-left (southwest) corner of the tile.
-
-    Example: N19W156.hgt refers to `bottom left` corner, while data starts
-    at top left. This would return (X_FIRST, Y_FIRST) = (-156.0, 20.0)
-
-    Args:
-        tile_name (str): name of .hgt file for SRTM1 tile
-
-    Returns:
-        tuple (float, float) of first (lon, lat) point in .hgt file
-
-    Raises:
-        ValueError: if regex match fails on tile_name
-
-    Examples:
-        >>> start_lon_lat('N19W156.hgt')
-        (-156.0, 20.0)
-        >>> start_lon_lat('S5E6.hgt')
-        (6.0, -4.0)
-        >>> start_lon_lat('Notrealname.hgt')
-        Traceback (most recent call last):
-           ...
-        ValueError: Invalid SRTM1 tile name: Notrealname.hgt, must match ([NS])(\d{1,2})([EW])(\d{1,3}).hgt
-
-    """
-
-    lat_str, lat, lon_str, lon = get_tile_parts(tile_name)
-
-    # lat gets added to or subtracted
-    top_lat = float(lat) + 1 if lat_str == 'N' else -float(lat) + 1
-
-    # lon is negative if we're in western hemisphere
-    # No +1 addition needed to lon: bottom left and top left are same
-    left_lon = -1 * float(lon) if lon_str == 'W' else float(lon)
-    return (left_lon, top_lat)
 
 
 def upsample_dem_rsc(rate=None, rsc_dict=None, rsc_filepath=None):
