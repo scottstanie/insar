@@ -355,17 +355,26 @@ class Downloader:
     def _download_hgt_tile(self, url):
         """Example from https://lpdaac.usgs.gov/data_access/daac2disk "command line tips" """
         # Using AWS or a netrc file are the easy cases
+        logger.info("Downloading {}".format(url))
         if self.data_source == 'AWS' or self._has_nasa_netrc():
-            return requests.get(url)
+            response = requests.get(url)
 
-        # NASA without a netrc file needs special auth session handling
-        with requests.Session() as session:
-            session.auth = (self.username, self.password)
-            r1 = session.request('get', url)
-            r = session.get(r1.url, auth=(self.username, self.password))
-            if r.ok:
-                logger.info("Downloading {}".format(url))
-                return r
+        else:
+            # NASA without a netrc file needs special auth session handling
+            with requests.Session() as session:
+                session.auth = (self.username, self.password)
+                r1 = session.request('get', url)
+                # NASA then redirects to
+                # urs.earthdata.nasa.gov/oauth/authorize?scope=uid&app_type=401&client_id=...
+                response = session.get(r1.url, auth=(self.username, self.password))
+
+        # Now check response for auth issues/ errors
+        if response.ok:
+            return response
+        else:
+            logger.error("Error in requesting url:")
+            logger.error(response.status_code)
+            logger.error(response.text)
 
     @staticmethod
     def _unzip_file(filepath):
