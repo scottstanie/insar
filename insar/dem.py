@@ -232,7 +232,7 @@ class Downloader:
     """Class to download and save SRTM1 tiles to create DEMs
 
     Attributes:
-        bounds (tuple): lon, lat boundaries of a rectangle to download
+        tile_names (iterator): strings of .hgt tiles (e.g. [N19W155.hgt])
         data_url (str): Base url where .hgt tiles are stored
         compress_type (str): format .hgt files are stored in online
         data_source (str): choices: NASA, AWS. See module docstring for explanation of sources
@@ -250,15 +250,8 @@ class Downloader:
     COMPRESS_TYPES = {'NASA': 'zip', 'AWS': 'gz'}
     NASAHOST = 'urs.earthdata.nasa.gov'
 
-    def __init__(self,
-                 left,
-                 bottom,
-                 right,
-                 top,
-                 data_source='NASA',
-                 netrc_file='~/.netrc',
-                 parallel_ok=PARALLEL):
-        self.bounds = (left, bottom, right, top)
+    def __init__(self, tile_names, data_source='NASA', netrc_file='~/.netrc', parallel_ok=PARALLEL):
+        self.tile_names = tile_names
         self.data_source = data_source
         if data_source not in self.VALID_SOURCES:
             raise ValueError('data_source must be one of: {}'.format(','.join(self.VALID_SOURCES)))
@@ -337,12 +330,11 @@ class Downloader:
             url: formatted url string with tile name
 
         Examples:
-            >>> bounds = (-155.7, 19.1, -154.7, 19.7)
-            >>> d = Downloader(*bounds, data_source='NASA')
+            >>> d = Downloader(['N19W156.hgt', 'N19W155.hgt'], data_source='NASA')
             >>> print(d._form_tile_url('N19W155.hgt'))
             http://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL1.003/2000.02.11/N19W155.SRTMGL1.hgt.zip
 
-            >>> d = Downloader(*bounds, data_source='AWS')
+            >>> d.data_source = 'AWS'
             >>> print(d._form_tile_url('N19W155.hgt'))
             https://s3.amazonaws.com/elevation-tiles-prod/skadi/N19/N19W155.hgt.gz
         """
@@ -422,14 +414,14 @@ class Downloader:
             with ThreadPoolExecutor(max_workers=4) as executor:
                 future_to_tile = {
                     executor.submit(self.download_and_save, tile): tile
-                    for tile in self.srtm1_tile_names()
+                    for tile in self.tile_names
                 }
                 for future in as_completed(future_to_tile):
                     future.result()
                     logger.info('Finished {}'.format(future_to_tile[future]))
 
         else:
-            for tile_name in self.srtm1_tile_names():
+            for tile_name in self.tile_names:
                 self.download_and_save(tile_name)
 
 
@@ -444,9 +436,11 @@ class Stitcher:
 
     """
 
-    def __init__(self, tile_file_list, num_pixels=3601):
+    def __init__(self, tile_names, num_pixels=3601):
         """List should come from Tile.srtm1_tile_names()"""
-        self.tile_file_list = tile_file_list
+        print('!!!')
+        print(list(tile_names))
+        self.tile_file_list = list(tile_names)
         # Assuming SRTMGL1: 3601 x 3601 squares
         self.num_pixels = num_pixels
 
@@ -599,7 +593,7 @@ class Stitcher:
         Args:
             srtm1_tile_list (list[str]): names of tiles (e.g. N19W156)
                 must be sorted with top-left tile first, as in from
-                output of Downloader.srtm1_tile_names
+                output of Tile.srtm1_tile_names
 
         Returns:
             OrderedDict: key/value pairs in order to write to a .dem.rsc file

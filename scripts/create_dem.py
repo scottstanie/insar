@@ -72,10 +72,11 @@ def main():
     bounds = insar.geojson.bounding_box(geojson)
     logger.info("Bounds: %s", " ".join(str(b) for b in bounds))
 
-    d = insar.dem.Downloader(*bounds, data_source=args.data_source)
+    tile_names = list(insar.dem.Tile(*bounds).srtm1_tile_names())
+    d = insar.dem.Downloader(tile_names, data_source=args.data_source)
     d.download_all()
 
-    s = insar.dem.Stitcher(d.srtm1_tile_names())
+    s = insar.dem.Stitcher(tile_names)
     stitched_dem = s.load_and_stitch()
 
     # Now create corresponding rsc file
