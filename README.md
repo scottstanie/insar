@@ -49,6 +49,33 @@ view-dem elevation1.dem elevation2.dem
 view-dem  # Looks in the current directory for "elevation.dem"
 ```
 
+The default datasource is NASA's SRTM version 3 global 1 degree data.
+See https://lpdaac.usgs.gov/dataset_discovery/measures/measures_products_table/srtmgl3s_v003
+
+This data requires a username and password from here:
+https://urs.earthdata.nasa.gov/users/new
+
+You will be prompted for a username and password when running with NASA data.
+It will save into your ~/.netrc file for future use, which means you will not have to enter a username and password any subsequent times.
+The entry will look like this:
+
+```
+machine urs.earthdata.nasa.gov
+    login USERNAME
+    password PASSWORD
+```
+
+If you want to avoid this entirely, you can [use Mapzen's data] (https://registry.opendata.aws/terrain-tiles/) by specifying
+```bash
+create-dem -g data/hawaii_bigger.geojson --data-source AWS
+```
+
+`--data-source NASA` is the default.
+
+Mapzen compbines SRTM data with outher sources, so it will be slightly different.
+They also list that they are discontinuing some services, which is why NASA is the default.
+
+
 #### eof.py
 
 Functions for dealing with precise orbit files (POE) for Sentinel 1
