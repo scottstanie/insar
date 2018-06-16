@@ -390,8 +390,6 @@ class Downloader:
         """
         # Remove extra latitude portion N19: keep all in one folder, compressed
         local_filename = os.path.join(_get_cache_dir(), tile_name.split('/')[-1])
-        print('local_filename')
-        print(local_filename)
         if os.path.exists(local_filename):
             logger.info("{} already exists, skipping.".format(local_filename))
         else:
@@ -438,8 +436,6 @@ class Stitcher:
 
     def __init__(self, tile_names, num_pixels=3601):
         """List should come from Tile.srtm1_tile_names()"""
-        print('!!!')
-        print(list(tile_names))
         self.tile_file_list = list(tile_names)
         # Assuming SRTMGL1: 3601 x 3601 squares
         self.num_pixels = num_pixels
