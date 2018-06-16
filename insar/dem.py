@@ -283,7 +283,7 @@ class Downloader:
         username = input("Username: ")
         password = getpass.getpass(prompt="Password (will not be displayed): ")
         save_to_netrc = input(
-            "Would you like to save these to ~/.netrc (machine={}) for future use (y/n)?".format(
+            "Would you like to save these to ~/.netrc (machine={}) for future use (y/n)?  ".format(
                 Downloader.NASAHOST))
 
         return username, password, save_to_netrc.lower().startswith('y')
@@ -397,8 +397,8 @@ class Downloader:
         Returns:
             None
         """
-        # Remove extra latitude portion N19: keep all in one folder, compressed
-        local_filename = os.path.join(_get_cache_dir(), tile_name.split('/')[-1])
+        # keep all in one folder, compressed
+        local_filename = os.path.join(_get_cache_dir(), tile_name)
         if os.path.exists(local_filename):
             logger.info("{} already exists, skipping.".format(local_filename))
         else:
@@ -412,9 +412,15 @@ class Downloader:
             logger.info("Unzipping {}".format(local_filename))
             self._unzip_file(local_filename)
 
+    def _all_files_exist(self):
+        filepaths = [os.path.join(_get_cache_dir(), tile_name) for tile_name in self.tile_names]
+        return all(os.path.exists(f) for f in filepaths)
+
     def download_all(self):
         """Downloads and saves all tiles from tile list"""
-        if self.data_source == 'NASA' and not self._has_nasa_netrc():
+        # Only need to get credentials for this case:
+        if not self._all_files_exist() and self.data_source == 'NASA' and not self._has_nasa_netrc(
+        ):
             self.handle_credentials()
 
         if self.parallel_ok:
