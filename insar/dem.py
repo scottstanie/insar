@@ -96,6 +96,39 @@ def _get_cache_dir():
     return path
 
 
+class Netrc(netrc.netrc):
+    """Handles saving of .netrc file, fixes bug in stdlib older versions
+
+    https://bugs.python.org/issue30806
+    Uses ideas from tinynetrc
+    """
+
+    def format(self):
+        """Dump the class data in the format of a .netrc file.
+
+        Fixes issue of including single quotes for username and password"""
+        rep = ""
+        for host in self.hosts.keys():
+            attrs = self.hosts[host]
+            rep += "machine {host}\n\tlogin {attrs[0]}\n".format(host=host, attrs=attrs)
+            if attrs[1]:
+                rep += "\taccount {attrs[1]}\n".format(attrs=attrs)
+            rep += "\tpassword {attrs[2]}\n".format(attrs=attrs)
+        for macro in self.macros.keys():
+            rep += "macdef {macro}\n".format(macro=macro)
+            for line in self.macros[macro]:
+                rep += line
+            rep += "\n"
+
+        return rep
+
+    def __repr__(self):
+        return self.format()
+
+    def __str__(self):
+        return repr(self)
+
+
 class Downloader:
     """Class to download and save SRTM1 tiles to create DEMs
 
@@ -137,7 +170,7 @@ class Downloader:
         self.parallel_ok = parallel_ok
 
     def _get_netrc_file(self):
-        return netrc.netrc(self.netrc_file)
+        return Netrc(self.netrc_file)
 
     def _has_nasa_netrc(self):
         try:
@@ -148,38 +181,52 @@ class Downloader:
         except (OSError, IOError):
             return False
 
-    def _get_username_pass(self):
+    @staticmethod
+    def _get_username_pass():
         """If netrc is not set up, get command line username and password"""
+        print("====================================================================")
         print("Please enter NASA Earthdata credentials to download NASA hosted STRM.")
         print("See https://urs.earthdata.nasa.gov/users/new for signup info.")
         print("Or choose data_source=AWS for Mapzen tiles.")
+        print("===========================================")
         username = input("Username: ")
         password = getpass.getpass(prompt="Password (will not be displayed): ")
         save_to_netrc = input(
             "Would you like to save these to ~/.netrc (machine={}) for future use (y/n)?".format(
-                self.NASAHOST))
+                Downloader.NASAHOST))
 
         return username, password, save_to_netrc.lower().startswith('y')
 
     @staticmethod
-    def _format_netrc(username, password):
+    def _nasa_netrc_entry(username, password):
+        """Create a string for a NASA urs account in .netrc format"""
         outstring = "machine {}\n".format(Downloader.NASAHOST)
         outstring += "\tlogin {}\n".format(username)
         outstring += "\tpassword {}\n".format(password)
         return outstring
 
     def handle_credentials(self):
-        username, pw, do_save = self._get_username_pass()
+        """Prompt user for NASA username/password, store as attribute or .netrc
+
+        If the user wants to save as .netrc, add to existing, or create new ~/.netrc
+        """
+        username, password, do_save = self._get_username_pass()
         if do_save:
             try:
+                # If they have a netrc existing, add to it
                 n = self._get_netrc_file()
-                n.hosts[self.NASAHOST] = (username, None, pw)
-                outstring = n.__repr__()
+                n.hosts[self.NASAHOST] = (username, None, password)
+                outstring = str(n)
             except (OSError, IOError):
-                outstring = self._format_netrc(username, pw)
+                # Otherwise, make a fresh one to save
+                outstring = self._nasa_netrc_entry(username, password)
 
             with open(self.netrc_file, 'w') as f:
                 f.write(outstring)
+        else:
+            # Save these as attritubes for the NASA url request
+            self.username = username
+            self.password = password
 
     @staticmethod
     def srtm1_tile_corner(lon, lat):
@@ -246,7 +293,7 @@ class Downloader:
                 yield tile_name_template.format(lat_str=lat_str, lon_str=lon_str)
 
     def _form_tile_url(self, tile_name_str):
-        """Downloads a singles from AWS
+        """Form the url for a .hgt tile from NASA or AWS
 
         Args:
             tile_name_str (str): string name of tile
@@ -258,11 +305,13 @@ class Downloader:
         Examples:
             >>> bounds = (-155.7, 19.1, -154.7, 19.7)
             >>> d = Downloader(*bounds, data_source='NASA')
-            >>> d._form_tile_url('N19W155.SRTMGL1.hgt')
+            >>> print(d._form_tile_url('N19W155.SRTMGL1.hgt'))
+            http://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL1.003/2000.02.11/N19W155.SRTMGL1.hgt.zip
+
             ['N19W156.SRTMGL1.hgt', 'N19W155.SRTMGL1.hgt']
             >>> d = Downloader(*bounds, data_source='AWS')
-            >>> d._form_tile_url('N19/N19W155.hgt')
-            ['N19W156.SRTMGL1.hgt', 'N19W155.SRTMGL1.hgt']
+            >>> print(d._form_tile_url('N19/N19W155.hgt'))
+            https://s3.amazonaws.com/elevation-tiles-prod/skadi/N19/N19W155.hgt.gz
         """
         if self.data_source == 'AWS':
             url = '{base}/{tile}.{ext}'.format(
@@ -274,6 +323,11 @@ class Downloader:
 
     def _download_hgt_tile(self, url):
         """Example from https://lpdaac.usgs.gov/data_access/daac2disk "command line tips" """
+        # Using AWS or a netrc file are the easy cases
+        if self.data_source == 'AWS' or self._has_nasa_netrc():
+            return requests.get(url)
+
+        # NASA without a netrc file needs special auth session handling
         with requests.Session() as session:
             session.auth = (self.username, self.password)
             r1 = session.request('get', url)
@@ -305,13 +359,15 @@ class Downloader:
         """
         # Remove extra latitude portion N19: keep all in one folder, compressed
         local_filename = os.path.join(_get_cache_dir(), tile_name_str.split('/')[-1])
+        print(local_filename, 'local_filename')
         if os.path.exists(local_filename):
             logger.info("{} already exists, skipping.".format(local_filename))
         else:
             # On AWS these are gzipped: download, then unzip
             local_filename += '.{}'.format(self.compress_type)
             with open(local_filename, 'wb') as f:
-                response = self._download_hgt_tile(tile_name_str)
+                url = self._form_tile_url(tile_name_str)
+                response = self._download_hgt_tile(url)
                 f.write(response.content)
                 logger.info("Writing to {}".format(local_filename))
             logger.info("Unzipping {}".format(local_filename))
