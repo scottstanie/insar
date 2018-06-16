@@ -129,6 +129,41 @@ class Netrc(netrc.netrc):
         return repr(self)
 
 
+def get_tile_parts(tile_name):
+    """Parses the lat/lon information of a .hgt tile
+
+    Validates that the string is an actual tile name
+
+    Args:
+        tile_name
+
+    Returns:
+        tuple: lat_str (either 'N' for north, 'S' for south), lat: int latitude from 0 to 90
+            lon_str (either 'W' for west, 'E' for east), lon: int longitude from 0 to 180
+
+    Raises:
+        ValueError: if regex match fails on tile_name
+
+    Examples:
+        >>> get_tile_parts('N19W156.hgt')
+        ('N', 19, 'W', 156)
+        >>> get_tile_parts('S5E6.hgt')
+        ('S', 5, 'E', 6)
+        >>> get_tile_parts('Notrealname.hgt')
+        Traceback (most recent call last):
+           ...
+        ValueError: Invalid SRTM1 tile name: Notrealname.hgt, must match ([NS])(\d{1,2})([EW])(\d{1,3}).hgt
+    """
+    lon_lat_regex = r'([NS])(\d{1,2})([EW])(\d{1,3}).hgt'
+    match = re.match(lon_lat_regex, tile_name)
+    if not match:
+        raise ValueError('Invalid SRTM1 tile name: {}, must match {}'.format(
+            tile_name, lon_lat_regex))
+
+    lat_str, lat, lon_str, lon = match.groups()
+    return lat_str, int(lat), lon_str, int(lon)
+
+
 class Downloader:
     """Class to download and save SRTM1 tiles to create DEMs
 
@@ -292,11 +327,11 @@ class Downloader:
 
                 yield tile_name_template.format(lat_str=lat_str, lon_str=lon_str)
 
-    def _form_tile_url(self, tile_name_str):
+    def _form_tile_url(self, tile_name):
         """Form the url for a .hgt tile from NASA or AWS
 
         Args:
-            tile_name_str (str): string name of tile
+            tile_name (str): string name of tile
             e.g. N06W001.SRTMGL1.hgt.zip (usgs) or N19/N19W156.hgt.gz (aws)
 
         Returns:
@@ -315,10 +350,10 @@ class Downloader:
         """
         if self.data_source == 'AWS':
             url = '{base}/{tile}.{ext}'.format(
-                base=self.data_url, tile=tile_name_str, ext=self.compress_type)
+                base=self.data_url, tile=tile_name, ext=self.compress_type)
         elif self.data_source == 'NASA':
             url = '{base}/{tile}.{ext}'.format(
-                base=self.data_url, tile=tile_name_str, ext=self.compress_type)
+                base=self.data_url, tile=tile_name, ext=self.compress_type)
         return url
 
     def _download_hgt_tile(self, url):
@@ -347,26 +382,27 @@ class Downloader:
             unzip_cmd = 'unzip -o -d {}'.format(_get_cache_dir()).split(' ')
         subprocess.check_call(unzip_cmd + [filepath])
 
-    def download_and_save(self, tile_name_str):
+    def download_and_save(self, tile_name):
         """Download and save one single tile
 
         Args:
-            tile_name_str (str): string name of tile
+            tile_name (str): string name of tile
             e.g. N06W001.SRTMGL1.hgt.zip (usgs) or N19/N19W156.gz (aws)
 
         Returns:
             None
         """
         # Remove extra latitude portion N19: keep all in one folder, compressed
-        local_filename = os.path.join(_get_cache_dir(), tile_name_str.split('/')[-1])
-        print(local_filename, 'local_filename')
+        local_filename = os.path.join(_get_cache_dir(), tile_name.split('/')[-1])
+        print('local_filename')
+        print(local_filename)
         if os.path.exists(local_filename):
             logger.info("{} already exists, skipping.".format(local_filename))
         else:
             # On AWS these are gzipped: download, then unzip
             local_filename += '.{}'.format(self.compress_type)
             with open(local_filename, 'wb') as f:
-                url = self._form_tile_url(tile_name_str)
+                url = self._form_tile_url(tile_name)
                 response = self._download_hgt_tile(url)
                 f.write(response.content)
                 logger.info("Writing to {}".format(local_filename))
@@ -389,8 +425,8 @@ class Downloader:
                     logger.info('Finished {}'.format(future_to_tile[future]))
 
         else:
-            for tile_name_str in self.srtm1_tile_names():
-                self.download_and_save(tile_name_str)
+            for tile_name in self.srtm1_tile_names():
+                self.download_and_save(tile_name)
 
 
 class Stitcher:
@@ -611,8 +647,8 @@ def _up_size(cur_size, rate):
     return 1 + (cur_size - 1) * rate
 
 
-def start_lon_lat(tilename):
-    """Takes an SRTM1 data tilename and returns the first (lon, lat) point
+def start_lon_lat(tile_name):
+    """Takes an SRTM1 data tile_name and returns the first (lon, lat) point
 
     The reverse of Downloader.srtm1_tile_names()
 
@@ -624,13 +660,13 @@ def start_lon_lat(tilename):
     at top left. This would return (X_FIRST, Y_FIRST) = (-156.0, 20.0)
 
     Args:
-        tilename (str): name of .hgt file for SRTM1 tile
+        tile_name (str): name of .hgt file for SRTM1 tile
 
     Returns:
         tuple (float, float) of first (lon, lat) point in .hgt file
 
     Raises:
-        ValueError: if regex match fails on tilename
+        ValueError: if regex match fails on tile_name
 
     Examples:
         >>> start_lon_lat('N19W156.hgt')
@@ -640,23 +676,18 @@ def start_lon_lat(tilename):
         >>> start_lon_lat('Notrealname.hgt')
         Traceback (most recent call last):
            ...
-        ValueError: Invalid SRTM1 tilename: Notrealname.hgt, must match ([NS])(\d+)([EW])(\d+).hgt
+        ValueError: Invalid SRTM1 tile name: Notrealname.hgt, must match ([NS])(\d{1,2})([EW])(\d{1,3}).hgt
 
     """
-    lon_lat_regex = r'([NS])(\d+)([EW])(\d+).hgt'
-    tilename = tilename.replace('SRTMGL1.', '')  # Remove NASA addition, if exists
-    match = re.match(lon_lat_regex, tilename)
-    if not match:
-        raise ValueError('Invalid SRTM1 tilename: {}, must match {}'.format(
-            tilename, lon_lat_regex))
 
-    lat_str, lat, lon_str, lon = match.groups()
+    lat_str, lat, lon_str, lon = get_tile_parts(tile_name)
 
-    # Only lon adjustment is negative it western hemisphere
-    left_lon = -1 * float(lon) if lon_str == 'W' else float(lon)
-    # No additions needed to lon: bottom left and top left are same
-    # Only the lat gets added or subtracted
+    # lat gets added to or subtracted
     top_lat = float(lat) + 1 if lat_str == 'N' else -float(lat) + 1
+
+    # lon is negative if we're in western hemisphere
+    # No +1 addition needed to lon: bottom left and top left are same
+    left_lon = -1 * float(lon) if lon_str == 'W' else float(lon)
     return (left_lon, top_lat)
 
 
