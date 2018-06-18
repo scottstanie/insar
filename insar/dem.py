@@ -334,7 +334,7 @@ class Downloader:
             >>> print(d._form_tile_url('N19W155.hgt'))
             http://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL1.003/2000.02.11/N19W155.SRTMGL1.hgt.zip
 
-            >>> d.data_source = 'AWS'
+            >>> d = Downloader(['N19W156.hgt', 'N19W155.hgt'], data_source='AWS')
             >>> print(d._form_tile_url('N19W155.hgt'))
             https://s3.amazonaws.com/elevation-tiles-prod/skadi/N19/N19W155.hgt.gz
         """
