@@ -51,11 +51,11 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
     # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
     if rsc_file:
         rsc_data = load_dem_rsc(rsc_file)
-    if ext in SENTINEL_EXTS:
+    elif ext in SENTINEL_EXTS:
         rsc_data = load_dem_rsc(_find_rsc_file(filename))
 
     # UAVSAR files have an annotation file for metadata
-    if not rsc_data and not ann_info:
+    if not ann_info and ext in UAVSAR_EXTS:
         ann_info = parse_ann_file(filename)
 
     if is_complex(filename):
@@ -163,7 +163,7 @@ def load_real(filename, ann_info=None, rsc_data=None):
     """
     data = np.fromfile(filename, '<f4')
     # rows = ann_info['rows']
-    cols = _get_file_width(ann_info=None, rsc_data=None)
+    cols = _get_file_width(ann_info=ann_info, rsc_data=rsc_data)
     return data.reshape([-1, cols])
 
 
@@ -174,7 +174,7 @@ def load_complex(filename, ann_info=None, rsc_data=None):
     """
     data = np.fromfile(filename, '<f4')
     # rows = ann_info['rows']  # Might not ever need rows: just the width
-    cols = _get_file_width(ann_info=None, rsc_data=None)
+    cols = _get_file_width(ann_info=ann_info, rsc_data=rsc_data)
     real_data, imag_data = parse_complex_data(data, cols)
     return combine_real_imag(real_data, imag_data)
 
