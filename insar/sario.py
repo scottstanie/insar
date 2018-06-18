@@ -4,12 +4,22 @@ Functions to assist input and output of SAR data
 Email: scott.stanie@utexas.edu
 """
 import collections
-import os.path
+import glob
+import os
 from pprint import pprint
 import re
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+
+from insar.log import get_log
+logger = get_log()
+
+SENTINEL_EXTS = ['.geo', '.cc', '.int', '.amp', '.unw']
+UAVSAR_EXTS = ['.int', '.mlc', '.slc', '.amp', '.cor']
+
+COMPLEX_EXTS = ['.int', '.mlc', '.slc', '.geo', '.cc', '.unw']
+REAL_EXTS = ['.amp', '.cor']  # NOTE: .cor might only be real for UAVSAR
 
 # For UAVSAR:
 REAL_POLs = ('HHHH', 'HVHV', 'VVVV')
@@ -22,19 +32,36 @@ def get_file_ext(filename):
     return os.path.splitext(filename)[1]
 
 
-def load_file(filename, ann_info=None):
+def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
     """Examines file type for real/complex and runs appropriate load"""
 
-    if get_file_ext(filename) in ('.hgt', '.dem'):
+    def _find_rsc_file(filename, verbose=False):
+        basepath = os.path.split(filename)[0]
+        # Should be just elevation.dem.rsc (for .geo folder) or dem.rsc (for igrams)
+        possible_rscs = glob.glob(os.path.join(basepath, '*.rsc'))
+        if verbose:
+            logger.info("Possible rsc files (using first one):")
+            logger.info(possible_rscs)
+        return possible_rscs[0]
+
+    ext = get_file_ext(filename)
+    if ext in ('.hgt', '.dem'):
         return load_elevation(filename)
 
-    if not ann_info:
+    # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
+    if rsc_file:
+        rsc_data = load_dem_rsc(rsc_file)
+    if ext in SENTINEL_EXTS:
+        rsc_data = load_dem_rsc(_find_rsc_file(filename))
+
+    # UAVSAR files have an annotation file for metadata
+    if not rsc_data and not ann_info:
         ann_info = parse_ann_file(filename)
 
-    if is_complex(filename, ann_info):
-        return load_complex(filename, ann_info)
+    if is_complex(filename):
+        return load_complex(filename, ann_info=ann_info, rsc_data=rsc_data)
     else:
-        return load_real(filename, ann_info)
+        return load_real(filename, ann_info=ann_info, rsc_data=rsc_data)
 
 
 def load_elevation(filename):
@@ -120,41 +147,58 @@ def load_dem_rsc(filename):
     return output_data
 
 
-def load_real(filename, ann_info):
+def _get_file_width(ann_info=None, rsc_data=None):
+    if rsc_data:
+        return rsc_data['WIDTH']
+    elif ann_info:
+        return ann_info['cols']
+    else:
+        raise ValueError("needs either ann_info or rsc_data to find number of cols")
+
+
+def load_real(filename, ann_info=None, rsc_data=None):
     """Reads in real 4-byte per pixel files""
 
-    Valid filetypes: .amp, .cor (for UAVSAR)
+    Valid filetypes: See sario.REAL_EXTS
     """
     data = np.fromfile(filename, '<f4')
     # rows = ann_info['rows']
-    cols = ann_info['cols']
+    cols = _get_file_width(ann_info=None, rsc_data=None)
     return data.reshape([-1, cols])
 
 
-def is_complex(filename, ann_info):
+def load_complex(filename, ann_info=None, rsc_data=None):
+    """Combines real and imaginary values from a filename to make complex image
+
+    Valid filetypes: See sario.COMPLEX_EXTS
+    """
+    data = np.fromfile(filename, '<f4')
+    # rows = ann_info['rows']  # Might not ever need rows: just the width
+    cols = _get_file_width(ann_info=None, rsc_data=None)
+    real_data, imag_data = parse_complex_data(data, cols)
+    return combine_real_imag(real_data, imag_data)
+
+
+def is_complex(filename):
     """Helper to determine if file data is real or complex
 
-    Based on https://uavsar.jpl.nasa.gov/science/documents/polsar-format.html
+    Uses https://uavsar.jpl.nasa.gov/science/documents/polsar-format.html for UAVSAR
     Note: differences between 3 polarizations for .mlc files: half real, half complex
     """
-    # TODO: are there other filetypes we want?
-    complex_exts = ['.int', '.mlc', '.slc']
-    real_exts = ['.amp', '.cor']  # NOTE: .cor might only be real for UAVSAR
-
     ext = get_file_ext(filename)
-    if ext not in complex_exts and ext not in real_exts:
+    if ext not in COMPLEX_EXTS and ext not in REAL_EXTS:
         raise ValueError('Invalid filetype for load_file: %s\n '
-                         'Allowed types: %s' % (ext, ' '.join(complex_exts + real_exts)))
+                         'Allowed types: %s' % (ext, ' '.join(COMPLEX_EXTS + REAL_EXTS)))
     if ext == '.mlc':
         # Check if filename has one of the complex polarizations
         return any(pol in filename for pol in COMPLEX_POLS)
     else:
-        return ext in complex_exts
+        return ext in COMPLEX_EXTS
 
 
-def parse_complex_data(complex_data, rows, cols):
+def parse_complex_data(complex_data, cols):
     """Splits a 1-D array of real/imag bytes to 2 square arrays"""
-    # TODO: double check if I don't need rows all the time
+    # double check if I ever need rows
     real_data = complex_data[::2].reshape([-1, cols])
     imag_data = complex_data[1::2].reshape([-1, cols])
     return real_data, imag_data
@@ -163,18 +207,6 @@ def parse_complex_data(complex_data, rows, cols):
 def combine_real_imag(real_data, imag_data):
     """Combines two float data arrays into one complex64 array"""
     return real_data + 1j * imag_data
-
-
-def load_complex(filename, ann_info):
-    """Combines real and imaginary values from a filename to make complex image
-
-    Valid filetypes: .slc, .mlc, .int
-    """
-    data = np.fromfile(filename, '<f4')
-    rows = ann_info['rows']
-    cols = ann_info['cols']
-    real_data, imag_data = parse_complex_data(data, rows, cols)
-    return combine_real_imag(real_data, imag_data)
 
 
 def save_array(filename, amplitude_array):
@@ -197,7 +229,7 @@ def save_array(filename, amplitude_array):
         # im.save(filename)
         plt.imsave(filename, amplitude_array, cmap='gray', vmin=0, vmax=1, format=ext.strip('.'))
 
-    elif ext in ('.cor', '.amp', '.int', '.mlc', '.slc'):
+    elif ext in ('.cor', '.amp', '.int', '.mlc', '.slc', '.unw'):
         # If machine order is big endian, need to byteswap (TODO: test on big-endian)
         # TODO: Do we need to do this at all??
         if not _is_little_endian():
