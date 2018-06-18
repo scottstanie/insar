@@ -6,7 +6,7 @@ Email: scott.stanie@utexas.edu
 import collections
 import glob
 import os
-from pprint import pprint
+import pprint
 import re
 import sys
 import numpy as np
@@ -33,14 +33,21 @@ def get_file_ext(filename):
 
 
 def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
-    """Examines file type for real/complex and runs appropriate load"""
+    """Examines file type for real/complex and runs appropriate load
+    
+    Args:
+        filename (str)
+        rsc_file (str)
+        ann_info (dict)
+        verbose (bool): print extra logging info while loading files
+    """
 
     def _find_rsc_file(filename, verbose=False):
         basepath = os.path.split(filename)[0]
         # Should be just elevation.dem.rsc (for .geo folder) or dem.rsc (for igrams)
         possible_rscs = glob.glob(os.path.join(basepath, '*.rsc'))
         if verbose:
-            logger.info("Possible rsc files (using first one):")
+            logger.info("Possible rsc files:")
             logger.info(possible_rscs)
         return possible_rscs[0]
 
@@ -51,12 +58,16 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
     # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
     if rsc_file:
         rsc_data = load_dem_rsc(rsc_file)
-    elif ext in SENTINEL_EXTS:
-        rsc_data = load_dem_rsc(_find_rsc_file(filename))
+    if ext in SENTINEL_EXTS:
+        rsc_file = rsc_file if rsc_file else _find_rsc_file(filename)
+        rsc_data = load_dem_rsc(rsc_file)
+        if verbose:
+            logger.info("Loaded rsc_data from %s", rsc_file)
+            logger.info(pprint.pformat(rsc_data))
 
     # UAVSAR files have an annotation file for metadata
-    if not ann_info and ext in UAVSAR_EXTS:
-        ann_info = parse_ann_file(filename)
+    if not ann_info and not rsc_data and ext in UAVSAR_EXTS:
+        ann_info = parse_ann_file(filename, verbose=verbose)
 
     if is_complex(filename):
         return load_complex(filename, ann_info=ann_info, rsc_data=rsc_data)
@@ -263,6 +274,9 @@ def parse_ann_file(filename, ext=None, verbose=False):
 
     Returns:
         ann_data (dict): key-values of requested data from .ann file
+        ext (str): extension of desired data file, if filename is the .ann file 
+            instead of a data filepath
+        verbose (bool): print extra logging into about file loading
     """
 
     def _parse_line(line):
@@ -281,6 +295,12 @@ def parse_ann_file(filename, ext=None, verbose=False):
 
     ext = ext or get_file_ext(filename)  # Use what's passed by default
     ann_filename = make_ann_filename(filename)
+    if verbose:
+        logger.info("Trying to load ann_data from %s", ann_filename)
+    if not os.path.exists(ann_filename):
+        if verbose:
+            logger.info("No file found: returning None")
+        return None
 
     ann_data = {}
     line_keywords = {
@@ -292,8 +312,8 @@ def parse_ann_file(filename, ext=None, verbose=False):
     }
     row_starts = {k: v + '.set_rows' for k, v in line_keywords.items()}
     col_starts = {k: v + '.set_cols' for k, v in line_keywords.items()}
-    row_key = row_starts[ext]
-    col_key = col_starts[ext]
+    row_key = row_starts.get(ext)
+    col_key = col_starts.get(ext)
 
     with open(ann_filename, 'r') as f:
         for line in f.readlines():
@@ -309,5 +329,5 @@ def parse_ann_file(filename, ext=None, verbose=False):
             # TODO: Add more parsing! whatever is useful from .ann file
 
     if verbose:
-        pprint(ann_data)
+        logger.info(pprint.pformat(ann_data))
     return ann_data
