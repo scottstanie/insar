@@ -34,12 +34,15 @@ def get_file_ext(filename):
 
 def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
     """Examines file type for real/complex and runs appropriate load
-    
+
     Args:
         filename (str)
         rsc_file (str)
         ann_info (dict)
         verbose (bool): print extra logging info while loading files
+
+    Returns:
+        np.array: a 2D array of the data from a file
     """
 
     def _find_rsc_file(filename, verbose=False):
@@ -69,7 +72,9 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
     if not ann_info and not rsc_data and ext in UAVSAR_EXTS:
         ann_info = parse_ann_file(filename, verbose=verbose)
 
-    if is_complex(filename):
+    if ext == '.unw':
+        return load_height(filename, rsc_data)
+    elif is_complex(filename):
         return load_complex(filename, ann_info=ann_info, rsc_data=rsc_data)
     else:
         return load_real(filename, ann_info=ann_info, rsc_data=rsc_data)
@@ -113,8 +118,7 @@ def load_elevation(filename):
             dem_img = data.reshape((1201, 1201))
         else:
             raise ValueError("Invalid .hgt data size: must be square size 1201 or 3601")
-        # TODO: makeDEM.m did this... do always want?? Why does AWS have so many more
-        # negative values in their SRTM1 tile than NASA?
+        # TODO: makeDEM.m did this... do we always want this??
         dem_img = np.clip(dem_img, 0, None)
 
     return dem_img
@@ -188,6 +192,31 @@ def load_complex(filename, ann_info=None, rsc_data=None):
     cols = _get_file_width(ann_info=ann_info, rsc_data=rsc_data)
     real_data, imag_data = parse_complex_data(data, cols)
     return combine_real_imag(real_data, imag_data)
+
+
+def load_height(filename, rsc_data):
+    """Load unwrapped interferograms, the output of snaphu
+
+    Format is two vertically stacked matrices stacked: [[amp]; [cor]]
+    using the fortran order (would be horizontal with 'c' order)
+    Example: unw data is 900x900 complex data, read by np.fromfile
+    In [76]: unw_data.shape   # Output: (1620000,)
+    In [85]: amp = unw_data.reshape(900, -1)[:900, :]
+    In [87]: amp.shape    # Output: (900, 1800)
+    In [88]: amp = unw_data.reshape(900, -1)[:, :900]
+    In [89]: amp.shape    # Output: (900, 900)
+
+    """
+    # cor_with_amp = np.vstack((amp, cordata))
+    data = np.fromfile(filename, '<f4')
+    cols = _get_file_width(rsc_data=rsc_data)
+    rows = int(data.shape[0] / cols / 2)
+
+    amp = data.reshape((-1, cols), order='F')[:rows, :]
+    phase = data.reshape((-1, cols), order='F')[rows:, :]
+    # amp = data.reshape((-1, cols))[:cols, :]
+    # phase = data.reshape((-1, cols))[cols:, :]
+    return amp, phase
 
 
 def is_complex(filename):
@@ -272,11 +301,15 @@ def make_ann_filename(filename):
 def parse_ann_file(filename, ext=None, verbose=False):
     """Returns the requested data from the annotation in ann_filename
 
-    Returns:
+    Args:
         ann_data (dict): key-values of requested data from .ann file
-        ext (str): extension of desired data file, if filename is the .ann file 
+        ext (str): extension of desired data file, if filename is the .ann file
             instead of a data filepath
         verbose (bool): print extra logging into about file loading
+
+    Returns:
+        dict: the annotation file parsed into a dict. If no annotation file
+            can be found, None is returned
     """
 
     def _parse_line(line):
