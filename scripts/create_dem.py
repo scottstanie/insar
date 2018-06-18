@@ -111,9 +111,9 @@ def main():
     dem_filename_small = dem_filename.replace(".dem", "_small.dem")
     rsc_filename_small = rsc_filename.replace(".dem.rsc", "_small.dem.rsc")
 
-    logger.info("Writing non-upsampled dem to %s", dem_filename_small)
+    logger.info("Writing non-upsampled dem temporarily to %s", dem_filename_small)
     stitched_dem.tofile(dem_filename_small)
-    logger.info("Writing non-upsampled dem.rsc to %s", rsc_filename_small)
+    logger.info("Writing non-upsampled dem.rsc temporarily to %s", rsc_filename_small)
     with open(rsc_filename_small, "w") as f:
         f.write(s.format_dem_rsc(rsc_dict))
 
@@ -135,6 +135,11 @@ def main():
     with open(rsc_filename, "w") as f:
         upsampled_rsc = insar.dem.upsample_dem_rsc(rate=rate, rsc_dict=rsc_dict)
         f.write(upsampled_rsc)
+
+    # Clean up the _small versions of dem and dem.rsc
+    logger.info("Cleaning up %s and %s", dem_filename_small, rsc_filename_small)
+    os.remove(dem_filename_small)
+    os.remove(rsc_filename_small)
 
 
 if __name__ == '__main__':
