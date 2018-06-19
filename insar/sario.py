@@ -190,6 +190,10 @@ def load_real(filename, ann_info=None, rsc_data=None):
         filename (str): path to the file to open
         rsc_data (dict): output from load_dem_rsc, gives width of file
         ann_info (dict): data parsed from UAVSAR annotation file
+
+    Returns:
+        np.array(float32) float values for the real 2D matrix
+
     """
     data = np.fromfile(filename, FLOAT_32_LE)
     rows, cols = _get_file_rows_cols(ann_info=ann_info, rsc_data=rsc_data)
@@ -208,8 +212,7 @@ def load_complex(filename, ann_info=None, rsc_data=None):
         ann_info (dict): data parsed from UAVSAR annotation file
 
     Returns:
-        np.array(np.dtype('complex64')): imaginary numbers of the recombined 
-            amplitude and phase of the height file
+        np.array(np.dtype('complex64')): imaginary numbers of the combined floats
     """
     data = np.fromfile(filename, FLOAT_32_LE)
     rows, cols = _get_file_rows_cols(ann_info=ann_info, rsc_data=rsc_data)
@@ -222,10 +225,19 @@ def load_complex(filename, ann_info=None, rsc_data=None):
 def _load_stacked_file(filename, rsc_data):
     """Helper function to load .unw and .cor files
 
-    Format is two vertically stacked matrices stacked: 
-        Either [[first]; [second]] or [[first], [second]]
-    For .unw height files, the top is amplitude, bottom is phase (unwrapped)
-    For .cc correlation files, top is amp, bottom is correlation (0 to 1)
+    Format is two matrices stacked:
+        [[first], [second]] where the first "cols" number of floats
+        are the first matrix, next "cols" are second, etc.
+    For .unw height files, the first is amplitude, second is phase (unwrapped)
+    For .cc correlation files, first is amp, second is correlation (0 to 1)
+
+    Args:
+        filename (str): path to the file to open
+        rsc_data (dict): output from load_dem_rsc, gives width of file
+
+    Returns:
+        tuple (np.array, np.array), both dtype='float32: The first and second
+            matrices parsed out
     """
     data = np.fromfile(filename, FLOAT_32_LE)
     rows, cols = _get_file_rows_cols(rsc_data=rsc_data)
@@ -261,6 +273,7 @@ def load_height(filename, rsc_data):
     Returns:
         np.array(np.dtype('float32')): unwrapped phase values
     """
+    # don't care about the amplitude, so ignore it
     amp, unwrapped_phase = _load_stacked_file(filename, rsc_data)
     return unwrapped_phase
 
@@ -278,7 +291,7 @@ def load_correlation(filename, rsc_data):
         np.array(np.dtype('float32')): float values of correlation
             Should be between 0 and 1 except for errors
     """
-    # Here, we don't care about the amplitude, so ignore it
+    # don't care about the amplitude, so ignore it
     _, cor = _load_stacked_file(filename, rsc_data)
     return cor
 
