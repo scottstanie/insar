@@ -86,6 +86,13 @@ def build_A_matrix(geolist, intlist):
     return A
 
 
+def _find_time_diffs(geolist):
+    """Finds the number of days between successive .geo files
+
+    Output length is a np.array of length len(geolist) - 1"""
+    return np.array([difference.days for difference in np.diff(geolist)])
+
+
 def build_B_matrix(geolist, intlist):
     """Takes the list of igram dates and builds the SBAS B (velocity coeff) matrix
 
@@ -99,7 +106,7 @@ def build_B_matrix(geolist, intlist):
             value will be t_k+1 - t_k for columns after the -1 in A,
             up to and including the +1 entry
     """
-    timediff = np.array([difference.days for difference in np.diff(geolist)])
+    timediffs = _find_time_diffs(geolist)
 
     A = build_A_matrix(geolist, intlist)
     B = np.zeros_like(A)
@@ -107,9 +114,23 @@ def build_B_matrix(geolist, intlist):
     for j, row in enumerate(A):
         # if no -1 entry, start at index 0. Otherwise, add 1 so exclude the -1 index
         start_idx = list(row).index(-1) + 1 if (-1 in row) else 0
-        end_idx = np.where(row == 1)[0][0] + 1  # Inclusive of +1 index
-        mask = np.zeros_like(row, dtype=bool)
-        mask[start_idx:end_idx] = 1
-        B[j][mask] = timediff[mask]
+        # End index is inclusive of the +1
+        end_idx = np.where(row == 1)[0][0] + 1
+
+        # Now only fill in the time diffs in the range from the early igram index
+        # to the later igram index
+        B[j][start_idx:end_idx] = timediffs[start_idx:end_idx]
 
     return B
+
+
+def invert_sbas(geolist, intlist, dphi_array):
+    B = build_B_matrix(geolist, intlist)
+    # Velocity will be result of the inversion
+    v = np.linalg.lstsq(B, dphi_array)
+    # velocity array entries: v_j = (phi_j - phi_j-1)/(t_j - t_j-1)
+
+    # Now integrate to get back to phases
+    timediffs = _find_time_diffs(geolist)
+    phi_diffs = timediffs * v
+    return np.cumsum(phi_diffs)
