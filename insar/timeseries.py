@@ -86,7 +86,7 @@ def build_A_matrix(geolist, intlist):
     return A
 
 
-def _find_time_diffs(geolist):
+def find_time_diffs(geolist):
     """Finds the number of days between successive .geo files
 
     Output length is a np.array of length len(geolist) - 1"""
@@ -106,7 +106,7 @@ def build_B_matrix(geolist, intlist):
             value will be t_k+1 - t_k for columns after the -1 in A,
             up to and including the +1 entry
     """
-    timediffs = _find_time_diffs(geolist)
+    timediffs = find_time_diffs(geolist)
 
     A = build_A_matrix(geolist, intlist)
     B = np.zeros_like(A)
@@ -127,10 +127,10 @@ def build_B_matrix(geolist, intlist):
 def invert_sbas(geolist, intlist, dphi_array):
     B = build_B_matrix(geolist, intlist)
     # Velocity will be result of the inversion
-    v = np.linalg.lstsq(B, dphi_array)
+    velocity_array, _, rank_B, sing_vals_B = np.linalg.lstsq(B, dphi_array, rcond=None)
     # velocity array entries: v_j = (phi_j - phi_j-1)/(t_j - t_j-1)
 
     # Now integrate to get back to phases
-    timediffs = _find_time_diffs(geolist)
-    phi_diffs = timediffs * v
-    return np.cumsum(phi_diffs)
+    timediffs = find_time_diffs(geolist)
+    phi_diffs = timediffs * velocity_array
+    return velocity_array, np.cumsum(phi_diffs)
