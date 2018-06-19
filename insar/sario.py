@@ -74,6 +74,8 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
 
     if ext == '.unw':
         return load_height(filename, rsc_data)
+    elif ext == '.cc':
+        return load_correlation(filename, rsc_data)
     elif is_complex(filename):
         return load_complex(filename, ann_info=ann_info, rsc_data=rsc_data)
     else:
@@ -162,14 +164,20 @@ def load_dem_rsc(filename):
     return output_data
 
 
-def _get_file_width(ann_info=None, rsc_data=None):
+def _get_file_rows_cols(ann_info=None, rsc_data=None):
     """Wrapper function to find file width for different SV types"""
     if (not rsc_data and not ann_info) or (rsc_data and ann_info):
         raise ValueError("needs either ann_info or rsc_data (but not both) to find number of cols")
     elif rsc_data:
-        return rsc_data['WIDTH']
+        return rsc_data['FILE_LENGTH'], rsc_data['WIDTH']
     elif ann_info:
-        return ann_info['cols']
+        return ann_info['rows'], ann_info['cols']
+
+
+def _assert_valid_size(data, rows, cols):
+    error_str = "Invalid rows, cols for file size %s: (%s, %s)" % (len(data), rows, cols)
+    # Note: 2* is since float data is really complex: (real, imag, real,...)
+    assert int(2 * rows * cols) == len(data), error_str
 
 
 def load_real(filename, ann_info=None, rsc_data=None):
@@ -183,8 +191,8 @@ def load_real(filename, ann_info=None, rsc_data=None):
         ann_info (dict): data parsed from UAVSAR annotation file
     """
     data = np.fromfile(filename, '<f4')
-    # rows = ann_info['rows']
-    cols = _get_file_width(ann_info=ann_info, rsc_data=rsc_data)
+    rows, cols = _get_file_rows_cols(ann_info=ann_info, rsc_data=rsc_data)
+    _assert_valid_size(data, rows, cols)
     return data.reshape([-1, cols])
 
 
@@ -203,8 +211,9 @@ def load_complex(filename, ann_info=None, rsc_data=None):
             amplitude and phase of the height file
     """
     data = np.fromfile(filename, '<f4')
-    # rows = ann_info['rows']  # Might not ever need rows: just the width
-    cols = _get_file_width(ann_info=ann_info, rsc_data=rsc_data)
+    rows, cols = _get_file_rows_cols(ann_info=ann_info, rsc_data=rsc_data)
+    _assert_valid_size(data, rows, cols)
+
     real_data, imag_data = parse_complex_data(data, cols)
     return combine_real_imag(real_data, imag_data)
 
@@ -212,31 +221,34 @@ def load_complex(filename, ann_info=None, rsc_data=None):
 def _load_stacked_file(filename, rsc_data):
     """Helper function to load .unw and .cor files
 
+    Format is two vertically stacked matrices stacked: [[top]; [bottom]]
+    For .unw height files, the top is amplitude, bottom is phase
+    For .cc correlation files, top is amp, bottom is correlation (0 to 1)
     """
+    data = np.fromfile(filename, '<f4')
+    rows, cols = _get_file_rows_cols(rsc_data=rsc_data)
+    _assert_valid_size(data, rows, cols)
+
+    top = data.reshape((-1, cols), order='F')[:rows, :]
+    bottom = data.reshape((-1, cols), order='F')[rows:, :]
+    # If we used c, not fortran matrix ordering style:
+    # amp = data.reshape((-1, cols))[:, :cols]
+    # phase = data.reshape((-1, cols))[:, cols:]
+    return top, bottom
 
 
 def load_height(filename, rsc_data):
     """Load unwrapped interferograms, the output of snaphu
 
-    Format is two vertically stacked matrices stacked: [[amp]; [cor]]
+    Format is two vertically stacked matrices stacked: [[amp]; [phase]]
     using the fortran order (would be horizontal with 'c' order)
     Example: unw data is 778x947 complex data, read by np.fromfile
     by reading in data type as '<f4', 4-byte floats
 
-    In [30]: data = np.fromfile('20141128_20150503.unw', '<f4')
-    In [32]: data.shape                      # Output: (1473532,)
-    In [30]: num_rows = 778
-    In [31]: data.shape[0] / (2 * num_rows)  # Output: 947.0
-
-
-    In [29]: data.shape[0] / (2 * 778)
-    Out[29]: 947.0
-
-    In [76]: unw_data.shape   # Output: (1620000,)
-    In [85]: amp = unw_data.reshape(900, -1)[:900, :]
-    In [87]: amp.shape    # Output: (900, 1800)
-    In [88]: amp = unw_data.reshape(900, -1)[:, :900]
-    In [89]: amp.shape    # Output: (900, 900)
+    data = np.fromfile('20141128_20150503.unw', '<f4')
+    data.shape                      # Output: (1473532,)
+    num_rows = 778
+    data.shape[0] / (2 * num_rows)  # Output: 947.0
 
     Args:
         filename (str): path to the file to open
@@ -246,18 +258,28 @@ def load_height(filename, rsc_data):
         np.array(np.dtype('complex64')): imaginary numbers of the recombined 
             amplitude and phase of the height file
     """
-    # cor_with_amp = np.vstack((amp, cordata))
-    data = np.fromfile(filename, '<f4')
-    cols = _get_file_width(rsc_data=rsc_data)
-    rows = int(data.shape[0] / cols / 2)
-
-    amp = data.reshape((-1, cols), order='F')[:rows, :]
-    phase = data.reshape((-1, cols), order='F')[rows:, :]
-    # amp = data.reshape((-1, cols))[:cols, :]
-    # phase = data.reshape((-1, cols))[cols:, :]
+    amp, phase = _load_stacked_file(filename, rsc_data)
 
     # Now to get back to a + ib, just use cos/ sin for real/imag
     return combine_real_imag(amp * np.cos(phase), amp * np.sin(phase))
+
+
+def load_correlation(filename, rsc_data):
+    """Load the correlation file (.cc) for an interferogram (a .int)
+
+    Format is two vertically stacked matrices stacked: [[amp]; [cor]]
+    using the fortran order (would be horizontal with 'c' order)
+    Args:
+        filename (str): path to the file to open
+        rsc_data (dict): output from load_dem_rsc, gives width of file
+
+    Returns:
+        np.array(np.dtype('float32')): float values of correlation
+            Should be between 0 and 1 except for errors
+    """
+    # Here, we don't care about the amplitude, so ignore it
+    _, cor = _load_stacked_file(filename, rsc_data)
+    return cor
 
 
 def is_complex(filename):
@@ -340,7 +362,7 @@ def make_ann_filename(filename):
 
 
 def parse_ann_file(filename, ext=None, verbose=False):
-    """Returns the requested data from the annotation in ann_filename
+    """Returns the requested data from the UAVSAR annotation in ann_filename
 
     Args:
         ann_data (dict): key-values of requested data from .ann file
