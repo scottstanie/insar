@@ -27,7 +27,7 @@ def find_sentinel_products():
             logger.info('Skipping {}'.format(filename))
             continue
 
-        start_date = parser.start_stop_time()[0]
+        start_date = parser.start_time()[0]
         mission = parser.mission()
         logger.info("Downloading precise orbits for {} on {}".format(
             mission, start_date.strftime('%Y-%m-%d')))

@@ -18,8 +18,18 @@ from insar.parsers import Sentinel
 
 
 def read_geolist(filepath="./geolist"):
+    """Reads in the list of .geo files used, in time order
+ 
+    Args:
+        filepath (str): path to the intlist file
+
+    Returns:
+        list[datetime]: the parse dates of each .geo used, in date order
+
+    """
     with open(filepath) as f:
-        return [os.path.split(geoname)[1] for geoname in f.readlines()]
+        geolist = [os.path.split(geoname)[1] for geoname in f.readlines()]
+    return [Sentinel(geo).start_time() for geo in geolist]
 
 
 def read_intlist(filepath="./intlist"):
@@ -29,7 +39,7 @@ def read_intlist(filepath="./intlist"):
         filepath (str): path to the intlist file
 
     Returns:
-        tuple(datetime, datetime)
+        tuple(datetime, datetime) of master, slave dates for all igrams
 
     """
 

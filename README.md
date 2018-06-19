@@ -124,9 +124,8 @@ Example:
 from insar.parsers import Sentinel
 
 parser = Sentinel('S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70.zip')
-parser.start_stop_time()
-    (datetime.datetime(2018, 4, 8, 4, 30, 25),
-     datetime.datetime(2018, 4, 8, 4, 30, 25))
+parser.start_time()
+    datetime.datetime(2018, 4, 8, 4, 30, 25)
 
 parser.mission()
     'S1A'
