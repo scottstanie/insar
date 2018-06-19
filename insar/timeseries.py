@@ -25,12 +25,12 @@ def read_geolist(filepath="./geolist"):
         filepath (str): path to the intlist file
 
     Returns:
-        list[datetime]: the parse dates of each .geo used, in date order
+        list[date]: the parse dates of each .geo used, in date order
 
     """
     with open(filepath) as f:
         geolist = [os.path.split(geoname)[1] for geoname in f.read().splitlines()]
-    return sorted([Sentinel(geo).start_time() for geo in geolist])
+    return sorted([Sentinel(geo).start_time().date() for geo in geolist])
 
 
 def read_intlist(filepath="./intlist"):
@@ -40,12 +40,12 @@ def read_intlist(filepath="./intlist"):
         filepath (str): path to the intlist file
 
     Returns:
-        tuple(datetime, datetime) of master, slave dates for all igrams
+        tuple(date, date) of master, slave dates for all igrams
 
     """
 
     def _parse(datestr):
-        return datetime.datetime.strptime(datestr, "%Y%m%d")
+        return datetime.datetime.strptime(datestr, "%Y%m%d").date()
 
     with open(filepath) as f:
         intlist = [intname.strip('.int').split('_') for intname in f.read().splitlines()]
@@ -57,17 +57,17 @@ def build_A_matrix(geolist, intlist):
     """Takes the list of igram dates and builds the SBAS A matrix
 
     Args:
-        geolist (list[datetime]): datetimes of the .geo acquisitions
-        intlist (list[tuple(datetime, datetime)])
+        geolist (list[date]): datetimes of the .geo acquisitions
+        intlist (list[tuple(date, date)])
 
     Returns:
         np.array 2D: the incident-like matrix from the SBAS paper: A*phi = dphi
             Each row corresponds to an igram, each column to a .geo
             value will be -1 on the early (slave) igrams, +1 on later (master)
     """
-    # We take the first .geo to be time 0, leave out of matrix, and only
-    # Only match on date (not time) to find indices
-    geolist = [g.date() for g in geolist[1:]]
+    # We take the first .geo to be time 0, leave out of matrix
+    # Match on date (not time) to find indices
+    geolist = geolist[1:]
     M = len(intlist)  # Number of igrams, number of rows
     N = len(geolist)
     A = np.zeros((M, N))
@@ -75,12 +75,12 @@ def build_A_matrix(geolist, intlist):
         early_igram, late_igram = intlist[j]
 
         try:
-            idx_early = geolist.index(early_igram.date())
+            idx_early = geolist.index(early_igram)
             A[j, idx_early] = -1
         except ValueError:  # The first SLC will not be in the matrix
             pass
 
-        idx_late = geolist.index(late_igram.date())
+        idx_late = geolist.index(late_igram)
         A[j, idx_late] = 1
 
     return A
@@ -90,11 +90,26 @@ def build_B_matrix(geolist, intlist):
     """Takes the list of igram dates and builds the SBAS B (velocity coeff) matrix
 
     Args:
-        geolist (list[datetime]): datetimes of the .geo acquisitions
-        intlist (list[tuple(datetime, datetime)])
+        geolist (list[date]): dates of the .geo acquisitions
+        intlist (list[tuple(date, date)])
 
     Returns:
         np.array 2D: the velocity coefficient matrix from the SBAS paper: Bv = dphi
             Each row corresponds to an igram, each column to a .geo
-            value will be -1 on the early (slave) igrams, +1 on later (master)
+            value will be t_k+1 - t_k for columns after the -1 in A,
+            up to and including the +1 entry
     """
+    timediff = np.array([difference.days for difference in np.diff(geolist)])
+
+    A = build_A_matrix(geolist, intlist)
+    B = np.zeros_like(A)
+
+    for j, row in enumerate(A):
+        # if no -1 entry, start at index 0. Otherwise, add 1 so exclude the -1 index
+        start_idx = list(row).index(-1) + 1 if (-1 in row) else 0
+        end_idx = np.where(row == 1)[0][0] + 1  # Inclusive of +1 index
+        mask = np.zeros_like(row, dtype=bool)
+        mask[start_idx:end_idx] = 1
+        B[j][mask] = timediff[mask]
+
+    return B
