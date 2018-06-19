@@ -257,7 +257,10 @@ def load_height(filename, rsc_data):
     """Load unwrapped interferograms, the output of snaphu
 
     Format is two vertically stacked matrices stacked: [[amp]; [phase]]
-    using the fortran order (would be horizontal with 'c' order)
+
+    The first "ncols" values of data are from the first matrix, then from
+    data[ncols:2*ncols] are the second matrix.
+
     Example: unw data is 778x947 complex data, read by np.fromfile
     by reading in data type as '<f4', 4-byte floats
 
@@ -281,8 +284,7 @@ def load_height(filename, rsc_data):
 def load_correlation(filename, rsc_data):
     """Load the correlation file (.cc) for an interferogram (a .int)
 
-    Format is two vertically stacked matrices stacked: [[amp]; [cor]]
-    using the fortran order (would be horizontal with 'c' order)
+    Format is two hotizontally stacked matrices stacked: [[amp], [cor]]
     Args:
         filename (str): path to the file to open
         rsc_data (dict): output from load_dem_rsc, gives width of file
