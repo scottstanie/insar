@@ -36,9 +36,9 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
     """Examines file type for real/complex and runs appropriate load
 
     Args:
-        filename (str)
-        rsc_file (str)
-        ann_info (dict)
+        filename (str): path to the file to open
+        rsc_file (str): path to a dem.rsc file (if Sentinel)
+        ann_info (dict): data parsed from annotation file (UAVSAR)
         verbose (bool): print extra logging info while loading files
 
     Returns:
@@ -87,7 +87,7 @@ def load_elevation(filename):
     https://dds.cr.usgs.gov/srtm/version2_1/Documentation/SRTM_Topo.pdf
     Key point: Big-endian 2byte integers
 
-    .dem is format used by Zebker geo-coded SAR software
+    .dem is format used by Zebker geo-coded and ROI-PAC SAR software
     Only difference is data is stored little-endian (like other SAR data)
 
     Note on both formats: gaps in coverage are given by INT_MIN -32768,
@@ -163,18 +163,24 @@ def load_dem_rsc(filename):
 
 
 def _get_file_width(ann_info=None, rsc_data=None):
-    if rsc_data:
+    """Wrapper function to find file width for different SV types"""
+    if (not rsc_data and not ann_info) or (rsc_data and ann_info):
+        raise ValueError("needs either ann_info or rsc_data (but not both) to find number of cols")
+    elif rsc_data:
         return rsc_data['WIDTH']
     elif ann_info:
         return ann_info['cols']
-    else:
-        raise ValueError("needs either ann_info or rsc_data to find number of cols")
 
 
 def load_real(filename, ann_info=None, rsc_data=None):
     """Reads in real 4-byte per pixel files""
 
     Valid filetypes: See sario.REAL_EXTS
+
+    Args:
+        filename (str): path to the file to open
+        rsc_data (dict): output from load_dem_rsc, gives width of file
+        ann_info (dict): data parsed from UAVSAR annotation file
     """
     data = np.fromfile(filename, '<f4')
     # rows = ann_info['rows']
@@ -186,6 +192,15 @@ def load_complex(filename, ann_info=None, rsc_data=None):
     """Combines real and imaginary values from a filename to make complex image
 
     Valid filetypes: See sario.COMPLEX_EXTS
+
+    Args:
+        filename (str): path to the file to open
+        rsc_data (dict): output from load_dem_rsc, gives width of file
+        ann_info (dict): data parsed from UAVSAR annotation file
+
+    Returns:
+        np.array(np.dtype('complex64')): imaginary numbers of the recombined 
+            amplitude and phase of the height file
     """
     data = np.fromfile(filename, '<f4')
     # rows = ann_info['rows']  # Might not ever need rows: just the width
