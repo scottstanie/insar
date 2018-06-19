@@ -209,12 +209,29 @@ def load_complex(filename, ann_info=None, rsc_data=None):
     return combine_real_imag(real_data, imag_data)
 
 
+def _load_stacked_file(filename, rsc_data):
+    """Helper function to load .unw and .cor files
+
+    """
+
+
 def load_height(filename, rsc_data):
     """Load unwrapped interferograms, the output of snaphu
 
     Format is two vertically stacked matrices stacked: [[amp]; [cor]]
     using the fortran order (would be horizontal with 'c' order)
-    Example: unw data is 900x900 complex data, read by np.fromfile
+    Example: unw data is 778x947 complex data, read by np.fromfile
+    by reading in data type as '<f4', 4-byte floats
+
+    In [30]: data = np.fromfile('20141128_20150503.unw', '<f4')
+    In [32]: data.shape                      # Output: (1473532,)
+    In [30]: num_rows = 778
+    In [31]: data.shape[0] / (2 * num_rows)  # Output: 947.0
+
+
+    In [29]: data.shape[0] / (2 * 778)
+    Out[29]: 947.0
+
     In [76]: unw_data.shape   # Output: (1620000,)
     In [85]: amp = unw_data.reshape(900, -1)[:900, :]
     In [87]: amp.shape    # Output: (900, 1800)
