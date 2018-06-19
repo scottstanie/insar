@@ -24,10 +24,13 @@ class TestSentinel(unittest.TestCase):
         path_filename = '/some/path/' + self.filename
         self.assertEqual(Sentinel(path_filename).full_parse(), self.parser.full_parse())
 
-    def test_start_stop_time(self):
+    def test_start_time(self):
         expected_start = datetime(2018, 4, 8, 4, 30, 25)
-        expected_stop = datetime(2018, 4, 8, 4, 30, 25)
-        self.assertEqual(self.parser.start_stop_time(), (expected_start, expected_stop))
+        self.assertEqual(self.parser.start_time(), expected_start)
+
+    def test_stop_time(self):
+        expected_stop = datetime(2018, 4, 8, 4, 30, 53)
+        self.assertEqual(self.parser.stop_time(), expected_stop)
 
     def test_polarization(self):
         self.assertEqual(self.parser.polarization(), 'DV')

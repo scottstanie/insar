@@ -38,6 +38,7 @@ class Sentinel:
         filename (str) name of the sentinel data product
     """
     FILE_REGEX = r'([\w\d]{3})_([\w\d]{2})_([\w_]{3})([FHM_])_(\d)([SA])([SDHV]{2})_([T\d]{15})_([T\d]{15})_([\d]{6})_([\d\w]{6})_([\d\w]{4})'
+    TIME_FMT = '%Y%m%dT%H%M%S'
 
     def __init__(self, filename):
         self.filename = filename
@@ -68,29 +69,40 @@ class Sentinel:
                 'Product class', 'Polarization', 'Start datetime', 'Stop datetime', 'Orbit number',
                 'data-take identified', 'product unique id')
 
-    def start_stop_time(self):
+    def start_time(self):
         """Returns start datetime and stop datetime from a sentinel file name
 
         Args:
             sentinel_filename (str): filename of a sentinel 1 product
 
         Returns:
-            (datetime, datetime): start datetime, stop datetime
+            datetime: start datetime of mission
 
 
         Example:
             >>> s = Sentinel('S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70')
-            >>> print(s.start_stop_time()[0])
-            2018-04-08 04:30:25
-            >>> print(s.start_stop_time()[1])
+            >>> print(s.start_time())
             2018-04-08 04:30:25
         """
-        time_format = '%Y%m%dT%H%M%S'
-        start_time_str, stop_time_str = self.full_parse()[7:9]
-        start_time = datetime.strptime(start_time_str, time_format)
-        stop_time = datetime.strptime(start_time_str, time_format)
+        start_time_str = self.full_parse()[7]
+        return datetime.strptime(start_time_str, self.TIME_FMT)
 
-        return start_time, stop_time
+    def stop_time(self):
+        """Returns stop datetime from a sentinel file name
+
+        Args:
+            sentinel_filename (str): filename of a sentinel 1 product
+
+        Returns:
+            datetime: stop datetime
+
+        Example:
+            >>> s = Sentinel('S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70')
+            >>> print(s.stop_time())
+            2018-04-08 04:30:53
+        """
+        stop_time_str = self.full_parse()[8]
+        return datetime.strptime(stop_time_str, self.TIME_FMT)
 
     def polarization(self):
         """Returns type of polarization of product

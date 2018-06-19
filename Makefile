@@ -21,7 +21,7 @@ $(TARGET): $(SRCS)
 
 test:
 	@echo "Running doctests and unittests: nose must be installed"
-	nosetests -v --with-doctest
+	nosetests -v --with-doctest --where insar
 
 clean:
 	rm -f *.o
