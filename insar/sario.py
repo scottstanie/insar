@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from insar.log import get_log
 logger = get_log()
 
+FLOAT_32_LE = np.dtype('<f4')
 SENTINEL_EXTS = ['.geo', '.cc', '.int', '.amp', '.unw']
 UAVSAR_EXTS = ['.int', '.mlc', '.slc', '.amp', '.cor']
 
@@ -87,7 +88,7 @@ def load_elevation(filename):
 
     .hgt is the NASA SRTM files given. Documentation on format here:
     https://dds.cr.usgs.gov/srtm/version2_1/Documentation/SRTM_Topo.pdf
-    Key point: Big-endian 2byte integers
+    Key point: Big-endian 2 byte (16-bit) integers
 
     .dem is format used by Zebker geo-coded and ROI-PAC SAR software
     Only difference is data is stored little-endian (like other SAR data)
@@ -190,7 +191,7 @@ def load_real(filename, ann_info=None, rsc_data=None):
         rsc_data (dict): output from load_dem_rsc, gives width of file
         ann_info (dict): data parsed from UAVSAR annotation file
     """
-    data = np.fromfile(filename, '<f4')
+    data = np.fromfile(filename, FLOAT_32_LE)
     rows, cols = _get_file_rows_cols(ann_info=ann_info, rsc_data=rsc_data)
     _assert_valid_size(data, rows, cols)
     return data.reshape([-1, cols])
@@ -210,7 +211,7 @@ def load_complex(filename, ann_info=None, rsc_data=None):
         np.array(np.dtype('complex64')): imaginary numbers of the recombined 
             amplitude and phase of the height file
     """
-    data = np.fromfile(filename, '<f4')
+    data = np.fromfile(filename, FLOAT_32_LE)
     rows, cols = _get_file_rows_cols(ann_info=ann_info, rsc_data=rsc_data)
     _assert_valid_size(data, rows, cols)
 
@@ -221,20 +222,23 @@ def load_complex(filename, ann_info=None, rsc_data=None):
 def _load_stacked_file(filename, rsc_data):
     """Helper function to load .unw and .cor files
 
-    Format is two vertically stacked matrices stacked: [[top]; [bottom]]
-    For .unw height files, the top is amplitude, bottom is phase
+    Format is two vertically stacked matrices stacked: 
+        Either [[first]; [second]] or [[first], [second]]
+    For .unw height files, the top is amplitude, bottom is phase (unwrapped)
     For .cc correlation files, top is amp, bottom is correlation (0 to 1)
     """
-    data = np.fromfile(filename, '<f4')
+    data = np.fromfile(filename, FLOAT_32_LE)
     rows, cols = _get_file_rows_cols(rsc_data=rsc_data)
     _assert_valid_size(data, rows, cols)
 
-    top = data.reshape((-1, cols), order='F')[:rows, :]
-    bottom = data.reshape((-1, cols), order='F')[rows:, :]
+    # Using fortran reshaping
+    # first = data.reshape((2 * rows, cols), order='F')[:rows, :]
+    # second = data.reshape((2 * rows, cols), order='F')[rows:, :]
+
     # If we used c, not fortran matrix ordering style:
-    # amp = data.reshape((-1, cols))[:, :cols]
-    # phase = data.reshape((-1, cols))[:, cols:]
-    return top, bottom
+    first = data.reshape((rows, 2 * cols))[:, :cols]
+    second = data.reshape((rows, 2 * cols))[:, cols:]
+    return first, second
 
 
 def load_height(filename, rsc_data):
@@ -255,13 +259,10 @@ def load_height(filename, rsc_data):
         rsc_data (dict): output from load_dem_rsc, gives width of file
 
     Returns:
-        np.array(np.dtype('complex64')): imaginary numbers of the recombined 
-            amplitude and phase of the height file
+        np.array(np.dtype('float32')): unwrapped phase values
     """
-    amp, phase = _load_stacked_file(filename, rsc_data)
-
-    # Now to get back to a + ib, just use cos/ sin for real/imag
-    return combine_real_imag(amp * np.cos(phase), amp * np.sin(phase))
+    amp, unwrapped_phase = _load_stacked_file(filename, rsc_data)
+    return unwrapped_phase
 
 
 def load_correlation(filename, rsc_data):
