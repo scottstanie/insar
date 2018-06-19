@@ -206,6 +206,13 @@ def load_height(filename, rsc_data):
     In [88]: amp = unw_data.reshape(900, -1)[:, :900]
     In [89]: amp.shape    # Output: (900, 900)
 
+    Args:
+        filename (str): path to the file to open
+        rsc_data (dict): output from load_dem_rsc, gives width of file
+
+    Returns:
+        np.array(np.dtype('complex64')): imaginary numbers of the recombined 
+            amplitude and phase of the height file
     """
     # cor_with_amp = np.vstack((amp, cordata))
     data = np.fromfile(filename, '<f4')
@@ -216,7 +223,9 @@ def load_height(filename, rsc_data):
     phase = data.reshape((-1, cols), order='F')[rows:, :]
     # amp = data.reshape((-1, cols))[:cols, :]
     # phase = data.reshape((-1, cols))[cols:, :]
-    return amp, phase
+
+    # Now to get back to a + ib, just use cos/ sin for real/imag
+    return combine_real_imag(amp * np.cos(phase), amp * np.sin(phase))
 
 
 def is_complex(filename):
