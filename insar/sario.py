@@ -320,7 +320,7 @@ def load_stacked(filename, rsc_data, return_amp=False):
     if return_amp:
         return first, second
     else:
-        return first
+        return second
 
 
 def is_complex(filename):
