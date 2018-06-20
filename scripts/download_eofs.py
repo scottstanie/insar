@@ -10,31 +10,9 @@ try:
 except ImportError:  # add root to pythonpath if script is erroring
     sys.path.insert(0, dirname(dirname(abspath(__file__))))
 import insar.eof
-from insar.parsers import Sentinel
 from insar.log import get_log, log_runtime
 
 logger = get_log()
-
-
-def find_sentinel_products():
-    """Parse the current directory for any Sentinel 1 products' date and mission"""
-    orbit_dates = []
-    missions = []
-    for filename in glob.glob("./*.zip"):
-        try:
-            parser = Sentinel(filename)
-        except ValueError:  # Not a sentinel zip file
-            logger.info('Skipping {}'.format(filename))
-            continue
-
-        start_date = parser.start_time()[0]
-        mission = parser.mission()
-        logger.info("Downloading precise orbits for {} on {}".format(
-            mission, start_date.strftime('%Y-%m-%d')))
-        orbit_dates.append(start_date)
-        missions.append(mission)
-
-    return orbit_dates, missions
 
 
 @log_runtime
@@ -55,7 +33,7 @@ def main():
         sys.exit(1)
     if not args.date:
         # No command line args given: search current directory
-        orbit_dates, missions = find_sentinel_products()
+        orbit_dates, missions = insar.eof.find_sentinel_products()
         if not orbit_dates:
             logger.info("No Sentinel products found in current directory. Exiting")
             sys.exit(0)

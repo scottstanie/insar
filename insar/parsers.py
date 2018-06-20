@@ -37,7 +37,7 @@ class Sentinel:
     Attributes:
         filename (str) name of the sentinel data product
     """
-    FILE_REGEX = r'([\w\d]{3})_([\w\d]{2})_([\w_]{3})([FHM_])_(\d)([SA])([SDHV]{2})_([T\d]{15})_([T\d]{15})_([\d]{6})_([\d\w]{6})_([\d\w]{4})'
+    FILE_REGEX = r'(S1A|S1B)_([\w\d]{2})_([\w_]{3})([FHM_])_(\d)([SA])([SDHV]{2})_([T\d]{15})_([T\d]{15})_([\d]{6})_([\d\w]{6})_([\d\w]{4})'
     TIME_FMT = '%Y%m%dT%H%M%S'
 
     def __init__(self, filename):
