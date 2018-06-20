@@ -3,14 +3,13 @@ import tempfile
 import shutil
 import datetime
 import os
+import responses
 
 from insar import eof
-import responses
 
 
 class TestEOF(unittest.TestCase):
     def setUp(self):
-        self.testdate = '20180408'
         self.sample_api_search = {
             'count':
             1,
