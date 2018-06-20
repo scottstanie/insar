@@ -70,9 +70,9 @@ def save(filepath, mask, downsample=0):
     maskfile = filepath.replace(ext, ext + '.png')
 
     if args.downsample:
-        insar.sario.save_array(maskfile, insar.utils.downsample_im(mask, args.downsample))
+        insar.sario.save(maskfile, insar.utils.downsample_im(mask, args.downsample))
     else:
-        insar.sario.save_array(maskfile, mask)
+        insar.sario.save(maskfile, mask)
     return True
 
 

@@ -120,7 +120,7 @@ def split_and_save(filename):
     for idx, block in enumerate(blocks, start=1):
         fname = filename.replace(ext, ".{}{}".format(str(idx), ext))
         print("Saving {}".format(fname))
-        insar.sario.save_array(fname, block)
+        insar.sario.save(fname, block)
         newpaths.append(fname)
 
     return newpaths
@@ -157,7 +157,7 @@ def combine_cor_amp(corfilename, save=True):
     cor_with_amp = np.vstack((amp, cordata))
 
     outfilename = corfilename.replace('.cor', '_withamp.cor')
-    insar.sario.save_array(outfilename, cor_with_amp)
+    insar.sario.save(outfilename, cor_with_amp)
     return cor_with_amp, outfilename
 
 

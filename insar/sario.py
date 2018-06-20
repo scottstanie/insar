@@ -351,11 +351,17 @@ def combine_real_imag(real_data, imag_data):
     return real_data + 1j * imag_data
 
 
-def save_array(filename, amplitude_array):
-    """Save the numpy array as a .png file
+def save(filename, array):
+    """Save the numpy array in one of known formats
 
-    amplitude_array (np.array, dtype=float32)
-    filename (str)
+    Args:
+        filename (str)
+        array (np.array, dtype=float32 or int16 or complex64)
+    Returns:
+        None
+
+    Raises:
+        NotImplementedError: if file extension of filename not a known ext
     """
 
     def _is_little_endian():
@@ -366,17 +372,17 @@ def save_array(filename, amplitude_array):
 
     if ext == '.png':  # TODO: or ext == '.jpg':
         # from PIL import Image
-        # im = Image.fromarray(amplitude_array)
+        # im = Image.fromarray(array)
         # im.save(filename)
-        plt.imsave(filename, amplitude_array, cmap='gray', vmin=0, vmax=1, format=ext.strip('.'))
+        plt.imsave(filename, array, cmap='gray', vmin=0, vmax=1, format=ext.strip('.'))
 
     elif ext in COMPLEX_EXTS + REAL_EXTS and ext not in STACKED_FILES:
         # If machine order is big endian, need to byteswap (TODO: test on big-endian)
         # TODO: Do we need to do this at all??
         if not _is_little_endian():
-            amplitude_array.byteswap(inplace=True)
+            array.byteswap(inplace=True)
 
-        amplitude_array.tofile(filename)
+        array.tofile(filename)
     elif ext in STACKED_FILES:
         # TODO
         raise NotImplementedError("{} saving not yet implemented (TODO).".format(ext))

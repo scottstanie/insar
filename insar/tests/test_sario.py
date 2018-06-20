@@ -5,17 +5,6 @@ import numpy as np
 from numpy.testing import assert_array_almost_equal
 
 from insar import sario
-"""Functions todo:
-def load_file(filename, ann_info=None):
-def load_elevation(filename):
-def upsample_dem_rsc(filepath, rate):
-def load_real(filename, ann_info):
-def is_complex(filename, ann_info):
-def parse_complex_data(complex_data, rows, cols):
-def combine_real_imag(real_data, imag_data):
-def load_complex(filename, ann_info):
-def save_array(filename, amplitude_array):
-"""
 
 
 class TestLoading(unittest.TestCase):
@@ -24,6 +13,9 @@ class TestLoading(unittest.TestCase):
         self.datapath = join(dirname(__file__), 'data')
         self.rsc_path = join(self.datapath, 'elevation.dem.rsc')
         self.ann_path = join(self.datapath, 'test.ann')
+        self.geo_path = join(
+            self.datapath,
+            'S1A_IW_SLC__1SDV_20180420T043026_20180420T043054_021546_025211_81BE.SAFE.small.geo')
         self.rsc_data = OrderedDict(
             [('WIDTH', 2), ('FILE_LENGTH', 3), ('X_FIRST', -155.676388889), ('Y_FIRST',
                                                                              19.5755555567),
@@ -96,3 +88,12 @@ class TestLoading(unittest.TestCase):
         self.assertIsNone(sario._assert_valid_size(data, rows, cols))
 
         self.assertRaises(AssertionError, sario._assert_valid_size, data, rows, 5 * cols)
+
+    def test_load_file(self):
+        test_geo = sario.load_file(self.geo_path, verbose=True)
+        expected = np.array(
+            [[-27.189274 - 60.105267j, -41.34938 + 82.05109j], [
+                58.716545 + 13.9955j, 68.892 - 42.065178j
+            ], [41.361275 - 152.78986j, -65.905945 - 61.246834j]],
+            dtype='complex64')
+        assert_array_almost_equal(expected, test_geo)
