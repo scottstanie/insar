@@ -18,6 +18,9 @@ import numpy as np
 from insar.parsers import Sentinel
 from insar import sario
 
+SENTINEL_WAVELENGTH = 5.5465763  # cm
+PHASE_TO_CM = SENTINEL_WAVELENGTH / (4 * np.pi)
+
 
 def read_geolist(filepath="./geolist"):
     """Reads in the list of .geo files used, in time order
@@ -55,8 +58,7 @@ def read_intlist(filepath="./intlist", parse=True):
 
     if parse:
         intlist = [intname.strip('.int').split('_') for intname in intlist]
-        return [(_parse(master), _parse(slave))
-                for master, slave in intlist.strip('.int').split('_')]
+        return [(_parse(master), _parse(slave)) for master, slave in intlist]
     else:
         dirname = os.path.dirname(filepath)
         return [os.path.join(dirname, igram) for igram in intlist]
