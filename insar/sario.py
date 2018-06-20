@@ -120,11 +120,11 @@ def load_elevation(filename):
     """
 
     ext = get_file_ext(filename)
-    data_type = "<i2" if ext == '.dem' else ">i2"
+    data_type = INT_16_LE if ext == '.dem' else INT_16_BE
     data = np.fromfile(filename, dtype=data_type)
     # Make sure we're working with little endian
-    if data_type == '>i2':
-        data = data.astype('<i2')
+    if data_type == INT_16_BE:
+        data = data.astype(INT_16_LE)
 
     # Reshape to correct size.
     # Either get info from .dem.rsc
