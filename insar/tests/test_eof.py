@@ -2,6 +2,7 @@ import unittest
 from datetime import datetime
 
 from insar.eof import download_eofs, eof_list
+import responses
 
 
 class TestEOF(unittest.TestCase):
