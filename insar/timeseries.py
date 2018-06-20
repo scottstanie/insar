@@ -16,6 +16,7 @@ import os
 import datetime
 import numpy as np
 from insar.parsers import Sentinel
+from insar import sario
 
 
 def read_geolist(filepath="./geolist"):
@@ -33,14 +34,16 @@ def read_geolist(filepath="./geolist"):
     return sorted([Sentinel(geo).start_time().date() for geo in geolist])
 
 
-def read_intlist(filepath="./intlist"):
+def read_intlist(filepath="./intlist", parse=True):
     """Reads the list of igrams to return dates of images as a tuple
 
     Args:
         filepath (str): path to the intlist file
+        parse (bool): output the intlist as parsed datetime tuples
 
     Returns:
-        tuple(date, date) of master, slave dates for all igrams
+        tuple(date, date) of master, slave dates for all igrams (if parse=True)
+            if parse=False: returns list[str], filenames of the igrams
 
     """
 
@@ -48,9 +51,15 @@ def read_intlist(filepath="./intlist"):
         return datetime.datetime.strptime(datestr, "%Y%m%d").date()
 
     with open(filepath) as f:
-        intlist = [intname.strip('.int').split('_') for intname in f.read().splitlines()]
+        intlist = f.read().splitlines()
 
-    return [(_parse(master), _parse(slave)) for master, slave in intlist]
+    if parse:
+        intlist = [intname.strip('.int').split('_') for intname in intlist]
+        return [(_parse(master), _parse(slave))
+                for master, slave in intlist.strip('.int').split('_')]
+    else:
+        dirname = os.path.dirname(filepath)
+        return [os.path.join(dirname, igram) for igram in intlist]
 
 
 def build_A_matrix(geolist, intlist):
@@ -134,3 +143,15 @@ def invert_sbas(geolist, intlist, dphi_array):
     timediffs = find_time_diffs(geolist)
     phi_diffs = timediffs * velocity_array
     return velocity_array, np.cumsum(phi_diffs)
+
+
+def read_unw_list(intlist, row, column):
+    # row 283, col 493 looks like a good test
+    igrams = read_intlist(intlist, parse=False)
+    num_ints = len(igrams)
+    pixel_phase_arr = np.zeros((num_ints, 1))
+    for idx, igram_file in enumerate(igrams):
+        unw_file = igram_file.replace('.int', '.unw')
+        pixel_phase = sario.load_file(unw_file)[row, column]
+        pixel_phase_arr[idx] = pixel_phase
+    return pixel_phase_arr
