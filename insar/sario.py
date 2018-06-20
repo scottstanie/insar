@@ -85,6 +85,7 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
         return load_elevation(filename)
 
     # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
+    rsc_data = None
     if rsc_file:
         rsc_data = load_dem_rsc(rsc_file)
     if ext in SENTINEL_EXTS:
