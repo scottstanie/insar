@@ -72,7 +72,7 @@ create-dem -g data/hawaii_bigger.geojson --data-source AWS
 
 `--data-source NASA` is the default.
 
-Mapzen compbines SRTM data with outher sources, so it will be slightly different.
+Mapzen combines SRTM data with other sources, so the .hgt files will be slightly different.
 They also list that they are discontinuing some services, which is why NASA is the default.
 
 
