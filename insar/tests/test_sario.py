@@ -24,14 +24,20 @@ class TestLoading(unittest.TestCase):
         self.datapath = join(dirname(__file__), 'data')
         self.rsc_path = join(self.datapath, 'elevation.dem.rsc')
         self.ann_path = join(self.datapath, 'test.ann')
+        self.rsc_data = OrderedDict(
+            [('WIDTH', 2), ('FILE_LENGTH', 3), ('X_FIRST', -155.676388889), ('Y_FIRST',
+                                                                             19.5755555567),
+             ('X_STEP', 0.000138888888), ('Y_STEP', -0.000138888888), ('X_UNIT', 'degrees'),
+             ('Y_UNIT', 'degrees'), ('Z_OFFSET', 0), ('Z_SCALE', 1), ('PROJECTION', 'LL')])
 
     def test_load_dem_rsc(self):
-        expected = OrderedDict(
-            [('WIDTH', 7201), ('FILE_LENGTH', 3601), ('X_FIRST', -156.0), ('Y_FIRST', 20.0),
-             ('X_STEP', 0.000277777777), ('Y_STEP', -0.000277777777), ('X_UNIT', 'degrees'),
-             ('Y_UNIT', 'degrees'), ('Z_OFFSET', 0), ('Z_SCALE', 1), ('PROJECTION', 'LL')])
         rsc_data = sario.load_dem_rsc(self.rsc_path)
-        self.assertEqual(expected, rsc_data)
+        self.assertEqual(self.rsc_data, rsc_data)
+
+    def test_format_dem_rsc(self):
+        output = sario.format_dem_rsc(self.rsc_data)
+        read_file = open(self.rsc_path).read()
+        self.assertEqual(output, read_file)
 
     def test_parse_ann_file(self):
         ann_info = sario.parse_ann_file(self.ann_path, ext='.int', verbose=True)

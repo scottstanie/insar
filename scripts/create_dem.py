@@ -21,14 +21,14 @@ import json
 import sys
 import subprocess
 import os
-from os.path import abspath, dirname, join, exists
+from os.path import abspath, dirname, exists
 
 try:
     import insar
 except ImportError:  # add root to pythonpath if script is erroring
     sys.path.insert(0, dirname(dirname(abspath(__file__))))
 
-from insar.sario import load_file
+from insar.sario import format_dem_rsc
 from insar.utils import which
 import insar.dem
 import insar.geojson
@@ -104,7 +104,7 @@ def main():
         stitched_dem.tofile(dem_filename)
         logger.info("Writing .dem.rsc file to %s", rsc_filename)
         with open(rsc_filename, "w") as f:
-            f.write(s.format_dem_rsc(rsc_dict))
+            f.write(format_dem_rsc(rsc_dict))
         sys.exit(0)
 
     logger.info("Upsampling by {}".format(rate))
@@ -115,7 +115,7 @@ def main():
     stitched_dem.tofile(dem_filename_small)
     logger.info("Writing non-upsampled dem.rsc temporarily to %s", rsc_filename_small)
     with open(rsc_filename_small, "w") as f:
-        f.write(s.format_dem_rsc(rsc_dict))
+        f.write(format_dem_rsc(rsc_dict))
 
     # Now upsample this block
     nrows, ncols = stitched_dem.shape

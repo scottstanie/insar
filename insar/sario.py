@@ -24,7 +24,9 @@ UAVSAR_EXTS = ['.int', '.mlc', '.slc', '.amp', '.cor']
 
 # Note: .mlc can be either real or complex for UAVSAR
 # .amp files are real only for UAVSAR, complex for sentinel processing
-COMPLEX_EXTS = ['.amp', '.int', '.slc', '.geo', '.cc', '.unw', '.mlc']
+# However, we label them as real here since we can tell .amp files
+# are from sentinel if there exists .rsc files in the same dir
+COMPLEX_EXTS = ['.int', '.slc', '.geo', '.cc', '.unw', '.mlc']
 REAL_EXTS = ['.amp', '.cor', '.mlc']  # NOTE: .cor might only be real for UAVSAR
 
 # These file types are not simple complex matrices: see load_height for detail
@@ -187,6 +189,33 @@ def load_dem_rsc(filename):
                     output_data[field] = num_type(line.split()[1])
 
     return output_data
+
+
+def format_dem_rsc(rsc_dict):
+    """Creates the .dem.rsc file string from key/value pairs of an OrderedDict
+
+    Output of function can be written to a file as follows
+        with open('my.dem.rsc', 'w') as f:
+            f.write(outstring)
+
+    Args:
+        rsc_dict (OrderedDict): data about dem in ordered key/value format
+            See `load_dem_rsc` output for example
+
+    Returns:
+        outstring (str) formatting string to be written to .dem.rsc
+
+    """
+    outstring = ""
+    for field, value in rsc_dict.items():
+        # Files seemed to be left justified with 13 spaces? Not sure why 13
+        if field.lower() in ('x_step', 'y_step'):
+            # give step floats proper sig figs to not output scientific notation
+            outstring += "{field:<14s}{val:0.12f}\n".format(field=field.upper(), val=value)
+        else:
+            outstring += "{field:<14s}{val}\n".format(field=field.upper(), val=value)
+
+    return outstring
 
 
 def _get_file_rows_cols(ann_info=None, rsc_data=None):
