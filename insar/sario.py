@@ -16,12 +16,19 @@ from insar.log import get_log
 logger = get_log()
 
 FLOAT_32_LE = np.dtype('<f4')
+INT_16_LE = np.dtype('<i2')
+INT_16_BE = np.dtype('>i2')
+
 SENTINEL_EXTS = ['.geo', '.cc', '.int', '.amp', '.unw']
 UAVSAR_EXTS = ['.int', '.mlc', '.slc', '.amp', '.cor']
 
-# Note: .mlc can be either real or complex
-COMPLEX_EXTS = ['.int', '.slc', '.geo', '.cc', '.unw', '.mlc']
+# Note: .mlc can be either real or complex for UAVSAR
+# .amp files are real only for UAVSAR, complex for sentinel processing
+COMPLEX_EXTS = ['.amp', '.int', '.slc', '.geo', '.cc', '.unw', '.mlc']
 REAL_EXTS = ['.amp', '.cor', '.mlc']  # NOTE: .cor might only be real for UAVSAR
+
+# These file types are not simple complex matrices: see load_height for detail
+STACKED_FILES = ['.cc', '.unw']
 
 # For UAVSAR:
 REAL_POLs = ('HHHH', 'HVHV', 'VVVV')
@@ -53,6 +60,10 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
 
     Returns:
         np.array: a 2D array of the data from a file
+
+    Raises:
+        ValueError: if sentinel files loaded without a .rsc file in same path
+            to give the file width
     """
 
     def _find_rsc_file(filename, verbose=False):
@@ -62,6 +73,8 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
         if verbose:
             logger.info("Possible rsc files:")
             logger.info(possible_rscs)
+        if len(possible_rscs) < 1:
+            raise ValueError("{} needs a .rsc file with it for width info.".format(filename))
         return possible_rscs[0]
 
     ext = get_file_ext(filename)
@@ -82,11 +95,10 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
     if not ann_info and not rsc_data and ext in UAVSAR_EXTS:
         ann_info = parse_ann_file(filename, verbose=verbose)
 
-    if ext == '.unw':
-        return load_height(filename, rsc_data)
-    elif ext == '.cc':
-        return load_correlation(filename, rsc_data)
-    elif is_complex(filename):
+    if ext in STACKED_FILES:
+        return load_stacked(filename, rsc_data)
+    # having rsc_data implies that this is not a UAVSAR file, so is complex
+    elif rsc_data or is_complex(filename):
         return load_complex(filename, ann_info=ann_info, rsc_data=rsc_data)
     else:
         return load_real(filename, ann_info=ann_info, rsc_data=rsc_data)
@@ -234,10 +246,10 @@ def load_complex(filename, ann_info=None, rsc_data=None):
     return combine_real_imag(real_data, imag_data)
 
 
-def _load_stacked_file(filename, rsc_data):
+def load_stacked(filename, rsc_data, return_amp=False):
     """Helper function to load .unw and .cor files
 
-    Format is two matrices stacked:
+    Format is two stacked matrices:
         [[first], [second]] where the first "cols" number of floats
         are the first matrix, next "cols" are second, etc.
     For .unw height files, the first is amplitude, second is phase (unwrapped)
@@ -246,68 +258,38 @@ def _load_stacked_file(filename, rsc_data):
     Args:
         filename (str): path to the file to open
         rsc_data (dict): output from load_dem_rsc, gives width of file
+        return_amp (bool): flag to request the amplitude data to be returned
 
     Returns:
-        tuple (np.array, np.array), both dtype='float32: The first and second
-            matrices parsed out
+        np.array(float32): the second matrix (height, correlation, ...) parsed
+        if return_amp == True, returns a tuple (np.array, np.array)
+
+    Example illustrating how strips of data alternate:
+    reading unw (unwrapped phase) data
+
+    data = np.fromfile('20141128_20150503.unw', '<f4')
+
+    # The first section of data is amplitude data
+    # The amplitude has a different, larger range of values
+    amp = data[:cols]
+    print(np.max(amp), np.min(amp))
+    # Output: (27140.396, 118.341095)
+
+    # The next part of the data is a line of phases:
+    phase = data[cols:2*cols])
+    print(np.max(phase), np.min(phase))
+    # Output: (8.011558, -2.6779003)
     """
     data = np.fromfile(filename, FLOAT_32_LE)
     rows, cols = _get_file_rows_cols(rsc_data=rsc_data)
     _assert_valid_size(data, rows, cols)
 
-    # Using fortran reshaping
-    # first = data.reshape((2 * rows, cols), order='F')[:rows, :]
-    # second = data.reshape((2 * rows, cols), order='F')[rows:, :]
-
-    # If we used c, not fortran matrix ordering style:
     first = data.reshape((rows, 2 * cols))[:, :cols]
     second = data.reshape((rows, 2 * cols))[:, cols:]
-    return first, second
-
-
-def load_height(filename, rsc_data):
-    """Load unwrapped interferograms, the output of snaphu
-
-    Format is two vertically stacked matrices stacked: [[amp]; [phase]]
-
-    The first "ncols" values of data are from the first matrix, then from
-    data[ncols:2*ncols] are the second matrix.
-
-    Example: unw data is 778x947 complex data, read by np.fromfile
-    by reading in data type as '<f4', 4-byte floats
-
-    data = np.fromfile('20141128_20150503.unw', '<f4')
-    data.shape                      # Output: (1473532,)
-    num_rows = 778
-    data.shape[0] / (2 * num_rows)  # Output: 947.0
-
-    Args:
-        filename (str): path to the file to open
-        rsc_data (dict): output from load_dem_rsc, gives width of file
-
-    Returns:
-        np.array(np.dtype('float32')): unwrapped phase values
-    """
-    # don't care about the amplitude, so ignore it
-    amp, unwrapped_phase = _load_stacked_file(filename, rsc_data)
-    return unwrapped_phase
-
-
-def load_correlation(filename, rsc_data):
-    """Load the correlation file (.cc) for an interferogram (a .int)
-
-    Format is two hotizontally stacked matrices stacked: [[amp], [cor]]
-    Args:
-        filename (str): path to the file to open
-        rsc_data (dict): output from load_dem_rsc, gives width of file
-
-    Returns:
-        np.array(np.dtype('float32')): float values of correlation
-            Should be between 0 and 1 except for errors
-    """
-    # don't care about the amplitude, so ignore it
-    _, cor = _load_stacked_file(filename, rsc_data)
-    return cor
+    if return_amp:
+        return first, second
+    else:
+        return first
 
 
 def is_complex(filename):
@@ -354,19 +336,21 @@ def save_array(filename, amplitude_array):
     ext = get_file_ext(filename)
 
     if ext == '.png':  # TODO: or ext == '.jpg':
-        # TODO
         # from PIL import Image
         # im = Image.fromarray(amplitude_array)
         # im.save(filename)
         plt.imsave(filename, amplitude_array, cmap='gray', vmin=0, vmax=1, format=ext.strip('.'))
 
-    elif ext in ('.cor', '.amp', '.int', '.mlc', '.slc', '.unw'):
+    elif ext in COMPLEX_EXTS + REAL_EXTS and ext not in STACKED_FILES:
         # If machine order is big endian, need to byteswap (TODO: test on big-endian)
         # TODO: Do we need to do this at all??
         if not _is_little_endian():
             amplitude_array.byteswap(inplace=True)
 
         amplitude_array.tofile(filename)
+    elif ext in STACKED_FILES:
+        # TODO
+        raise NotImplementedError("{} saving not yet implemented (TODO).".format(ext))
     else:
         raise NotImplementedError("{} saving not implemented.".format(ext))
 

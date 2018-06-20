@@ -1,5 +1,4 @@
 import unittest
-import tempfile
 from os.path import join, dirname
 
 from datetime import date
