@@ -1,3 +1,5 @@
 nose
 twine
+coverage
+responses
 
