@@ -75,13 +75,14 @@ def get_valid_dates(orbit_dates):
     return [date + relativedelta(days=-1) for date in orbit_dates]
 
 
-def download_eofs(orbit_dates, missions=None):
+def download_eofs(orbit_dates, missions=None, save_dir="."):
     """Downloads and saves EOF files for specific dates
 
     Args:
         orbit_dates (list[str] or list[datetime.datetime])
         missions (list[str]): optional, to specify S1A or S1B
             No input downloads both, must be same len as orbit_dates
+        save_dir (str): directory to save the EOF files into
 
     Returns:
         None
@@ -118,7 +119,7 @@ def download_eofs(orbit_dates, missions=None):
         with ThreadPoolExecutor(max_workers=10) as executor:
             # Make a dict to refer back to which link is finished downloading
             future_to_link = {
-                executor.submit(_download_and_write, link): link
+                executor.submit(_download_and_write, link, save_dir): link
                 for link in eof_links
             }
             for future in as_completed(future_to_link):
@@ -126,7 +127,7 @@ def download_eofs(orbit_dates, missions=None):
     else:
         # Fall back for python 2:
         for link in eof_links:
-            _download_and_write(link)
+            _download_and_write(link, save_dir)
             logger.info('Finished {}'.format(link))
 
 
@@ -137,7 +138,7 @@ def eof_list(start_date):
         start_date (str or datetime): Year month day of validity start for orbit file
 
     Returns:
-        list: names of EOF files
+        list: urls of EOF files
 
     Raises:
         ValueError: if start_date returns no results
@@ -162,16 +163,17 @@ def eof_list(start_date):
     return [result['remote_url'] for result in response.json()['results']]
 
 
-def _download_and_write(link):
+def _download_and_write(link, save_dir="."):
     """Wrapper function to run the link downloading in parallel
 
     Args:
         link (str) url of EOF file to download
+        save_dir (str): directory to save the EOF files into
 
     Returns:
         None
     """
-    fname = link.split('/')[-1]
+    fname = os.path.join(save_dir, link.split('/')[-1])
     if os.path.isfile(fname):
         logger.info("%s already exists, skipping download.", link)
         return
