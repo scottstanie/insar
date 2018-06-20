@@ -29,7 +29,15 @@ POLARIZATIONS = REAL_POLs + COMPLEX_POLS
 
 
 def get_file_ext(filename):
-    """Extracts the file extension, including the '.' (e.g.: .slc)"""
+    """Extracts the file extension, including the '.' (e.g.: .slc)
+
+    Examples:
+        >>> print(get_file_ext('radarimage.slc'))
+        .slc
+        >>> print(get_file_ext('unwrapped.lowpass.unw'))
+        .unw
+
+    """
     return os.path.splitext(filename)[1]
 
 
@@ -133,6 +141,9 @@ def load_dem_rsc(filename):
     Args:
         filename (str) path to either the .dem or .dem.rsc file.
             Function will add .rsc to path if passed .dem file
+
+    Returns:
+        dict: dem.rsc file parsed out, keys are all caps
 
     example file:
     WIDTH         10801
