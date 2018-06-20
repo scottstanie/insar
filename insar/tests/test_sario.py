@@ -1,6 +1,8 @@
 import unittest
 from collections import OrderedDict
-from os.path import join, dirname
+import os
+from os.path import join, dirname, exists
+import shutil
 import numpy as np
 from numpy.testing import assert_array_almost_equal
 
@@ -13,9 +15,7 @@ class TestLoading(unittest.TestCase):
         self.datapath = join(dirname(__file__), 'data')
         self.rsc_path = join(self.datapath, 'elevation.dem.rsc')
         self.ann_path = join(self.datapath, 'test.ann')
-        self.geo_path = join(
-            self.datapath,
-            'S1A_IW_SLC__1SDV_20180420T043026_20180420T043054_021546_025211_81BE.SAFE.small.geo')
+        self.dem_path = join(self.datapath, 'elevation.dem')
         self.rsc_data = OrderedDict(
             [('WIDTH', 2), ('FILE_LENGTH', 3), ('X_FIRST', -155.676388889), ('Y_FIRST',
                                                                              19.5755555567),
@@ -90,10 +90,37 @@ class TestLoading(unittest.TestCase):
         self.assertRaises(AssertionError, sario._assert_valid_size, data, rows, 5 * cols)
 
     def test_load_file(self):
-        test_geo = sario.load_file(self.geo_path, verbose=True)
-        expected = np.array(
+        geo_path = join(
+            self.datapath,
+            'S1A_IW_SLC__1SDV_20180420T043026_20180420T043054_021546_025211_81BE.SAFE.small.geo')
+        loaded_geo = sario.load_file(geo_path, verbose=True)
+        expected_geo = np.array(
             [[-27.189274 - 60.105267j, -41.34938 + 82.05109j], [
                 58.716545 + 13.9955j, 68.892 - 42.065178j
             ], [41.361275 - 152.78986j, -65.905945 - 61.246834j]],
             dtype='complex64')
-        assert_array_almost_equal(expected, test_geo)
+        assert_array_almost_equal(expected_geo, loaded_geo)
+
+        loaded_dem = sario.load_file(self.dem_path, verbose=True)
+        expected_dem = np.array([[1413, 1413], [1414, 1414], [1415, 1415]], dtype='<i2')
+        assert_array_almost_equal(expected_dem, loaded_dem)
+
+    def test_save_elevation(self):
+        loaded_dem = sario.load_file(self.dem_path)
+        save_path = self.dem_path.replace('.dem', '_test.dem')
+
+        # Must copy the .dem.rsc as well
+        old_dem_rsc = self.dem_path + '.rsc'
+        new_dem_rsc = old_dem_rsc.replace('.dem', '_test.dem')
+        shutil.copyfile(old_dem_rsc, new_dem_rsc)
+
+        sario.save(save_path, loaded_dem)
+        self.assertTrue(exists(save_path))
+
+        reloaded_dem = sario.load_file(save_path)
+        assert_array_almost_equal(reloaded_dem, loaded_dem)
+
+        os.remove(new_dem_rsc)
+        os.remove(save_path)
+        self.assertFalse(exists(save_path))
+        self.assertFalse(exists(new_dem_rsc))
