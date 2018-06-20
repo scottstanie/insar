@@ -237,6 +237,7 @@ class Downloader:
         compress_type (str): format .hgt files are stored in online
         data_source (str): choices: NASA, AWS. See module docstring for explanation of sources
         parallel_ok (bool): true if using python3 or concurrent.futures installed
+        cache_dir (str): explcitly specify where to store .hgt files
 
     Raises:
         ValueError: if data_source not a valid source string
@@ -250,7 +251,12 @@ class Downloader:
     COMPRESS_TYPES = {'NASA': 'zip', 'AWS': 'gz'}
     NASAHOST = 'urs.earthdata.nasa.gov'
 
-    def __init__(self, tile_names, data_source='NASA', netrc_file='~/.netrc', parallel_ok=PARALLEL):
+    def __init__(self,
+                 tile_names,
+                 data_source='NASA',
+                 netrc_file='~/.netrc',
+                 parallel_ok=PARALLEL,
+                 cache_dir=None):
         self.tile_names = tile_names
         self.data_source = data_source
         if data_source not in self.VALID_SOURCES:
@@ -259,6 +265,7 @@ class Downloader:
         self.compress_type = self.COMPRESS_TYPES[data_source]
         self.netrc_file = os.path.expanduser(netrc_file)
         self.parallel_ok = parallel_ok
+        self.cache_dir = cache_dir or _get_cache_dir()
 
     def _get_netrc_file(self):
         return Netrc(self.netrc_file)
@@ -371,18 +378,19 @@ class Downloader:
                 response = session.get(r1.url, auth=(self.username, self.password))
 
         # Now check response for auth issues/ errors
+        if response.status_code == 404:
+            logger.error("Cannot find url: check latitudes/ longitudes of input bounding box.")
         response.raise_for_status()
         return response
 
-    @staticmethod
-    def _unzip_file(filepath):
+    def _unzip_file(self, filepath):
         """Unzips in place the .hgt files downloaded"""
         ext = sario.get_file_ext(filepath)
         if ext == '.gz':
             unzip_cmd = ['gunzip']
         elif ext == '.zip':
             # -o forces overwrite without prompt, -d specifices unzip directory
-            unzip_cmd = 'unzip -o -d {}'.format(_get_cache_dir()).split(' ')
+            unzip_cmd = 'unzip -o -d {}'.format(self.cache_dir).split(' ')
         subprocess.check_call(unzip_cmd + [filepath])
 
     def download_and_save(self, tile_name):
@@ -396,7 +404,7 @@ class Downloader:
             None
         """
         # keep all in one folder, compressed
-        local_filename = os.path.join(_get_cache_dir(), tile_name)
+        local_filename = os.path.join(self.cache_dir, tile_name)
         if os.path.exists(local_filename):
             logger.info("{} already exists, skipping.".format(local_filename))
         else:
@@ -411,7 +419,7 @@ class Downloader:
             self._unzip_file(local_filename)
 
     def _all_files_exist(self):
-        filepaths = [os.path.join(_get_cache_dir(), tile_name) for tile_name in self.tile_names]
+        filepaths = [os.path.join(self.cache_dir, tile_name) for tile_name in self.tile_names]
         return all(os.path.exists(f) for f in filepaths)
 
     def download_all(self):
