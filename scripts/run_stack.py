@@ -47,6 +47,9 @@ def download_eof(*a):
 def create_dem(args):
     """2. Download, upsample, and stich a DEM"""
     create_dem_exe = which('create-dem')
+    if not args.geojson:
+        logger.error("For step 2: create_dem, --geojson is needed.")
+        sys.exit(1)
     dem_cmd = '{} -g {} -r {}'.format(create_dem_exe, args.geojson, args.rate)
     logger.info("Running: %s", dem_cmd)
     subprocess.check_call(dem_cmd, shell=True)
@@ -107,11 +110,14 @@ def convert_int_tif(*a):
     subprocess.call(convert1, shell=True)
 
 
-def run_snaphu(*a):
+def run_snaphu(args):
     """8. run snaphu to unwrap all .int files"""
     # TODO: probably shouldn't call these like this? idk alternative right now
     igram_rsc = insar.sario.load_dem_rsc('dem.rsc')
-    subprocess.call('~/repos/insar/scripts/run_snaphu.sh {}'.format(igram_rsc['WIDTH']), shell=True)
+    subprocess.call(
+        '~/repos/insar/scripts/run_snaphu.sh {width} {lowpass}'.format(
+            width=igram_rsc['WIDTH'], lowpass=args.lowpass),
+        shell=True)
 
 
 def convert_snaphu_tif(args):
@@ -141,13 +147,12 @@ def get_cli_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--working-dir", "-d", default=".", help="Directory where sentinel .zip are located")
-    parser.add_argument(
-        "--geojson", "-g", required=True, help="File containing the geojson object for DEM bounds")
+    parser.add_argument("--geojson", "-g", help="File containing the geojson object for DEM bounds")
     parser.add_argument(
         "--rate",
         "-r",
         type=int,
-        required=True,
+        default=1,
         help="Rate at which to upsample DEM (default=1, no upsampling)")
     parser.add_argument(
         "--max-height",
@@ -173,6 +178,11 @@ def get_cli_args():
         type=int,
         default=500,
         help="Maximum spatial baseline for igrams (fed to sbas_list)")
+    parser.add_argument(
+        "--lowpass",
+        type=int,
+        default=1,
+        help="Size of lowpass filter to use on igrams before unwrapping")
     return parser.parse_args()
 
 
