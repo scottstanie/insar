@@ -108,8 +108,6 @@ class TestEOF(unittest.TestCase):
             eof.download_eofs(orbit_dates, save_dir=temp_dir)
             self.assertTrue(os.path.exists(eof_path))
 
-            print(eof_path)
-            print('TEMO')
             # Now read the file and make sure it's the same
             with open(eof_path) as f:
                 eof_contents = f.read()
