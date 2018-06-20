@@ -634,50 +634,6 @@ class Stitcher:
         rsc_dict.update({'X_STEP': x_step, 'Y_STEP': y_step})
         return rsc_dict
 
-    def format_dem_rsc(self, rsc_dict):
-        """Creates the .dem.rsc file string from key/value pairs of an OrderedDict
-
-        Output of function can be written to a file as follows
-            with open('my.dem.rsc', 'w') as f:
-                f.write(outstring)
-
-        Args:
-            rsc_dict (OrderedDict): data about dem in ordered key/value format
-                See `create_dem_rsc` output for example
-
-        Returns:
-            outstring (str) formatting string to be written to .dem.rsc
-
-        Example:
-            >>> s = Stitcher(['N19W156.hgt', 'N19W155.hgt'])
-            >>> rsc_dict = s.create_dem_rsc()
-            >>> print(s.format_dem_rsc(rsc_dict))
-            WIDTH         7201
-            FILE_LENGTH   3601
-            X_FIRST       -156.0
-            Y_FIRST       20.0
-            X_STEP        0.000277777777
-            Y_STEP        -0.000277777777
-            X_UNIT        degrees
-            Y_UNIT        degrees
-            Z_OFFSET      0
-            Z_SCALE       1
-            PROJECTION    LL
-            <BLANKLINE>
-
-        Note: ^^ <BLANKLINE> is doctest's way of saying it ends in newline
-        """
-        outstring = ""
-        for field, value in rsc_dict.items():
-            # Files seemed to be left justified with 13 spaces? Not sure why 13
-            if field.lower() in ('x_step', 'y_step'):
-                # give step floats proper sig figs to not output scientific notation
-                outstring += "{field:<14s}{val:0.12f}\n".format(field=field.upper(), val=value)
-            else:
-                outstring += "{field:<14s}{val}\n".format(field=field.upper(), val=value)
-
-        return outstring
-
 
 def _up_size(cur_size, rate):
     """Calculates the number of points to be computed in the upsampling
