@@ -26,22 +26,7 @@ fi
 # aka linelength aka xsize aka number of samples in one range line
 WIDTH=$1
 
-if [ "$#" -lt 2 ] || [ $2 -lt 2 ]  # If boxsize not passed, or boxsize < 2
-then
-	echo "Skipping low pass filter"
-	SNAFU_FILE_EXT=".int"
-else
-	BOX_SIZE=$2
-	LOW_PASS=~/phase_upwrap/bin/lowpass
-	echo "Running $LOWPASS with box size $BOX_SIZE"
-
-	for FILE in $(find . -name "*.int"); do
-		$LOW_PASS $FILE $WIDTH $BOX_SIZE
-	done
-	SNAFU_FILE_EXT=".int.lowpass"
-fi
-
-# If they didn't pass in third arg:
+# If they didn't pass in third arg for numver of jobs:
 if [ "$#" -lt 3 ]
 then
 	# Get the number of cores (at least on linux): if it fails, use 4
@@ -52,6 +37,23 @@ fi
 echo "Running with number of jobs=$MAX_PROCS "
 
 
+# If boxsize not passed, or boxsize < 2
+if [ "$#" -lt 2 ] || [ $2 -lt 2 ]
+then
+	echo "Skipping low pass filter"
+	SNAFU_FILE_EXT=".int"
+else
+	BOX_SIZE=$2
+	LOWPASS=~/phase_upwrap/bin/lowpass
+	echo "Running $LOWPASS with box size $BOX_SIZE"
+
+	# For loop is faster for the fortran program than xargs
+	for FILE in $(find . -name "*.int"); do
+		$LOWPASS $FILE $WIDTH $BOX_SIZE
+	done
+	SNAFU_FILE_EXT=".int.lowpass"
+fi
+
 # Call snaphu with each file name matched by SNAFU_FILE_EXT, and pass WIDTH to each call
-find . -name "*${SNAFU_FILE_EXT}" | xargs --max-procs=$MAX_PROCS -I {} $SHELL -c 'call_snaphu {} '"$WIDTH"' '
+find . -name "*${SNAFU_FILE_EXT}" | xargs --max-procs=$MAX_PROCS -I {} $SHELL -c "call_snaphu {} $WIDTH"
 
