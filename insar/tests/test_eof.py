@@ -72,12 +72,13 @@ class TestEOF(unittest.TestCase):
             open(name2, 'w').close()
             orbit_dates, missions = eof.find_sentinel_products(startpath=temp_dir)
 
-            self.assertEqual(orbit_dates, [
-                datetime.datetime(2018, 4, 20, 4, 30, 26),
-                datetime.datetime(2018, 5, 2, 4, 30, 26)
-            ])
+            self.assertEqual(
+                sorted(orbit_dates), [
+                    datetime.datetime(2018, 4, 20, 4, 30, 26),
+                    datetime.datetime(2018, 5, 2, 4, 30, 26)
+                ])
 
-            self.assertEqual(missions, ['S1A', 'S1B'])
+            self.assertEqual(sorted(missions), ['S1A', 'S1B'])
         except Exception:
             raise
         finally:
