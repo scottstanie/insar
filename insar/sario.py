@@ -19,8 +19,9 @@ FLOAT_32_LE = np.dtype('<f4')
 SENTINEL_EXTS = ['.geo', '.cc', '.int', '.amp', '.unw']
 UAVSAR_EXTS = ['.int', '.mlc', '.slc', '.amp', '.cor']
 
-COMPLEX_EXTS = ['.int', '.mlc', '.slc', '.geo', '.cc', '.unw']
-REAL_EXTS = ['.amp', '.cor']  # NOTE: .cor might only be real for UAVSAR
+# Note: .mlc can be either real or complex
+COMPLEX_EXTS = ['.int', '.slc', '.geo', '.cc', '.unw', '.mlc']
+REAL_EXTS = ['.amp', '.cor', '.mlc']  # NOTE: .cor might only be real for UAVSAR
 
 # For UAVSAR:
 REAL_POLs = ('HHHH', 'HVHV', 'VVVV')
@@ -372,7 +373,18 @@ def save_array(filename, amplitude_array):
 
 # TODO: possibly separate into a "parser" file
 def make_ann_filename(filename):
-    """Take the name of a data file and return corresponding .ann name"""
+    """Take the name of a data file and return corresponding .ann name
+
+    Examples:
+        >>> print(make_ann_filename('brazos.cor'))
+        brazos.ann
+        >>> print(make_ann_filename('brazos.1.int'))
+        brazos.ann
+        >>> print(make_ann_filename('brazos_090HHHV_CX_01.mlc'))
+        brazos_090_CX_01.ann
+        >>> print(make_ann_filename('brazos_090HHVV_CX_01.mlc'))
+        brazos_090_CX_01.ann
+    """
 
     # The .mlc files have polarization added to filename, .ann files don't
     shortname = filename
