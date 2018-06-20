@@ -19,6 +19,9 @@ Example EOF: 'S1A_OPER_AUX_POEORB_OPOD_20140828T122040_V20140806T225944_20140808
 Full EOF sentinel doumentation:
 https://earth.esa.int/documents/247904/349490/GMES_Sentinels_POD_Service_File_Format_Specification_GMES-GSEG-EOPG-FS-10-0075_Issue1-3.pdf
 
+API documentation: https://qc.sentinel1.eo.esa.int/doc/api/
+
+See insar.parsers for Sentinel file naming description
 """
 try:
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -27,17 +30,23 @@ except ImportError:  # Python 2 doesn't have this :(
     CONCURRENT = False
 
 import os
+import glob
 import itertools
 import requests
 
-import bs4
+from datetime import timedelta
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
 from insar.log import get_log
+from insar.parsers import Sentinel
 
 logger = get_log()
 
-BASE_URL = "https://qc.sentinel1.eo.esa.int/aux_poeorb/"
+# BASE_URL = "https://qc.sentinel1.eo.esa.int/aux_poeorb/"
+BASE_URL = "https://qc.sentinel1.eo.esa.int/api/v1/?product_type=AUX_POEORB&validity_start__lt={start_date}&validity_stop__gt={stop_date}"
+DATE_FMT = "%Y-%m-%d"  # Used in sentinel API url
+
+#
 
 
 def get_valid_dates(orbit_dates):
@@ -88,7 +97,8 @@ def download_eofs(orbit_dates, missions=None):
     if not missions:
         missions = itertools.repeat(None)
 
-    validity_dates = get_valid_dates(orbit_dates)
+    validity_dates = list(set(orbit_dates))
+    # validity_dates = get_valid_dates(orbit_dates)
 
     eof_links = []
     for mission, date in zip(missions, validity_dates):
@@ -100,7 +110,7 @@ def download_eofs(orbit_dates, missions=None):
             continue
 
         if mission:
-            cur_links = [link for link in cur_links if link.startswith(mission)]
+            cur_links = [link for link in cur_links if mission in link]
         eof_links.extend(cur_links)
 
     if CONCURRENT:
@@ -136,35 +146,61 @@ def eof_list(start_date):
         start_date = parse(start_date)
 
     # TODO: maybe responses library for tests?
-    url = BASE_URL + '?validity_start_time={}'.format(start_date.strftime('%Y-%m-%d'))
+    # url = BASE_URL + '?validity_start_time={}'.format(start_date.strftime('%Y-%m-%d'))
+    url = BASE_URL.format(
+        start_date=start_date.strftime(DATE_FMT),
+        stop_date=(start_date + timedelta(days=1)).strftime(DATE_FMT),
+    )
+    logger.info("Searching for EOFs at {}".format(url))
     response = requests.get(url)
     response.raise_for_status()
 
-    soup = bs4.BeautifulSoup(response.text, 'html.parser')
-    try:
-        links = soup.find_all('a', href=lambda link: link.endswith('.EOF'))
-    except AttributeError:  # NoneType has no attribute .endswith
+    if response.json()['count'] < 1:
         raise ValueError('No EOF files found for {} at {}'.format(
-            start_date.strftime('%Y-%m-%d'), url))
+            start_date.strftime(DATE_FMT), url))
 
-    return [link.text for link in links]
+    return [result['remote_url'] for result in response.json()['results']]
 
 
 def _download_and_write(link):
     """Wrapper function to run the link downloading in parallel
 
     Args:
-        link (str) name of EOF file to download
+        link (str) url of EOF file to download
 
     Returns:
         None
     """
-    if os.path.isfile(link):
+    fname = link.split('/')[-1]
+    if os.path.isfile(fname):
         logger.info("%s already exists, skipping download.", link)
         return
 
-    logger.info("Downloading and saving %s", link)
-    response = requests.get(BASE_URL + link)
+    logger.info("Downloading %s, saving to %s", link, fname)
+    response = requests.get(link)
     response.raise_for_status()
-    with open(link, 'wb') as f:
+    with open(fname, 'wb') as f:
         f.write(response.content)
+
+
+def find_sentinel_products(startpath='./'):
+    """Parse the startpath directory for any Sentinel 1 products' date and mission"""
+    orbit_dates = []
+    missions = []
+    for filename in glob.glob(os.path.join(startpath, "S1*")):
+        try:
+            parser = Sentinel(filename)
+        except ValueError:  # Doesn't match a sentinel file
+            logger.info('Skipping {}'.format(filename))
+            continue
+
+        start_date = parser.start_time()
+        mission = parser.mission()
+        if start_date in orbit_dates:
+            continue
+        logger.info("Downloading precise orbits for {} on {}".format(
+            mission, start_date.strftime('%Y-%m-%d')))
+        orbit_dates.append(start_date)
+        missions.append(mission)
+
+    return orbit_dates, missions
