@@ -28,6 +28,7 @@ UAVSAR_EXTS = ['.int', '.mlc', '.slc', '.amp', '.cor']
 # are from sentinel if there exists .rsc files in the same dir
 COMPLEX_EXTS = ['.int', '.slc', '.geo', '.cc', '.unw', '.mlc']
 REAL_EXTS = ['.amp', '.cor', '.mlc']  # NOTE: .cor might only be real for UAVSAR
+ELEVATION_EXTS = ['.dem', '.hgt']
 
 # These file types are not simple complex matrices: see load_height for detail
 STACKED_FILES = ['.cc', '.unw']
@@ -80,7 +81,7 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
         return possible_rscs[0]
 
     ext = get_file_ext(filename)
-    if ext in ('.hgt', '.dem'):
+    if ext in ELEVATION_EXTS:
         return load_elevation(filename)
 
     # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
@@ -376,7 +377,7 @@ def save(filename, array):
         # im.save(filename)
         plt.imsave(filename, array, cmap='gray', vmin=0, vmax=1, format=ext.strip('.'))
 
-    elif ext in COMPLEX_EXTS + REAL_EXTS and ext not in STACKED_FILES:
+    elif (ext in COMPLEX_EXTS + REAL_EXTS + ELEVATION_EXTS) and (ext not in STACKED_FILES):
         # If machine order is big endian, need to byteswap (TODO: test on big-endian)
         # TODO: Do we need to do this at all??
         if not _is_little_endian():
