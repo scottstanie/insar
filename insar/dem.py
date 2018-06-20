@@ -67,6 +67,7 @@ try:
     input = raw_input  # Check for python 2
 except NameError:
     pass
+
 logger = get_log()
 RSC_KEYS = [
     'WIDTH',
@@ -94,6 +95,20 @@ def _get_cache_dir():
     if not os.path.exists(path):
         os.makedirs(path)
     return path
+
+
+def _get_username_pass():
+    """If netrc is not set up, get command line username and password"""
+    print("====================================================================")
+    print("Please enter NASA Earthdata credentials to download NASA hosted STRM.")
+    print("See https://urs.earthdata.nasa.gov/users/new for signup info.")
+    print("Or choose data_source=AWS for Mapzen tiles.")
+    print("===========================================")
+    username = input("Username: ")
+    password = getpass.getpass(prompt="Password (will not be displayed): ")
+    save_to_netrc = input(
+        "Would you like to save these to ~/.netrc (machine={}) for future use (y/n)?  ".format(
+            Downloader.NASAHOST))
 
 
 class Netrc(netrc.netrc):
@@ -203,10 +218,7 @@ class Tile:
             >>> bounds = [-156.0, 19.0, -154.0, 20.0]  # Show int bounds
             >>> list(d.srtm1_tile_names())
             ['N19W156.hgt', 'N19W155.hgt']
-
-
         """
-
         left, bottom, right, top = self.bounds
         left_int, top_int = self.srtm1_tile_corner(left, top)
         right_int, bot_int = self.srtm1_tile_corner(right, bottom)
@@ -279,20 +291,6 @@ class Downloader:
         except (OSError, IOError):
             return False
 
-    @staticmethod
-    def _get_username_pass():
-        """If netrc is not set up, get command line username and password"""
-        print("====================================================================")
-        print("Please enter NASA Earthdata credentials to download NASA hosted STRM.")
-        print("See https://urs.earthdata.nasa.gov/users/new for signup info.")
-        print("Or choose data_source=AWS for Mapzen tiles.")
-        print("===========================================")
-        username = input("Username: ")
-        password = getpass.getpass(prompt="Password (will not be displayed): ")
-        save_to_netrc = input(
-            "Would you like to save these to ~/.netrc (machine={}) for future use (y/n)?  ".format(
-                Downloader.NASAHOST))
-
         return username, password, save_to_netrc.lower().startswith('y')
 
     @staticmethod
@@ -308,7 +306,7 @@ class Downloader:
 
         If the user wants to save as .netrc, add to existing, or create new ~/.netrc
         """
-        username, password, do_save = self._get_username_pass()
+        username, password, do_save = _get_username_pass()
         if do_save:
             try:
                 # If they have a netrc existing, add to it
