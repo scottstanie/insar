@@ -5,7 +5,6 @@ Most functions will be stuck in here until there's a more sensible module.
 Email: scott.stanie@utexas.edu
 """
 from __future__ import division
-import argparse
 import math
 import errno
 import os
@@ -95,7 +94,7 @@ def split_array_into_blocks(data):
         blocks (list[np.ndarray])
     """
     rows, cols = data.shape
-    blocks = np.array_split(data, rows // cols + 1)
+    blocks = np.array_split(data, np.ceil(rows / cols))
     return blocks
 
 
