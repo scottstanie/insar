@@ -148,13 +148,24 @@ def invert_sbas(geolist, intlist, dphi_array):
     return velocity_array, np.cumsum(phi_diffs)
 
 
-def read_unw_list(intlist, row, column):
+def read_unw_list(intlist, row, col, ref_row, ref_col):
     # row 283, col 493 looks like a good test
     igrams = read_intlist(intlist, parse=False)
     num_ints = len(igrams)
     pixel_phase_arr = np.zeros((num_ints, 1))
     for idx, igram_file in enumerate(igrams):
         unw_file = igram_file.replace('.int', '.unw')
-        pixel_phase = sario.load_file(unw_file)[row, column]
+        cur_unw = sario.load_file(unw_file)
+        pixel_phase = cur_unw[row, col] - cur_unw[ref_row, ref_col]
         pixel_phase_arr[idx] = pixel_phase
     return pixel_phase_arr
+
+
+def run_inversion(igram_path, pixel=(283, 493), reference=(483, 493)):
+    intlist_path = os.path.join(igram_path, 'intlist')
+    geolist_path = os.path.join(igram_path, 'geolist')
+    intlist = read_intlist(filepath=intlist_path)
+    geolist = read_geolist(filepath=geolist_path)
+    unw_arr = read_unw_list(intlist_path, pixel[0], pixel[1], *reference)
+    varr, phiarr = invert_sbas(geolist, intlist, unw_arr)
+    return varr, phiarr
