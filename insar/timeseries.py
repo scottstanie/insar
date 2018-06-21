@@ -167,5 +167,11 @@ def run_inversion(igram_path, pixel=(283, 493), reference=(483, 493)):
     intlist = read_intlist(filepath=intlist_path)
     geolist = read_geolist(filepath=geolist_path)
     unw_arr = read_unw_list(intlist_path, pixel[0], pixel[1], *reference)
+
     varr, phiarr = invert_sbas(geolist, intlist, unw_arr)
-    return varr, phiarr
+
+    # Add 0 as first entry of phase array to match geolist length
+    phiarr = np.insert(phiarr, 0, 0)
+    deformation = PHASE_TO_CM * phiarr
+
+    return geolist, phiarr, deformation, varr
