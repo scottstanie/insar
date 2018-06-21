@@ -79,8 +79,6 @@ class TestEOF(unittest.TestCase):
                 ])
 
             self.assertEqual(sorted(missions), ['S1A', 'S1B'])
-        except Exception:
-            raise
         finally:
             # Clean up temp dir
             shutil.rmtree(temp_dir)

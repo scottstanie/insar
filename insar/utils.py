@@ -31,7 +31,7 @@ def mkdir_p(path):
 
 
 def which(program):
-    """Mimic UNIX which, but for the python sys.path
+    """Mimics UNIX which
 
     Used from https://stackoverflow.com/a/377028"""
 
@@ -159,20 +159,3 @@ def combine_cor_amp(corfilename, save=True):
     outfilename = corfilename.replace('.cor', '_withamp.cor')
     insar.sario.save(outfilename, cor_with_amp)
     return cor_with_amp, outfilename
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("command", type=str, help="Specify command to run on file.")
-    parser.add_argument("filename", type=str, help="Specify the input UAVSAR filename")
-    args = parser.parse_args()
-
-    if args.command == 'info':
-        ann_data = insar.sario.parse_ann_file(args.filename)
-        print(ann_data)
-    elif args.command == 'split':
-        split_and_save(args.filename)
-
-
-if __name__ == "__main__":
-    main()
