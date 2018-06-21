@@ -68,6 +68,74 @@ class TestDownload(unittest.TestCase):
         shutil.rmtree(self.cache_dir)
 
 
+class TestRsc(unittest.TestCase):
+    def setUp(self):
+        self.rsc_path = join(DATAPATH, 'elevation.dem.rsc')
+        # Sample dict with only lat/lon info
+        self.test_rsc_data = {
+            "WIDTH": 4,
+            "FILE_LENGTH": 2,
+            "X_FIRST": -10.0,
+            "Y_FIRST": 3.0,
+            "X_STEP": 0.25,
+            "Y_STEP": -0.25
+        }
+
+    def test_upsample_dem_rsc(self):
+        # Test input checking
+        self.assertRaises(
+            TypeError,
+            dem.upsample_dem_rsc,
+            rate=2,
+            rsc_dict={'something': 1},
+            rsc_filepath=self.rsc_path)
+        self.assertRaises(TypeError, dem.upsample_dem_rsc, rate=2)
+        self.assertRaises(TypeError, dem.upsample_dem_rsc, rsc_filepath=self.rsc_path)  # Need rate
+
+        up_rsc = dem.upsample_dem_rsc(rate=2, rsc_filepath=self.rsc_path)
+        expected = """\
+WIDTH         3
+FILE_LENGTH   5
+X_FIRST       -155.676388889
+Y_FIRST       19.5755555567
+X_STEP        0.000069444444
+Y_STEP        -0.000069444444
+X_UNIT        degrees
+Y_UNIT        degrees
+Z_OFFSET      0
+Z_SCALE       1
+PROJECTION    LL
+"""
+
+        self.assertEqual(expected, up_rsc)
+
+    def test_rsc_bounds(self):
+        expected = {'north': 3.0, 'south': 2.5, 'west': -10.0, 'east': -9.0}
+        self.assertEqual(expected, dem.rsc_bounds(self.test_rsc_data))
+
+    def test_create_kml(self):
+        expected = """\ 
+<?xml version="1.0" encoding="UTF-8"?> 
+<kml xmlns="http://earth.google.com/kml/2.2"> 
+<GroundOverlay> 
+    <name> test_title </name> 
+    <description> my desc </description> 
+    <Icon> 
+          <href> out.tif </href> 
+    </Icon> 
+    <LatLonBox> 
+        <north> 3.0 </north> 
+        <south> 2.5 </south> 
+        <east> -9.0 </east> 
+        <west> -10.0 </west> 
+    </LatLonBox> 
+</GroundOverlay> 
+</kml> 
+"""
+        tifname = "out.tif"
+        output = dem.create_kml(self.test_rsc_data, tifname)
+
+
 """
 TODO:
     finish cropped, upsampled dem, show  this:

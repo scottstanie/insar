@@ -61,7 +61,6 @@ class TestHelpers(unittest.TestCase):
             os.environ["PATH"] += os.pathsep + temp_dir
             test_exe = 'test_exe'
             test_exe_full = os.path.join(temp_dir, test_exe)
-            print(os.environ["PATH"])
             # Create temp file,
             open(test_exe_full, 'a').close()
             # Make it executable
