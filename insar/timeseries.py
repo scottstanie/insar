@@ -19,7 +19,7 @@ from insar.parsers import Sentinel
 from insar import sario
 
 SENTINEL_WAVELENGTH = 5.5465763  # cm
-PHASE_TO_CM = SENTINEL_WAVELENGTH / (4 * np.pi)
+PHASE_TO_CM = SENTINEL_WAVELENGTH / (-4 * np.pi)
 
 
 def read_geolist(filepath="./geolist"):
@@ -140,6 +140,7 @@ def invert_sbas(geolist, intlist, dphi_array):
     # Velocity will be result of the inversion
     velocity_array, _, rank_B, sing_vals_B = np.linalg.lstsq(B, dphi_array, rcond=None)
     # velocity array entries: v_j = (phi_j - phi_j-1)/(t_j - t_j-1)
+    velocity_array = np.squeeze(velocity_array)  # Remove singleton dim
 
     # Now integrate to get back to phases
     timediffs = find_time_diffs(geolist)
