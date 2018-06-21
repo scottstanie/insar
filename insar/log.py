@@ -120,25 +120,3 @@ def log_runtime(f):
         return result
 
     return wrapper
-
-
-if __name__ == '__main__':
-    # Example usage
-    p = argparse.ArgumentParser()
-    p.add_argument('--debug', action='store_true', required=False, help='Show debug output')
-
-    args = p.parse_args()
-    debug = args.debug or False
-
-    log = get_log(debug=debug)
-
-    log.critical('Sample critical')
-    try:
-        print(1 / 0)
-    except ZeroDivisionError:
-        log.exception('Sample exception (prints traceback by default)')
-        log.error('Sample error (uses exc_info for traceback)', exc_info=True)
-    log.error('Other kind of error.')
-    log.warning('Sample warning')
-    log.success('Sample SUCCESS!')
-    log.debug('Sample debug')
