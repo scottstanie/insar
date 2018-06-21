@@ -1,6 +1,6 @@
 nose
 twine
-coverage
+coveralls
 responses
 mock
 
