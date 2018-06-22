@@ -16,7 +16,6 @@ import os
 import datetime
 import numpy as np
 import matplotlib.pyplot as plt
-import time
 from insar.parsers import Sentinel
 from insar import sario
 
@@ -102,7 +101,12 @@ def build_A_matrix(geolist, intlist):
 def find_time_diffs(geolist):
     """Finds the number of days between successive .geo files
 
-    Output length is a np.array of length len(geolist) - 1"""
+    Args:
+        geolist (list[date]): dates of the .geo SAR acquisitions
+
+    Returns:
+        np.array: days between each datetime in geolist
+            dtype=int, length is a len(geolist) - 1"""
     return np.array([difference.days for difference in np.diff(geolist)])
 
 
@@ -110,11 +114,11 @@ def build_B_matrix(geolist, intlist):
     """Takes the list of igram dates and builds the SBAS B (velocity coeff) matrix
 
     Args:
-        geolist (list[date]): dates of the .geo acquisitions
+        geolist (list[date]): dates of the .geo SAR acquisitions
         intlist (list[tuple(date, date)])
 
     Returns:
-        np.array: 2D array of the velocity coefficient matrix from the SBAS paper: 
+        np.array: 2D array of the velocity coefficient matrix from the SBAS paper:
                 Bv = dphi
             Each row corresponds to an igram, each column to a .geo
             value will be t_k+1 - t_k for columns after the -1 in A,
@@ -138,20 +142,7 @@ def build_B_matrix(geolist, intlist):
     return B
 
 
-def invert_sbas(geolist, intlist, dphi_array):
-    B = build_B_matrix(geolist, intlist)
-    # Velocity will be result of the inversion
-    velocity_array, _, rank_B, sing_vals_B = np.linalg.lstsq(B, dphi_array, rcond=None)
-    # velocity array entries: v_j = (phi_j - phi_j-1)/(t_j - t_j-1)
-    velocity_array = np.squeeze(velocity_array)  # Remove singleton dim
-
-    # Now integrate to get back to phases
-    timediffs = find_time_diffs(geolist)
-    phi_diffs = timediffs * velocity_array
-    return velocity_array, np.cumsum(phi_diffs)
-
-
-def read_unw_list(igram_path, ref_row, ref_col):
+def read_unw_stack(igram_path, ref_row, ref_col):
     """Reads all unwrapped phase .unw files into unw_stack
 
     Uses ref_row, ref_col as the normalizing point (subtracts
@@ -194,7 +185,7 @@ def display_stack(array_stack, pause_time=0.05):
     """Runs a matplotlib loop to show each image in a 3D stack
 
     Args:
-        array_stack (ndarray): 3D np.ndarray 
+        array_stack (ndarray): 3D np.ndarray
         pause_time (float): time between images
 
     Returns:
@@ -211,16 +202,46 @@ def display_stack(array_stack, pause_time=0.05):
         plt.pause(pause_time)
 
 
-def run_inversion(igram_path, pixel=(283, 493), reference=(483, 493)):
+def invert_sbas(dphis, timediffs, B):
+    """Performs and SBAS inversion on each pixel of unw_stack to find deformation
+
+    Args:
+        dphis (ndarray): 1D array of unwrapped phases (delta phis)
+            comes from 1 pixel of read_unw_stack along 3rd axis
+        B (ndarray): output of build_B_matrix for current set of igrams
+        timediffs (np.array): dtype=int, days between each SAR acquisitions
+            length will be equal to B.shape[1], 1 less than num SAR acquisitions
+
+    """
+    assert B.shape[1] == len(timediffs)
+
+    # Velocity will be result of the inversion
+    velocity_array, _, rank_B, sing_vals_B = np.linalg.lstsq(B, dphis, rcond=None)
+    # velocity array entries: v_j = (phi_j - phi_j-1)/(t_j - t_j-1)
+    velocity_array = np.squeeze(velocity_array)  # Remove singleton dim
+
+    # Now integrate to get back to phases
+    phi_diffs = timediffs * velocity_array
+    return velocity_array, np.cumsum(phi_diffs)
+
+
+def run_inversion(igram_path, reference=(483, 493)):
     intlist_path = os.path.join(igram_path, 'intlist')
     geolist_path = os.path.join(igram_path, 'geolist')
 
     intlist = read_intlist(filepath=intlist_path)
     geolist = read_geolist(filepath=geolist_path)
 
-    unw_arr = read_unw_list(intlist_path, *reference)
+    unw_stack = read_unw_stack(igram_path, *reference)
 
-    varr, phiarr = invert_sbas(geolist, intlist, unw_arr)
+    # Prepare B matrix and timediffs used for each pixel inversion
+    B = build_B_matrix(geolist, intlist)
+    timediffs = find_time_diffs(geolist)
+
+    for idx in range(unw_stack.shape[0]):
+        for jdx in range(unw_stack.shape[1]):
+            dphis = unw_stack[idx, jdx]
+            varr, phiarr = invert_sbas(dphis, timediffs, B)
 
     # Add 0 as first entry of phase array to match geolist length
     phiarr = np.insert(phiarr, 0, 0)
