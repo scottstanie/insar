@@ -564,7 +564,7 @@ class Stitcher:
         TODO: break this up to more testable chunks
 
         Returns:
-            numpy.array: the stitched .hgt tiles in 2D np.array
+            ndarray: the stitched .hgt tiles in 2D np.array
         """
         row_list = []
         # ncols in the number of .hgt blocks wide

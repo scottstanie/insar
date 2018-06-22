@@ -54,7 +54,7 @@ def downsample_im(image, rate=10):
     """Takes a numpy matrix of an image and returns a smaller version
 
     Args:
-        image (np.array) 2D array of an image
+        image (ndarray) 2D array of an image
         rate (int) the reduction rate to downsample
     """
     return image[::rate, ::rate]

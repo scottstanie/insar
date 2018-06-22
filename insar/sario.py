@@ -62,7 +62,7 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
         verbose (bool): print extra logging info while loading files
 
     Returns:
-        np.array: a 2D array of the data from a file
+        ndarray: a 2D array of the data from a file
 
     Raises:
         ValueError: if sentinel files loaded without a .rsc file in same path
@@ -247,7 +247,7 @@ def load_real(filename, ann_info=None, rsc_data=None):
         ann_info (dict): data parsed from UAVSAR annotation file
 
     Returns:
-        np.array(float32) float values for the real 2D matrix
+        ndarray: float32 values for the real 2D matrix
 
     """
     data = np.fromfile(filename, FLOAT_32_LE)
@@ -267,7 +267,7 @@ def load_complex(filename, ann_info=None, rsc_data=None):
         ann_info (dict): data parsed from UAVSAR annotation file
 
     Returns:
-        np.array(np.dtype('complex64')): imaginary numbers of the combined floats
+        ndarray: imaginary numbers of the combined floats (dtype('complex64'))
     """
     data = np.fromfile(filename, FLOAT_32_LE)
     rows, cols = _get_file_rows_cols(ann_info=ann_info, rsc_data=rsc_data)
@@ -292,8 +292,8 @@ def load_stacked(filename, rsc_data, return_amp=False):
         return_amp (bool): flag to request the amplitude data to be returned
 
     Returns:
-        np.array(float32): the second matrix (height, correlation, ...) parsed
-        if return_amp == True, returns a tuple (np.array, np.array)
+        ndarray: dtype=float32, the second matrix (height, correlation, ...) parsed
+        if return_amp == True, returns a tuple (ndarray, ndarray)
 
     Example illustrating how strips of data alternate:
     reading unw (unwrapped phase) data
@@ -357,8 +357,8 @@ def save(filename, array):
     """Save the numpy array in one of known formats
 
     Args:
-        filename (str)
-        array (np.array, dtype=float32 or int16 or complex64)
+        filename (str) Output path to save file in
+        array (ndarray) matrix to save
     Returns:
         None
 
