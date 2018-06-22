@@ -3,4 +3,5 @@ twine
 coveralls
 responses
 mock
-
+sphinx
+m2r
