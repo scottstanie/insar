@@ -81,8 +81,11 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
         return possible_rscs[0]
 
     ext = get_file_ext(filename)
+    # Elevation and rsc files can be immediately loaded without extra data
     if ext in ELEVATION_EXTS:
         return load_elevation(filename)
+    elif ext == '.rsc':
+        return load_dem_rsc(filename)
 
     # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
     rsc_data = None
