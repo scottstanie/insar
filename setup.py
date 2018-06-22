@@ -31,7 +31,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="insar",
-    version="0.1.5",
+    version="0.1.6",
     author="Scott Staniewicz",
     author_email="scott.stanie@utexas.com",
     description="Tools for gathering and preprocessing InSAR data",
@@ -57,7 +57,7 @@ setuptools.setup(
         "Topic :: Scientific/Engineering",
         "Intended Audience :: Science/Research",
     ),
-    install_requires=["numpy", "scipy", "requests", "matplotlib", "beautifulsoup4"],
+    install_requires=["numpy", "requests", "matplotlib"],
     entry_points={
         "console_scripts": [
             "create-dem=scripts.create_dem:main",
