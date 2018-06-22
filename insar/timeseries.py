@@ -15,6 +15,8 @@ scott@lidar igrams]$ head geolist
 import os
 import datetime
 import numpy as np
+import matplotlib.pyplot as plt
+import time
 from insar.parsers import Sentinel
 from insar import sario
 
@@ -112,7 +114,8 @@ def build_B_matrix(geolist, intlist):
         intlist (list[tuple(date, date)])
 
     Returns:
-        np.array 2D: the velocity coefficient matrix from the SBAS paper: Bv = dphi
+        np.array: 2D array of the velocity coefficient matrix from the SBAS paper: 
+                Bv = dphi
             Each row corresponds to an igram, each column to a .geo
             value will be t_k+1 - t_k for columns after the -1 in A,
             up to and including the +1 entry
@@ -126,7 +129,7 @@ def build_B_matrix(geolist, intlist):
         # if no -1 entry, start at index 0. Otherwise, add 1 so exclude the -1 index
         start_idx = list(row).index(-1) + 1 if (-1 in row) else 0
         # End index is inclusive of the +1
-        end_idx = np.where(row == 1)[0][0] + 1
+        end_idx = np.where(row == 1)[0][0] + 1  # +1 will always exist in row
 
         # Now only fill in the time diffs in the range from the early igram index
         # to the later igram index
@@ -148,25 +151,74 @@ def invert_sbas(geolist, intlist, dphi_array):
     return velocity_array, np.cumsum(phi_diffs)
 
 
-def read_unw_list(intlist, row, col, ref_row, ref_col):
+def read_unw_list(igram_path, ref_row, ref_col):
+    """Reads all unwrapped phase .unw files into unw_stack
+
+    Uses ref_row, ref_col as the normalizing point (subtracts
+        that pixels value from all others in each .unw file)
+
+    Args:
+        igram_path (str): path to the directory containing `intlist`,
+            the .int filenames, the .unw files, and the dem.rsc file
+        ref_row (int): row index of the reference pixel to subtract
+        ref_col (int): col index of the reference pixel to subtract
+
+    Returns:
+        ndarray: 3D array of each unw file stacked along axis=3
+
+    """
+
+    def _allocate_stack(igram_path, num_ints):
+        # Get igram file size data to pre-allocate space for 3D unw stack
+        rsc_path = os.path.join(igram_path, 'dem.rsc')
+        rsc_data = sario.load_file(rsc_path)
+        rows = rsc_data['FILE_LENGTH']
+        cols = rsc_data['WIDTH']
+        return np.empty((rows, cols, num_ints), dtype='float32')
+
     # row 283, col 493 looks like a good test
-    igrams = read_intlist(intlist, parse=False)
-    num_ints = len(igrams)
-    pixel_phase_arr = np.zeros((num_ints, 1))
-    for idx, igram_file in enumerate(igrams):
+    intlist_path = os.path.join(igram_path, 'intlist')
+    igram_files = read_intlist(intlist_path, parse=False)
+    num_ints = len(igram_files)
+
+    unw_stack = _allocate_stack(igram_path, num_ints)
+
+    for idx, igram_file in enumerate(igram_files):
         unw_file = igram_file.replace('.int', '.unw')
         cur_unw = sario.load_file(unw_file)
-        pixel_phase = cur_unw[row, col] - cur_unw[ref_row, ref_col]
-        pixel_phase_arr[idx] = pixel_phase
-    return pixel_phase_arr
+        unw_stack[:, :, idx] = cur_unw - cur_unw[ref_row, ref_col]
+    return unw_stack
+
+
+def display_stack(array_stack, pause_time=0.05):
+    """Runs a matplotlib loop to show each image in a 3D stack
+
+    Args:
+        array_stack (ndarray): 3D np.ndarray 
+        pause_time (float): time between images
+
+    Returns:
+        None
+
+    Notes: may need this
+        https://github.com/matplotlib/matplotlib/issues/7759/#issuecomment-271110279
+    """
+    fig, ax = plt.subplots()
+
+    for idx in range(array_stack.shape[2]):
+        ax.imshow(array_stack[..., idx])
+        plt.show()
+        plt.pause(pause_time)
 
 
 def run_inversion(igram_path, pixel=(283, 493), reference=(483, 493)):
     intlist_path = os.path.join(igram_path, 'intlist')
     geolist_path = os.path.join(igram_path, 'geolist')
+
     intlist = read_intlist(filepath=intlist_path)
     geolist = read_geolist(filepath=geolist_path)
-    unw_arr = read_unw_list(intlist_path, pixel[0], pixel[1], *reference)
+
+    unw_arr = read_unw_list(intlist_path, *reference)
 
     varr, phiarr = invert_sbas(geolist, intlist, unw_arr)
 
