@@ -10,13 +10,14 @@ Welcome to insar's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-    readme
+   modules
+   README.md
 
 
 Readme File
 ===========
 
-.. mdinclude:: ../README.md
+.. mdinclude:: ../../README.md
 
 
 
