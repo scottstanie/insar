@@ -289,12 +289,4 @@ def run_inversion(igram_path, reference=(483, 493), verbose=False):
     varr, phi_arr = invert_sbas(phi_columns, timediffs, B)
     deformation = PHASE_TO_CM * phi_arr
 
-    # rows, cols = unw_stack.shape[:2]
-    # for idx in range(unw_stack.shape[0]):
-    #     for jdx in range(unw_stack.shape[1]):
-    #         # grab time series along 3rd axis for pixel-wise inversion
-    #         delta_phis = unw_stack[idx, jdx]
-    #         varr, phi_arr = invert_sbas(delta_phis, timediffs, B)
-    #         deformation = PHASE_TO_CM * phi_arr
-
     return geolist, phi_arr, deformation, varr

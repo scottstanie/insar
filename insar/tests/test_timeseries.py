@@ -117,7 +117,11 @@ class TestInvertSbas(unittest.TestCase):
 
         # Check that a bad reference throws exception
         self.assertRaises(
-            IndexError, timeseries.run_inversion, self.igram_path, reference=(100, 100))
+            IndexError,
+            timeseries.run_inversion,
+            self.igram_path,
+            reference=(100, 100),
+            verbose=True)
 
         _, phases, deformation, velocity_array = timeseries.run_inversion(
             self.igram_path, reference=(2, 0))
