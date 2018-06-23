@@ -6,6 +6,7 @@ install:
   - pip install -r requirements-dev.txt
   - pip install -r requirements.txt
 
+# https://stackoverflow.com/a/35403128
 before_script: # configure a headless display to test plot generation
   - "export DISPLAY=:99.0"
   - "sh -e /etc/init.d/xvfb start"
