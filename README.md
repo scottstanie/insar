@@ -68,7 +68,7 @@ machine urs.earthdata.nasa.gov
     password PASSWORD
 ```
 
-If you want to avoid this entirely, you can [use Mapzen's data] (https://registry.opendata.aws/terrain-tiles/) by specifying
+If you want to avoid this entirely, you can [use Mapzen's data hosted on AWS](https://registry.opendata.aws/terrain-tiles/) by specifying
 ```bash
 create-dem -g data/hawaii_bigger.geojson --data-source AWS
 ```

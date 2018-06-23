@@ -2,16 +2,21 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 
-def display_stack(stack, pause_time=200, titles=None, save_title=None):
+def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=None):
     """Runs a matplotlib loop to show each image in a 3D stack
 
     Args:
         stack (ndarray): 3D np.ndarray, 1st index is image number
             i.e. the idx image is stack[idx, :, :]
         pause_time (float): Optional- time between images in milliseconds (default=200)
+        display (bool): True if you want the plot GUI to pop up and run
+            False would be if you jsut want to save the movie with as save_title
         titles (list[str]): Optional- Names of images corresponding to stack.
             Length must match stack's 1st dimension length
-        save_title (str): Optional- if provided, will save the animation to a .mp4 file
+        save_title (str): Optional- if provided, will save the animation to a file
+            extension must be a valid extension for a animation writer:
+            See https://matplotlib.org/api/_as_gen/matplotlib.animation.Animation.html
+            and https://matplotlib.org/api/animation_api.html#writer-classes
 
     Returns:
         None
@@ -38,6 +43,7 @@ def display_stack(stack, pause_time=200, titles=None, save_title=None):
         fig, update_im, frames=range(num_images), interval=pause_time, blit=False)
 
     if save_title:
-        stack_ani.save(save_title + '.mp4' if '.mp4' not in save_title else save_title)
+        stack_ani.save(save_title)
 
-    plt.show()
+    if display:
+        plt.show()

@@ -14,7 +14,6 @@ scott@lidar igrams]$ head geolist
 import os
 import datetime
 import numpy as np
-import matplotlib.pyplot as plt
 
 from insar.parsers import Sentinel
 from insar import sario
