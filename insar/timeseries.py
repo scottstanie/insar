@@ -266,7 +266,7 @@ def stack_to_cols(stacked, reverse=False):
         >>> print(cols)
         [[ 0.  3.  6.  1.  4.  7.  2.  5.  8.]
          [ 9. 12. 15. 10. 13. 16. 11. 14. 17.]]
-        >>> orig = cols_to_stack(cols)
+        >>> orig = cols_to_stack(cols, 3, 3)
         >>> print(np.all(orig == a))
         True
     """
@@ -309,7 +309,7 @@ def cols_to_stack(columns, rows, cols):
         raise ValueError("Must be a 2D ndarray")
 
     num_stacks = columns.shape[0]
-    return columns.T.reshape((rows, cols, num_stacks))
+    return columns.T.reshape((rows, cols, num_stacks), order='F')
 
 
 @log_runtime
@@ -331,9 +331,12 @@ def run_inversion(igram_path, reference=(483, 493), verbose=False):
     B = build_B_matrix(geolist, intlist)
     timediffs = find_time_diffs(geolist)
 
+    # Save shape for end
+    rows, cols, _ = unw_stack.shape
     phi_columns = stack_to_cols(unw_stack)
+
     varr, phi_arr = invert_sbas(phi_columns, timediffs, B)
     deformation = PHASE_TO_CM * phi_arr
-    deformation = cols_to_stack(deformation)
+    deformation = cols_to_stack(deformation, rows, cols)
 
     return geolist, phi_arr, deformation, varr
