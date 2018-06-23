@@ -13,7 +13,6 @@ scott@lidar igrams]$ head geolist
 """
 import os
 import datetime
-import itertools
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -25,10 +24,6 @@ SENTINEL_WAVELENGTH = 5.5465763  # cm
 PHASE_TO_CM = SENTINEL_WAVELENGTH / (-4 * np.pi)
 
 logger = get_log()
-
-
-def _all_indices(num_rows, num_cols):
-    return itertools.product(range(num_rows), range(num_cols))
 
 
 def read_geolist(filepath="./geolist"):
