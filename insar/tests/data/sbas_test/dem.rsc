@@ -1,4 +1,4 @@
-WIDTH         1
+WIDTH         2
 FILE_LENGTH   3
 X_FIRST       -155.67638889
 Y_FIRST       19.5755555567
