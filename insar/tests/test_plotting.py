@@ -24,15 +24,10 @@ class TestPlotting(unittest.TestCase):
 
             temp_dir = tempfile.mkdtemp()
             animate_file = join(temp_dir, 'save.gif')
-            plotting.animate_stack(
-                self.stack, display=False, save_title=animate_file, writer='ffmpeg')
-            self.assertTrue(os.path.exists(animate_file))
-            os.remove(animate_file)
+            plotting.animate_stack(self.stack, display=False)
 
             igram_files = timeseries.read_intlist(join(self.igram_path, 'intlist'), parse=False)
-            plotting.animate_stack(
-                self.stack, display=False, titles=igram_files, save_title=animate_file)
-            self.assertTrue(os.path.exists(animate_file))
+            plotting.animate_stack(self.stack, display=False, titles=igram_files)
 
         finally:
             shutil.rmtree(temp_dir)
