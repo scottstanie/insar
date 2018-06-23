@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 
-def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=None):
+def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=None, **savekwargs):
     """Runs a matplotlib loop to show each image in a 3D stack
 
     Args:
@@ -15,6 +15,7 @@ def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=N
             Length must match stack's 1st dimension length
         save_title (str): Optional- if provided, will save the animation to a file
             extension must be a valid extension for a animation writer:
+        savekwargs: extra keyword args passed to animation.save
             See https://matplotlib.org/api/_as_gen/matplotlib.animation.Animation.html
             and https://matplotlib.org/api/animation_api.html#writer-classes
 
@@ -40,10 +41,10 @@ def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=N
         return image,
 
     stack_ani = animation.FuncAnimation(
-        fig, update_im, frames=range(num_images), interval=pause_time, blit=False)
-
-    if save_title:
-        stack_ani.save(save_title)
+        fig, update_im, frames=range(num_images), interval=pause_time, blit=False, repeat=False)
 
     if display:
         plt.show()
+
+    if save_title:
+        stack_ani.save(save_title, **savekwargs)
