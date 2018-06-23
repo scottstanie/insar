@@ -158,7 +158,8 @@ def read_unw_stack(igram_path, ref_row, ref_col):
         ref_col (int): col index of the reference pixel to subtract
 
     Returns:
-        ndarray: 3D array of each unw file stacked along axis=3
+        ndarray: 3D array of each unw file stacked
+            1st dim is the index of the igram: unw_stack[0, :, :]
 
     """
 
@@ -168,7 +169,7 @@ def read_unw_stack(igram_path, ref_row, ref_col):
         rsc_data = sario.load_file(rsc_path)
         rows = rsc_data['FILE_LENGTH']
         cols = rsc_data['WIDTH']
-        return np.empty((rows, cols, num_ints), dtype='float32')
+        return np.empty((num_ints, rows, cols), dtype='float32')
 
     # row 283, col 493 looks like a good test
     intlist_path = os.path.join(igram_path, 'intlist')
@@ -181,10 +182,10 @@ def read_unw_stack(igram_path, ref_row, ref_col):
         unw_file = igram_file.replace('.int', '.unw')
         cur_unw = sario.load_file(unw_file)
         try:
-            unw_stack[:, :, idx] = cur_unw - cur_unw[ref_row, ref_col]
+            unw_stack[idx, :, :] = cur_unw - cur_unw[ref_row, ref_col]
         except IndexError:
             logger.error("Reference pixel (%s, %s) is out of bounds for unw shape %s", ref_row,
-                         ref_col, unw_stack.shape[:2])
+                         ref_col, unw_stack.shape[1:])
             raise
     return unw_stack
 
@@ -193,7 +194,7 @@ def display_stack(array_stack, pause_time=0.05):
     """Runs a matplotlib loop to show each image in a 3D stack
 
     Args:
-        array_stack (ndarray): 3D np.ndarray
+        array_stack (ndarray): 3D np.ndarray, 1st index is image number
         pause_time (float): time between images
 
     Returns:
@@ -204,8 +205,8 @@ def display_stack(array_stack, pause_time=0.05):
     """
     fig, ax = plt.subplots()
 
-    for idx in range(array_stack.shape[2]):
-        ax.imshow(array_stack[..., idx])
+    for idx in range(array_stack.shape[0]):
+        ax.imshow(array_stack[idx, :, :])
         plt.show()
         plt.pause(pause_time)
 
@@ -249,32 +250,27 @@ def stack_to_cols(stacked, reverse=False):
     The reverse function of cols_to_stack
 
     Args:
-        stacked (ndarray): 3D array, each [:, :, idx] is an array of interest
+        stacked (ndarray): 3D array, each [idx, :, :] is an array of interest
 
     Returns:
-        ndarray: a 2D array where each of the stacked[i,j,:] is
+        ndarray: a 2D array where each of the stacked[:, i, j] is
             now a column
 
     Raises:
         ValueError: if input shape is not 3D
 
     Example:
-        >>> a = np.zeros((3, 3, 2))
-        >>> a[:, :, 0] = np.array([[0, 1, 2,],[3, 4, 5,], [6, 7, 8,]])
-        >>> a[:, :, 1] = np.array([[9, 10, 11,], [12, 13, 14], [15, 16, 17,]])
+        >>> a = np.arange(18).reshape((2, 3, 3))
         >>> cols = stack_to_cols(a)
         >>> print(cols)
-        [[ 0.  3.  6.  1.  4.  7.  2.  5.  8.]
-         [ 9. 12. 15. 10. 13. 16. 11. 14. 17.]]
-        >>> orig = cols_to_stack(cols, 3, 3)
-        >>> print(np.all(orig == a))
-        True
+        [[ 0  1  2  3  4  5  6  7  8]
+         [ 9 10 11 12 13 14 15 16 17]]
     """
     if len(stacked.shape) != 3:
         raise ValueError("Must be a 3D ndarray")
 
-    num_stacks = stacked.shape[2]
-    return stacked.T.reshape((num_stacks, -1))
+    num_stacks = stacked.shape[0]
+    return stacked.reshape((num_stacks, -1))
 
 
 def cols_to_stack(columns, rows, cols):
@@ -288,28 +284,24 @@ def cols_to_stack(columns, rows, cols):
         cols (int): number of rows of original stack
 
     Returns:
-        ndarray: a 2D array where each output[:, :, idx] was column idx
+        ndarray: a 2D array where each output[idx, :, :] was column idx
 
     Raises:
         ValueError: if input shape is not 2D
 
     Example:
-        >>> a = np.zeros((3, 3, 2))
-        >>> a[:, :, 0] = np.array([[0, 1, 2,],[3, 4, 5,], [6, 7, 8,]])
-        >>> a[:, :, 1] = np.array([[9, 10, 11,], [12, 13, 14], [15, 16, 17,]])
+        >>> a = np.arange(18).reshape((2, 3, 3))
         >>> cols = stack_to_cols(a)
         >>> print(cols)
-        [[ 0.  3.  6.  1.  4.  7.  2.  5.  8.]
-         [ 9. 12. 15. 10. 13. 16. 11. 14. 17.]]
-        >>> orig = cols_to_stack(cols, 3, 3)
-        >>> print(np.all(orig == a))
+        [[ 0  1  2  3  4  5  6  7  8]
+         [ 9 10 11 12 13 14 15 16 17]]
+        >>> print(np.all(cols_to_stack(cols, 3, 3) == a))
         True
     """
     if len(columns.shape) != 2:
         raise ValueError("Must be a 2D ndarray")
 
-    num_stacks = columns.shape[0]
-    return columns.T.reshape((rows, cols, num_stacks), order='F')
+    return columns.reshape((-1, rows, cols))
 
 
 @log_runtime
@@ -347,7 +339,7 @@ def run_inversion(igram_path, reference=(483, 493), verbose=False):
     timediffs = find_time_diffs(geolist)
 
     # Save shape for end
-    rows, cols, _ = unw_stack.shape
+    num_ints, rows, cols = unw_stack.shape
     phi_columns = stack_to_cols(unw_stack)
 
     varr, phi_arr = invert_sbas(phi_columns, timediffs, B)
@@ -355,5 +347,7 @@ def run_inversion(igram_path, reference=(483, 493), verbose=False):
     deformation = PHASE_TO_CM * phi_arr
 
     # Now reshape all outputs that should be in stack form
-    return (geolist, cols_to_stack(phi_arr, rows, cols), cols_to_stack(deformation, rows, cols),
-            cols_to_stack(varr, rows, cols), unw_stack)
+    phi_arr = cols_to_stack(phi_arr, rows, cols)
+    deformation = cols_to_stack(deformation, rows, cols)
+    varr = cols_to_stack(varr, rows, cols)
+    return (geolist, phi_arr, deformation, varr, unw_stack)
