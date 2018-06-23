@@ -1,4 +1,3 @@
-import itertools
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
@@ -20,10 +19,11 @@ def display_stack(stack, pause_time=200, titles=None, save_title=None):
     Notes: may need this
         https://github.com/matplotlib/matplotlib/issues/7759/#issuecomment-271110279
     """
+    num_images = stack.shape[0]
     if titles:
-        assert len(titles) == stack.shape[0], "len(titles) must equal stack.shape[0]"
+        assert len(titles) == num_images, "len(titles) must equal stack.shape[0]"
     else:
-        titles = itertools.repeat('')
+        titles = ['' for _ in range(num_images)]
 
     fig, ax = plt.subplots()
     image = plt.imshow(stack[0, :, :])  # Type: AxesImage
@@ -34,7 +34,6 @@ def display_stack(stack, pause_time=200, titles=None, save_title=None):
         fig.suptitle(titles[idx])
         return image,
 
-    num_images = stack.shape[0]
     stack_ani = animation.FuncAnimation(
         fig, update_im, frames=range(num_images), interval=pause_time, blit=False)
 
