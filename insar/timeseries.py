@@ -337,6 +337,6 @@ def run_inversion(igram_path, reference=(483, 493), verbose=False):
 
     varr, phi_arr = invert_sbas(phi_columns, timediffs, B)
     deformation = PHASE_TO_CM * phi_arr
-    deformation = cols_to_stack(deformation, rows, cols)
 
-    return geolist, phi_arr, deformation, varr
+    return (geolist, cols_to_stack(phi_arr, rows, cols), cols_to_stack(deformation, rows, cols),
+            cols_to_stack(varr, rows, cols))
