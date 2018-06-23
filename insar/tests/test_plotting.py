@@ -3,6 +3,9 @@ import os
 from os.path import join, dirname, exists
 import tempfile
 import shutil
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 import numpy as np
 from numpy.testing import assert_array_almost_equal
 
@@ -18,6 +21,9 @@ class TestPlotting(unittest.TestCase):
 
     def test_animate_stack(self):
         try:
+            # Commands to turn off interactive for travis tests
+            plt.ioff()
+
             temp_dir = tempfile.mkdtemp()
             animate_file = join(temp_dir, 'save.gif')
             plotting.animate_stack(
