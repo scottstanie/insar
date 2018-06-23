@@ -226,18 +226,19 @@ def invert_sbas(delta_phis, timediffs, B):
     assert B.shape[1] == len(timediffs)
 
     # Velocity will be result of the inversion
-    print(B.shape, delta_phis.shape)
     velocity_array, _, rank_B, sing_vals_B = np.linalg.lstsq(B, delta_phis, rcond=None)
     # velocity array entries: v_j = (phi_j - phi_j-1)/(t_j - t_j-1)
-    velocity_array = np.squeeze(velocity_array)  # Remove singleton dim
+    if velocity_array.ndim == 1:
+        velocity_array = np.expand_dims(velocity_array, axis=-1)
 
     # Now integrate to get back to phases
-    phi_diffs = timediffs * velocity_array
+    # multiple each column of vel array: each col is a separate solution
+    phi_diffs = timediffs.reshape((-1, 1)) * velocity_array
 
     # Now the final phase results are the cumulative sum of delta phis
-    phi_arr = np.cumsum(phi_diffs)
-    # Add 0 as first entry of phase array to match geolist length
-    phi_arr = np.insert(phi_arr, 0, 0)
+    phi_arr = np.cumsum(phi_diffs, axis=0)
+    # Add 0 as first entry of phase array to match geolist length on each col
+    phi_arr = np.insert(phi_arr, 0, 0, axis=0)
 
     return velocity_array, phi_arr
 
@@ -276,18 +277,15 @@ def run_inversion(igram_path, reference=(483, 493), verbose=True):
     intlist = read_intlist(filepath=intlist_path)
     geolist = read_geolist(filepath=geolist_path)
 
-    logger.DEBUG("Reading stack")
+    logger.debug("Reading stack")
     unw_stack = read_unw_stack(igram_path, *reference)
-    logger.DEBUG("Reading stack complete")
-
-    # online answer attempt:
-    # # shared_arr = mp.RawArray(ctypes.c_double, unw_stack.size)
-    # # arr = tonumpyarray(shared_arr)
-    # # arr[:] = unw_stack
+    logger.debug("Reading stack complete")
 
     # Prepare B matrix and timediffs used for each pixel inversion
     B = build_B_matrix(geolist, intlist)
     timediffs = find_time_diffs(geolist)
+
+    phi_columns = _prep_columns(unw_stack)
 
     rows, cols = unw_stack.shape[:2]
 

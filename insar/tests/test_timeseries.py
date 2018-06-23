@@ -81,10 +81,10 @@ class TestInvertSbas(unittest.TestCase):
 
     def test_invert_sbas(self):
         # Fake pixel phases from unwrapped igrams
-        actual_phases = np.array([0.0, 2.0, 14.0, 16.0])
-        actual_velocity_array = np.array([1, 2, .5])
+        actual_phases = np.array([0.0, 2.0, 14.0, 16.0]).reshape((-1, 1))
+        actual_velocity_array = np.array([1, 2, .5]).reshape((-1, 1))
 
-        delta_phis = np.array([2, 14, 12, 14, 2])
+        delta_phis = np.array([2, 14, 12, 14, 2]).reshape((-1, 1))
 
         geolist = timeseries.read_geolist(self.geolist_path)
         intlist = timeseries.read_intlist(self.intlist_path)
@@ -93,5 +93,19 @@ class TestInvertSbas(unittest.TestCase):
         B = timeseries.build_B_matrix(geolist, intlist)
         velocity_array, phases = timeseries.invert_sbas(delta_phis, timediffs, B)
 
+        assert_array_almost_equal(velocity_array, actual_velocity_array)
+        assert_array_almost_equal(phases, actual_phases)
+
+        # Now test multiple phase time series as columns
+        # stack is column-wise stack by laying vertical rows, then transpose
+        actual_phases = np.hstack((actual_phases, 2 * actual_phases))
+        actual_velocity_array = np.hstack((actual_velocity_array, 2 * actual_velocity_array))
+        delta_phis = np.hstack((delta_phis, 2 * delta_phis))
+        print(actual_phases.shape)
+        print(delta_phis)
+
+        velocity_array, phases = timeseries.invert_sbas(delta_phis, timediffs, B)
+        print(phases)
+        print('----')
         assert_array_almost_equal(velocity_array, actual_velocity_array)
         assert_array_almost_equal(phases, actual_phases)
