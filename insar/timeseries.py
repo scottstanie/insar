@@ -190,27 +190,6 @@ def read_unw_stack(igram_path, ref_row, ref_col):
     return unw_stack
 
 
-def display_stack(array_stack, pause_time=0.05):
-    """Runs a matplotlib loop to show each image in a 3D stack
-
-    Args:
-        array_stack (ndarray): 3D np.ndarray, 1st index is image number
-        pause_time (float): time between images
-
-    Returns:
-        None
-
-    Notes: may need this
-        https://github.com/matplotlib/matplotlib/issues/7759/#issuecomment-271110279
-    """
-    fig, ax = plt.subplots()
-
-    for idx in range(array_stack.shape[0]):
-        ax.imshow(array_stack[idx, :, :])
-        plt.show()
-        plt.pause(pause_time)
-
-
 def invert_sbas(delta_phis, timediffs, B):
     """Performs and SBAS inversion on each pixel of unw_stack to find deformation
 
