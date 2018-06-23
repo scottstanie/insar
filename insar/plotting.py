@@ -48,3 +48,46 @@ def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=N
 
     if save_title:
         stack_ani.save(save_title, **savekwargs)
+
+
+def explore_stack(stack, geolist, image_num=-1, title=""):
+    """Displays an image from a stack, allows you to click for timeseries
+
+    Args:
+        stack (ndarray): 3D np.ndarray, 1st index is image number
+            i.e. the idx image is stack[idx, :, :]
+        geolist (list[datetime]): times of acquisition for each stack layer
+        image_num (int): Optional- default = -1, the last image. Choose which
+            image in the stack you want as the display to click on
+        title (str): Optional- Title for plot
+
+    Returns:
+        None
+
+    Notes: may need this
+        See https://matplotlib.org/users/event_handling.html for click handling
+    """
+
+    def get_timeseries(row, col):
+        return stack[:, row, col]
+
+    fig = plt.figure(1)
+    image = plt.imshow(stack[image_num, :, :])  # Type: AxesImage
+    fig.colorbar(image)
+
+    if not title:
+        title = "Press close and click again."
+
+    def onclick(event):
+        plt.figure(2)
+        timeline = get_timeseries(int(event.y), int(event.x))
+
+        plt.plot(geolist, timeline)
+        plt.title(title)
+        plt.show()
+        print('%s click: button=%d, x=%d, y=%d, xdata=%f, ydata=%f' %
+              ('double' if event.dblclick else 'single', event.button, event.x, event.y,
+               event.xdata, event.ydata))
+
+    cid = fig.canvas.mpl_connect('button_press_event', onclick)
+    plt.show(block=True)
