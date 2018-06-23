@@ -185,7 +185,12 @@ def read_unw_stack(igram_path, ref_row, ref_col):
     for idx, igram_file in enumerate(igram_files):
         unw_file = igram_file.replace('.int', '.unw')
         cur_unw = sario.load_file(unw_file)
-        unw_stack[:, :, idx] = cur_unw - cur_unw[ref_row, ref_col]
+        try:
+            unw_stack[:, :, idx] = cur_unw - cur_unw[ref_row, ref_col]
+        except IndexError:
+            logger.error("Reference pixel (%s, %s) is out of bounds for unw shape %s", ref_row,
+                         ref_col, unw_stack.shape[:2])
+            raise
     return unw_stack
 
 
@@ -267,7 +272,7 @@ def _prep_columns(stacked):
 
 
 @log_runtime
-def run_inversion(igram_path, reference=(483, 493), verbose=True):
+def run_inversion(igram_path, reference=(483, 493), verbose=False):
     if verbose:
         logger.setLevel(10)  # DEBUG
 
@@ -286,14 +291,15 @@ def run_inversion(igram_path, reference=(483, 493), verbose=True):
     timediffs = find_time_diffs(geolist)
 
     phi_columns = _prep_columns(unw_stack)
+    varr, phi_arr = invert_sbas(phi_columns, timediffs, B)
+    deformation = PHASE_TO_CM * phi_arr
 
-    rows, cols = unw_stack.shape[:2]
+    # rows, cols = unw_stack.shape[:2]
+    # for idx in range(unw_stack.shape[0]):
+    #     for jdx in range(unw_stack.shape[1]):
+    #         # grab time series along 3rd axis for pixel-wise inversion
+    #         delta_phis = unw_stack[idx, jdx]
+    #         varr, phi_arr = invert_sbas(delta_phis, timediffs, B)
+    #         deformation = PHASE_TO_CM * phi_arr
 
-    for idx in range(unw_stack.shape[0]):
-        for jdx in range(unw_stack.shape[1]):
-            # grab time series along 3rd axis for pixel-wise inversion
-            delta_phis = unw_stack[idx, jdx]
-            varr, phi_arr = invert_sbas(delta_phis, timediffs, B)
-            deformation = PHASE_TO_CM * phi_arr
-
-    return invert_sbas(phi_arr, timediffs, B)
+    return geolist, phi_arr, deformation, varr

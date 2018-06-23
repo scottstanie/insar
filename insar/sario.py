@@ -30,7 +30,7 @@ COMPLEX_EXTS = ['.int', '.slc', '.geo', '.cc', '.unw', '.mlc']
 REAL_EXTS = ['.amp', '.cor', '.mlc']  # NOTE: .cor might only be real for UAVSAR
 ELEVATION_EXTS = ['.dem', '.hgt']
 
-# These file types are not simple complex matrices: see load_height for detail
+# These file types are not simple complex matrices: see load_stacked for detail
 STACKED_FILES = ['.cc', '.unw']
 
 # For UAVSAR:

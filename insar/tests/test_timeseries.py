@@ -11,9 +11,9 @@ from insar import timeseries
 class TestInvertSbas(unittest.TestCase):
     def setUp(self):
         # self.jsonfile = tempfile.NamedTemporaryFile(mode='w+')
-        self.datapath = join(dirname(__file__), "data", "sbas_test")
-        self.geolist_path = join(self.datapath, 'geolist')
-        self.intlist_path = join(self.datapath, 'intlist')
+        self.igram_path = join(dirname(__file__), "data", "sbas_test")
+        self.geolist_path = join(self.igram_path, 'geolist')
+        self.intlist_path = join(self.igram_path, 'intlist')
         self.actual_time_diffs = np.array([2, 6, 4])
 
     def test_time_diff(self):
@@ -101,11 +101,26 @@ class TestInvertSbas(unittest.TestCase):
         actual_phases = np.hstack((actual_phases, 2 * actual_phases))
         actual_velocity_array = np.hstack((actual_velocity_array, 2 * actual_velocity_array))
         delta_phis = np.hstack((delta_phis, 2 * delta_phis))
-        print(actual_phases.shape)
-        print(delta_phis)
 
         velocity_array, phases = timeseries.invert_sbas(delta_phis, timediffs, B)
-        print(phases)
-        print('----')
+        assert_array_almost_equal(velocity_array, actual_velocity_array)
+        assert_array_almost_equal(phases, actual_phases)
+
+    def test_run_inverison(self):
+        # Fake pixel phases from unwrapped igrams
+        actual_phases = np.array([0.0, 2.0, 14.0, 16.0]).reshape((-1, 1))
+        # Now we need an extra set of zeros as the "reference" that stays constant
+        actual_phases = np.hstack((actual_phases, 2 * actual_phases, np.zeros((4, 1))))
+        actual_velocity_array = np.array([1, 2, .5]).reshape((-1, 1))
+        actual_velocity_array = np.hstack((actual_velocity_array, 2 * actual_velocity_array,
+                                           np.zeros((3, 1))))
+
+        # Check that a bad reference throws exception
+        self.assertRaises(
+            IndexError, timeseries.run_inversion, self.igram_path, reference=(100, 100))
+
+        _, phases, deformation, velocity_array = timeseries.run_inversion(
+            self.igram_path, reference=(2, 0))
+
         assert_array_almost_equal(velocity_array, actual_velocity_array)
         assert_array_almost_equal(phases, actual_phases)
