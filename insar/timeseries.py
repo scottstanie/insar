@@ -11,11 +11,6 @@ scott@lidar igrams]$ head geolist
 20180420_20180502.int
 
 """
-# import multiprocessing as mp
-# from contextlib import closing
-from concurrent.futures import ProcessPoolExecutor, as_completed
-# import ctypes
-
 import os
 import datetime
 import itertools
@@ -231,6 +226,7 @@ def invert_sbas(delta_phis, timediffs, B):
     assert B.shape[1] == len(timediffs)
 
     # Velocity will be result of the inversion
+    print(B.shape, delta_phis.shape)
     velocity_array, _, rank_B, sing_vals_B = np.linalg.lstsq(B, delta_phis, rcond=None)
     # velocity array entries: v_j = (phi_j - phi_j-1)/(t_j - t_j-1)
     velocity_array = np.squeeze(velocity_array)  # Remove singleton dim
@@ -244,6 +240,29 @@ def invert_sbas(delta_phis, timediffs, B):
     phi_arr = np.insert(phi_arr, 0, 0)
 
     return velocity_array, phi_arr
+
+
+def _prep_columns(stacked):
+    """Takes a 3D array, makes vectors along the 3D axes into cols
+
+    Args:
+        stacked (ndarray): 3D array, each [:, :, idx] is an slice
+
+    Returns:
+        ndarray: a 2D array where each of the stacked[i,j,:] is
+            now a column
+
+    Example:
+        >>> a = np.zeros((3, 3, 2))
+        >>> a[:, :, 0] = np.array([[0, 1, 2,],[3, 4, 5,], [6, 7, 8,]])
+        >>> a[:, :, 1] = np.array([[9, 10, 11,], [12, 13, 14], [15, 16, 17,]])
+        >>> print(_prep_columns(a))
+        [[ 0.  3.  6.  1.  4.  7.  2.  5.  8.]
+         [ 9. 12. 15. 10. 13. 16. 11. 14. 17.]]
+    """
+    assert len(stacked.shape) == 3, "Must be a 3D ndarray"
+    num_stacks = stacked.shape[2]
+    return stacked.T.reshape((num_stacks, -1))
 
 
 @log_runtime
@@ -272,50 +291,11 @@ def run_inversion(igram_path, reference=(483, 493), verbose=True):
 
     rows, cols = unw_stack.shape[:2]
 
-    # for idx in range(unw_stack.shape[0]):
-    #     for jdx in range(unw_stack.shape[1]):
-    #         # grab time series along 3rd axis for pixel-wise inversion
-    #         delta_phis = unw_stack[idx, jdx]
-    #         varr, phi_arr = invert_sbas(delta_phis, timediffs, B)
-    #         deformation = PHASE_TO_CM * phi_arr
-
-    # with closing(mp.Pool(initializer=init, initargs=(shared_arr, ))) as pool:
-    #     for result in pool.imap_unordered(lambda x: _invert_wrapper(unw_stack, x, timediffs, B),
-    #                                       _all_indices(rows, cols)):
-    #         print(result)
-    # pool.join()
-
-    num_complete = 0
-    with ProcessPoolExecutor(max_workers=20) as executor:
-        # Make a dict to refer back to which pixel is finished
-        future_to_row_col = {}
-        for row, col in _all_indices(rows, cols):
-            phi_arr = unw_stack[row, col]
-            future = executor.submit(invert_sbas, phi_arr, timediffs, B)
-            future_to_row_col[future] = (row, col)
-
-        for future in as_completed(future_to_row_col):
-            row, col = future_to_row_col[future]
-            varr, phi_arr = future.result()
-            logger.info("Completed %s, %s", row, col)
-            num_complete += 1
-            if num_complete % 1000 == 0:
-                logger.info("Completed %s pixels", num_complete)
+    for idx in range(unw_stack.shape[0]):
+        for jdx in range(unw_stack.shape[1]):
+            # grab time series along 3rd axis for pixel-wise inversion
+            delta_phis = unw_stack[idx, jdx]
+            varr, phi_arr = invert_sbas(delta_phis, timediffs, B)
             deformation = PHASE_TO_CM * phi_arr
 
-    return geolist, phi_arr, deformation, varr
-
-
-def init(shared_arr_):
-    global shared_arr
-    shared_arr = shared_arr_  # must be inherited, not passed as an argument
-
-
-def tonumpyarray(mp_arr):
-    return np.frombuffer(mp_arr.get_obj())
-
-
-def _invert_wrapper(big_arr, row_col_tup, timediffs, B):
-    row, col = row_col_tup
-    phi_arr = big_arr[row, col]
     return invert_sbas(phi_arr, timediffs, B)
