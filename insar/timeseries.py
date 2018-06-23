@@ -243,27 +243,73 @@ def invert_sbas(delta_phis, timediffs, B):
     return velocity_array, phi_arr
 
 
-def _prep_columns(stacked):
+def stack_to_cols(stacked, reverse=False):
     """Takes a 3D array, makes vectors along the 3D axes into cols
 
+    The reverse function of cols_to_stack
+
     Args:
-        stacked (ndarray): 3D array, each [:, :, idx] is an slice
+        stacked (ndarray): 3D array, each [:, :, idx] is an array of interest
 
     Returns:
         ndarray: a 2D array where each of the stacked[i,j,:] is
             now a column
 
+    Raises:
+        ValueError: if input shape is not 3D
+
     Example:
         >>> a = np.zeros((3, 3, 2))
         >>> a[:, :, 0] = np.array([[0, 1, 2,],[3, 4, 5,], [6, 7, 8,]])
         >>> a[:, :, 1] = np.array([[9, 10, 11,], [12, 13, 14], [15, 16, 17,]])
-        >>> print(_prep_columns(a))
+        >>> cols = stack_to_cols(a)
+        >>> print(cols)
         [[ 0.  3.  6.  1.  4.  7.  2.  5.  8.]
          [ 9. 12. 15. 10. 13. 16. 11. 14. 17.]]
+        >>> orig = cols_to_stack(cols)
+        >>> print(np.all(orig == a))
+        True
     """
-    assert len(stacked.shape) == 3, "Must be a 3D ndarray"
+    if len(stacked.shape) != 3:
+        raise ValueError("Must be a 3D ndarray")
+
     num_stacks = stacked.shape[2]
     return stacked.T.reshape((num_stacks, -1))
+
+
+def cols_to_stack(columns, rows, cols):
+    """Takes a 2D array of columns, reshapes to cols along 3rd axis
+
+    The reverse function of stack_to_cols
+
+    Args:
+        stacked (ndarray): 2D array of columns of data
+        rows (int): number of rows of original stack
+        cols (int): number of rows of original stack
+
+    Returns:
+        ndarray: a 2D array where each output[:, :, idx] was column idx
+
+    Raises:
+        ValueError: if input shape is not 2D
+
+    Example:
+        >>> a = np.zeros((3, 3, 2))
+        >>> a[:, :, 0] = np.array([[0, 1, 2,],[3, 4, 5,], [6, 7, 8,]])
+        >>> a[:, :, 1] = np.array([[9, 10, 11,], [12, 13, 14], [15, 16, 17,]])
+        >>> cols = stack_to_cols(a)
+        >>> print(cols)
+        [[ 0.  3.  6.  1.  4.  7.  2.  5.  8.]
+         [ 9. 12. 15. 10. 13. 16. 11. 14. 17.]]
+        >>> orig = cols_to_stack(cols, 3, 3)
+        >>> print(np.all(orig == a))
+        True
+    """
+    if len(columns.shape) != 2:
+        raise ValueError("Must be a 2D ndarray")
+
+    num_stacks = columns.shape[0]
+    return columns.T.reshape((rows, cols, num_stacks))
 
 
 @log_runtime
@@ -285,8 +331,9 @@ def run_inversion(igram_path, reference=(483, 493), verbose=False):
     B = build_B_matrix(geolist, intlist)
     timediffs = find_time_diffs(geolist)
 
-    phi_columns = _prep_columns(unw_stack)
+    phi_columns = stack_to_cols(unw_stack)
     varr, phi_arr = invert_sbas(phi_columns, timediffs, B)
     deformation = PHASE_TO_CM * phi_arr
+    deformation = cols_to_stack(deformation)
 
     return geolist, phi_arr, deformation, varr
