@@ -11,16 +11,29 @@ scott@lidar igrams]$ head geolist
 20180420_20180502.int
 
 """
+# import multiprocessing as mp
+# from contextlib import closing
+from concurrent.futures import ProcessPoolExecutor, as_completed
+# import ctypes
 
 import os
 import datetime
+import itertools
 import numpy as np
 import matplotlib.pyplot as plt
+
 from insar.parsers import Sentinel
 from insar import sario
+from insar.log import get_log, log_runtime
 
 SENTINEL_WAVELENGTH = 5.5465763  # cm
 PHASE_TO_CM = SENTINEL_WAVELENGTH / (-4 * np.pi)
+
+logger = get_log()
+
+
+def _all_indices(num_rows, num_cols):
+    return itertools.product(range(num_rows), range(num_cols))
 
 
 def read_geolist(filepath="./geolist"):
@@ -202,49 +215,107 @@ def display_stack(array_stack, pause_time=0.05):
         plt.pause(pause_time)
 
 
-def invert_sbas(dphis, timediffs, B):
+def invert_sbas(delta_phis, timediffs, B):
     """Performs and SBAS inversion on each pixel of unw_stack to find deformation
 
     Args:
-        dphis (ndarray): 1D array of unwrapped phases (delta phis)
+        delta_phis (ndarray): 1D array of unwrapped phases (delta phis)
             comes from 1 pixel of read_unw_stack along 3rd axis
         B (ndarray): output of build_B_matrix for current set of igrams
         timediffs (np.array): dtype=int, days between each SAR acquisitions
             length will be equal to B.shape[1], 1 less than num SAR acquisitions
 
+    return
+
     """
     assert B.shape[1] == len(timediffs)
 
     # Velocity will be result of the inversion
-    velocity_array, _, rank_B, sing_vals_B = np.linalg.lstsq(B, dphis, rcond=None)
+    velocity_array, _, rank_B, sing_vals_B = np.linalg.lstsq(B, delta_phis, rcond=None)
     # velocity array entries: v_j = (phi_j - phi_j-1)/(t_j - t_j-1)
     velocity_array = np.squeeze(velocity_array)  # Remove singleton dim
 
     # Now integrate to get back to phases
     phi_diffs = timediffs * velocity_array
-    return velocity_array, np.cumsum(phi_diffs)
+
+    # Now the final phase results are the cumulative sum of delta phis
+    phi_arr = np.cumsum(phi_diffs)
+    # Add 0 as first entry of phase array to match geolist length
+    phi_arr = np.insert(phi_arr, 0, 0)
+
+    return velocity_array, phi_arr
 
 
-def run_inversion(igram_path, reference=(483, 493)):
+@log_runtime
+def run_inversion(igram_path, reference=(483, 493), verbose=True):
+    if verbose:
+        logger.setLevel(10)  # DEBUG
+
     intlist_path = os.path.join(igram_path, 'intlist')
     geolist_path = os.path.join(igram_path, 'geolist')
 
     intlist = read_intlist(filepath=intlist_path)
     geolist = read_geolist(filepath=geolist_path)
 
+    logger.DEBUG("Reading stack")
     unw_stack = read_unw_stack(igram_path, *reference)
+    logger.DEBUG("Reading stack complete")
+
+    # online answer attempt:
+    # # shared_arr = mp.RawArray(ctypes.c_double, unw_stack.size)
+    # # arr = tonumpyarray(shared_arr)
+    # # arr[:] = unw_stack
 
     # Prepare B matrix and timediffs used for each pixel inversion
     B = build_B_matrix(geolist, intlist)
     timediffs = find_time_diffs(geolist)
 
-    for idx in range(unw_stack.shape[0]):
-        for jdx in range(unw_stack.shape[1]):
-            dphis = unw_stack[idx, jdx]
-            varr, phiarr = invert_sbas(dphis, timediffs, B)
+    rows, cols = unw_stack.shape[:2]
 
-    # Add 0 as first entry of phase array to match geolist length
-    phiarr = np.insert(phiarr, 0, 0)
-    deformation = PHASE_TO_CM * phiarr
+    # for idx in range(unw_stack.shape[0]):
+    #     for jdx in range(unw_stack.shape[1]):
+    #         # grab time series along 3rd axis for pixel-wise inversion
+    #         delta_phis = unw_stack[idx, jdx]
+    #         varr, phi_arr = invert_sbas(delta_phis, timediffs, B)
+    #         deformation = PHASE_TO_CM * phi_arr
 
-    return geolist, phiarr, deformation, varr
+    # with closing(mp.Pool(initializer=init, initargs=(shared_arr, ))) as pool:
+    #     for result in pool.imap_unordered(lambda x: _invert_wrapper(unw_stack, x, timediffs, B),
+    #                                       _all_indices(rows, cols)):
+    #         print(result)
+    # pool.join()
+
+    num_complete = 0
+    with ProcessPoolExecutor(max_workers=20) as executor:
+        # Make a dict to refer back to which pixel is finished
+        future_to_row_col = {}
+        for row, col in _all_indices(rows, cols):
+            phi_arr = unw_stack[row, col]
+            future = executor.submit(invert_sbas, phi_arr, timediffs, B)
+            future_to_row_col[future] = (row, col)
+
+        for future in as_completed(future_to_row_col):
+            row, col = future_to_row_col[future]
+            varr, phi_arr = future.result()
+            logger.info("Completed %s, %s", row, col)
+            num_complete += 1
+            if num_complete % 1000 == 0:
+                logger.info("Completed %s pixels", num_complete)
+            deformation = PHASE_TO_CM * phi_arr
+
+    return geolist, phi_arr, deformation, varr
+
+
+def init(shared_arr_):
+    global shared_arr
+    shared_arr = shared_arr_  # must be inherited, not passed as an argument
+
+
+def tonumpyarray(mp_arr):
+    return np.frombuffer(mp_arr.get_obj())
+
+
+def _invert_wrapper(big_arr, row_col_tup, timediffs, B):
+    row, col = row_col_tup
+    phi_arr = big_arr[row, col]
+    return invert_sbas(phi_arr, timediffs, B)
