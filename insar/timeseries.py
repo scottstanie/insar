@@ -314,6 +314,21 @@ def cols_to_stack(columns, rows, cols):
 
 @log_runtime
 def run_inversion(igram_path, reference=(483, 493), verbose=False):
+    """Runs SBAS inversion on all unwrapped igrams
+
+    Args:
+        igram_path (str): path to the directory containing `intlist`,
+            the .int filenames, the .unw files, and the dem.rsc file
+        reference (tuple[int, int]): row and col index of the reference pixel to subtract
+        verbose (bool): print extra timing and debug info
+
+    Returns:
+        geolist (list[datetime]): dates of each SAR acquisition from read_geolist
+        phi_arr (ndarray): absolute phases of every pixel at each time
+        deformation (ndarray): matrix of deformations at each pixel and time
+        varr (ndarray): array of volocities solved for from SBAS inversion
+        unw_stack (ndarray): output of read_unw_stack (if desired)
+    """
     if verbose:
         logger.setLevel(10)  # DEBUG
 
@@ -336,7 +351,9 @@ def run_inversion(igram_path, reference=(483, 493), verbose=False):
     phi_columns = stack_to_cols(unw_stack)
 
     varr, phi_arr = invert_sbas(phi_columns, timediffs, B)
+    # Multiple by wavelength ratio to go from phase to cm
     deformation = PHASE_TO_CM * phi_arr
 
+    # Now reshape all outputs that should be in stack form
     return (geolist, cols_to_stack(phi_arr, rows, cols), cols_to_stack(deformation, rows, cols),
-            cols_to_stack(varr, rows, cols))
+            cols_to_stack(varr, rows, cols), unw_stack)
