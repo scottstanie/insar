@@ -76,7 +76,7 @@ def explore_stack(stack, geolist, image_num=-1, title=""):
     fig.colorbar(image)
 
     if not title:
-        title = "Press close and click again."
+        title = "Time series for pixel"
 
     def onclick(event):
         plt.figure(2)
@@ -85,9 +85,6 @@ def explore_stack(stack, geolist, image_num=-1, title=""):
         plt.plot(geolist, timeline)
         plt.title(title)
         plt.show()
-        print('%s click: button=%d, x=%d, y=%d, xdata=%f, ydata=%f' %
-              ('double' if event.dblclick else 'single', event.button, event.x, event.y,
-               event.xdata, event.ydata))
 
     cid = fig.canvas.mpl_connect('button_press_event', onclick)
     plt.show(block=True)
