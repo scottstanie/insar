@@ -1,3 +1,4 @@
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
@@ -29,11 +30,16 @@ def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=N
     if titles:
         assert len(titles) == num_images, "len(titles) must equal stack.shape[0]"
     else:
-        titles = ['' for _ in range(num_images)]
+        titles = ['' for _ in range(num_images)]  # blank titles, same length
 
+    # Use the same stack min and stack max for all colorbars/ color ranges
+    minval, maxval = np.min(stack), np.max(stack)
     fig, ax = plt.subplots()
-    image = plt.imshow(stack[0, :, :])  # Type: AxesImage
-    fig.colorbar(image)
+    image = plt.imshow(stack[0, :, :], vmin=minval, vmax=maxval)  # Type: AxesImage
+
+    cbar = fig.colorbar(image)
+    cbar_ticks = np.linspace(minval, maxval, num=6, endpoint=True)
+    cbar.set_ticks(cbar_ticks)
 
     def update_im(idx):
         image.set_data(stack[idx, :, :])
@@ -99,5 +105,5 @@ def view_stack(stack, geolist, image_num=-1, title=""):
         plt.legend(legend_entries)
         plt.show()
 
-    cid = imagefig.canvas.mpl_connect('button_press_event', onclick)
+    imagefig.canvas.mpl_connect('button_press_event', onclick)
     plt.show(block=True)
