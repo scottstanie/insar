@@ -80,7 +80,9 @@ def explore_stack(stack, geolist, image_num=-1, title=""):
 
     def onclick(event):
         plt.figure(2)
-        timeline = get_timeseries(int(event.y), int(event.x))
+        timeline = get_timeseries(int(event.ydata), int(event.xdata))
+        print(int(event.ydata), int(event.xdata))
+        print(timeline[-5:])
 
         plt.plot(geolist, timeline)
         plt.title(title)
