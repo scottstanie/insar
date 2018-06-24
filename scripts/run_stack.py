@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 """Runs all steps of interferogram processing
 
-    Usage: convert_snaphu.py --geojson "/path/to/dem.geojson" --rate 10 --max-height 10
+    See run_stack.py --help for explanation of all options
 
-    geojson used for bounding box of DEM
-    rate passed to dem upsampling routine
-    max_height passed to snaphu phase unwrapping
+    TODO: allow ranges of steps like https://stackoverflow.com/a/4726287
 
     Steps:
     1. Download precise orbits EOF files
