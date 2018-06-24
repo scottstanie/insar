@@ -75,7 +75,8 @@ def main():
         "--pause-time",
         type=int,
         default=200,
-        help="For --animate option, time in milliseconds to pause between stack layers.")
+        help=
+        "For --animate option, time in milliseconds to pause between stack layers (default 200).")
     parser.add_argument(
         "--save-title",
         help="For --animate option, If you want to save the animation as a movie,"

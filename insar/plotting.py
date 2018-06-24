@@ -1,6 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from insar.log import get_log
+
+logger = get_log()
 
 
 def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=None, **savekwargs):
@@ -47,13 +50,14 @@ def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=N
         return image,
 
     stack_ani = animation.FuncAnimation(
-        fig, update_im, frames=range(num_images), interval=pause_time, blit=False, repeat=False)
+        fig, update_im, frames=range(num_images), interval=pause_time, blit=False, repeat=True)
+
+    if save_title:
+        logger.info("Saving to %s", save_title)
+        stack_ani.save(save_title, **savekwargs)
 
     if display:
         plt.show()
-
-    if save_title:
-        stack_ani.save(save_title, **savekwargs)
 
 
 def view_stack(stack, geolist, image_num=-1, title=""):

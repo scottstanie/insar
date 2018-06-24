@@ -1,11 +1,8 @@
 import unittest
-import os
-from os.path import join, dirname, exists
+from os.path import join, dirname
 import tempfile
 import shutil
 import matplotlib.pyplot as plt
-import numpy as np
-from numpy.testing import assert_array_almost_equal
 
 from insar import plotting, timeseries
 
@@ -23,7 +20,6 @@ class TestPlotting(unittest.TestCase):
             plt.ioff()
 
             temp_dir = tempfile.mkdtemp()
-            animate_file = join(temp_dir, 'save.gif')
             plotting.animate_stack(self.stack, display=False)
 
             igram_files = timeseries.read_intlist(join(self.igram_path, 'intlist'), parse=False)
