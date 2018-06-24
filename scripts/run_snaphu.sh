@@ -6,8 +6,8 @@ call_snaphu() {
 	echo $#
 	INTFILE=$1
 	WIDTH=$2
-	CORNAME=$(echo $INTFILE | sed 's/.int/.cc/' )
-	OUTNAME=$(echo $INTFILE | sed 's/.int/.unw/' )
+	CORNAME=$(echo $INTFILE | sed 's/.int/.cc/' | sed 's/.lowpass//' )
+	OUTNAME=$(echo $INTFILE | sed 's/.int/.unw/' | sed 's/.lowpass//' )
 	echo "Running snaphu on $INTFILE with width $WIDTH: output to $OUTNAME"
 	~/phase_upwrap/bin/snaphu -s $INTFILE $WIDTH -c $CORNAME -o $OUTNAME;
 	return 0;
