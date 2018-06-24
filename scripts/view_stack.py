@@ -10,7 +10,7 @@ except ImportError:  # add root to pythonpath if import fails
 from insar import timeseries, plotting
 
 
-def explore_stack(igram_path=".", ref_row=None, ref_col=None):
+def view_stack(igram_path=".", ref_row=None, ref_col=None):
     try:
         deformation = np.load('deformation.npy')
         geolist = np.load('geolist.npy')
@@ -24,10 +24,10 @@ def explore_stack(igram_path=".", ref_row=None, ref_col=None):
         np.save('deformation.npy', deformation)
         np.save('geolist.npy', geolist)
 
-    plotting.explore_stack(deformation, geolist, image_num=-1)
+    plotting.view_stack(deformation, geolist, image_num=-1)
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--igram-path",
@@ -43,4 +43,8 @@ if __name__ == '__main__':
         type=int,
         help="Column number of pixel to use as unwrapping reference for SBAS inversion")
     args = parser.parse_args()
-    explore_stack(args.igram_path, args.ref_row, args.ref_col)
+    view_stack(args.igram_path, args.ref_row, args.ref_col)
+
+
+if __name__ == '__main__':
+    main()

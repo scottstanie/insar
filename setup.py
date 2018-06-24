@@ -31,7 +31,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="insar",
-    version="0.1.6",
+    version="0.1.7",
     author="Scott Staniewicz",
     author_email="scott.stanie@utexas.com",
     description="Tools for gathering and preprocessing InSAR data",
@@ -63,6 +63,8 @@ setuptools.setup(
             "create-dem=scripts.create_dem:main",
             "download-eofs=scripts.download_eofs:main",
             "view-dem=scripts.view_dem:main",
+            "run-stack=scripts.run_stack:main",
+            "view-stack=scripts.view_stack:main",
         ],
     },
     data_files=[("bin", ["bin/upsample"])],

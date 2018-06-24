@@ -50,7 +50,7 @@ def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=N
         stack_ani.save(save_title, **savekwargs)
 
 
-def explore_stack(stack, geolist, image_num=-1, title=""):
+def view_stack(stack, geolist, image_num=-1, title=""):
     """Displays an image from a stack, allows you to click for timeseries
 
     Args:
