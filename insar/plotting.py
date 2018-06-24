@@ -71,25 +71,33 @@ def explore_stack(stack, geolist, image_num=-1, title=""):
     def get_timeseries(row, col):
         return stack[:, row, col]
 
-    fig = plt.figure(1)
+    imagefig = plt.figure()
     image = plt.imshow(stack[image_num, :, :])  # Type: AxesImage
-    fig.colorbar(image)
+    imagefig.colorbar(image)
 
+    timefig = plt.figure()
     if not title:
         title = "Time series for pixel"
 
+    plt.title(title)
     legend_entries = []
 
     def onclick(event):
-        plt.figure(2)
+        # Ignore right/middle click, clicks off image
+        if event.button != 1 or not event.inaxes:
+            return
+        plt.figure(timefig.number)
         row, col = int(event.ydata), int(event.xdata)
-        timeline = get_timeseries(row, col)
+        try:
+            timeline = get_timeseries(row, col)
+        except IndexError:  # Somehow clicked outside image, but in axis
+            return
+
         legend_entries.append('Row %s, Col %s' % (row, col))
 
         plt.plot(geolist, timeline)
         plt.legend(legend_entries)
-        plt.title(title)
         plt.show()
 
-    cid = fig.canvas.mpl_connect('button_press_event', onclick)
+    cid = imagefig.canvas.mpl_connect('button_press_event', onclick)
     plt.show(block=True)
