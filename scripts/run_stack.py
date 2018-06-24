@@ -17,6 +17,7 @@
     7. convert .int files to .tif
     8. run snaphu to unwrap all .int files
     9. Convert snaphu outputs to .tif files
+    10. Run an SBAS inversion to get the LOS deformation
 
 """
 
@@ -26,12 +27,13 @@ import sys
 import subprocess
 import os
 from os.path import abspath, dirname
+import numpy as np
 try:
     import insar
 except ImportError:  # add root to pythonpath if import fails
     sys.path.insert(0, dirname(dirname(abspath(__file__))))
 
-import insar.sario
+from insar import sario, timeseries
 from insar.log import get_log, log_runtime
 from insar.utils import mkdir_p, which
 
@@ -87,7 +89,7 @@ def run_ps_sbas_igrams(args):
 
     logger.info("Gathering file size info from elevation.dem.rsc")
     elevation_dem_rsc_file = '../elevation.dem.rsc'
-    rsc_data = insar.sario.load_dem_rsc(elevation_dem_rsc_file)
+    rsc_data = sario.load_dem_rsc(elevation_dem_rsc_file)
     xsize, ysize = calc_sizes(args.rate, rsc_data['WIDTH'], rsc_data['FILE_LENGTH'])
 
     # the "1 1" is xstart ystart
@@ -104,16 +106,19 @@ def convert_int_tif(*a):
     # TODO: Make this into the script like the convert_snaphu
 
     # Default name by ps_sbas_igrams
-    igram_rsc = insar.sario.load_dem_rsc('dem.rsc')
+    igram_rsc = sario.load_dem_rsc('dem.rsc')
     convert1 = "for i in *.int ; do dismphfile $i {igram_width} ; mv dismph.tif `echo $i | sed 's/int$/tif/'` ; done".format(
         igram_width=igram_rsc['WIDTH'])
     subprocess.call(convert1, shell=True)
 
 
 def run_snaphu(args):
-    """8. run snaphu to unwrap all .int files"""
+    """8. run snaphu to unwrap all .int files
+
+    Assumes we are in the directory with all .unw files
+    """
     # TODO: probably shouldn't call these like this? idk alternative right now
-    igram_rsc = insar.sario.load_dem_rsc('dem.rsc')
+    igram_rsc = sario.load_dem_rsc('dem.rsc')
     subprocess.call(
         '~/repos/insar/scripts/run_snaphu.sh {width} {lowpass}'.format(
             width=igram_rsc['WIDTH'], lowpass=args.lowpass),
@@ -121,10 +126,25 @@ def run_snaphu(args):
 
 
 def convert_snaphu_tif(args):
-    """9. Convert snaphu outputs to .tif files"""
+    """9. Convert snaphu outputs to .tif files
+
+    Assumes we are in the directory with all .unw files
+    """
     subprocess.call(
         '~/repos/insar/scripts/convert_snaphu.py --max-height {}'.format(args.max_height),
         shell=True)
+
+
+def run_sbas_inversion(args):
+    """10. Perofrm SBAS inversion, save the deformation as .npy
+
+    Assumes we are in the directory with all .unw files"""
+    igram_path = os.path.realpath(os.getcwd())
+    geolist, phi_arr, deformation, varr, unw_stack = timeseries.run_inversion(
+        igram_path, reference=(args.ref_row, args.ref_col))
+    np.save('deformation.npy', deformation)
+    np.save('velocity_array.npy', varr)
+    np.save('geolist.npy', geolist)
 
 
 # List of functions that run each step
@@ -138,6 +158,7 @@ STEPS = [
     convert_int_tif,
     run_snaphu,
     convert_snaphu_tif,
+    run_sbas_inversion,
 ]
 # Form string for help function "1:download_eof,2:..."
 STEP_LIST = ',\n'.join("%d:%s" % (num, func.__name__) for (num, func) in enumerate(STEPS, start=1))
