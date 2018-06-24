@@ -7,6 +7,7 @@ As many as you'd like can be shown in different figures.
 With no arguments, searches for elevation.dem to show
 """
 import sys
+from os.path import dirname, abspath
 try:
     import insar
 except ImportError:  # add root to pythonpath if import fails
