@@ -95,7 +95,7 @@ def view_stack(stack, geolist, image_num=-1, title=""):
 
         legend_entries.append('Row %s, Col %s' % (row, col))
 
-        plt.plot(geolist, timeline)
+        plt.plot(geolist, timeline, marker='o', linestyle='dashed', linewidth=1, markersize=4)
         plt.legend(legend_entries)
         plt.show()
 
