@@ -8,6 +8,9 @@ try:
 except ImportError:  # add root to pythonpath if import fails
     sys.path.insert(0, dirname(dirname(abspath(__file__))))
 from insar import timeseries, plotting
+from insar.log import get_log
+
+logger = get_log()
 
 
 def load_deformation(igram_path, ref_row=None, ref_col=None):
@@ -15,10 +18,12 @@ def load_deformation(igram_path, ref_row=None, ref_col=None):
         deformation = np.load(join(igram_path, 'deformation.npy'))
         # geolist is a list of datetimes: encoding must be bytes
         geolist = np.load(join(igram_path, 'geolist.npy'), encoding='bytes')
+
     except (IOError, OSError):
         if not ref_col and not ref_col:
-            print("Need ref_row, ref_col to invert, or need deformation.npy and geolist.npy")
-            return
+            logger.error("deformation.npy or geolist.npy not found in path %s", igram_path)
+            logger.error("Need ref_row, ref_col to run inversion and create files")
+            return None, None
 
         geolist, phi_arr, deformation, varr, unw_stack = timeseries.run_inversion(
             igram_path, reference=(ref_row, ref_col))
@@ -31,6 +36,9 @@ def load_deformation(igram_path, ref_row=None, ref_col=None):
 def view_stack(args):
     """Wrapper to run `view_stack <plotting.view_stack>` with command line args"""
     geolist, deformation = load_deformation(args.igram_path, args.ref_row, args.ref_col)
+    if geolist is None or deformation is None:
+        return
+
     plotting.view_stack(deformation, geolist, image_num=-1)
 
 
@@ -70,13 +78,12 @@ def main():
     parser.add_argument(
         "--display",
         action="store_true",
-        help="For --animate option, select --display to pop up the GUI (instead of just saving)")
+        help="For --animate, select --display to pop up the GUI (instead of just saving)")
     parser.add_argument(
         "--pause-time",
         type=int,
         default=200,
-        help=
-        "For --animate option, time in milliseconds to pause between stack layers (default 200).")
+        help="For --animate, time in milliseconds to pause between stack layers (default 200).")
     parser.add_argument(
         "--save-title",
         help="For --animate option, If you want to save the animation as a movie,"
