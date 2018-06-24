@@ -95,10 +95,10 @@ def run_ps_sbas_igrams(args):
     # the "1 1" is xstart ystart
     # Default number of looks is the upsampling rate so that
     # the igram is the size of the original DEM (elevation_small.dem)
-    num_looks = args.num_looks or args.rate
+    looks = args.looks or args.rate
     logger.info("Running ps_sbas_igrams.py")
     ps_sbas_cmd = "~/sentinel/ps_sbas_igrams.py sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
-        rsc_file=elevation_dem_rsc_file, xsize=xsize, ysize=ysize, looks=num_looks)
+        rsc_file=elevation_dem_rsc_file, xsize=xsize, ysize=ysize, looks=looks)
     logger.info(ps_sbas_cmd)
     subprocess.check_call(ps_sbas_cmd, shell=True)
 
@@ -140,6 +140,10 @@ def run_sbas_inversion(args):
     """10. Perofrm SBAS inversion, save the deformation as .npy
 
     Assumes we are in the directory with all .unw files"""
+    if not args.ref_row or not args.ref_col:
+        logger.warning("--ref-row and --ref-col required for run_sbas_inversion: skipping.")
+        return
+
     igram_path = os.path.realpath(os.getcwd())
     geolist, phi_arr, deformation, varr, unw_stack = timeseries.run_inversion(
         igram_path, reference=(args.ref_row, args.ref_col))
@@ -202,9 +206,9 @@ def get_cli_args():
         default=500,
         help="Maximum spatial baseline for igrams (fed to sbas_list)")
     parser.add_argument(
-        "--num-looks",
+        "--looks",
         type=int,
-        help="Number of looks to perform on .geo files to shrink down .int"
+        help="Number of looks to perform on .geo files to shrink down .int, "
         "Default is the upsampling rate, makes the igram size=original DEM size")
     parser.add_argument(
         "--lowpass",
