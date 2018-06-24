@@ -78,13 +78,16 @@ def explore_stack(stack, geolist, image_num=-1, title=""):
     if not title:
         title = "Time series for pixel"
 
+    legend_entries = []
+
     def onclick(event):
         plt.figure(2)
-        timeline = get_timeseries(int(event.ydata), int(event.xdata))
-        print(int(event.ydata), int(event.xdata))
-        print(timeline[-5:])
+        row, col = int(event.ydata), int(event.xdata)
+        timeline = get_timeseries(row, col)
+        legend_entries.append('Row %s, Col %s' % (row, col))
 
         plt.plot(geolist, timeline)
+        plt.legend(legend_entries)
         plt.title(title)
         plt.show()
 
