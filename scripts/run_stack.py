@@ -93,11 +93,12 @@ def run_ps_sbas_igrams(args):
     xsize, ysize = calc_sizes(args.rate, rsc_data['WIDTH'], rsc_data['FILE_LENGTH'])
 
     # the "1 1" is xstart ystart
-    # We are using the upsampling rate as the number of looks so that
+    # Default number of looks is the upsampling rate so that
     # the igram is the size of the original DEM (elevation_small.dem)
+    num_looks = args.num_looks or args.rate
     logger.info("Running ps_sbas_igrams.py")
     ps_sbas_cmd = "~/sentinel/ps_sbas_igrams.py sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
-        rsc_file=elevation_dem_rsc_file, xsize=xsize, ysize=ysize, looks=args.rate)
+        rsc_file=elevation_dem_rsc_file, xsize=xsize, ysize=ysize, looks=num_looks)
     logger.info(ps_sbas_cmd)
     subprocess.check_call(ps_sbas_cmd, shell=True)
 
@@ -142,6 +143,7 @@ def run_sbas_inversion(args):
     igram_path = os.path.realpath(os.getcwd())
     geolist, phi_arr, deformation, varr, unw_stack = timeseries.run_inversion(
         igram_path, reference=(args.ref_row, args.ref_col))
+    logger.info("Saving deformation, velocity_array, and geolist")
     np.save('deformation.npy', deformation)
     np.save('velocity_array.npy', varr)
     np.save('geolist.npy', geolist)
@@ -200,10 +202,23 @@ def get_cli_args():
         default=500,
         help="Maximum spatial baseline for igrams (fed to sbas_list)")
     parser.add_argument(
+        "--num-looks",
+        type=int,
+        help="Number of looks to perform on .geo files to shrink down .int"
+        "Default is the upsampling rate, makes the igram size=original DEM size")
+    parser.add_argument(
         "--lowpass",
         type=int,
         default=1,
         help="Size of lowpass filter to use on igrams before unwrapping")
+    parser.add_argument(
+        "--ref-row",
+        type=int,
+        help="Row number of pixel to use as unwrapping reference for SBAS inversion")
+    parser.add_argument(
+        "--ref-col",
+        type=int,
+        help="Column number of pixel to use as unwrapping reference for SBAS inversion")
     return parser.parse_args()
 
 
