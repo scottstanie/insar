@@ -158,9 +158,8 @@ def eof_list(start_date):
     response.raise_for_status()
 
     if response.json()['count'] < 1:
-        raise ValueError(
-            'No EOF files found for {} at {}'.format(start_date.strftime(DATE_FMT), url)
-        )
+        raise ValueError('No EOF files found for {} at {}'.format(
+            start_date.strftime(DATE_FMT), url))
 
     return [result['remote_url'] for result in response.json()['results']]
 
@@ -203,11 +202,8 @@ def find_sentinel_products(startpath='./'):
         mission = parser.mission()
         if start_date in orbit_dates:
             continue
-        logger.info(
-            "Downloading precise orbits for {} on {}".format(
-                mission, start_date.strftime('%Y-%m-%d')
-            )
-        )
+        logger.info("Downloading precise orbits for {} on {}".format(
+            mission, start_date.strftime('%Y-%m-%d')))
         orbit_dates.append(start_date)
         missions.append(mission)
 

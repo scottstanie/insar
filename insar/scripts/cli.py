@@ -12,8 +12,7 @@ import matplotlib.pyplot as plt
     '--path',
     type=click.Path(exists=False, file_okay=False, writable=True),
     default='.',
-    help="Path to switch to and run command in"
-)
+    help="Path to switch to and run command in")
 @click.pass_context
 def cli(ctx, verbose, path):
     """Command line tools for processing insar."""
@@ -30,8 +29,7 @@ def cli(ctx, verbose, path):
     "--mission",
     "-m",
     type=click.Choice(["S1A", "S1B"]),
-    help="Sentinel satellite to download (None gets both S1A and S1B)"
-)
+    help="Sentinel satellite to download (None gets both S1A and S1B)")
 @click.pass_obj
 def download(context, **kwargs):
     """Download Sentinel precise orbit files.
@@ -52,25 +50,25 @@ def download(context, **kwargs):
     "-g",
     required=True,
     type=click.File('r'),
-    help="File containing the geojson object for DEM bounds"
-)
+    help="File containing the geojson object for DEM bounds")
 @click.option(
     "--rate",
     "-r",
     default=1,
     type=click.IntRange(0, 30),  # Reasonable range of upsampling rates
-    help="Rate at which to upsample DEM (default=1, no upsampling)"
-)
+    help="Rate at which to upsample DEM (default=1, no upsampling)")
 @click.option(
-    "--output", "-o", type=click.File('w'), default="elevation.dem", help="Name of output dem file"
-)
+    "--output",
+    "-o",
+    type=click.File('w'),
+    default="elevation.dem",
+    help="Name of output dem file (default=elevation.dem)")
 @click.option(
     "--data-source",
     "-d",
     type=click.Choice(['NASA', 'AWS']),
     default='NASA',
-    help="Source of SRTM data. See insar.dem docstring for more about data."
-)
+    help="Source of SRTM data. See insar.dem docstring for more about data.")
 @click.pass_obj
 def dem(context, **kwargs):
     """Stiches .hgt files to make one DEM and .dem.rsc file
@@ -96,55 +94,46 @@ def dem(context, **kwargs):
 @cli.command()
 @click.option('--geojson', '-g', help="File containing the geojson object for DEM bounds")
 @click.option(
-    "--rate", "-r", default=1, help="Rate at which to upsample DEM (default=1, no upsampling)"
-)
+    "--rate", "-r", default=1, help="Rate at which to upsample DEM (default=1, no upsampling)")
 @click.option(
     "--max-height",
     default=10,
     help="Maximum height/max absolute phase for converting .unw files to .tif"
-    "(used for contour_interval option to dishgt)"
-)
+    "(used for contour_interval option to dishgt)")
 @click.option(
     "--step",
     "-s",
     type=click.IntRange(min=1, max=len(insar.scripts.process.STEPS)),
     help="Choose which step to start on. Steps: {}".format(insar.scripts.process.STEP_LIST),
-    default=1
-)
+    default=1)
 @click.option(
     "--max-temporal",
     type=int,
     default=500,
-    help="Maximum temporal baseline for igrams (fed to sbas_list)"
-)
+    help="Maximum temporal baseline for igrams (fed to sbas_list)")
 @click.option(
     "--max-spatial",
     type=int,
     default=500,
-    help="Maximum spatial baseline for igrams (fed to sbas_list)"
-)
+    help="Maximum spatial baseline for igrams (fed to sbas_list)")
 @click.option(
     "--looks",
     type=int,
     help="Number of looks to perform on .geo files to shrink down .int, "
-    "Default is the upsampling rate, makes the igram size=original DEM size"
-)
+    "Default is the upsampling rate, makes the igram size=original DEM size")
 @click.option(
     "--lowpass",
     type=int,
     default=1,
-    help="Size of lowpass filter to use on igrams before unwrapping"
-)
+    help="Size of lowpass filter to use on igrams before unwrapping")
 @click.option(
     "--ref-row",
     type=int,
-    help="Row number of pixel to use as unwrapping reference for SBAS inversion"
-)
+    help="Row number of pixel to use as unwrapping reference for SBAS inversion")
 @click.option(
     "--ref-col",
     type=int,
-    help="Column number of pixel to use as unwrapping reference for SBAS inversion"
-)
+    help="Column number of pixel to use as unwrapping reference for SBAS inversion")
 @click.pass_obj
 def process(context, **kwargs):
     """Process stack of Sentinel interferograms.
@@ -200,27 +189,22 @@ def view_dem(demfile):
     "--ref-row",
     '-r',
     type=click.INT,
-    help="Row number of pixel to use as unwrapping reference (for SBAS inversion)"
-)
+    help="Row number of pixel to use as unwrapping reference (for SBAS inversion)")
 @click.option(
     "--ref-col",
     '-c',
     type=click.INT,
-    help="Column number of pixel to use as unwrapping reference (for SBAS inversion)"
-)
+    help="Column number of pixel to use as unwrapping reference (for SBAS inversion)")
 @click.option(
     "--pause",
     default=200,
     help="For --animate, time in milliseconds to pause"
-    " between stack layers (default 200)."
-)
+    " between stack layers (default 200).")
 @click.option(
     "--save-title", help="If you want to save the animation as a movie,"
-    " title to save file as."
-)
+    " title to save file as.")
 @click.option(
-    "--display/--no-display", help="Pop up matplotlib figure to view (instead of just saving)"
-)
+    "--display/--no-display", help="Pop up matplotlib figure to view (instead of just saving)")
 @click.pass_obj
 def animate(context, pause, ref_row, ref_col, save_title, display):
     """Creates animation for 3D image stack.
@@ -236,8 +220,7 @@ def animate(context, pause, ref_row, ref_col, save_title, display):
     geolist, deformation = insar.timeseries.load_deformation(context['path'], ref_row, ref_col)
     titles = [d.strftime("%Y-%m-%d") for d in geolist]
     insar.plotting.animate_stack(
-        deformation, pause_time=pause, display=display, titles=titles, save_title=save_title
-    )
+        deformation, pause_time=pause, display=display, titles=titles, save_title=save_title)
 
 
 # COMMAND: view_stack
@@ -246,14 +229,12 @@ def animate(context, pause, ref_row, ref_col, save_title, display):
     "--ref-row",
     '-r',
     type=click.INT,
-    help="Row number of pixel to use as unwrapping reference (for SBAS inversion)"
-)
+    help="Row number of pixel to use as unwrapping reference (for SBAS inversion)")
 @click.option(
     "--ref-col",
     '-c',
     type=click.INT,
-    help="Column number of pixel to use as unwrapping reference (for SBAS inversion)"
-)
+    help="Column number of pixel to use as unwrapping reference (for SBAS inversion)")
 @click.pass_obj
 def view_stack(context, ref_row, ref_col):
     """Explore timeseries on deformation image.
