@@ -43,6 +43,7 @@ def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=N
     cbar = fig.colorbar(image)
     cbar_ticks = np.linspace(minval, maxval, num=6, endpoint=True)
     cbar.set_ticks(cbar_ticks)
+    cbar.set_label("Centimeters")
 
     def update_im(idx):
         image.set_data(stack[idx, :, :])
@@ -50,7 +51,8 @@ def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=N
         return image,
 
     stack_ani = animation.FuncAnimation(
-        fig, update_im, frames=range(num_images), interval=pause_time, blit=False, repeat=True)
+        fig, update_im, frames=range(num_images), interval=pause_time, blit=False, repeat=True
+    )
 
     if save_title:
         logger.info("Saving to %s", save_title)
@@ -83,7 +85,8 @@ def view_stack(stack, geolist, image_num=-1, title=""):
 
     imagefig = plt.figure()
     image = plt.imshow(stack[image_num, :, :])  # Type: AxesImage
-    imagefig.colorbar(image)
+    cbar = imagefig.colorbar(image)
+    cbar.set_label("Centimeters")
 
     timefig = plt.figure()
     if not title:
@@ -107,6 +110,8 @@ def view_stack(stack, geolist, image_num=-1, title=""):
 
         plt.plot(geolist, timeline, marker='o', linestyle='dashed', linewidth=1, markersize=4)
         plt.legend(legend_entries)
+        plt.xlabel("SAR image date")
+        plt.ylabel("Centimeters")
         plt.show()
 
     imagefig.canvas.mpl_connect('button_press_event', onclick)
