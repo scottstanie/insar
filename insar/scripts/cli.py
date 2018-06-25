@@ -1,5 +1,6 @@
 """Main entry point to manage all other sub commands
 """
+import os
 import click
 import insar.scripts.process as procc
 
@@ -16,15 +17,17 @@ import insar.scripts.process as procc
 @click.option(
     '--path',
     type=click.Path(exists=False, file_okay=True, writable=True),
+    default='.',
     help="Path to switch to and run command in")
 @click.pass_context
-def cli(context, verbose, path):
+def cli(ctx, verbose, path):
     """Help for the insar group of command"""
-    context.obj = {}
-    context.obj['verbose'] = verbose
-    if path:
-        context.obj['path'] = path
-        logger.info("Changing directory to {}".format(path))
+    # Store these to be passed to all sub commands
+    ctx.obj = {}
+    ctx.obj['verbose'] = verbose
+    ctx.obj['path'] = path
+    if path and path != ".":
+        click.echo("Changing directory to {}".format(path))
         os.chdir(path)
 
 
@@ -72,18 +75,12 @@ def cli(context, verbose, path):
     "--ref-col",
     type=int,
     help="Column number of pixel to use as unwrapping reference for SBAS inversion")
-# @click.pass_obj
-def process(**kwargs):
+@click.pass_obj
+def process(context, **kwargs):
     """Process a stack of Sentinel interferograms
 
     Contains the steps from SLC .geo creation to SBAS deformation inversion"""
-    print('context obj verbose in process func')
-    # print(context)
-    print(kwargs)
-    # if context.obj['verbose']:
-    # click.echo("Verbose mode")
+    if context['verbose']:
+        click.echo("Verbose mode")
+
     procc.main(kwargs)
-
-
-if __name__ == '__main__':
-    cli(obj={})
