@@ -27,6 +27,7 @@ def cli(ctx, verbose, path):
 
 
 # COMMAND: DOWNLOAD
+@cli.command()
 @click.option("--date", "-r", help="Validity date for EOF to download")
 @click.option(
     "--mission",
@@ -36,10 +37,59 @@ def cli(ctx, verbose, path):
 )
 @click.pass_obj
 def download(context, **kwargs):
-    """Download EOFs for specific date, or for Sentinel files in --path.
-       With arguments, searches current directory for Sentinel 1 products
+    """Download Sentinel precise orbit files.
+
+    Download EOFs for specific date, or for Sentinel files in --path.
+    With arguments, searches current directory for Sentinel 1 products
     """
     insar.eofs.main(kwargs['mission'], kwargs['date'])
+
+
+# COMMAND: DEM
+@cli.command()
+@click.option(
+    "--geojson",
+    "-g",
+    required=True,
+    type=click.File('r'),
+    help="File containing the geojson object for DEM bounds"
+)
+@click.option(
+    "--rate",
+    "-r",
+    default=1,
+    type=click.IntRange(0, 30),  # Reasonable range of upsampling rates
+    help="Rate at which to upsample DEM (default=1, no upsampling)"
+)
+@click.option(
+    "--output", "-o", type=click.File('w'), default="elevation.dem", help="Name of output dem file"
+)
+@click.option(
+    "--data-source",
+    "-d",
+    type=click.Choice(['NASA', 'AWS']),
+    default='NASA',
+    help="Source of SRTM data. See insar.dem docstring for more about data."
+)
+@click.pass_obj
+def dem(context, **kwargs):
+    """Stiches .hgt files to make one DEM and .dem.rsc file
+
+    Pick a lat/lon bounding box for a DEM, and it will download
+    the necessary SRTM1 tile, combine into one array,
+    then upsample using upsample.c
+
+    Suggestion for box: http://geojson.io gives you geojson for any polygon
+    Take the output of that and save to a file (e.g. mybox.geojson
+
+    Usage:
+        insar dem --geojson data/mybox.geojson --rate 2
+        insar dem -g data/mybox.geojson -r 2 -o elevation.dem
+
+    Default out is elevation.dem for upsampled version, elevation_small.dem
+    Also creates elevation.dem.rsc with start lat/lon, stride, and other info.
+    """
+    insar.dem.main(kwargs['mission'], kwargs['date'])
 
 
 # COMMAND: PROCESS
@@ -97,7 +147,7 @@ def download(context, **kwargs):
 )
 @click.pass_obj
 def process(context, **kwargs):
-    """Process a stack of Sentinel interferograms
+    """Process stack of Sentinel interferograms.
 
     Contains the steps from SLC .geo creation to SBAS deformation inversion"""
     if context['verbose']:

@@ -108,7 +108,9 @@ def _get_username_pass():
     password = getpass.getpass(prompt="Password (will not be displayed): ")
     save_to_netrc = input(
         "Would you like to save these to ~/.netrc (machine={}) for future use (y/n)?  ".format(
-            Downloader.NASAHOST))
+            Downloader.NASAHOST
+        )
+    )
 
 
 class Netrc(netrc.netrc):
@@ -179,8 +181,9 @@ class Tile:
         lon_lat_regex = r'([NS])(\d{1,2})([EW])(\d{1,3}).hgt'
         match = re.match(lon_lat_regex, tile_name)
         if not match:
-            raise ValueError('Invalid SRTM1 tile name: {}, must match {}'.format(
-                tile_name, lon_lat_regex))
+            raise ValueError(
+                'Invalid SRTM1 tile name: {}, must match {}'.format(tile_name, lon_lat_regex)
+            )
 
         lat_str, lat, lon_str, lon = match.groups()
         return lat_str, int(lat), lon_str, int(lon)
@@ -263,12 +266,14 @@ class Downloader:
     COMPRESS_TYPES = {'NASA': 'zip', 'AWS': 'gz'}
     NASAHOST = 'urs.earthdata.nasa.gov'
 
-    def __init__(self,
-                 tile_names,
-                 data_source='NASA',
-                 netrc_file='~/.netrc',
-                 parallel_ok=PARALLEL,
-                 cache_dir=None):
+    def __init__(
+        self,
+        tile_names,
+        data_source='NASA',
+        netrc_file='~/.netrc',
+        parallel_ok=PARALLEL,
+        cache_dir=None
+    ):
         self.tile_names = tile_names
         self.data_source = data_source
         if data_source not in self.VALID_SOURCES:
@@ -286,8 +291,10 @@ class Downloader:
         try:
             n = self._get_netrc_file()
             # Check account exists, as well is having username and password
-            return (self.NASAHOST in n.hosts and n.authenticators(self.NASAHOST)[0]
-                    and n.authenticators(self.NASAHOST)[2])
+            return (
+                self.NASAHOST in n.hosts and n.authenticators(self.NASAHOST)[0]
+                and n.authenticators(self.NASAHOST)[2]
+            )
         except (OSError, IOError):
             return False
 
@@ -349,12 +356,14 @@ class Downloader:
                 base=self.data_url,
                 lat=lat_str + str(lat_int),
                 tile=tile_name,
-                ext=self.compress_type)
+                ext=self.compress_type
+            )
         elif self.data_source == 'NASA':
             url = '{base}/{tile}.{ext}'.format(
                 base=self.data_url,
                 tile=tile_name.replace('.hgt', '.SRTMGL1.hgt'),
-                ext=self.compress_type)
+                ext=self.compress_type
+            )
         return url
 
     def _download_hgt_tile(self, url):
@@ -423,8 +432,7 @@ class Downloader:
     def download_all(self):
         """Downloads and saves all tiles from tile list"""
         # Only need to get credentials for this case:
-        if not self._all_files_exist() and self.data_source == 'NASA' and not self._has_nasa_netrc(
-        ):
+        if not self._all_files_exist() and self.data_source == 'NASA' and not self._has_nasa_netrc():
             self.handle_credentials()
 
         if self.parallel_ok:
@@ -785,6 +793,102 @@ def create_kml(rsc_data, tif_filename, title="Title", desc="Description"):
 </kml>
 """
     output = template.format(
-        title=title, description=desc, tif_filename=tif_filename, **rsc_bounds(rsc_data))
+        title=title, description=desc, tif_filename=tif_filename, **rsc_bounds(rsc_data)
+    )
 
     return output
+
+
+def main(kwargs):
+    """Stiches .hgt files to make one DEM and .dem.rsc file
+
+    Pick a lat/lon bounding box for a DEM, and it will download
+    the necessary SRTM1 tile, combine into one array,
+    then upsample using upsample.c
+
+    Suggestion for box: http://geojson.io gives you geojson for any polygon
+    Take the output of that and save to a file (e.g. mybox.geojson
+
+
+    Usage:
+        python scripts/create_dem.py --geojson data/mybox.geojson --rate 2
+        python scripts/create_dem.py -g data/mybox.geojson -r 2 -o elevation.dem
+
+    Default out is elevation.dem for upsampled version, elevation_small.dem
+    Also creates elevation.dem.rsc with start lat/lon, stride, and other info.
+    """
+    logger = get_log()
+
+    geojson = json.load(kwargs['geojson'])
+    bounds = insar.geojson.bounding_box(geojson)
+    logger.info("Bounds: %s", " ".join(str(b) for b in bounds))
+
+    tile_names = list(insar.dem.Tile(*bounds).srtm1_tile_names())
+    d = insar.dem.Downloader(tile_names, data_source=kwargs['data_source'])
+    d.download_all()
+
+    s = insar.dem.Stitcher(tile_names)
+    stitched_dem = s.load_and_stitch()
+
+    # Now create corresponding rsc file
+    rsc_dict = s.create_dem_rsc()
+
+    # Cropping: get very close to the bounds asked for:
+    logger.info("Cropping stitched DEM to boundaries")
+    stitched_dem, new_starts, new_sizes = insar.dem.crop_stitched_dem(
+        bounds, stitched_dem, rsc_dict
+    )
+    new_x_first, new_y_first = new_starts
+    new_rows, new_cols = new_sizes
+    # Now adjust the .dem.rsc data to reflect new top-left corner and new shape
+    rsc_dict['X_FIRST'] = new_x_first
+    rsc_dict['Y_FIRST'] = new_y_first
+    rsc_dict['FILE_LENGTH'] = new_rows
+    rsc_dict['WIDTH'] = new_cols
+
+    # Upsampling:
+    rate = kwargs['rate']
+    dem_filename = kwargs['output']
+    rsc_filename = dem_filename + '.rsc'
+    if rate == 1:
+        logger.info("Rate = 1: No upsampling to do")
+        logger.info("Writing DEM to %s", dem_filename)
+        stitched_dem.tofile(dem_filename)
+        logger.info("Writing .dem.rsc file to %s", rsc_filename)
+        with open(rsc_filename, "w") as f:
+            f.write(format_dem_rsc(rsc_dict))
+        sys.exit(0)
+
+    logger.info("Upsampling by {}".format(rate))
+    dem_filename_small = dem_filename.replace(".dem", "_small.dem")
+    rsc_filename_small = rsc_filename.replace(".dem.rsc", "_small.dem.rsc")
+
+    logger.info("Writing non-upsampled dem temporarily to %s", dem_filename_small)
+    stitched_dem.tofile(dem_filename_small)
+    logger.info("Writing non-upsampled dem.rsc temporarily to %s", rsc_filename_small)
+    with open(rsc_filename_small, "w") as f:
+        f.write(format_dem_rsc(rsc_dict))
+
+    # Now upsample this block
+    nrows, ncols = stitched_dem.shape
+    upsample_path = 'bin/upsample' if exists('bin/upsample') else 'upsample'
+    upsample_cmd = [
+        which(upsample_path), dem_filename_small,
+        str(rate),
+        str(ncols),
+        str(nrows), dem_filename
+    ]
+    logger.info("Upsampling using %s:", upsample_cmd[0])
+    logger.info(' '.join(upsample_cmd))
+    subprocess.check_call(upsample_cmd)
+
+    # Redo a new .rsc file for it
+    logger.info("Writing new upsampled dem to %s", rsc_filename)
+    with open(rsc_filename, "w") as f:
+        upsampled_rsc = insar.dem.upsample_dem_rsc(rate=rate, rsc_dict=rsc_dict)
+        f.write(upsampled_rsc)
+
+    # Clean up the _small versions of dem and dem.rsc
+    logger.info("Cleaning up %s and %s", dem_filename_small, rsc_filename_small)
+    os.remove(dem_filename_small)
+    os.remove(rsc_filename_small)
