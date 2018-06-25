@@ -51,17 +51,19 @@ except ImportError:  # Python 2 doesn't have this :(
     PARALLEL = False
 import collections
 import getpass
+import json
 import math
 import netrc
 import os
 import re
-import requests
 import subprocess
+import sys
 import numpy as np
+import requests
 
+import insar
 from insar.log import get_log
-from insar.utils import floor_float
-from insar import sario
+from insar import sario, utils
 
 try:
     input = raw_input  # Check for python 2
@@ -108,9 +110,8 @@ def _get_username_pass():
     password = getpass.getpass(prompt="Password (will not be displayed): ")
     save_to_netrc = input(
         "Would you like to save these to ~/.netrc (machine={}) for future use (y/n)?  ".format(
-            Downloader.NASAHOST
-        )
-    )
+            Downloader.NASAHOST))
+    return username, password, save_to_netrc.lower().startswith('y')
 
 
 class Netrc(netrc.netrc):
@@ -181,9 +182,8 @@ class Tile:
         lon_lat_regex = r'([NS])(\d{1,2})([EW])(\d{1,3}).hgt'
         match = re.match(lon_lat_regex, tile_name)
         if not match:
-            raise ValueError(
-                'Invalid SRTM1 tile name: {}, must match {}'.format(tile_name, lon_lat_regex)
-            )
+            raise ValueError('Invalid SRTM1 tile name: {}, must match {}'.format(
+                tile_name, lon_lat_regex))
 
         lat_str, lat, lon_str, lon = match.groups()
         return lat_str, int(lat), lon_str, int(lon)
@@ -266,14 +266,12 @@ class Downloader:
     COMPRESS_TYPES = {'NASA': 'zip', 'AWS': 'gz'}
     NASAHOST = 'urs.earthdata.nasa.gov'
 
-    def __init__(
-        self,
-        tile_names,
-        data_source='NASA',
-        netrc_file='~/.netrc',
-        parallel_ok=PARALLEL,
-        cache_dir=None
-    ):
+    def __init__(self,
+                 tile_names,
+                 data_source='NASA',
+                 netrc_file='~/.netrc',
+                 parallel_ok=PARALLEL,
+                 cache_dir=None):
         self.tile_names = tile_names
         self.data_source = data_source
         if data_source not in self.VALID_SOURCES:
@@ -291,14 +289,10 @@ class Downloader:
         try:
             n = self._get_netrc_file()
             # Check account exists, as well is having username and password
-            return (
-                self.NASAHOST in n.hosts and n.authenticators(self.NASAHOST)[0]
-                and n.authenticators(self.NASAHOST)[2]
-            )
+            return (self.NASAHOST in n.hosts and n.authenticators(self.NASAHOST)[0]
+                    and n.authenticators(self.NASAHOST)[2])
         except (OSError, IOError):
             return False
-
-        return username, password, save_to_netrc.lower().startswith('y')
 
     @staticmethod
     def _nasa_netrc_entry(username, password):
@@ -356,14 +350,12 @@ class Downloader:
                 base=self.data_url,
                 lat=lat_str + str(lat_int),
                 tile=tile_name,
-                ext=self.compress_type
-            )
+                ext=self.compress_type)
         elif self.data_source == 'NASA':
             url = '{base}/{tile}.{ext}'.format(
                 base=self.data_url,
                 tile=tile_name.replace('.hgt', '.SRTMGL1.hgt'),
-                ext=self.compress_type
-            )
+                ext=self.compress_type)
         return url
 
     def _download_hgt_tile(self, url):
@@ -432,7 +424,8 @@ class Downloader:
     def download_all(self):
         """Downloads and saves all tiles from tile list"""
         # Only need to get credentials for this case:
-        if not self._all_files_exist() and self.data_source == 'NASA' and not self._has_nasa_netrc():
+        if not self._all_files_exist() and self.data_source == 'NASA' and not self._has_nasa_netrc(
+        ):
             self.handle_credentials()
 
         if self.parallel_ok:
@@ -605,7 +598,7 @@ class Stitcher:
             >>> print(s._find_step_sizes())
             (0.000277777777, -0.000277777777)
         """
-        step_size = floor_float(1 / (self.num_pixels - 1), ndigits)
+        step_size = utils.floor_float(1 / (self.num_pixels - 1), ndigits)
         return (step_size, -1 * step_size)
 
     def create_dem_rsc(self):
@@ -793,22 +786,21 @@ def create_kml(rsc_data, tif_filename, title="Title", desc="Description"):
 </kml>
 """
     output = template.format(
-        title=title, description=desc, tif_filename=tif_filename, **rsc_bounds(rsc_data)
-    )
+        title=title, description=desc, tif_filename=tif_filename, **rsc_bounds(rsc_data))
 
     return output
 
 
-def main(kwargs):
+def main(geojson, data_source, rate, output):
     """Function for entry point to create a DEM with `insar dem`"""
     logger = get_log()
 
-    geojson = json.load(kwargs['geojson'])
+    geojson = json.load(geojson)
     bounds = insar.geojson.bounding_box(geojson)
     logger.info("Bounds: %s", " ".join(str(b) for b in bounds))
 
     tile_names = list(insar.dem.Tile(*bounds).srtm1_tile_names())
-    d = insar.dem.Downloader(tile_names, data_source=kwargs['data_source'])
+    d = insar.dem.Downloader(tile_names, data_source=data_source)
     d.download_all()
 
     s = insar.dem.Stitcher(tile_names)
@@ -819,9 +811,8 @@ def main(kwargs):
 
     # Cropping: get very close to the bounds asked for:
     logger.info("Cropping stitched DEM to boundaries")
-    stitched_dem, new_starts, new_sizes = insar.dem.crop_stitched_dem(
-        bounds, stitched_dem, rsc_dict
-    )
+    stitched_dem, new_starts, new_sizes = insar.dem.crop_stitched_dem(bounds, stitched_dem,
+                                                                      rsc_dict)
     new_x_first, new_y_first = new_starts
     new_rows, new_cols = new_sizes
     # Now adjust the .dem.rsc data to reflect new top-left corner and new shape
@@ -831,8 +822,8 @@ def main(kwargs):
     rsc_dict['WIDTH'] = new_cols
 
     # Upsampling:
-    rate = kwargs['rate']
-    dem_filename = kwargs['output']
+    rate = rate
+    dem_filename = output.name  # Note: output is a 'LazyFile' from click
     rsc_filename = dem_filename + '.rsc'
     if rate == 1:
         logger.info("Rate = 1: No upsampling to do")
@@ -840,7 +831,7 @@ def main(kwargs):
         stitched_dem.tofile(dem_filename)
         logger.info("Writing .dem.rsc file to %s", rsc_filename)
         with open(rsc_filename, "w") as f:
-            f.write(format_dem_rsc(rsc_dict))
+            f.write(sario.format_dem_rsc(rsc_dict))
         sys.exit(0)
 
     logger.info("Upsampling by {}".format(rate))
@@ -851,13 +842,13 @@ def main(kwargs):
     stitched_dem.tofile(dem_filename_small)
     logger.info("Writing non-upsampled dem.rsc temporarily to %s", rsc_filename_small)
     with open(rsc_filename_small, "w") as f:
-        f.write(format_dem_rsc(rsc_dict))
+        f.write(sario.format_dem_rsc(rsc_dict))
 
     # Now upsample this block
     nrows, ncols = stitched_dem.shape
-    upsample_path = 'bin/upsample' if exists('bin/upsample') else 'upsample'
+    upsample_path = 'bin/upsample' if os.path.exists('bin/upsample') else 'upsample'
     upsample_cmd = [
-        which(upsample_path), dem_filename_small,
+        utils.which(upsample_path), dem_filename_small,
         str(rate),
         str(ncols),
         str(nrows), dem_filename

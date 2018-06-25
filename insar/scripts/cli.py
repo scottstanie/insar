@@ -70,7 +70,7 @@ def download(context, **kwargs):
     default='NASA',
     help="Source of SRTM data. See insar.dem docstring for more about data.")
 @click.pass_obj
-def dem(context, **kwargs):
+def dem(context, geojson, data_source, rate, output):
     """Stiches .hgt files to make one DEM and .dem.rsc file
 
     Pick a lat/lon bounding box for a DEM, and it will download
@@ -81,13 +81,15 @@ def dem(context, **kwargs):
     Take the output of that and save to a file (e.g. mybox.geojson
 
     Usage:
+
         insar dem --geojson data/mybox.geojson --rate 2
+
         insar dem -g data/mybox.geojson -r 2 -o elevation.dem
 
     Default out is elevation.dem for upsampled version, elevation_small.dem
     Also creates elevation.dem.rsc with start lat/lon, stride, and other info.
     """
-    insar.dem.main(kwargs['mission'], kwargs['date'])
+    insar.dem.main(geojson, data_source, rate, output)
 
 
 # COMMAND: PROCESS
