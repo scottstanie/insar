@@ -39,7 +39,7 @@ def download(context, **kwargs):
     """Download EOFs for specific date, or for Sentinel files in --path.
        With arguments, searches current directory for Sentinel 1 products
     """
-    pass
+    insar.eofs.main(kwargs['mission'], kwargs['date'])
 
 
 # COMMAND: PROCESS

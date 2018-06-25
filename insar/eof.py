@@ -37,7 +37,7 @@ import requests
 from datetime import timedelta
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
-from insar.log import get_log
+from insar.log import get_log, log_runtime
 from insar.parsers import Sentinel
 
 logger = get_log()
@@ -157,8 +157,9 @@ def eof_list(start_date):
     response.raise_for_status()
 
     if response.json()['count'] < 1:
-        raise ValueError('No EOF files found for {} at {}'.format(
-            start_date.strftime(DATE_FMT), url))
+        raise ValueError(
+            'No EOF files found for {} at {}'.format(start_date.strftime(DATE_FMT), url)
+        )
 
     return [result['remote_url'] for result in response.json()['results']]
 
@@ -200,9 +201,31 @@ def find_sentinel_products(startpath='./'):
         mission = parser.mission()
         if start_date in orbit_dates:
             continue
-        logger.info("Downloading precise orbits for {} on {}".format(
-            mission, start_date.strftime('%Y-%m-%d')))
+        logger.info(
+            "Downloading precise orbits for {} on {}".format(
+                mission, start_date.strftime('%Y-%m-%d')
+            )
+        )
         orbit_dates.append(start_date)
         missions.append(mission)
 
     return orbit_dates, missions
+
+
+@log_runtime
+def main(mission=None, date=None):
+    """Function used for entry point to download eofs"""
+    if (mission and not date):
+        logger.error("Must specify date if specifying mission.")
+        sys.exit(1)
+    if not date:
+        # No command line args given: search current directory
+        orbit_dates, missions = insar.eof.find_sentinel_products(args.path)
+        if not orbit_dates:
+            logger.info("No Sentinel products found in current directory. Exiting")
+            sys.exit(0)
+    if args.date:
+        orbit_dates = [args.date]
+        missions = list(args.mission) if args.mission else []
+
+    download_eofs(orbit_dates, missions=missions)
