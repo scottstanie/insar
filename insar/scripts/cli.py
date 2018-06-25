@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 @click.option('--verbose', is_flag=True)
 @click.option(
     '--path',
-    type=click.Path(exists=False, file_okay=True, writable=True),
+    type=click.Path(exists=False, file_okay=False, writable=True),
     default='.',
     help="Path to switch to and run command in"
 )
@@ -193,3 +193,77 @@ def view_dem(demfile):
 
     # Wait for windows to close to exit the script
     plt.show(block=True)
+
+
+# COMMAND: animate
+@cli.command()
+@click.option(
+    "--ref-row",
+    type=int,
+    help="Row number of pixel to use as unwrapping reference (for SBAS inversion)"
+)
+@click.option(
+    "--ref-col",
+    type=int,
+    help="Column number of pixel to use as unwrapping reference (for SBAS inversion)"
+)
+@click.option(
+    "--pause",
+    default=200,
+    help="For --animate, time in milliseconds to pause"
+    " between stack layers (default 200)."
+)
+@click.option(
+    "--save-title", help="If you want to save the animation as a movie,"
+    " title to save file as."
+)
+@click.option(
+    "--display/--no-display", help="Pop up matplotlib figure to view (instead of just saving)"
+)
+@click.pass_context
+def animate(context, pause, ref_row, ref_col):
+    """Command to run `animate_stack <plotting.animate_stack>`
+
+    If deformation.npy and geolist.npy or .unw files are not in current directory,
+    use the --path option:
+
+        insar --path /path/to/igrams animate
+
+    Note: --ref-row and --ref-col only needed if the inversion
+    has not already been done and saved as deformation.npy
+    """
+    geolist, deformation = insar.timeseries.load_deformation(context['path'], ref_row, ref_col)
+    titles = [d.strftime("%Y-%m-%d") for d in geolist]
+    plotting.animate_stack(
+        deformation, pause_time=pause, display=display, titles=titles, save_title=save_title
+    )
+
+
+# COMMAND: view_stack
+@cli.command()
+@click.option(
+    "--ref-row",
+    type=int,
+    help="Row number of pixel to use as unwrapping reference (for SBAS inversion)"
+)
+@click.option(
+    "--ref-col",
+    type=int,
+    help="Column number of pixel to use as unwrapping reference (for SBAS inversion)"
+)
+def view_stack(context, ref_row, ref_col):
+    """Command to run `view_stack <plotting.view_stack>`
+
+    If deformation.npy and geolist.npy or .unw files are not in current directory,
+    use the --path option:
+
+        insar --path /path/to/igrams animate
+
+    Note: --ref-row and --ref-col only needed if the inversion
+    has not already been done and saved as deformation.npy
+    """
+    geolist, deformation = load_deformation(context['path'], ref_row, ref_col)
+    if geolist is None or deformation is None:
+        return
+
+    plotting.view_stack(deformation, geolist, image_num=-1)
