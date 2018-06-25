@@ -164,7 +164,7 @@ def process(context, **kwargs):
 @click.option("--title", "-t", help="Title of the KML object once loaded.")
 @click.option("--desc", "-d", help="Description for google Earth.")
 def kml(tiffile, rscfile, title, desc):
-    """Creates a .kml file to load tif-converted image
+    """Creates .kml file for tif image
 
     TIFFILE is the .tif image to load into Google Earth
     RSCFILE is the .rsc file containing lat/lon start and steps
@@ -222,7 +222,7 @@ def view_dem(demfile):
 )
 @click.pass_context
 def animate(context, pause, ref_row, ref_col):
-    """Command to run `animate_stack <plotting.animate_stack>`
+    """Creates animation for 3D image stack.
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
     use the --path option:
@@ -252,7 +252,7 @@ def animate(context, pause, ref_row, ref_col):
     help="Column number of pixel to use as unwrapping reference (for SBAS inversion)"
 )
 def view_stack(context, ref_row, ref_col):
-    """Command to run `view_stack <plotting.view_stack>`
+    """Explore timeseries on deformation image.
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
     use the --path option:
@@ -266,4 +266,4 @@ def view_stack(context, ref_row, ref_col):
     if geolist is None or deformation is None:
         return
 
-    plotting.view_stack(deformation, geolist, image_num=-1)
+    insar.plotting.view_stack(deformation, geolist, image_num=-1)
