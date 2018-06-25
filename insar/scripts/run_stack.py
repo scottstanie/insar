@@ -168,62 +168,6 @@ STEPS = [
 STEP_LIST = ',\n'.join("%d:%s" % (num, func.__name__) for (num, func) in enumerate(STEPS, start=1))
 
 
-def get_cli_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--working-dir", "-d", default=".", help="Directory where sentinel .zip are located")
-    parser.add_argument("--geojson", "-g", help="File containing the geojson object for DEM bounds")
-    parser.add_argument(
-        "--rate",
-        "-r",
-        type=int,
-        default=1,
-        help="Rate at which to upsample DEM (default=1, no upsampling)")
-    parser.add_argument(
-        "--max-height",
-        "-m",
-        default=10,
-        help="Maximum height/max absolute phase for converting .unw files to .tif"
-        "(used for contour_interval option to dishgt)")
-    parser.add_argument(
-        "--step",
-        "-s",
-        type=int,
-        help="Choose which step to start on. Steps: {}".format(STEP_LIST),
-        choices=range(1,
-                      len(STEPS) + 1),
-        default=1)
-    parser.add_argument(
-        "--max-temporal",
-        type=int,
-        default=500,
-        help="Maximum temporal baseline for igrams (fed to sbas_list)")
-    parser.add_argument(
-        "--max-spatial",
-        type=int,
-        default=500,
-        help="Maximum spatial baseline for igrams (fed to sbas_list)")
-    parser.add_argument(
-        "--looks",
-        type=int,
-        help="Number of looks to perform on .geo files to shrink down .int, "
-        "Default is the upsampling rate, makes the igram size=original DEM size")
-    parser.add_argument(
-        "--lowpass",
-        type=int,
-        default=1,
-        help="Size of lowpass filter to use on igrams before unwrapping")
-    parser.add_argument(
-        "--ref-row",
-        type=int,
-        help="Row number of pixel to use as unwrapping reference for SBAS inversion")
-    parser.add_argument(
-        "--ref-col",
-        type=int,
-        help="Column number of pixel to use as unwrapping reference for SBAS inversion")
-    return parser.parse_args()
-
-
 @log_runtime
 def main():
     args = get_cli_args()
