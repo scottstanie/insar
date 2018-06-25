@@ -31,24 +31,27 @@ logger = get_log()
 
 def download_eof(**kwargs):
     """1. Download precision orbit files"""
-    download_eof_exe = which('download-eofs')
-    subprocess.check_call(download_eof_exe, shell=True)
+    # TODO: use https://pocco-click.readthedocs.io/en/latest/advanced.html#invoking-other-commands
+    # Invoke the other commands rather than use subprocess
+    insar_exe = which('insar')
+    subprocess.check_call('{} download'.format(insar_exe), shell=True)
 
 
 def create_dem(geojson=None, rate=1, **kwargs):
     """2. Download, upsample, and stich a DEM"""
-    create_dem_exe = which('create-dem')
+    # TODO: use https://pocco-click.readthedocs.io/en/latest/advanced.html#invoking-other-commands
+    insar_exe = which('insar')
     if not geojson:
         logger.error("For step 2: create_dem, --geojson is needed.")
         sys.exit(1)
-    dem_cmd = '{} -g {} -r {}'.format(create_dem_exe, geojson, rate)
+    dem_cmd = '{} dem -g {} -r {}'.format(insar_exe, geojson, rate)
     logger.info("Running: %s", dem_cmd)
     subprocess.check_call(dem_cmd, shell=True)
 
 
 def run_sentinel_stack(**kwargs):
     """3. Create geocoded slcs as .geo files for each .zip file"""
-    subprocess.call('~/sentinel/sentinel_stack.py', shell=True)
+    subprocess.check_call('~/sentinel/sentinel_stack.py', shell=True)
 
 
 def prep_igrams_dir(**kwargs):
@@ -65,7 +68,7 @@ def create_sbas_list(max_temporal=500, max_spatial=500, **kwargs):
 
     sbas_cmd = '~/sentinel/sbas_list.py {} {}'.format(max_temporal, max_spatial)
     logger.info(sbas_cmd)
-    subprocess.call(sbas_cmd, shell=True)
+    subprocess.check_call(sbas_cmd, shell=True)
 
 
 def run_ps_sbas_igrams(rate=1, looks=None, **kwargs):
@@ -87,8 +90,7 @@ def run_ps_sbas_igrams(rate=1, looks=None, **kwargs):
     looks = looks or rate
     logger.info("Running ps_sbas_igrams.py")
     ps_sbas_cmd = "~/sentinel/ps_sbas_igrams.py sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
-        rsc_file=elevation_dem_rsc_file, xsize=xsize, ysize=ysize, looks=looks
-    )
+        rsc_file=elevation_dem_rsc_file, xsize=xsize, ysize=ysize, looks=looks)
     logger.info(ps_sbas_cmd)
     subprocess.check_call(ps_sbas_cmd, shell=True)
 
@@ -99,9 +101,8 @@ def convert_int_tif(**kwargs):
     # Default name by ps_sbas_igrams
     igram_rsc = sario.load_dem_rsc('dem.rsc')
     convert1 = "for i in *.int ; do dismphfile $i {igram_width} ; mv dismph.tif `echo $i | sed 's/int$/tif/'` ; done".format(
-        igram_width=igram_rsc['WIDTH']
-    )
-    subprocess.call(convert1, shell=True)
+        igram_width=igram_rsc['WIDTH'])
+    subprocess.check_call(convert1, shell=True)
 
 
 def run_snaphu(lowpass=None):
@@ -113,10 +114,8 @@ def run_snaphu(lowpass=None):
     igram_rsc = sario.load_dem_rsc('dem.rsc')
     subprocess.call(
         '~/repos/insar/scripts/run_snaphu.sh {width} {lowpass}'.format(
-            width=igram_rsc['WIDTH'], lowpass=lowpass
-        ),
-        shell=True
-    )
+            width=igram_rsc['WIDTH'], lowpass=lowpass),
+        shell=True)
 
 
 def convert_snaphu_tif(max_height=None, **kwargs):
@@ -125,8 +124,7 @@ def convert_snaphu_tif(max_height=None, **kwargs):
     Assumes we are in the directory with all .unw files
     """
     subprocess.call(
-        '~/repos/insar/scripts/convert_snaphu.py --max-height {}'.format(max_height), shell=True
-    )
+        '~/repos/insar/scripts/convert_snaphu.py --max-height {}'.format(max_height), shell=True)
 
 
 def run_sbas_inversion(ref_row=None, ref_col=None, **kwargs):
@@ -139,8 +137,7 @@ def run_sbas_inversion(ref_row=None, ref_col=None, **kwargs):
 
     igram_path = os.path.realpath(os.getcwd())
     geolist, phi_arr, deformation, varr, unw_stack = timeseries.run_inversion(
-        igram_path, reference=(ref_row, ref_col)
-    )
+        igram_path, reference=(ref_row, ref_col))
     logger.info("Saving deformation, velocity_array, and geolist")
     np.save('deformation.npy', deformation)
     np.save('velocity_array.npy', varr)

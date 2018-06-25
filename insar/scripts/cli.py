@@ -94,7 +94,11 @@ def dem(context, geojson, data_source, rate, output):
 
 # COMMAND: PROCESS
 @cli.command()
-@click.option('--geojson', '-g', help="File containing the geojson object for DEM bounds")
+@click.option(
+    '--geojson',
+    '-g',
+    help="File containing the geojson object for DEM bounds",
+    type=click.Path(resolve_path=True))
 @click.option(
     "--rate", "-r", default=1, help="Rate at which to upsample DEM (default=1, no upsampling)")
 @click.option(
