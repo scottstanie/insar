@@ -3,6 +3,7 @@
 import os
 import click
 import insar
+import matplotlib.pyplot as plt
 
 
 # Main entry point:
@@ -156,6 +157,7 @@ def process(context, **kwargs):
     insar.scripts.process.main(kwargs)
 
 
+# COMMAND: kml
 @cli.command()
 @click.argument("tiffile", required=True)
 @click.argument("rscfile", default="dem.rsc")
@@ -173,3 +175,21 @@ def kml(tiffile, rscfile, title, desc):
     """
     rsc_data = insar.sario.load_dem_rsc(rscfile)
     print(insar.dem.create_kml(rsc_data, tiffile, title=title, desc=desc))
+
+
+# COMMAND: view-dem
+@cli.command()
+@click.argument("demfile", type=click.Path(exists=True, dir_okay=False), nargs=-1)
+def view_dem(demfile):
+    """View a .dem file with matplotlib.
+
+    Can list multiple .dem files to open in separate figures.
+    """
+    for fname in demfile:
+        dem = insar.sario.load_file(fname)
+        plt.figure()
+        plt.imshow(dem)
+        plt.colorbar()
+
+    # Wait for windows to close to exit the script
+    plt.show(block=True)
