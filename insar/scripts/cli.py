@@ -1,6 +1,5 @@
 """Main entry point to manage all other sub commands
 """
-import os
 import click
 import insar
 import matplotlib.pyplot as plt
@@ -22,9 +21,6 @@ def cli(ctx, verbose, path):
     ctx.obj = {}
     ctx.obj['verbose'] = verbose
     ctx.obj['path'] = path
-    if path and path != ".":
-        click.echo("Changing directory to {}".format(path))
-        os.chdir(path)
 
 
 # COMMAND: DOWNLOAD
@@ -40,10 +36,13 @@ def cli(ctx, verbose, path):
 def download(context, **kwargs):
     """Download Sentinel precise orbit files.
 
-    Download EOFs for specific date, or for Sentinel files in --path.
-    With arguments, searches current directory for Sentinel 1 products
+    Saves files to current directory, regardless of what --path
+    is given to search.
+
+    Download EOFs for specific date, or searches for Sentinel files in --path.
+    With no arguments, searches current directory for Sentinel 1 products
     """
-    insar.eofs.main(kwargs['mission'], kwargs['date'])
+    insar.eof.main(context['path'], kwargs['mission'], kwargs['date'])
 
 
 # COMMAND: DEM
@@ -154,7 +153,7 @@ def process(context, **kwargs):
     if context['verbose']:
         click.echo("Verbose mode")
 
-    insar.scripts.process.main(kwargs)
+    insar.scripts.process.main(context['path'], kwargs)
 
 
 # COMMAND: kml

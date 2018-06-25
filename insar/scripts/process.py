@@ -16,18 +16,11 @@
     10. Run an SBAS inversion to get the LOS deformation
 
 """
-
-import argparse
 import math
 import sys
 import subprocess
 import os
-from os.path import abspath, dirname
 import numpy as np
-try:
-    import insar
-except ImportError:  # add root to pythonpath if import fails
-    sys.path.insert(0, dirname(dirname(abspath(__file__))))
 
 from insar import sario, timeseries
 from insar.log import get_log, log_runtime
@@ -172,10 +165,12 @@ STEP_LIST = ',\n'.join("%d:%s" % (num, func.__name__) for (num, func) in enumera
 
 
 @log_runtime
-def main(kwargs):
+def main(working_dir, kwargs):
     # TODO: maybe let user specify individual steps?
-    logger.info('in process main')
-    logger.info(kwargs)
+    if working_dir != ".":
+        logger.info("Changing directory to {}".format(working_dir))
+        os.chdir(working_dir)
+
     for stepnum in range(kwargs['step'] - 1, len(STEPS)):
         curfunc = STEPS[stepnum]
         logger.info("Starting step %d: %s", stepnum + 1, curfunc.__name__)
