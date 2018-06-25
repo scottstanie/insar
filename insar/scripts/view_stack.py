@@ -3,10 +3,6 @@ import argparse
 import sys
 from os.path import join, dirname, abspath
 import numpy as np
-try:
-    import insar
-except ImportError:  # add root to pythonpath if import fails
-    sys.path.insert(0, dirname(dirname(abspath(__file__))))
 from insar import timeseries, plotting
 from insar.log import get_log
 

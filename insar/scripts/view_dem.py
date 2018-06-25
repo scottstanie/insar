@@ -8,10 +8,6 @@ With no arguments, searches for elevation.dem to show
 """
 import sys
 from os.path import dirname, abspath
-try:
-    import insar
-except ImportError:  # add root to pythonpath if import fails
-    sys.path.insert(0, dirname(dirname(abspath(__file__))))
 from insar.sario import load_file
 import matplotlib.pyplot as plt
 

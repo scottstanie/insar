@@ -60,11 +60,11 @@ setuptools.setup(
     install_requires=["numpy", "requests", "matplotlib"],
     entry_points={
         "console_scripts": [
-            "create-dem=scripts.create_dem:main",
-            "download-eofs=scripts.download_eofs:main",
-            "view-dem=scripts.view_dem:main",
-            "run-stack=scripts.run_stack:main",
-            "view-stack=scripts.view_stack:main",
+            "create-dem=insar.scripts.create_dem:main",
+            "download-eofs=insar.scripts.download_eofs:main",
+            "view-dem=insar.scripts.view_dem:main",
+            "run-stack=insar.scripts.run_stack:main",
+            "view-stack=insar.scripts.view_stack:main",
         ],
     },
     data_files=[("bin", ["bin/upsample"])],

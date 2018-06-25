@@ -4,10 +4,6 @@ import argparse
 import sys
 from os.path import dirname, abspath
 
-try:
-    import insar
-except ImportError:  # add root to pythonpath if script is erroring
-    sys.path.insert(0, dirname(dirname(abspath(__file__))))
 import insar.eof
 from insar.log import get_log, log_runtime
 

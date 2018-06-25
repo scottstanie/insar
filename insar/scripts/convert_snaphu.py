@@ -14,10 +14,6 @@ import sys
 import subprocess
 import os.path
 from os.path import abspath, dirname
-try:
-    import insar
-except ImportError:  # add root to pythonpath if import fails
-    sys.path.insert(0, dirname(dirname(abspath(__file__))))
 
 import insar.sario
 from insar.log import get_log

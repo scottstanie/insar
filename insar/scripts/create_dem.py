@@ -23,12 +23,6 @@ import subprocess
 import os
 from os.path import abspath, dirname, exists
 
-try:
-    import insar
-except ImportError:  # add root to pythonpath if script is erroring
-    sys.path.insert(0, dirname(dirname(abspath(__file__))))
-
-from insar.sario import format_dem_rsc
 from insar.utils import which
 import insar.dem
 import insar.geojson
