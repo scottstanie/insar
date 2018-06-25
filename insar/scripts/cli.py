@@ -199,16 +199,19 @@ def view_dem(demfile):
     help="Column number of pixel to use as unwrapping reference (for SBAS inversion)")
 @click.option(
     "--pause",
+    '-p',
     default=200,
     help="For --animate, time in milliseconds to pause"
     " between stack layers (default 200).")
 @click.option(
-    "--save-title", help="If you want to save the animation as a movie,"
+    "--save", '-s', help="If you want to save the animation as a movie,"
     " title to save file as.")
 @click.option(
-    "--display/--no-display", help="Pop up matplotlib figure to view (instead of just saving)")
+    "--display/--no-display",
+    help="Pop up matplotlib figure to view (instead of just saving)",
+    default=True)
 @click.pass_obj
-def animate(context, pause, ref_row, ref_col, save_title, display):
+def animate(context, pause, ref_row, ref_col, save, display):
     """Creates animation for 3D image stack.
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
@@ -222,7 +225,7 @@ def animate(context, pause, ref_row, ref_col, save_title, display):
     geolist, deformation = insar.timeseries.load_deformation(context['path'], ref_row, ref_col)
     titles = [d.strftime("%Y-%m-%d") for d in geolist]
     insar.plotting.animate_stack(
-        deformation, pause_time=pause, display=display, titles=titles, save_title=save_title)
+        deformation, pause_time=pause, display=display, titles=titles, save_title=save)
 
 
 # COMMAND: view_stack
