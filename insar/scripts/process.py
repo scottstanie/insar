@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Runs all steps of interferogram processing
 
-    See `insar process --help` for explanation of all options
+    See run_stack.py --help for explanation of all options
 
     TODO: allow ranges of steps like https://stackoverflow.com/a/4726287
 
@@ -38,47 +38,46 @@ from insar.utils import mkdir_p, which
 logger = get_log()
 
 
-def download_eof(*a):
+def download_eof(**kwargs):
     """1. Download precision orbit files"""
     download_eof_exe = which('download-eofs')
     subprocess.check_call(download_eof_exe, shell=True)
 
 
-def create_dem(args):
+def create_dem(geojson=None, rate=1, **kwargs):
     """2. Download, upsample, and stich a DEM"""
     create_dem_exe = which('create-dem')
-    if not args.geojson:
+    if not geojson:
         logger.error("For step 2: create_dem, --geojson is needed.")
         sys.exit(1)
-    dem_cmd = '{} -g {} -r {}'.format(create_dem_exe, args.geojson, args.rate)
+    dem_cmd = '{} -g {} -r {}'.format(create_dem_exe, geojson, rate)
     logger.info("Running: %s", dem_cmd)
     subprocess.check_call(dem_cmd, shell=True)
 
 
-def run_sentinel_stack(*a):
+def run_sentinel_stack(**kwargs):
     """3. Create geocoded slcs as .geo files for each .zip file"""
-    # Note: `*a` used to accept arbitrary args, but we don't need them here
     subprocess.call('~/sentinel/sentinel_stack.py', shell=True)
 
 
-def prep_igrams_dir(*a):
+def prep_igrams_dir(**kwargs):
     """4. prepare directory for igrams"""
     mkdir_p('igrams')
     os.chdir('igrams')
     logger.info("Changed directory to %s", os.path.realpath(os.getcwd()))
 
 
-def create_sbas_list(args):
+def create_sbas_list(max_temporal=500, max_spatial=500, **kwargs):
     """ 5.run the sbas_list script
 
     Uses the outputs of the geo coded SLCS to find files with small baselines"""
 
-    sbas_cmd = '~/sentinel/sbas_list.py {} {}'.format(args.max_temporal, args.max_spatial)
+    sbas_cmd = '~/sentinel/sbas_list.py {} {}'.format(max_temporal, max_spatial)
     logger.info(sbas_cmd)
     subprocess.call(sbas_cmd, shell=True)
 
 
-def run_ps_sbas_igrams(args):
+def run_ps_sbas_igrams(rate=1, looks=None, **kwargs):
     """6. run the ps_sbas_igrams script"""
 
     def calc_sizes(rate, width, length):
@@ -89,12 +88,12 @@ def run_ps_sbas_igrams(args):
     logger.info("Gathering file size info from elevation.dem.rsc")
     elevation_dem_rsc_file = '../elevation.dem.rsc'
     rsc_data = sario.load_dem_rsc(elevation_dem_rsc_file)
-    xsize, ysize = calc_sizes(args.rate, rsc_data['WIDTH'], rsc_data['FILE_LENGTH'])
+    xsize, ysize = calc_sizes(rate, rsc_data['WIDTH'], rsc_data['FILE_LENGTH'])
 
     # the "1 1" is xstart ystart
     # Default number of looks is the upsampling rate so that
     # the igram is the size of the original DEM (elevation_small.dem)
-    looks = args.looks or args.rate
+    looks = looks or rate
     logger.info("Running ps_sbas_igrams.py")
     ps_sbas_cmd = "~/sentinel/ps_sbas_igrams.py sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
         rsc_file=elevation_dem_rsc_file, xsize=xsize, ysize=ysize, looks=looks)
@@ -102,7 +101,7 @@ def run_ps_sbas_igrams(args):
     subprocess.check_call(ps_sbas_cmd, shell=True)
 
 
-def convert_int_tif(*a):
+def convert_int_tif(**kwargs):
     # TODO: Make this into the script like the convert_snaphu
 
     # Default name by ps_sbas_igrams
@@ -112,7 +111,7 @@ def convert_int_tif(*a):
     subprocess.call(convert1, shell=True)
 
 
-def run_snaphu(args):
+def run_snaphu(lowpass=None):
     """8. run snaphu to unwrap all .int files
 
     Assumes we are in the directory with all .unw files
@@ -121,31 +120,30 @@ def run_snaphu(args):
     igram_rsc = sario.load_dem_rsc('dem.rsc')
     subprocess.call(
         '~/repos/insar/scripts/run_snaphu.sh {width} {lowpass}'.format(
-            width=igram_rsc['WIDTH'], lowpass=args.lowpass),
+            width=igram_rsc['WIDTH'], lowpass=lowpass),
         shell=True)
 
 
-def convert_snaphu_tif(args):
+def convert_snaphu_tif(max_height=None, **kwargs):
     """9. Convert snaphu outputs to .tif files
 
     Assumes we are in the directory with all .unw files
     """
     subprocess.call(
-        '~/repos/insar/scripts/convert_snaphu.py --max-height {}'.format(args.max_height),
-        shell=True)
+        '~/repos/insar/scripts/convert_snaphu.py --max-height {}'.format(max_height), shell=True)
 
 
-def run_sbas_inversion(args):
+def run_sbas_inversion(ref_row=None, ref_col=None, **kwargs):
     """10. Perofrm SBAS inversion, save the deformation as .npy
 
     Assumes we are in the directory with all .unw files"""
-    if not args.ref_row or not args.ref_col:
+    if not ref_row or not ref_col:
         logger.warning("--ref-row and --ref-col required for run_sbas_inversion: skipping.")
         return
 
     igram_path = os.path.realpath(os.getcwd())
     geolist, phi_arr, deformation, varr, unw_stack = timeseries.run_inversion(
-        igram_path, reference=(args.ref_row, args.ref_col))
+        igram_path, reference=(ref_row, ref_col))
     logger.info("Saving deformation, velocity_array, and geolist")
     np.save('deformation.npy', deformation)
     np.save('velocity_array.npy', varr)
@@ -169,13 +167,12 @@ STEPS = [
 STEP_LIST = ',\n'.join("%d:%s" % (num, func.__name__) for (num, func) in enumerate(STEPS, start=1))
 
 
-# @log_runtime
-def main(args, kwargs):
+@log_runtime
+def main(kwargs):
     # TODO: maybe let user specify individual steps?
     logger.info('in process main')
-    logger.info(args)
     logger.info(kwargs)
     for stepnum in range(kwargs['step'] - 1, len(STEPS)):
         curfunc = STEPS[stepnum]
         logger.info("Starting step %d: %s", stepnum + 1, curfunc.__name__)
-        curfunc(args)
+        curfunc(**kwargs)

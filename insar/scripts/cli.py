@@ -1,7 +1,7 @@
 """Main entry point to manage all other sub commands
 """
 import click
-from insar.scripts import run_stack
+import insar.scripts.process as procc
 
 # class Config(object):
 #     def __init__(self):
@@ -20,13 +20,15 @@ from insar.scripts import run_stack
 @click.pass_context
 def cli(context, verbose, path):
     """Help for the insar group of command"""
-    context.verbose = verbose
+    context.obj = {}
+    context.obj['verbose'] = verbose
     if path:
-        context.path = path
+        context.obj['path'] = path
         logger.info("Changing directory to {}".format(path))
         os.chdir(path)
 
 
+# Options for the "process" command
 @cli.command()
 @click.option('--geojson', '-g', help="File containing the geojson object for DEM bounds")
 @click.option(
@@ -39,8 +41,8 @@ def cli(context, verbose, path):
 @click.option(
     "--step",
     "-s",
-    type=click.IntRange(min=1, max=len(run_stack.STEPS)),
-    help="Choose which step to start on. Steps: {}".format(run_stack.STEP_LIST),
+    type=click.IntRange(min=1, max=len(procc.STEPS)),
+    help="Choose which step to start on. Steps: {}".format(procc.STEP_LIST),
     default=1)
 @click.option(
     "--max-temporal",
@@ -70,10 +72,18 @@ def cli(context, verbose, path):
     "--ref-col",
     type=int,
     help="Column number of pixel to use as unwrapping reference for SBAS inversion")
-@click.pass_context
-def process(context, string, out):
+# @click.pass_obj
+def process(**kwargs):
     """Process a stack of Sentinel interferograms
 
     Contains the steps from SLC .geo creation to SBAS deformation inversion"""
-    if context.verbose:
-        click.echo("Verbose mode")
+    print('context obj verbose in process func')
+    # print(context)
+    print(kwargs)
+    # if context.obj['verbose']:
+    # click.echo("Verbose mode")
+    procc.main(kwargs)
+
+
+if __name__ == '__main__':
+    cli(obj={})
