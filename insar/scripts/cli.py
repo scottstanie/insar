@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 )
 @click.pass_context
 def cli(ctx, verbose, path):
-    """Help for the insar group of command"""
+    """Command line tools for processing insar."""
     # Store these to be passed to all sub commands
     ctx.obj = {}
     ctx.obj['verbose'] = verbose
@@ -199,12 +199,14 @@ def view_dem(demfile):
 @cli.command()
 @click.option(
     "--ref-row",
-    type=int,
+    '-r',
+    type=click.INT,
     help="Row number of pixel to use as unwrapping reference (for SBAS inversion)"
 )
 @click.option(
     "--ref-col",
-    type=int,
+    '-c',
+    type=click.INT,
     help="Column number of pixel to use as unwrapping reference (for SBAS inversion)"
 )
 @click.option(
@@ -220,8 +222,8 @@ def view_dem(demfile):
 @click.option(
     "--display/--no-display", help="Pop up matplotlib figure to view (instead of just saving)"
 )
-@click.pass_context
-def animate(context, pause, ref_row, ref_col):
+@click.pass_obj
+def animate(context, pause, ref_row, ref_col, save_title, display):
     """Creates animation for 3D image stack.
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
@@ -234,7 +236,7 @@ def animate(context, pause, ref_row, ref_col):
     """
     geolist, deformation = insar.timeseries.load_deformation(context['path'], ref_row, ref_col)
     titles = [d.strftime("%Y-%m-%d") for d in geolist]
-    plotting.animate_stack(
+    insar.plotting.animate_stack(
         deformation, pause_time=pause, display=display, titles=titles, save_title=save_title
     )
 
@@ -243,26 +245,29 @@ def animate(context, pause, ref_row, ref_col):
 @cli.command()
 @click.option(
     "--ref-row",
-    type=int,
+    '-r',
+    type=click.INT,
     help="Row number of pixel to use as unwrapping reference (for SBAS inversion)"
 )
 @click.option(
     "--ref-col",
-    type=int,
+    '-c',
+    type=click.INT,
     help="Column number of pixel to use as unwrapping reference (for SBAS inversion)"
 )
+@click.pass_obj
 def view_stack(context, ref_row, ref_col):
     """Explore timeseries on deformation image.
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
     use the --path option:
 
-        insar --path /path/to/igrams animate
+        insar --path /path/to/igrams view_stack
 
     Note: --ref-row and --ref-col only needed if the inversion
     has not already been done and saved as deformation.npy
     """
-    geolist, deformation = load_deformation(context['path'], ref_row, ref_col)
+    geolist, deformation = insar.timeseries.load_deformation(context['path'], ref_row, ref_col)
     if geolist is None or deformation is None:
         return
 

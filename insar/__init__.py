@@ -3,6 +3,7 @@ from . import eof
 from . import geojson
 from . import log
 from . import parsers
+from . import plotting
 from . import sario
 from . import timeseries
 from . import utils

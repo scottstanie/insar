@@ -335,21 +335,23 @@ def run_inversion(igram_path, reference=(483, 493), verbose=False):
 
 def save_deformation(igram_path, deformation, geolist):
     """Saves deformation ndarray and geolist dates as .npy file"""
-    np.save(join(igram_path, 'deformation.npy'), deformation)
-    np.save(join(igram_path, 'geolist.npy'), geolist)
+    np.save(os.path.join(igram_path, 'deformation.npy'), deformation)
+    np.save(os.path.join(igram_path, 'geolist.npy'), geolist)
 
 
 def load_deformation(igram_path, ref_row=None, ref_col=None):
     try:
-        deformation = np.load(join(igram_path, 'deformation.npy'))
+        deformation = np.load(os.path.join(igram_path, 'deformation.npy'))
         # geolist is a list of datetimes: encoding must be bytes
-        geolist = np.load(join(igram_path, 'geolist.npy'), encoding='bytes')
+        geolist = np.load(os.path.join(igram_path, 'geolist.npy'), encoding='bytes')
 
     except (IOError, OSError):
         if not ref_col and not ref_col:
             logger.error("deformation.npy or geolist.npy not found in path %s", igram_path)
             logger.error("Need ref_row, ref_col to run inversion and create files")
             return None, None
+        else:
+            logger.warning("No deformation.npy detected: running inversion")
 
         geolist, phi_arr, deformation, varr, unw_stack = run_inversion(
             igram_path, reference=(ref_row, ref_col)
