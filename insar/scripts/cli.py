@@ -154,3 +154,26 @@ def process(context, **kwargs):
         click.echo("Verbose mode")
 
     insar.scripts.process.main(kwargs)
+
+
+@cli.command
+@click.option(
+    "--rscfile",
+    "-r",
+    default="dem.rsc",
+    required=True,
+    help="The associated .rsc file containing lat/lon start and steps"
+)
+@click.option("--tif-img", "-i", required=True, help="The .tif file to load into Google Earth")
+@click.option("--title", "-t", help="Title of the KML object once loaded.")
+@click.option("--desc", "-d", help="Description for google Earth.")
+def kml(context):
+    """Creates a .kml file to load tif-converted image
+
+    Usage:
+        ./make_kml.py --rscfile RSCFILE --tif-img TIF_IMG  [--title TITLE] [--desc DESC]
+
+        insar kml -r dem.rsc -i 20180420_20180502.tif -t "My igram" -d "From April in Hawaii" > out.kml
+    """
+    rsc_data = insar.sario.load_dem_rsc(args.rscfile)
+    print(insar.dem.create_kml(rsc_data, args.tif_img, title=args.title, desc=args.desc))
