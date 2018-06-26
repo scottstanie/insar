@@ -142,7 +142,7 @@ class TestInvertSbas(unittest.TestCase):
 
     def test_invert_regularize(self):
         B = np.arange(15).reshape((5, 3))
-        dphis = np.arange(8).reshape((4, 2))  # Two fake pixels to invert
+        dphis = np.arange(10).reshape((5, 2))  # Two fake pixels to invert
         timediffs = np.arange(3)
         # Checks for no errors in shape (todo: get good expected output)
         timeseries.invert_sbas(dphis, timediffs, B, alpha=1)
