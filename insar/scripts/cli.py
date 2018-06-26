@@ -246,8 +246,10 @@ def animate(context, pause, ref_row, ref_col, save, display):
     '-c',
     type=click.INT,
     help="Column number of pixel to use as unwrapping reference (for SBAS inversion)")
+@click.option("--cmap", default='seismic', help="Colormap for image display.")
+@click.option("--label", default='Centimeters', help="Label on colorbar/yaxis for plot")
 @click.pass_obj
-def view_stack(context, ref_row, ref_col):
+def view_stack(context, ref_row, ref_col, cmap, label):
     """Explore timeseries on deformation image.
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
@@ -262,4 +264,4 @@ def view_stack(context, ref_row, ref_col):
     if geolist is None or deformation is None:
         return
 
-    insar.plotting.view_stack(deformation, geolist, display_img=-1)
+    insar.plotting.view_stack(deformation, geolist, display_img=-1, label=label, cmap=cmap)

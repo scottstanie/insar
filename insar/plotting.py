@@ -61,7 +61,7 @@ def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=N
         plt.show()
 
 
-def view_stack(stack, geolist=None, display_img=-1, label="Centimeters", title=""):
+def view_stack(stack, geolist=None, display_img=-1, label="Centimeters", cmap='seismic', title=""):
     """Displays an image from a stack, allows you to click for timeseries
 
     Args:
@@ -74,6 +74,7 @@ def view_stack(stack, geolist=None, display_img=-1, label="Centimeters", title="
             display_img = 'avg' will take the average across all images
         label (str): Optional- Label on colorbar/yaxis for plot
             Default = Centimeters
+        cmap (str): Optional- colormap to display stack image (default='seismic')
         title (str): Optional- Title for plot
 
     Returns:
@@ -92,9 +93,9 @@ def view_stack(stack, geolist=None, display_img=-1, label="Centimeters", title="
 
     imagefig = plt.figure()
     if isinstance(display_img, int):
-        image = plt.imshow(stack[display_img, :, :])  # Type: AxesImage
+        image = plt.imshow(stack[display_img, :, :], cmap=cmap)  # Type: AxesImage
     elif display_img == 'mean':
-        image = plt.imshow(np.mean(stack, axis=0))
+        image = plt.imshow(np.mean(stack, axis=0), cmap=cmap)
     else:
         raise ValueError("display_img must be an int or 'mean'")
 
