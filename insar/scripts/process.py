@@ -27,6 +27,7 @@ from insar.log import get_log, log_runtime
 from insar.utils import mkdir_p
 
 logger = get_log()
+SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def download_eof(mission=None, date=None, **kwargs):
@@ -107,10 +108,11 @@ def run_snaphu(lowpass=None, **kwargs):
     """
     # TODO: probably shouldn't call these like this? idk alternative right now
     igram_rsc = insar.sario.load_dem_rsc('dem.rsc')
-    subprocess.call(
-        '~/repos/insar/scripts/run_snaphu.sh {width} {lowpass}'.format(
-            width=igram_rsc['WIDTH'], lowpass=lowpass),
-        shell=True)
+    snaphu_script = os.path.join(SCRIPTS_DIR, 'run_snaphu.sh')
+    snaphu_cmd = '{filepath} {width} {lowpass}'.format(
+        filepath=snaphu_script, width=igram_rsc['WIDTH'], lowpass=lowpass),
+    logger.info(snaphu_cmd)
+    subprocess.check_call(snaphu_cmd, shell=True)
 
 
 def convert_snaphu_tif(max_height=None, **kwargs):
@@ -118,8 +120,10 @@ def convert_snaphu_tif(max_height=None, **kwargs):
 
     Assumes we are in the directory with all .unw files
     """
-    subprocess.call(
-        '~/repos/insar/scripts/convert_snaphu.py --max-height {}'.format(max_height), shell=True)
+    snaphu_script = os.path.join(SCRIPTS_DIR, 'convert_snaphu.py')
+    snaphu_cmd = '{filepath} --max-height {hgt}'.format(filepath=snaphu_script, hgt=max_height)
+    logger.info(snaphu_cmd)
+    subprocess.check_call(snaphu_cmd, shell=True)
 
 
 def run_sbas_inversion(ref_row=None, ref_col=None, **kwargs):
