@@ -22,31 +22,25 @@ import subprocess
 import os
 import numpy as np
 
-from insar import sario, timeseries
+import insar
 from insar.log import get_log, log_runtime
-from insar.utils import mkdir_p, which
+from insar.utils import mkdir_p
 
 logger = get_log()
 
 
-def download_eof(**kwargs):
+def download_eof(mission=None, date=None, **kwargs):
     """1. Download precision orbit files"""
-    # TODO: use https://pocco-click.readthedocs.io/en/latest/advanced.html#invoking-other-commands
-    # Invoke the other commands rather than use subprocess
-    insar_exe = which('insar')
-    subprocess.check_call('{} download'.format(insar_exe), shell=True)
+    insar.eof.main(mission=mission, date=date)
 
 
-def create_dem(geojson=None, rate=1, **kwargs):
+def create_dem(geojson=None, rate=1, data_source='NASA', output='elevation.dem', **kwargs):
     """2. Download, upsample, and stich a DEM"""
-    # TODO: use https://pocco-click.readthedocs.io/en/latest/advanced.html#invoking-other-commands
-    insar_exe = which('insar')
     if not geojson:
         logger.error("For step 2: create_dem, --geojson is needed.")
         sys.exit(1)
-    dem_cmd = '{} dem -g {} -r {}'.format(insar_exe, geojson, rate)
-    logger.info("Running: %s", dem_cmd)
-    subprocess.check_call(dem_cmd, shell=True)
+    logger.info("Running: insar.dem:main")
+    insar.dem.main(geojson, data_source, rate, output)
 
 
 def run_sentinel_stack(**kwargs):
@@ -81,7 +75,7 @@ def run_ps_sbas_igrams(rate=1, looks=None, **kwargs):
 
     logger.info("Gathering file size info from elevation.dem.rsc")
     elevation_dem_rsc_file = '../elevation.dem.rsc'
-    rsc_data = sario.load_dem_rsc(elevation_dem_rsc_file)
+    rsc_data = insar.sario.load_dem_rsc(elevation_dem_rsc_file)
     xsize, ysize = calc_sizes(rate, rsc_data['WIDTH'], rsc_data['FILE_LENGTH'])
 
     # the "1 1" is xstart ystart
@@ -99,7 +93,7 @@ def convert_int_tif(**kwargs):
     # TODO: Make this into the script like the convert_snaphu
 
     # Default name by ps_sbas_igrams
-    igram_rsc = sario.load_dem_rsc('dem.rsc')
+    igram_rsc = insar.sario.load_dem_rsc('dem.rsc')
     convert1 = "for i in *.int ; do dismphfile $i {igram_width} ; mv dismph.tif `echo $i | sed 's/int$/tif/'` ; done".format(
         igram_width=igram_rsc['WIDTH'])
     subprocess.check_call(convert1, shell=True)
@@ -111,7 +105,7 @@ def run_snaphu(lowpass=None):
     Assumes we are in the directory with all .unw files
     """
     # TODO: probably shouldn't call these like this? idk alternative right now
-    igram_rsc = sario.load_dem_rsc('dem.rsc')
+    igram_rsc = insar.sario.load_dem_rsc('dem.rsc')
     subprocess.call(
         '~/repos/insar/scripts/run_snaphu.sh {width} {lowpass}'.format(
             width=igram_rsc['WIDTH'], lowpass=lowpass),
@@ -136,7 +130,7 @@ def run_sbas_inversion(ref_row=None, ref_col=None, **kwargs):
         return
 
     igram_path = os.path.realpath(os.getcwd())
-    geolist, phi_arr, deformation, varr, unw_stack = timeseries.run_inversion(
+    geolist, phi_arr, deformation, varr, unw_stack = insar.timeseries.run_inversion(
         igram_path, reference=(ref_row, ref_col))
     logger.info("Saving deformation, velocity_array, and geolist")
     np.save('deformation.npy', deformation)

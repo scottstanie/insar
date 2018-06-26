@@ -12,7 +12,9 @@ import matplotlib.pyplot as plt
     '--path',
     type=click.Path(exists=False, file_okay=False, writable=True),
     default='.',
-    help="Path to switch to and run command in")
+    help="Path of interest for command. "
+    "Will search for files path or change directory, "
+    "depending on command.")
 @click.pass_context
 def cli(ctx, verbose, path):
     """Command line tools for processing insar."""
