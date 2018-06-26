@@ -229,10 +229,24 @@ def invert_sbas(delta_phis, timediffs, B, alpha=0):
 
     """
 
-    def _augment_matrices(alpha):
-        pass
+    def _augment_matrices(B, delta_phis, alpha):
+        B = np.vstack((B, alpha * np.eye(B.shape[1])))
+        zeros_shape = (B.shape[1], delta_phis.shape[1])  # Same # rows as above
+        delta_phis = np.vstack((delta_phis, np.zeros(zeros_shape)))
+        return B, delta_phis
 
-    assert B.shape[1] == len(timediffs)
+    if B.shape[1] != len(timediffs):
+        raise ValueError("Shapes of B {} and timediffs {} not compatible".format(
+            B.shape, timediffs.shape))
+    elif B.shape[0] != delta_phis.shape[0]:
+        raise ValueError("Shapes of B {} and delta_phis {} not compatible".format(
+            B.shape, delta_phis.shape))
+    elif alpha < 0:
+        raise ValueError("alpha cannot be negative")
+
+    # Augment only if regularization requested
+    if alpha > 0:
+        B, delta_phis = _augment_matrices(B, delta_phis, alpha)
 
     # Velocity will be result of the inversion
     velocity_array, _, rank_B, sing_vals_B = np.linalg.lstsq(B, delta_phis, rcond=None)

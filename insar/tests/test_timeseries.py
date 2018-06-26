@@ -79,6 +79,16 @@ class TestInvertSbas(unittest.TestCase):
         B = timeseries.build_B_matrix(geolist, intlist)
         assert_array_equal(expected_B, B)
 
+    def test_invert_sbas_errors(self):
+        B = np.arange(12).reshape((4, 3))
+        timediffs = np.arange(4)
+        dphis = np.arange(4)
+        self.assertRaises(ValueError, timeseries.invert_sbas, dphis, timediffs, B)
+
+        # Should work without error
+        timediffs = np.arange(3)
+        timeseries.invert_sbas(dphis, timediffs, B)
+
     def test_invert_sbas(self):
         # Fake pixel phases from unwrapped igrams
         actual_phases = np.array([0.0, 2.0, 14.0, 16.0]).reshape((-1, 1))
@@ -129,3 +139,10 @@ class TestInvertSbas(unittest.TestCase):
 
         assert_array_almost_equal(velocity_array, actual_velocity_array)
         assert_array_almost_equal(phases, actual_phases)
+
+    def test_invert_regularize(self):
+        B = np.arange(15).reshape((5, 3))
+        dphis = np.arange(8).reshape((4, 2))  # Two fake pixels to invert
+        timediffs = np.arange(3)
+        # Checks for no errors in shape (todo: get good expected output)
+        timeseries.invert_sbas(dphis, timediffs, B, alpha=1)
