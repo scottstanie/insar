@@ -121,7 +121,8 @@ def convert_snaphu_tif(max_height=None, **kwargs):
     Assumes we are in the directory with all .unw files
     """
     snaphu_script = os.path.join(SCRIPTS_DIR, 'convert_snaphu.py')
-    snaphu_cmd = '{filepath} --max-height {hgt}'.format(filepath=snaphu_script, hgt=max_height)
+    snaphu_cmd = 'python {filepath} --max-height {hgt}'.format(
+        filepath=snaphu_script, hgt=max_height)
     logger.info(snaphu_cmd)
     subprocess.check_call(snaphu_cmd, shell=True)
 
