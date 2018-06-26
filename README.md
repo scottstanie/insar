@@ -12,44 +12,117 @@ Utilities for Synthetic apeture radar (SAR) and Interferometric SAR (InSAR) proc
 pip install insar
 ```
 
-This will put three scripts as executables on your path: `create-dem`,`download-eofs`, and `view-dem`.
-Other functionality is explained below.
+This will put the executable `insar` on your path with several commands available to use:
 
 
 Or for development use (to change code and have it be reflected in what is installed):
 
 ```bash
 mkvirtualenv insar
-pip install -r requirements.txt
-python setup.py develop
+git clone https://github.com/scottstanie/insar.git && cd insar
+pip install --editable .
 ```
 
 virtualenv is optional but recommended.
 
+## Command Line Interface Reference
+
+```bash
+$ insar --help
+Usage: insar [OPTIONS] COMMAND [ARGS]...
+
+  Command line tools for processing insar.
+
+Options:
+  --verbose
+  --path DIRECTORY  Path of interest for command. Will search for files path
+                    or change directory, depending on command.
+  --help            Show this message and exit.
+
+Commands:
+  animate     Creates animation for 3D image stack.
+  dem         Stiches .hgt files to make one DEM and...
+  download    Download Sentinel precise orbit files.
+  kml         Creates .kml file for tif image TIFFILE is...
+  process     Process stack of Sentinel interferograms.
+  view_dem    View a .dem file with matplotlib.
+  view_stack  Explore timeseries on deformation image.
+```
+
+```bash
+$ insar dem --help
+Usage: insar dem [OPTIONS]
+
+  Stiches .hgt files to make one DEM and .dem.rsc file
+
+  Pick a lat/lon bounding box for a DEM, and it will download the necessary
+  SRTM1 tile, combine into one array, then upsample using upsample.c
+
+  Suggestion for box: http://geojson.io gives you geojson for any polygon
+  Take the output of that and save to a file (e.g. mybox.geojson
+
+  Usage:
+
+      insar dem --geojson data/mybox.geojson --rate 2
+
+      insar dem -g data/mybox.geojson -r 2 -o elevation.dem
+
+  Default out is elevation.dem for upsampled version, elevation_small.dem
+  Also creates elevation.dem.rsc with start lat/lon, stride, and other info.
+
+Options:
+  -g, --geojson FILENAME        File containing the geojson object for DEM
+                                bounds  [required]
+  -r, --rate INTEGER RANGE      Rate at which to upsample DEM (default=1, no
+                                upsampling)
+  -o, --output FILENAME         Name of output dem file
+                                (default=elevation.dem)
+  -d, --data-source [NASA|AWS]  Source of SRTM data. See insar.dem docstring
+                                for more about data.
+  --help                        Show this message and exit.
+```
+
+```bash
+$ insar download --help
+Usage: insar download [OPTIONS]
+
+  Download Sentinel precise orbit files.
+
+  Saves files to current directory, regardless of what --path is given to
+  search.
+
+  Download EOFs for specific date, or searches for Sentinel files in --path.
+  With no arguments, searches current directory for Sentinel 1 products
+
+Options:
+  -r, --date TEXT          Validity date for EOF to download
+  -m, --mission [S1A|S1B]  Sentinel satellite to download (None gets both S1A
+                           and S1B)
+  --help                   Show this message and exit.
+```
 
 ### Modules and example usage
 
 #### dem.py
-In order to download a cropped (and possibly upsampled) dem,
-see `scripts/create_dem.py`
+
+`insar dem` creates a cropped (and possibly upsampled) digital elevation map.
 
 
 ```bash
-create-dem --geojson data/hawaii.geojson --rate 2 --output elevation.dem
-create-dem -g data/hawaii_bigger.geojson -r 5 --output elevation.dem
+insar dem --geojson data/hawaii.geojson --rate 2 --output elevation.dem
+insar dem -g data/hawaii_bigger.geojson -r 5 --output elevation.dem
 ```
 
 The geojson can be any valid simple Polygon- you can get one easily from http://geojson.io , for example.
 
-Functions for working with digital elevation maps (DEMs) are mostly contained in the `Downloader` and `Stitcher` classes.
+Functions for working with digital elevation maps (DEMs) are mostly contained in the `Downloader` and `Stitcher` classes within `insar/dem.py`.
 
-Once you have made this, if you want to get a quick look in python, the script `script/view_dem.py` opens the file and plots with matplotlib.
-You can access the script with the entry-point `view-dem`, installed with a `pip install`.
-If you have multiple, you can plot them:
+Once you have made this, if you want to get a quick look in python, the script `insar/scripts/view_dem.py` opens the file and plots with matplotlib.
+
+If you have multiple, you can plot them using matplotlib for a quick look.
 
 ```bash
-view-dem elevation1.dem elevation2.dem
-view-dem  # Looks in the current directory for "elevation.dem"
+insar view_dem elevation1.dem elevation2.dem
 ```
 
 The default datasource is NASA's SRTM version 3 global 1 degree data.
@@ -70,7 +143,7 @@ machine urs.earthdata.nasa.gov
 
 If you want to avoid this entirely, you can [use Mapzen's data hosted on AWS](https://registry.opendata.aws/terrain-tiles/) by specifying
 ```bash
-create-dem -g data/hawaii_bigger.geojson --data-source AWS
+insar dem -g data/hawaii_bigger.geojson --data-source AWS
 ```
 
 `--data-source NASA` is the default.
@@ -84,15 +157,15 @@ They also list that they are discontinuing some services, which is why NASA is t
 Functions for dealing with precise orbit files (POE) for Sentinel 1
 
 ```bash
-$ download-eofs
+$ insar download
 ```
 
 The script without arguments will look in the current directory for .EOF files.
 You can also specify dates, with or without a mission (S1A/S1B):
 
 ```bash
-download-eofs --date 20180301 
-download-eofs -d 2018-03-01 --mission S1A
+insar download --date 20180301 
+insar download -d 2018-03-01 --mission S1A
 ```
 
 Using it from python, you can pass a list of dates:
@@ -114,7 +187,8 @@ Main function:
 ```python
 import insar.sario
 my_slc = insar.sario.load_file('/file/path/radar.slc')
-my_dem = insar.sario.load_file('/file/path/elevation.hgt')
+my_dem = insar.sario.load_file('/file/path/elevation.dem')
+my_hgt = insar.sario.load_file('/file/path/N20W100.hgt')
 ```
 
 
