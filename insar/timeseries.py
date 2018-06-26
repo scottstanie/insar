@@ -150,6 +150,20 @@ def read_stack(directory, file_ext):
     return np.stack(all_files, axis=0)
 
 
+def find_stack_max(stack):
+    """Gets the row, col of the max value for the mean of the stack
+
+    Args:
+        stack (ndarray): 3D array of images, stacked along axis=0
+
+    Returns:
+        tuple[int, int]: row, col of the mean for the stack_mean
+    """
+    stack_mean = np.mean(stack, axis=0)
+    # Argmax gives the flattened indices, so we need to convert back to row, col
+    max_row, max_col = np.unravel_index(np.argmax(stack_mean), stack_mean.shape)
+
+
 def read_unw_stack(igram_path, ref_row, ref_col):
     """Reads all unwrapped phase .unw files into unw_stack
 

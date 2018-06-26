@@ -7,9 +7,7 @@
     With no arguments, converts all .unw files in current directory
 
 """
-
 import argparse
-import glob
 import sys
 import subprocess
 import os.path
