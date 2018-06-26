@@ -100,7 +100,7 @@ def convert_int_tif(**kwargs):
     subprocess.check_call(convert_cmd, shell=True)
 
 
-def run_snaphu(lowpass=None):
+def run_snaphu(lowpass=None, **kwargs):
     """8. run snaphu to unwrap all .int files
 
     Assumes we are in the directory with all .unw files
