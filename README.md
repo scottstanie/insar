@@ -27,6 +27,8 @@ virtualenv is optional but recommended.
 
 ## Command Line Interface Reference
 
+The command line tool in `insar/scripts/cli.py` was made using the [click](https://pocco-click.readthedocs.io/en/latest/) library.
+
 ```
 $ insar --help
 Usage: insar [OPTIONS] COMMAND [ARGS]...
