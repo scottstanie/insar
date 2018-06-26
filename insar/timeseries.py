@@ -208,8 +208,10 @@ def read_unw_stack(igram_path, ref_row, ref_col):
     return unw_stack
 
 
-def invert_sbas(delta_phis, timediffs, B):
+def invert_sbas(delta_phis, timediffs, B, alpha=0):
     """Performs and SBAS inversion on each pixel of unw_stack to find deformation
+
+    Solves the least squares equation Bv = dphi
 
     Args:
         delta_phis (ndarray): 1D array of unwrapped phases (delta phis)
@@ -217,14 +219,24 @@ def invert_sbas(delta_phis, timediffs, B):
         B (ndarray): output of build_B_matrix for current set of igrams
         timediffs (np.array): dtype=int, days between each SAR acquisitions
             length will be equal to B.shape[1], 1 less than num SAR acquisitions
+        alpha (float): nonnegative Tikhonov regularization parameter.
+            If alpha > 0, then the equation is instead to minimize
+            ||B*v - dphi||^2 + ||alpha*I*v||^2
+            See https://en.wikipedia.org/wiki/Tikhonov_regularization
 
-    return
+    Returns:
+        tuple[ndarray, ndarray]: solution velocity array, and integrated phase array
 
     """
+
+    def _augment_matrices(alpha):
+        pass
+
     assert B.shape[1] == len(timediffs)
 
     # Velocity will be result of the inversion
     velocity_array, _, rank_B, sing_vals_B = np.linalg.lstsq(B, delta_phis, rcond=None)
+
     # velocity array entries: v_j = (phi_j - phi_j-1)/(t_j - t_j-1)
     if velocity_array.ndim == 1:
         velocity_array = np.expand_dims(velocity_array, axis=-1)
