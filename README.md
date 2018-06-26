@@ -27,7 +27,7 @@ virtualenv is optional but recommended.
 
 ## Command Line Interface Reference
 
-```bash
+```
 $ insar --help
 Usage: insar [OPTIONS] COMMAND [ARGS]...
 
@@ -49,7 +49,7 @@ Commands:
   view_stack  Explore timeseries on deformation image.
 ```
 
-```bash
+```
 $ insar dem --help
 Usage: insar dem [OPTIONS]
 
@@ -82,7 +82,7 @@ Options:
   --help                        Show this message and exit.
 ```
 
-```bash
+```
 $ insar download --help
 Usage: insar download [OPTIONS]
 
@@ -255,7 +255,7 @@ json_dict = read_json(input_string)
 
 Running the module as a script will give you both the bounding box, and the comma-joined lon,lat pairs of the polygon:
 
-```bash
+```
 $ cat data/hawaii.geojson | python insar/geojson.py 
 -155.67626953125,19.077692991868297,-154.77264404296875,19.077692991868297,-154.77264404296875,19.575317892869453,-155.67626953125,19.575317892869453,-155.67626953125,19.077692991868297
 -155.67626953125 19.077692991868297 -154.77264404296875 19.575317892869453
@@ -302,6 +302,6 @@ logger = get_log()
 logger.info("Better than printing")
 ```
 
-```bash
+```
 [05/29 16:28:19] [INFO log.py] Better than printing
 ```
