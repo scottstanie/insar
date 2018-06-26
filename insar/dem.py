@@ -22,7 +22,9 @@ NASA MEaSUREs SRTM Version 3 (SRTMGL1) houses the data
 Example url: "http://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL1.003/2000.02.11/N06W001.SRTMGL1.hgt.zip"
 
 Other option is to download from Mapzen's tile set on AWS:
+
     https://mapzen.com/documentation/terrain-tiles/formats/#skadi
+
 These do not require a username and password.
 They use the SRTM dataset within the US, but combine other sources to produce
 1 arcsecond (30 m) resolution world wide.

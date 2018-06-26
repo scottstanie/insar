@@ -6,6 +6,7 @@ Subpackages
 
 .. toctree::
 
+    insar.scripts
     insar.tests
 
 Submodules
@@ -47,6 +48,14 @@ insar.parsers module
 --------------------
 
 .. automodule:: insar.parsers
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+insar.plotting module
+---------------------
+
+.. automodule:: insar.plotting
     :members:
     :undoc-members:
     :show-inheritance:

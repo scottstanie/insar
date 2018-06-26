@@ -36,6 +36,14 @@ insar.tests.test\_parsers module
     :undoc-members:
     :show-inheritance:
 
+insar.tests.test\_plotting module
+---------------------------------
+
+.. automodule:: insar.tests.test_plotting
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 insar.tests.test\_sario module
 ------------------------------
 
