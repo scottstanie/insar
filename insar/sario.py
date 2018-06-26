@@ -52,6 +52,21 @@ def get_file_ext(filename):
     return os.path.splitext(filename)[1]
 
 
+def find_files(directory, search_term):
+    """Searches for files in `directory` using globbing on search_term
+
+    Path to file is also included.
+
+    Examples:
+        >>> open("afakefile.txt", "w").close()
+        >>> find_files(".", "*.txt")
+        ['./afakefile.txt']
+        >>> os.remove("afakefile.txt")
+
+    """
+    return glob.glob(os.path.join(directory, search_term))
+
+
 def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
     """Examines file type for real/complex and runs appropriate load
 
@@ -72,7 +87,7 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
     def _find_rsc_file(filename, verbose=False):
         basepath = os.path.split(filename)[0]
         # Should be just elevation.dem.rsc (for .geo folder) or dem.rsc (for igrams)
-        possible_rscs = glob.glob(os.path.join(basepath, '*.rsc'))
+        possible_rscs = find_files(basepath, '*.rsc')
         if verbose:
             logger.info("Possible rsc files:")
             logger.info(possible_rscs)

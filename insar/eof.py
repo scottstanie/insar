@@ -30,6 +30,7 @@ except ImportError:  # Python 2 doesn't have this :(
     CONCURRENT = False
 
 import os
+import sys
 import glob
 import itertools
 import requests
@@ -37,7 +38,8 @@ import requests
 from datetime import timedelta
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
-from insar.log import get_log
+import insar.sario
+from insar.log import get_log, log_runtime
 from insar.parsers import Sentinel
 
 logger = get_log()
@@ -178,9 +180,10 @@ def _download_and_write(link, save_dir="."):
         logger.info("%s already exists, skipping download.", link)
         return
 
-    logger.info("Downloading %s, saving to %s", link, fname)
+    logger.info("Downloading %s", link)
     response = requests.get(link)
     response.raise_for_status()
+    logger.info("Saving to %s", fname)
     with open(fname, 'wb') as f:
         f.write(response.content)
 
@@ -189,7 +192,7 @@ def find_sentinel_products(startpath='./'):
     """Parse the startpath directory for any Sentinel 1 products' date and mission"""
     orbit_dates = []
     missions = []
-    for filename in glob.glob(os.path.join(startpath, "S1*")):
+    for filename in insar.sario.find_files(startpath, "S1*"):
         try:
             parser = Sentinel(filename)
         except ValueError:  # Doesn't match a sentinel file
@@ -206,3 +209,22 @@ def find_sentinel_products(startpath='./'):
         missions.append(mission)
 
     return orbit_dates, missions
+
+
+@log_runtime
+def main(path='.', mission=None, date=None):
+    """Function used for entry point to download eofs"""
+    if (mission and not date):
+        logger.error("Must specify date if specifying mission.")
+        sys.exit(1)
+    if not date:
+        # No command line args given: search current directory
+        orbit_dates, missions = find_sentinel_products(path)
+        if not orbit_dates:
+            logger.info("No Sentinel products found in directory %s, exiting", path)
+            sys.exit(0)
+    if date:
+        orbit_dates = [date]
+        missions = list(mission) if mission else []
+
+    download_eofs(orbit_dates, missions=missions)

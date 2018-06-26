@@ -144,6 +144,26 @@ def build_B_matrix(geolist, intlist):
     return B
 
 
+def read_stack(directory, file_ext):
+    all_file_names = sario.find_files(directory, "*" + file_ext)
+    all_files = [sario.load_file(filename) for filename in all_file_names]
+    return np.stack(all_files, axis=0)
+
+
+def find_stack_max(stack):
+    """Gets the row, col of the max value for the mean of the stack
+
+    Args:
+        stack (ndarray): 3D array of images, stacked along axis=0
+
+    Returns:
+        tuple[int, int]: row, col of the mean for the stack_mean
+    """
+    stack_mean = np.mean(stack, axis=0)
+    # Argmax gives the flattened indices, so we need to convert back to row, col
+    max_row, max_col = np.unravel_index(np.argmax(stack_mean), stack_mean.shape)
+
+
 def read_unw_stack(igram_path, ref_row, ref_col):
     """Reads all unwrapped phase .unw files into unw_stack
 
@@ -170,7 +190,6 @@ def read_unw_stack(igram_path, ref_row, ref_col):
         cols = rsc_data['WIDTH']
         return np.empty((num_ints, rows, cols), dtype='float32')
 
-    # row 283, col 493 looks like a good test
     intlist_path = os.path.join(igram_path, 'intlist')
     igram_files = read_intlist(intlist_path, parse=False)
     num_ints = len(igram_files)
@@ -283,7 +302,7 @@ def cols_to_stack(columns, rows, cols):
 
 
 @log_runtime
-def run_inversion(igram_path, reference=(483, 493), verbose=False):
+def run_inversion(igram_path, reference=(None, None), verbose=False):
     """Runs SBAS inversion on all unwrapped igrams
 
     Args:
@@ -329,3 +348,30 @@ def run_inversion(igram_path, reference=(483, 493), verbose=False):
     deformation = cols_to_stack(deformation, rows, cols)
     varr = cols_to_stack(varr, rows, cols)
     return (geolist, phi_arr, deformation, varr, unw_stack)
+
+
+def save_deformation(igram_path, deformation, geolist):
+    """Saves deformation ndarray and geolist dates as .npy file"""
+    np.save(os.path.join(igram_path, 'deformation.npy'), deformation)
+    np.save(os.path.join(igram_path, 'geolist.npy'), geolist)
+
+
+def load_deformation(igram_path, ref_row=None, ref_col=None):
+    try:
+        deformation = np.load(os.path.join(igram_path, 'deformation.npy'))
+        # geolist is a list of datetimes: encoding must be bytes
+        geolist = np.load(os.path.join(igram_path, 'geolist.npy'), encoding='bytes')
+
+    except (IOError, OSError):
+        if not ref_col and not ref_col:
+            logger.error("deformation.npy or geolist.npy not found in path %s", igram_path)
+            logger.error("Need ref_row, ref_col to run inversion and create files")
+            return None, None
+        else:
+            logger.warning("No deformation.npy detected: running inversion")
+
+        geolist, phi_arr, deformation, varr, unw_stack = run_inversion(
+            igram_path, reference=(ref_row, ref_col))
+        save_deformation(igram_path, deformation, geolist)
+
+    return geolist, deformation

@@ -1,5 +1,4 @@
 import setuptools
-from setuptools import setup
 from setuptools.command.develop import develop
 from setuptools.command.install import install
 from subprocess import check_call
@@ -31,7 +30,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="insar",
-    version="0.1.7",
+    version="1.0",
     author="Scott Staniewicz",
     author_email="scott.stanie@utexas.com",
     description="Tools for gathering and preprocessing InSAR data",
@@ -57,14 +56,10 @@ setuptools.setup(
         "Topic :: Scientific/Engineering",
         "Intended Audience :: Science/Research",
     ),
-    install_requires=["numpy", "requests", "matplotlib"],
+    install_requires=["numpy", "requests", "matplotlib", "click"],
     entry_points={
         "console_scripts": [
-            "create-dem=scripts.create_dem:main",
-            "download-eofs=scripts.download_eofs:main",
-            "view-dem=scripts.view_dem:main",
-            "run-stack=scripts.run_stack:main",
-            "view-stack=scripts.view_stack:main",
+            "insar=insar.scripts.cli:cli",
         ],
     },
     data_files=[("bin", ["bin/upsample"])],

@@ -51,17 +51,19 @@ except ImportError:  # Python 2 doesn't have this :(
     PARALLEL = False
 import collections
 import getpass
+import json
 import math
 import netrc
 import os
 import re
-import requests
 import subprocess
+import sys
 import numpy as np
+import requests
 
+import insar
 from insar.log import get_log
-from insar.utils import floor_float
-from insar import sario
+from insar import sario, utils
 
 try:
     input = raw_input  # Check for python 2
@@ -109,6 +111,7 @@ def _get_username_pass():
     save_to_netrc = input(
         "Would you like to save these to ~/.netrc (machine={}) for future use (y/n)?  ".format(
             Downloader.NASAHOST))
+    return username, password, save_to_netrc.lower().startswith('y')
 
 
 class Netrc(netrc.netrc):
@@ -290,8 +293,6 @@ class Downloader:
                     and n.authenticators(self.NASAHOST)[2])
         except (OSError, IOError):
             return False
-
-        return username, password, save_to_netrc.lower().startswith('y')
 
     @staticmethod
     def _nasa_netrc_entry(username, password):
@@ -597,7 +598,7 @@ class Stitcher:
             >>> print(s._find_step_sizes())
             (0.000277777777, -0.000277777777)
         """
-        step_size = floor_float(1 / (self.num_pixels - 1), ndigits)
+        step_size = utils.floor_float(1 / (self.num_pixels - 1), ndigits)
         return (step_size, -1 * step_size)
 
     def create_dem_rsc(self):
@@ -788,3 +789,81 @@ def create_kml(rsc_data, tif_filename, title="Title", desc="Description"):
         title=title, description=desc, tif_filename=tif_filename, **rsc_bounds(rsc_data))
 
     return output
+
+
+def main(geojson, data_source, rate, output):
+    """Function for entry point to create a DEM with `insar dem`"""
+    logger = get_log()
+
+    geojson = json.load(geojson)
+    bounds = insar.geojson.bounding_box(geojson)
+    logger.info("Bounds: %s", " ".join(str(b) for b in bounds))
+
+    tile_names = list(insar.dem.Tile(*bounds).srtm1_tile_names())
+    d = insar.dem.Downloader(tile_names, data_source=data_source)
+    d.download_all()
+
+    s = insar.dem.Stitcher(tile_names)
+    stitched_dem = s.load_and_stitch()
+
+    # Now create corresponding rsc file
+    rsc_dict = s.create_dem_rsc()
+
+    # Cropping: get very close to the bounds asked for:
+    logger.info("Cropping stitched DEM to boundaries")
+    stitched_dem, new_starts, new_sizes = insar.dem.crop_stitched_dem(bounds, stitched_dem,
+                                                                      rsc_dict)
+    new_x_first, new_y_first = new_starts
+    new_rows, new_cols = new_sizes
+    # Now adjust the .dem.rsc data to reflect new top-left corner and new shape
+    rsc_dict['X_FIRST'] = new_x_first
+    rsc_dict['Y_FIRST'] = new_y_first
+    rsc_dict['FILE_LENGTH'] = new_rows
+    rsc_dict['WIDTH'] = new_cols
+
+    # Upsampling:
+    rate = rate
+    dem_filename = output.name  # Note: output is a 'LazyFile' from click
+    rsc_filename = dem_filename + '.rsc'
+    if rate == 1:
+        logger.info("Rate = 1: No upsampling to do")
+        logger.info("Writing DEM to %s", dem_filename)
+        stitched_dem.tofile(dem_filename)
+        logger.info("Writing .dem.rsc file to %s", rsc_filename)
+        with open(rsc_filename, "w") as f:
+            f.write(sario.format_dem_rsc(rsc_dict))
+        sys.exit(0)
+
+    logger.info("Upsampling by {}".format(rate))
+    dem_filename_small = dem_filename.replace(".dem", "_small.dem")
+    rsc_filename_small = rsc_filename.replace(".dem.rsc", "_small.dem.rsc")
+
+    logger.info("Writing non-upsampled dem temporarily to %s", dem_filename_small)
+    stitched_dem.tofile(dem_filename_small)
+    logger.info("Writing non-upsampled dem.rsc temporarily to %s", rsc_filename_small)
+    with open(rsc_filename_small, "w") as f:
+        f.write(sario.format_dem_rsc(rsc_dict))
+
+    # Now upsample this block
+    nrows, ncols = stitched_dem.shape
+    upsample_path = 'bin/upsample' if os.path.exists('bin/upsample') else 'upsample'
+    upsample_cmd = [
+        utils.which(upsample_path), dem_filename_small,
+        str(rate),
+        str(ncols),
+        str(nrows), dem_filename
+    ]
+    logger.info("Upsampling using %s:", upsample_cmd[0])
+    logger.info(' '.join(upsample_cmd))
+    subprocess.check_call(upsample_cmd)
+
+    # Redo a new .rsc file for it
+    logger.info("Writing new upsampled dem to %s", rsc_filename)
+    with open(rsc_filename, "w") as f:
+        upsampled_rsc = insar.dem.upsample_dem_rsc(rate=rate, rsc_dict=rsc_dict)
+        f.write(upsampled_rsc)
+
+    # Clean up the _small versions of dem and dem.rsc
+    logger.info("Cleaning up %s and %s", dem_filename_small, rsc_filename_small)
+    os.remove(dem_filename_small)
+    os.remove(rsc_filename_small)

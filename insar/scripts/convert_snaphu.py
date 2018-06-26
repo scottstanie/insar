@@ -7,27 +7,17 @@
     With no arguments, converts all .unw files in current directory
 
 """
-
 import argparse
-import glob
 import sys
 import subprocess
 import os.path
 from os.path import abspath, dirname
-try:
-    import insar
-except ImportError:  # add root to pythonpath if import fails
-    sys.path.insert(0, dirname(dirname(abspath(__file__))))
 
 import insar.sario
 from insar.log import get_log
 
 UNWRAPPED_EXT = '.unw'
 logger = get_log()
-
-
-def _find_unw_files(dir_path):
-    return glob.glob(os.path.join(dir_path, '*.unw'))
 
 
 def unw_to_tif(filename, num_cols, num_rows, max_height):
@@ -66,7 +56,7 @@ def main():
         sys.exit(1)
     elif args.path:
         dir_path = args.path
-        files_to_convert = _find_unw_files(dir_path)
+        files_to_convert = insar.sario.find_files(dir_path, '*.unw')
     elif args.file:
         file_ext = insar.sario.get_file_ext(args.file)
         if file_ext != UNWRAPPED_EXT:
@@ -76,7 +66,7 @@ def main():
     else:
         logger.info("Searching in current directory for .unw files.")
         dir_path = './'
-        files_to_convert = _find_unw_files(dir_path)
+        files_to_convert = insar.sario.find_files(dir_path, '*.unw')
 
     dem_rsc_file = os.path.join(dir_path, 'dem.rsc')
     rsc_data = insar.sario.load_dem_rsc(dem_rsc_file)
