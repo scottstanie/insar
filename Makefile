@@ -17,7 +17,7 @@ $(TARGET): $(SRCS)
 	$(CC) $(SRCS) $(CFLAGS) -o $@
 
 
-.PHONY: test clean
+.PHONY: test clean upload
 
 test:
 	@echo "Running doctests and unittests: nose must be installed"
@@ -27,4 +27,7 @@ clean:
 	rm -f *.o
 	rm -f $(TARGET)
 
-
+upload:
+	rm -rf dist
+	python setup.py sdist
+	twine upload dist/*.tar.gz
