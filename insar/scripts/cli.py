@@ -134,6 +134,7 @@ def dem(context, geojson, data_source, rate, output):
     type=int,
     default=1,
     help="Size of lowpass filter to use on igrams before unwrapping")
+@click.option('--alpha', default=0.0, help="Regularization parameter for SBAS inversion")
 @click.option(
     "--ref-row",
     type=int,

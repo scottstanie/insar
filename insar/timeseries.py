@@ -328,13 +328,15 @@ def cols_to_stack(columns, rows, cols):
 
 
 @log_runtime
-def run_inversion(igram_path, reference=(None, None), verbose=False):
+def run_inversion(igram_path, reference=(None, None), alpha=0, verbose=False):
     """Runs SBAS inversion on all unwrapped igrams
 
     Args:
         igram_path (str): path to the directory containing `intlist`,
             the .int filenames, the .unw files, and the dem.rsc file
         reference (tuple[int, int]): row and col index of the reference pixel to subtract
+        alpha (float): nonnegative Tikhonov regularization parameter.
+            See https://en.wikipedia.org/wiki/Tikhonov_regularization
         verbose (bool): print extra timing and debug info
 
     Returns:
@@ -365,7 +367,7 @@ def run_inversion(igram_path, reference=(None, None), verbose=False):
     num_ints, rows, cols = unw_stack.shape
     phi_columns = stack_to_cols(unw_stack)
 
-    varr, phi_arr = invert_sbas(phi_columns, timediffs, B)
+    varr, phi_arr = invert_sbas(phi_columns, timediffs, B, alpha=alpha)
     # Multiple by wavelength ratio to go from phase to cm
     deformation = PHASE_TO_CM * phi_arr
 
@@ -382,7 +384,7 @@ def save_deformation(igram_path, deformation, geolist):
     np.save(os.path.join(igram_path, 'geolist.npy'), geolist)
 
 
-def load_deformation(igram_path, ref_row=None, ref_col=None):
+def load_deformation(igram_path, ref_row=None, ref_col=None, alpha=0):
     try:
         deformation = np.load(os.path.join(igram_path, 'deformation.npy'))
         # geolist is a list of datetimes: encoding must be bytes
@@ -397,7 +399,7 @@ def load_deformation(igram_path, ref_row=None, ref_col=None):
             logger.warning("No deformation.npy detected: running inversion")
 
         geolist, phi_arr, deformation, varr, unw_stack = run_inversion(
-            igram_path, reference=(ref_row, ref_col))
+            igram_path, reference=(ref_row, ref_col), alpha=alpha)
         save_deformation(igram_path, deformation, geolist)
 
     return geolist, deformation
