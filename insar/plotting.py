@@ -51,8 +51,7 @@ def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=N
         return image,
 
     stack_ani = animation.FuncAnimation(
-        fig, update_im, frames=range(num_images), interval=pause_time, blit=False, repeat=True
-    )
+        fig, update_im, frames=range(num_images), interval=pause_time, blit=False, repeat=True)
 
     if save_title:
         logger.info("Saving to %s", save_title)
@@ -62,31 +61,45 @@ def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=N
         plt.show()
 
 
-def view_stack(stack, geolist, image_num=-1, title=""):
+def view_stack(stack, geolist=None, display_img=-1, label="Centimeters", title=""):
     """Displays an image from a stack, allows you to click for timeseries
 
     Args:
         stack (ndarray): 3D np.ndarray, 1st index is image number
             i.e. the idx image is stack[idx, :, :]
-        geolist (list[datetime]): times of acquisition for each stack layer
-        image_num (int): Optional- default = -1, the last image. Choose which
-            image in the stack you want as the display to click on
+        geolist (list[datetime]): Optional: times of acquisition for
+            each stack layer. Used as xaxis if provided
+        display_img (int, str): Optional- default = -1, the last image.
+            Chooses which image in the stack you want as the display
+            display_img = 'avg' will take the average across all images
+        label (str): Optional- Label on colorbar/yaxis for plot
+            Default = Centimeters
         title (str): Optional- Title for plot
 
     Returns:
         None
 
-    Notes: may need this
-        See https://matplotlib.org/users/event_handling.html for click handling
+    Raises:
+        ValueError: if display_img is not an int or the string 'mean'
+
     """
+    # If we don't have dates, use indices as the x-axis
+    if geolist is None:
+        geolist = np.arange(stack.shape[0])
 
     def get_timeseries(row, col):
         return stack[:, row, col]
 
     imagefig = plt.figure()
-    image = plt.imshow(stack[image_num, :, :])  # Type: AxesImage
+    if isinstance(display_img, int):
+        image = plt.imshow(stack[display_img, :, :])  # Type: AxesImage
+    elif display_img == 'mean':
+        image = plt.imshow(np.mean(stack, axis=0))
+    else:
+        raise ValueError("display_img must be an int or 'mean'")
+
     cbar = imagefig.colorbar(image)
-    cbar.set_label("Centimeters")
+    cbar.set_label(label)
 
     timefig = plt.figure()
     if not title:
@@ -110,8 +123,9 @@ def view_stack(stack, geolist, image_num=-1, title=""):
 
         plt.plot(geolist, timeline, marker='o', linestyle='dashed', linewidth=1, markersize=4)
         plt.legend(legend_entries)
-        plt.xlabel("SAR image date")
-        plt.ylabel("Centimeters")
+        x_axis_str = "SAR image date" if geolist is not None else "Image number"
+        plt.xlabel(x_axis_str)
+        plt.ylabel(label)
         plt.show()
 
     imagefig.canvas.mpl_connect('button_press_event', onclick)

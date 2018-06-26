@@ -262,4 +262,4 @@ def view_stack(context, ref_row, ref_col):
     if geolist is None or deformation is None:
         return
 
-    insar.plotting.view_stack(deformation, geolist, image_num=-1)
+    insar.plotting.view_stack(deformation, geolist, display_img=-1)

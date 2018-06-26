@@ -94,7 +94,7 @@ def convert_int_tif(**kwargs):
 
     # Default name by ps_sbas_igrams
     igram_rsc = insar.sario.load_dem_rsc('dem.rsc')
-    convert1 = "for i in *.int ; do dismphfile $i {igram_width} ; mv dismph.tif `echo $i | sed 's/int$/tif/'` ; done".format(
+    convert1 = """for i in ./*.int ; do dismphfile "$i" {igram_width} ; mv dismph.tif `echo "$i" | sed 's/int$/tif/'` ; done""".format(
         igram_width=igram_rsc['WIDTH'])
     subprocess.check_call(convert1, shell=True)
 
