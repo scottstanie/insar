@@ -38,6 +38,7 @@ import requests
 from datetime import timedelta
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
+import insar.sario
 from insar.log import get_log, log_runtime
 from insar.parsers import Sentinel
 
@@ -191,7 +192,7 @@ def find_sentinel_products(startpath='./'):
     """Parse the startpath directory for any Sentinel 1 products' date and mission"""
     orbit_dates = []
     missions = []
-    for filename in glob.glob(os.path.join(startpath, "S1*")):
+    for filename in insar.sario.find_files(startpath, "S1*"):
         try:
             parser = Sentinel(filename)
         except ValueError:  # Doesn't match a sentinel file

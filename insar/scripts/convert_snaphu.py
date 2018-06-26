@@ -22,10 +22,6 @@ UNWRAPPED_EXT = '.unw'
 logger = get_log()
 
 
-def _find_unw_files(dir_path):
-    return glob.glob(os.path.join(dir_path, '*.unw'))
-
-
 def unw_to_tif(filename, num_cols, num_rows, max_height):
     """Uses dishgtfile program to convert a .unw to .tif"""
     # The "1" is "firstline" option
@@ -62,7 +58,7 @@ def main():
         sys.exit(1)
     elif args.path:
         dir_path = args.path
-        files_to_convert = _find_unw_files(dir_path)
+        files_to_convert = insar.sario.find_files(dir_path, '*.unw')
     elif args.file:
         file_ext = insar.sario.get_file_ext(args.file)
         if file_ext != UNWRAPPED_EXT:
@@ -72,7 +68,7 @@ def main():
     else:
         logger.info("Searching in current directory for .unw files.")
         dir_path = './'
-        files_to_convert = _find_unw_files(dir_path)
+        files_to_convert = insar.sario.find_files(dir_path, '*.unw')
 
     dem_rsc_file = os.path.join(dir_path, 'dem.rsc')
     rsc_data = insar.sario.load_dem_rsc(dem_rsc_file)
