@@ -170,7 +170,6 @@ def read_unw_stack(igram_path, ref_row, ref_col):
         cols = rsc_data['WIDTH']
         return np.empty((num_ints, rows, cols), dtype='float32')
 
-    # row 283, col 493 looks like a good test
     intlist_path = os.path.join(igram_path, 'intlist')
     igram_files = read_intlist(intlist_path, parse=False)
     num_ints = len(igram_files)
@@ -183,10 +182,8 @@ def read_unw_stack(igram_path, ref_row, ref_col):
         try:
             unw_stack[idx, :, :] = cur_unw - cur_unw[ref_row, ref_col]
         except IndexError:
-            logger.error(
-                "Reference pixel (%s, %s) is out of bounds for unw shape %s", ref_row, ref_col,
-                unw_stack.shape[1:]
-            )
+            logger.error("Reference pixel (%s, %s) is out of bounds for unw shape %s", ref_row,
+                         ref_col, unw_stack.shape[1:])
             raise
     return unw_stack
 
@@ -285,7 +282,7 @@ def cols_to_stack(columns, rows, cols):
 
 
 @log_runtime
-def run_inversion(igram_path, reference=(483, 493), verbose=False):
+def run_inversion(igram_path, reference=(None, None), verbose=False):
     """Runs SBAS inversion on all unwrapped igrams
 
     Args:
@@ -354,8 +351,7 @@ def load_deformation(igram_path, ref_row=None, ref_col=None):
             logger.warning("No deformation.npy detected: running inversion")
 
         geolist, phi_arr, deformation, varr, unw_stack = run_inversion(
-            igram_path, reference=(ref_row, ref_col)
-        )
+            igram_path, reference=(ref_row, ref_col))
         save_deformation(igram_path, deformation, geolist)
 
     return geolist, deformation
