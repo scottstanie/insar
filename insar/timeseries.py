@@ -144,6 +144,12 @@ def build_B_matrix(geolist, intlist):
     return B
 
 
+def read_stack(directory, file_ext):
+    all_file_names = sario.find_files(directory, "*" + file_ext)
+    all_files = [sario.load_file(filename) for filename in all_file_names]
+    return np.stack(all_files, axis=0)
+
+
 def read_unw_stack(igram_path, ref_row, ref_col):
     """Reads all unwrapped phase .unw files into unw_stack
 
