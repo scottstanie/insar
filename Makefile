@@ -27,7 +27,8 @@ clean:
 	rm -f *.o
 	rm -f $(TARGET)
 
+REPO?=pypi
 upload:
 	rm -rf dist
 	python setup.py sdist
-	twine upload dist/*.tar.gz
+	twine upload dist/*.tar.gz -r $(REPO)
