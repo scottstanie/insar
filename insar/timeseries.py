@@ -208,7 +208,31 @@ def read_unw_stack(igram_path, ref_row, ref_col):
     return unw_stack
 
 
-def invert_sbas(delta_phis, timediffs, B, alpha=0):
+def _create_diff_matrix(n):
+    """Creates n x n matrix subtracting adjacent vector elements
+
+    Example:
+        >>> print(_create_diff_matrix(4))
+        [[ 1 -1  0  0]
+         [-1  2 -1  0]
+         [ 0 -1  2 -1]
+         [ 0  0 -1  1]]
+
+        [[ 1 -1  0  0]
+         [ 0  1 -1  0]
+         [ 0  0  1 -1]]
+    """
+    diff_matrix = -1 * np.diag(np.ones(n - 1), k=1).astype('int')
+    diff_matrix = diff_matrix + -1 * np.diag(np.ones(n - 1), k=-1).astype('int')
+    np.fill_diagonal(diff_matrix, 2)
+    diff_matrix[-1, -1] = 1
+    diff_matrix[0, 0] = 1
+    # print(diff_matrix)
+    # return -1 * diff_matrix[:-1, :]
+    return diff_matrix
+
+
+def invert_sbas(delta_phis, timediffs, B, alpha=0, difference=False):
     """Performs and SBAS inversion on each pixel of unw_stack to find deformation
 
     Solves the least squares equation Bv = dphi
@@ -223,6 +247,9 @@ def invert_sbas(delta_phis, timediffs, B, alpha=0):
             If alpha > 0, then the equation is instead to minimize
             ||B*v - dphi||^2 + ||alpha*I*v||^2
             See https://en.wikipedia.org/wiki/Tikhonov_regularization
+        difference (bool): for regularization, penalize differences in velocity
+            Used to make a smoother final solution
+            TODO: difference giving wonky results
 
     Returns:
         tuple[ndarray, ndarray]: solution velocity array, and integrated phase array
@@ -230,8 +257,10 @@ def invert_sbas(delta_phis, timediffs, B, alpha=0):
     """
 
     def _augment_matrices(B, delta_phis, alpha):
-        B = np.vstack((B, alpha * np.eye(B.shape[1])))
-        zeros_shape = (B.shape[1], delta_phis.shape[1])  # Same # rows as above
+        reg_matrix = _create_diff_matrix(B.shape[1]) if difference else np.eye(B.shape[1])
+        B = np.vstack((B, alpha * reg_matrix))
+        # Now make num rows match
+        zeros_shape = (B.shape[0] - delta_phis.shape[0], delta_phis.shape[1])
         delta_phis = np.vstack((delta_phis, np.zeros(zeros_shape)))
         return B, delta_phis
 
@@ -246,6 +275,7 @@ def invert_sbas(delta_phis, timediffs, B, alpha=0):
 
     # Augment only if regularization requested
     if alpha > 0:
+        logger.info("Using regularization with alpha=%s, difference=%s", alpha, difference)
         B, delta_phis = _augment_matrices(B, delta_phis, alpha)
 
     # Velocity will be result of the inversion
@@ -328,7 +358,7 @@ def cols_to_stack(columns, rows, cols):
 
 
 @log_runtime
-def run_inversion(igram_path, reference=(None, None), alpha=0, verbose=False):
+def run_inversion(igram_path, reference=(None, None), alpha=0, difference=False, verbose=False):
     """Runs SBAS inversion on all unwrapped igrams
 
     Args:
@@ -337,6 +367,8 @@ def run_inversion(igram_path, reference=(None, None), alpha=0, verbose=False):
         reference (tuple[int, int]): row and col index of the reference pixel to subtract
         alpha (float): nonnegative Tikhonov regularization parameter.
             See https://en.wikipedia.org/wiki/Tikhonov_regularization
+        difference (bool): for regularization, penalize differences in velocity
+            Used to make a smoother final solution
         verbose (bool): print extra timing and debug info
 
     Returns:
@@ -367,7 +399,7 @@ def run_inversion(igram_path, reference=(None, None), alpha=0, verbose=False):
     num_ints, rows, cols = unw_stack.shape
     phi_columns = stack_to_cols(unw_stack)
 
-    varr, phi_arr = invert_sbas(phi_columns, timediffs, B, alpha=alpha)
+    varr, phi_arr = invert_sbas(phi_columns, timediffs, B, alpha=alpha, difference=difference)
     # Multiple by wavelength ratio to go from phase to cm
     deformation = PHASE_TO_CM * phi_arr
 
@@ -384,7 +416,7 @@ def save_deformation(igram_path, deformation, geolist):
     np.save(os.path.join(igram_path, 'geolist.npy'), geolist)
 
 
-def load_deformation(igram_path, ref_row=None, ref_col=None, alpha=0):
+def load_deformation(igram_path, ref_row=None, ref_col=None, alpha=0, difference=False):
     try:
         deformation = np.load(os.path.join(igram_path, 'deformation.npy'))
         # geolist is a list of datetimes: encoding must be bytes
@@ -399,7 +431,7 @@ def load_deformation(igram_path, ref_row=None, ref_col=None, alpha=0):
             logger.warning("No deformation.npy detected: running inversion")
 
         geolist, phi_arr, deformation, varr, unw_stack = run_inversion(
-            igram_path, reference=(ref_row, ref_col), alpha=alpha)
+            igram_path, reference=(ref_row, ref_col), alpha=alpha, difference=difference)
         save_deformation(igram_path, deformation, geolist)
 
     return geolist, deformation
