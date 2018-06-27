@@ -128,7 +128,7 @@ class TestInvertSbas(unittest.TestCase):
 
         # Check that a bad reference throws exception
         self.assertRaises(
-            IndexError,
+            ValueError,
             timeseries.run_inversion,
             self.igram_path,
             reference=(100, 100),
