@@ -48,33 +48,72 @@ logger = get_log()
 BASE_URL = "https://qc.sentinel1.eo.esa.int/api/v1/?product_type=AUX_POEORB&validity_start__lt={start_date}&validity_stop__gt={stop_date}"
 DATE_FMT = "%Y-%m-%d"  # Used in sentinel API url
 
+
 #
+class SentinelEof(object):
+    """Class to download precise orbit .EOF files from ESA API
 
+    Can handle either the filenames of Sentinel 1 products, or dates.
 
-def get_valid_dates(orbit_dates):
-    """Takes a list of desired orbit dates and find the correct EOF date
-
-    Sentinel EOFs have a validity starting one day before, and end one day after
-
-    Args:
-        list[str or datetime.datetime]: a list of dates of radar acquistions to
-            get precise orbits (Sentinel 1).
-            String format is flexible (uses dateutil.parser)
-
-    Examples:
-        >>> get_valid_dates(['20160102'])
-        [datetime.datetime(2016, 1, 1, 0, 0)]
-        >>> get_valid_dates(['01/02/2016'])
-        [datetime.datetime(2016, 1, 1, 0, 0)]
-        >>> import datetime
-        >>> get_valid_dates(['2017-01-03', datetime.datetime(2017, 1, 5, 0, 0)])
-        [datetime.datetime(2017, 1, 2, 0, 0), datetime.datetime(2017, 1, 4, 0, 0)]
+    API docs here: https://qc.sentinel1.eo.esa.int/doc/api/
     """
-    # Conver any string dates to a datetime
-    orbit_dates = [parse(date) if isinstance(date, str) else date for date in orbit_dates]
 
-    # Subtract one day from desired orbits to get correct files
-    return [date + relativedelta(days=-1) for date in orbit_dates]
+    BASE_URL = "https://qc.sentinel1.eo.esa.int/api/v1/"
+    DATE_FMT = "%Y-%m-%d"  # Used in sentinel API url
+    FULL_DATE_FMT = "%Y-%m-%dT%H:%M:%S"  # If hour/min/sec provided
+
+    def __init__(self, filename=None, dates=None):
+        self.filename = filename
+        self.dates = dates
+
+        self.params = {'product_type': 'AUX_POEORB'}
+        # Note: we append the __gte and __lte to look for data greater
+        # than the start, less than the stop
+        self._validity_start_param = 'validity_start__gte'
+        self._validity_stop_param = 'validity_stop__lte'
+
+        self._mission_param = 'sentinel1__mission'
+
+    def get(self):
+        requests.get(self.BASE_URL, params=params)
+
+    def _format_datetime(self, dt):
+        """Converts datetime to a string for the API query
+
+        Uses hour, minute, second data if available
+        """
+        return dt.strftime(self.FULL_DATE_FMT) if dt.hour else dt.strftime(self.DATE_FMT)
+
+    def _add_start(self, start_time):
+        self.params = self.params.update({selv._validity_start_param: start_time})
+
+    def _add_stop(self, stop_time):
+        self.params = self.params.update({selv._validity_stop_param: stop_time})
+
+    def _get_valid_dates(self, orbit_dates):
+        """Takes a list of desired orbit dates and find the correct EOF date
+
+        Sentinel EOFs have a validity starting one day before, and end one day after
+
+        Args:
+            list[str or datetime.datetime]: a list of dates of radar acquistions to
+                get precise orbits (Sentinel 1).
+                String format is flexible (uses dateutil.parser)
+
+        Examples:
+            >>> get_valid_dates(['20160102'])
+            [datetime.datetime(2016, 1, 1, 0, 0)]
+            >>> get_valid_dates(['01/02/2016'])
+            [datetime.datetime(2016, 1, 1, 0, 0)]
+            >>> import datetime
+            >>> get_valid_dates(['2017-01-03', datetime.datetime(2017, 1, 5, 0, 0)])
+            [datetime.datetime(2017, 1, 2, 0, 0), datetime.datetime(2017, 1, 4, 0, 0)]
+        """
+        # Conver any string dates to a datetime
+        orbit_dates = [parse(date) if isinstance(date, str) else date for date in orbit_dates]
+
+        # Subtract one day from desired orbits to get correct files
+        return [date + relativedelta(days=-1) for date in orbit_dates]
 
 
 def download_eofs(orbit_dates, missions=None, save_dir="."):
