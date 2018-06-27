@@ -211,50 +211,6 @@ def shift_stack(stack, ref_row, ref_col, window=3):
     return shifted
 
 
-def read_unw_stack(igram_path, ref_row, ref_col):
-    """Reads all unwrapped phase .unw files into unw_stack
-
-    Uses ref_row, ref_col as the normalizing point (subtracts
-        that pixels value from all others in each .unw file)
-
-    Args:
-        igram_path (str): path to the directory containing `intlist`,
-            the .int filenames, the .unw files, and the dem.rsc file
-        ref_row (int): row index of the reference pixel to subtract
-        ref_col (int): col index of the reference pixel to subtract
-
-    Returns:
-        ndarray: 3D array of each unw file stacked
-            1st dim is the index of the igram: unw_stack[0, :, :]
-
-    """
-
-    def _allocate_stack(igram_path, num_ints):
-        # Get igram file size data to pre-allocate space for 3D unw stack
-        rsc_path = os.path.join(igram_path, 'dem.rsc')
-        rsc_data = sario.load_file(rsc_path)
-        rows = rsc_data['FILE_LENGTH']
-        cols = rsc_data['WIDTH']
-        return np.empty((num_ints, rows, cols), dtype='float32')
-
-    intlist_path = os.path.join(igram_path, 'intlist')
-    igram_files = read_intlist(intlist_path, parse=False)
-    num_ints = len(igram_files)
-
-    unw_stack = _allocate_stack(igram_path, num_ints)
-
-    for idx, igram_file in enumerate(igram_files):
-        unw_file = igram_file.replace('.int', '.unw')
-        cur_unw = sario.load_file(unw_file)
-        try:
-            unw_stack[idx, :, :] = cur_unw - cur_unw[ref_row, ref_col]
-        except IndexError:
-            logger.error("Reference pixel (%s, %s) is out of bounds for unw shape %s", ref_row,
-                         ref_col, unw_stack.shape[1:])
-            raise
-    return unw_stack
-
-
 def _create_diff_matrix(n):
     """Creates n x n matrix subtracting adjacent vector elements
 
@@ -265,6 +221,7 @@ def _create_diff_matrix(n):
          [ 0 -1  2 -1]
          [ 0  0 -1  1]]
 
+    TODO: is this better?
         [[ 1 -1  0  0]
          [ 0  1 -1  0]
          [ 0  0  1 -1]]
