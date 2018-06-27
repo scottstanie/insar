@@ -145,11 +145,22 @@ def build_B_matrix(geolist, intlist):
 
 
 def read_stack(directory, file_ext):
-    all_file_names = sario.find_files(directory, "*" + file_ext)
+    """Reads a set of images into a 3D ndarray
+
+    Args:
+        directory (str): path to a dir containing all files
+        file_ext (str): ending type of files to read (e.g. '.unw')
+
+    Returns:
+        ndarray: 3D array of each file stacked
+            1st dim is the index of the image: stack[0, :, :]
+    """
+    all_file_names = sorted(sario.find_files(directory, "*" + file_ext))
     all_files = [sario.load_file(filename) for filename in all_file_names]
     return np.stack(all_files, axis=0)
 
 
+''' TODO: may not need this after all
 def find_stack_max(stack):
     """Gets the row, col of the max value for the mean of the stack
 
@@ -162,6 +173,42 @@ def find_stack_max(stack):
     stack_mean = np.mean(stack, axis=0)
     # Argmax gives the flattened indices, so we need to convert back to row, col
     max_row, max_col = np.unravel_index(np.argmax(stack_mean), stack_mean.shape)
+'''
+
+
+def shift_stack(stack, ref_row, ref_col, window=3):
+    """Subtracts reference pixel group from each layer
+
+    Args:
+        stack (ndarray): 3D array of images, stacked along axis=0
+        ref_row (int): row index of the reference pixel to subtract
+        ref_col (int): col index of the reference pixel to subtract
+        window (int): size of the group around ref pixel to avg for reference.
+            if window=1 or None, only the single pixel used to shift the group.
+
+    Raises:
+        ValueError: if window is not a positive int, or if ref pixel out of bounds
+    """
+    window = window or 1
+    if not isinstance(window, int) or window < 1:
+        raise ValueError("Invalid window %s: must be odd positive int" % window)
+    elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
+        raise ValueError(
+            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
+
+    if window % 2 == 0:
+        window -= 1
+        logger.warning("Making window an odd number (%s) to get square window", window)
+
+    win_size = window // 2
+    shifted = np.empty_like(stack)
+    for idx in range(stack.shape[0]):
+        cur_layer = stack[idx, :, :]
+        ref_group = cur_layer[ref_row - win_size:ref_row + win_size + 1,
+                              ref_col - win_size:ref_col + win_size + 1]  # yapf: disable
+        shifted[idx, :, :] = cur_layer - np.mean(ref_group)
+
+    return shifted
 
 
 def read_unw_stack(igram_path, ref_row, ref_col):
@@ -239,7 +286,7 @@ def invert_sbas(delta_phis, timediffs, B, alpha=0, difference=False):
 
     Args:
         delta_phis (ndarray): 1D array of unwrapped phases (delta phis)
-            comes from 1 pixel of read_unw_stack along 3rd axis
+            comes from 1 pixel of read_stack along 3rd axis
         B (ndarray): output of build_B_matrix for current set of igrams
         timediffs (np.array): dtype=int, days between each SAR acquisitions
             length will be equal to B.shape[1], 1 less than num SAR acquisitions
@@ -358,13 +405,20 @@ def cols_to_stack(columns, rows, cols):
 
 
 @log_runtime
-def run_inversion(igram_path, reference=(None, None), alpha=0, difference=False, verbose=False):
+def run_inversion(igram_path,
+                  reference=(None, None),
+                  window=None,
+                  alpha=0,
+                  difference=False,
+                  verbose=False):
     """Runs SBAS inversion on all unwrapped igrams
 
     Args:
         igram_path (str): path to the directory containing `intlist`,
             the .int filenames, the .unw files, and the dem.rsc file
         reference (tuple[int, int]): row and col index of the reference pixel to subtract
+        window (int): size of the group around ref pixel to avg for reference.
+            if window=1 or None, only the single pixel used to shift the group.
         alpha (float): nonnegative Tikhonov regularization parameter.
             See https://en.wikipedia.org/wiki/Tikhonov_regularization
         difference (bool): for regularization, penalize differences in velocity
@@ -388,8 +442,12 @@ def run_inversion(igram_path, reference=(None, None), alpha=0, difference=False,
     geolist = read_geolist(filepath=geolist_path)
 
     logger.debug("Reading stack")
-    unw_stack = read_unw_stack(igram_path, *reference)
-    logger.debug("Reading stack complete")
+    # unw_stack = read_unw_stack(igram_path, *reference)
+    unw_stack = read_stack(igram_path, ".unw")
+    # logger.debug("Reading stack complete")
+    ref_row, ref_col = reference
+    unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
+    logger.debug("Shifting stack complete")
 
     # Prepare B matrix and timediffs used for each pixel inversion
     B = build_B_matrix(geolist, intlist)
