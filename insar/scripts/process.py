@@ -168,7 +168,11 @@ def main(working_dir, kwargs):
         logger.info("Changing directory to {}".format(working_dir))
         os.chdir(working_dir)
 
-    for stepnum in range(kwargs['step'] - 1, len(STEPS)):
+    # Use the --step option first, or else use the --start
+    # Subtract 1 so that they are list indices, starting at 0
+    step_list = [s - 1 for s in kwargs['step']] or range(kwargs['start'] - 1, len(STEPS))
+    logger.info("Running steps %s", ','.join(str(s + 1) for s in step_list))
+    for stepnum in step_list:
         curfunc = STEPS[stepnum]
         logger.info("Starting step %d: %s", stepnum + 1, curfunc.__name__)
         curfunc(**kwargs)

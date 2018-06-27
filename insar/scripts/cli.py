@@ -95,6 +95,25 @@ def dem(context, geojson, data_source, rate, output):
 
 
 # COMMAND: PROCESS
+def parse_steps(ctx, param, value):
+    """Allows ranges of steps, from https://stackoverflow.com/a/4726287"""
+    if value is None:
+        return []
+
+    step_nums = set()
+    try:
+        for part in value.split(','):
+            x = part.split('-')
+            step_nums.update(range(int(x[0]), int(x[-1]) + 1))
+    except (ValueError, AttributeError):
+        raise click.BadParameter("Must be comma separated integers and/or dash separated range.")
+    max_step = len(insar.scripts.process.STEPS)
+    if any((num < 1 or num > max_step) for num in step_nums):
+        raise click.BadParameter("must be ints between 1 and {}".format(max_step))
+
+    return sorted(step_nums)
+
+
 @cli.command()
 @click.option(
     '--geojson',
@@ -109,11 +128,17 @@ def dem(context, geojson, data_source, rate, output):
     help="Maximum height/max absolute phase for converting .unw files to .tif"
     "(used for contour_interval option to dishgt)")
 @click.option(
-    "--step",
-    "-s",
+    "--start",
     type=click.IntRange(min=1, max=len(insar.scripts.process.STEPS)),
-    help="Choose which step to start on. Steps: {}".format(insar.scripts.process.STEP_LIST),
+    help="Choose which step to start on, then run all after. Steps: {}".format(
+        insar.scripts.process.STEP_LIST),
     default=1)
+@click.option(
+    "--step",
+    callback=parse_steps,
+    help="Run a one or a range of steps and exit. "
+    "Examples:\n--step 4,5,7\n--step 3-6\n--step 1,9-10",
+    required=False)
 @click.option(
     "--max-temporal",
     type=int,
