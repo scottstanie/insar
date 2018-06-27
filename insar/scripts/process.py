@@ -110,7 +110,7 @@ def run_snaphu(lowpass=None, **kwargs):
     igram_rsc = insar.sario.load_dem_rsc('dem.rsc')
     snaphu_script = os.path.join(SCRIPTS_DIR, 'run_snaphu.sh')
     snaphu_cmd = '{filepath} {width} {lowpass}'.format(
-        filepath=snaphu_script, width=igram_rsc['WIDTH'], lowpass=lowpass),
+        filepath=snaphu_script, width=igram_rsc['WIDTH'], lowpass=lowpass)
     logger.info(snaphu_cmd)
     subprocess.check_call(snaphu_cmd, shell=True)
 
