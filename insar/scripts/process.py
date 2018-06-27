@@ -46,7 +46,7 @@ def create_dem(geojson=None, rate=1, data_source='NASA', output='elevation.dem',
 
 def run_sentinel_stack(**kwargs):
     """3. Create geocoded slcs as .geo files for each .zip file"""
-    subprocess.check_call('/usr/bin/python ~/sentinel/sentinel_stack.py', shell=True)
+    subprocess.check_call('/usr/bin/env python ~/sentinel/sentinel_stack.py', shell=True)
 
 
 def prep_igrams_dir(**kwargs):
@@ -61,7 +61,7 @@ def create_sbas_list(max_temporal=500, max_spatial=500, **kwargs):
 
     Uses the outputs of the geo coded SLCS to find files with small baselines"""
 
-    sbas_cmd = '/usr/bin/python ~/sentinel/sbas_list.py {} {}'.format(max_temporal, max_spatial)
+    sbas_cmd = '/usr/bin/env python ~/sentinel/sbas_list.py {} {}'.format(max_temporal, max_spatial)
     logger.info(sbas_cmd)
     subprocess.check_call(sbas_cmd, shell=True)
 
@@ -84,7 +84,7 @@ def run_ps_sbas_igrams(rate=1, looks=None, **kwargs):
     # the igram is the size of the original DEM (elevation_small.dem)
     looks = looks or rate
     logger.info("Running ps_sbas_igrams.py")
-    ps_sbas_cmd = "/usr/bin/python ~/sentinel/ps_sbas_igrams.py sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
+    ps_sbas_cmd = "/usr/bin/env python ~/sentinel/ps_sbas_igrams.py sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
         rsc_file=elevation_dem_rsc_file, xsize=xsize, ysize=ysize, looks=looks)
     logger.info(ps_sbas_cmd)
     subprocess.check_call(ps_sbas_cmd, shell=True)
