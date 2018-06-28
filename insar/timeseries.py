@@ -193,8 +193,8 @@ def shift_stack(stack, ref_row, ref_col, window=3):
     if not isinstance(window, int) or window < 1:
         raise ValueError("Invalid window %s: must be odd positive int" % window)
     elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
-        raise ValueError(
-            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
+        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col,
+                                                                                 stack.shape))
 
     if window % 2 == 0:
         window -= 1
@@ -211,28 +211,34 @@ def shift_stack(stack, ref_row, ref_col, window=3):
     return shifted
 
 
-def _create_diff_matrix(n):
+def _create_diff_matrix(n, order=1):
     """Creates n x n matrix subtracting adjacent vector elements
 
     Example:
-        >>> print(_create_diff_matrix(4))
+        >>> print(_create_diff_matrix(4, order=1))
+        [[ 1 -1  0  0]
+         [ 0  1 -1  0]
+         [ 0  0  1 -1]]
+
+        >>> print(_create_diff_matrix(4, order=2))
         [[ 1 -1  0  0]
          [-1  2 -1  0]
          [ 0 -1  2 -1]
          [ 0  0 -1  1]]
 
-    TODO: is this better?
-        [[ 1 -1  0  0]
-         [ 0  1 -1  0]
-         [ 0  0  1 -1]]
     """
-    diff_matrix = -1 * np.diag(np.ones(n - 1), k=1).astype('int')
-    diff_matrix = diff_matrix + -1 * np.diag(np.ones(n - 1), k=-1).astype('int')
-    np.fill_diagonal(diff_matrix, 2)
-    diff_matrix[-1, -1] = 1
-    diff_matrix[0, 0] = 1
+    if order == 1:
+        diff_matrix = -1 * np.diag(np.ones(n - 1), k=1).astype('int')
+        np.fill_diagonal(diff_matrix, 1)
+        diff_matrix = diff_matrix[:-1, :]
+    elif order == 2:
+        diff_matrix = -1 * np.diag(np.ones(n - 1), k=1).astype('int')
+        diff_matrix = diff_matrix + -1 * np.diag(np.ones(n - 1), k=-1).astype('int')
+        np.fill_diagonal(diff_matrix, 2)
+        diff_matrix[-1, -1] = 1
+        diff_matrix[0, 0] = 1
+
     # print(diff_matrix)
-    # return -1 * diff_matrix[:-1, :]
     return diff_matrix
 
 
