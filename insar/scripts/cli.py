@@ -1,4 +1,5 @@
-"""Main entry point to manage all other sub commands
+"""
+Main command line entry point to manage all other sub commands
 """
 import click
 import insar
@@ -62,7 +63,6 @@ def download(context, **kwargs):
 @click.option(
     "--output",
     "-o",
-    type=click.File('w'),
     default="elevation.dem",
     help="Name of output dem file (default=elevation.dem)")
 @click.option(

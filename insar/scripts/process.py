@@ -35,13 +35,15 @@ def download_eof(mission=None, date=None, **kwargs):
     insar.eof.main(mission=mission, date=date)
 
 
-def create_dem(geojson=None, rate=1, data_source='NASA', output='elevation.dem', **kwargs):
+def create_dem(geojson=None, rate=1, data_source='NASA', **kwargs):
     """2. Download, upsample, and stich a DEM"""
     if not geojson:
         logger.error("For step 2: create_dem, --geojson is needed.")
         sys.exit(1)
+    # Don't think this name needs to be an option for process
+    output_name = 'elevation.dem'
     logger.info("Running: insar.dem:main")
-    insar.dem.main(geojson, data_source, rate, output)
+    insar.dem.main(geojson, data_source, rate, output_name)
 
 
 def run_sentinel_stack(**kwargs):

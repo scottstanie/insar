@@ -53,6 +53,7 @@ except ImportError:  # Python 2 doesn't have this :(
     PARALLEL = False
 import collections
 import getpass
+import io
 import json
 import math
 import netrc
@@ -793,12 +794,19 @@ def create_kml(rsc_data, tif_filename, title="Title", desc="Description"):
     return output
 
 
-def main(geojson, data_source, rate, output):
-    """Function for entry point to create a DEM with `insar dem`"""
-    logger = get_log()
-
-    geojson = json.load(geojson)
-    bounds = insar.geojson.bounding_box(geojson)
+def main(geojson, data_source, rate, output_name):
+    """Function for entry point to create a DEM with `insar dem`
+    
+    Args:
+        geojson (str, open file): either name of geojson file or pre-opened file 
+        data_source (str): 'NASA' or 'AWS', where to download .hgt tiles from
+        rate (int): rate to upsample DEM (positive int)
+        output_name (str): name of file to save final DEM (usually elevation.dem)
+    """
+    geojson_file = geojson if isinstance(geojson, io.IOBase) else open(geojson, 'r')
+    geojson_obj = json.load(geojson_file)
+    bounds = insar.geojson.bounding_box(geojson_obj)
+    geojson_file.close()
     logger.info("Bounds: %s", " ".join(str(b) for b in bounds))
 
     tile_names = list(insar.dem.Tile(*bounds).srtm1_tile_names())
@@ -824,20 +832,18 @@ def main(geojson, data_source, rate, output):
     rsc_dict['WIDTH'] = new_cols
 
     # Upsampling:
-    rate = rate
-    dem_filename = output.name  # Note: output is a 'LazyFile' from click
-    rsc_filename = dem_filename + '.rsc'
+    rsc_filename = output_name + '.rsc'
     if rate == 1:
         logger.info("Rate = 1: No upsampling to do")
-        logger.info("Writing DEM to %s", dem_filename)
-        stitched_dem.tofile(dem_filename)
+        logger.info("Writing DEM to %s", output_name)
+        stitched_dem.tofile(output_name)
         logger.info("Writing .dem.rsc file to %s", rsc_filename)
         with open(rsc_filename, "w") as f:
             f.write(sario.format_dem_rsc(rsc_dict))
         sys.exit(0)
 
     logger.info("Upsampling by {}".format(rate))
-    dem_filename_small = dem_filename.replace(".dem", "_small.dem")
+    dem_filename_small = output_name.replace(".dem", "_small.dem")
     rsc_filename_small = rsc_filename.replace(".dem.rsc", "_small.dem.rsc")
 
     logger.info("Writing non-upsampled dem temporarily to %s", dem_filename_small)
@@ -853,7 +859,7 @@ def main(geojson, data_source, rate, output):
         utils.which(upsample_path), dem_filename_small,
         str(rate),
         str(ncols),
-        str(nrows), dem_filename
+        str(nrows), output_name
     ]
     logger.info("Upsampling using %s:", upsample_cmd[0])
     logger.info(' '.join(upsample_cmd))
