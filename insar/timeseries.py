@@ -30,12 +30,15 @@ def read_geolist(filepath="./geolist"):
     """Reads in the list of .geo files used, in time order
 
     Args:
-        filepath (str): path to the intlist file
+        filepath (str): path to the geolist file or directory
 
     Returns:
         list[date]: the parse dates of each .geo used, in date order
 
     """
+    if os.path.isdir(filepath):
+        filepath = os.path.join(filepath, 'geolist')
+
     with open(filepath) as f:
         geolist = [os.path.split(geoname)[1] for geoname in f.read().splitlines()]
     return sorted([Sentinel(geo).start_time().date() for geo in geolist])
@@ -45,7 +48,7 @@ def read_intlist(filepath="./intlist", parse=True):
     """Reads the list of igrams to return dates of images as a tuple
 
     Args:
-        filepath (str): path to the intlist file
+        filepath (str): path to the intlist directory, or file
         parse (bool): output the intlist as parsed datetime tuples
 
     Returns:
@@ -56,6 +59,9 @@ def read_intlist(filepath="./intlist", parse=True):
 
     def _parse(datestr):
         return datetime.datetime.strptime(datestr, "%Y%m%d").date()
+
+    if os.path.isdir(filepath):
+        filepath = os.path.join(filepath, 'intlist')
 
     with open(filepath) as f:
         intlist = f.read().splitlines()
@@ -297,7 +303,7 @@ def invert_sbas(delta_phis, timediffs, B, alpha=0, difference=False):
         velocity_array = np.expand_dims(velocity_array, axis=-1)
 
     # Now integrate to get back to phases
-    # multiple each column of vel array: each col is a separate solution
+    # multiply each column of vel array: each col is a separate solution
     phi_diffs = timediffs.reshape((-1, 1)) * velocity_array
 
     # Now the final phase results are the cumulative sum of delta phis
@@ -401,11 +407,8 @@ def run_inversion(igram_path,
     if verbose:
         logger.setLevel(10)  # DEBUG
 
-    intlist_path = os.path.join(igram_path, 'intlist')
-    geolist_path = os.path.join(igram_path, 'geolist')
-
-    intlist = read_intlist(filepath=intlist_path)
-    geolist = read_geolist(filepath=geolist_path)
+    intlist = read_intlist(filepath=igram_path)
+    geolist = read_geolist(filepath=igram_path)
 
     logger.debug("Reading stack")
     unw_stack = read_stack(igram_path, ".unw")
@@ -417,7 +420,11 @@ def run_inversion(igram_path,
     # Process the correlation, mask bad corr pixels in the igrams
     # TODO
 
-    ref_row, ref_col = reference
+    if all(r is None for r in reference):
+        ref_row, ref_col = find_coherent_patch(unw_stack)
+    else:
+        ref_row, ref_col = reference
+
     unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
     logger.debug("Shifting stack complete")
 
@@ -571,6 +578,9 @@ def find_coherent_patch(correlations, window=11):
         >>> corrs = np.arange(25).reshape((5, 5))
         >>> print(find_coherent_patch(corrs, window=3))
         (3, 3)
+        >>> corrs = np.stack((corrs, corrs), axis=0)
+        >>> print(find_coherent_patch(corrs, window=3))
+        (3, 3)
     """
     if correlations.ndim == 2:
         mean_stack = correlations
@@ -579,6 +589,6 @@ def find_coherent_patch(correlations, window=11):
     else:
         raise ValueError("correlations must be a 2D mean array, or 3D correlations")
 
-    conv = uniform_filter(correlations, size=window, mode='constant')
+    conv = uniform_filter(mean_stack, size=window, mode='constant')
     max_idx = conv.argmax()
     return np.unravel_index(max_idx, mean_stack.shape)

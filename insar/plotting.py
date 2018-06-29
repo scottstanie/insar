@@ -25,9 +25,6 @@ def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=N
 
     Returns:
         None
-
-    Notes: may need this
-        https://github.com/matplotlib/matplotlib/issues/7759/#issuecomment-271110279
     """
     num_images = stack.shape[0]
     if titles:
