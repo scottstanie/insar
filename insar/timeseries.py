@@ -459,8 +459,10 @@ def load_deformation(igram_path, ref_row=None, ref_col=None, alpha=0, difference
     return geolist, deformation
 
 
-def matrix_indices(nrows, ncols):
+def matrix_indices(shape, flatten=True):
     """Returns a pair of vectors for all indices of a 2D array
+
+    Convenience function to help remembed mgrid syntax
 
     Example:
         >>> a = np.arange(12).reshape((4, 3))
@@ -477,14 +479,18 @@ def matrix_indices(nrows, ncols):
         >>> print(a[rs[1], cs[1]] == a[0, 1])
         True
     """
+    nrows, ncols = shape
     row_block, col_block = np.mgrid[0:nrows, 0:ncols]
-    return row_block.flatten(), col_block.flatten()
+    if flatten == True:
+        return row_block.flatten(), col_block.flatten()
+    else:
+        return row_block, col_block
 
 
 def _estimate_ramp(z):
     """Takes a 2D array an fits a linear plane to the data"""
     # Note: rows == ys, cols are xs
-    yidxs, xidxs = matrix_indices(*z.shape)
+    yidxs, xidxs = matrix_indices(z.shape, flatten=True)
     # c_ stacks 1D arrays as columns into a 2D array
     A = np.c_[xidxs, yidxs, np.ones(xidxs.shape)]
 
@@ -505,5 +511,6 @@ def remove_ramp(z):
         ndarray: flattened 2D array with linear ramp removed
     """
     a, b, c = _estimate_ramp(z)
-    y, x = np.mgrid[:z.shape[0], :z.shape[1]]
-    return z - (a*x + b*y + c)  # yapf: disable
+    # We want full blocks, as opposed to matrix_index flattened
+    y_block, x_block = matrix_indices(z.shape, flatten=False)
+    return z - (a*x_block + b*y_block + c)  # yapf: disable
