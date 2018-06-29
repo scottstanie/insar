@@ -26,12 +26,12 @@ See insar.parsers for Sentinel file naming description
 try:
     from concurrent.futures import ThreadPoolExecutor, as_completed
     CONCURRENT = True
+    MAX_WORKERS = 20
 except ImportError:  # Python 2 doesn't have this :(
     CONCURRENT = False
 
 import os
 import sys
-import glob
 import itertools
 import requests
 
@@ -103,33 +103,22 @@ def download_eofs(orbit_dates, missions=None, save_dir="."):
     validity_dates = list(set(orbit_dates))
     # validity_dates = get_valid_dates(orbit_dates)
 
-    eof_links = []
-    for mission, date in zip(missions, validity_dates):
-        try:
-            cur_links = eof_list(date)
-        except ValueError as e:
-            logger.warning(e.args[0])
-            logger.warning('Skipping {}'.format(date.strftime('%Y-%m-%d')))
-            continue
-
-        if mission:
-            cur_links = [link for link in cur_links if mission in link]
-        eof_links.extend(cur_links)
-
     if CONCURRENT:
         # Download and save all links in parallel
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            # Make a dict to refer back to which link is finished downloading
-            future_to_link = {
-                executor.submit(_download_and_write, link, save_dir): link
-                for link in eof_links
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            # Make a dict to refer back to which date is finished downloading
+            future_to_date = {
+                executor.submit(_download_and_write, mission, date, save_dir): date
+                for mission, date in zip(missions, validity_dates)
             }
-            for future in as_completed(future_to_link):
-                logger.info('Finished {}'.format(future_to_link[future]))
+            for future in as_completed(future_to_date):
+                future.result()
+                finished_date = future_to_date[future]
+                logger.info('Finished {}'.format(finished_date))
     else:
         # Fall back for python 2:
-        for link in eof_links:
-            _download_and_write(link, save_dir)
+        for mission, date in zip(missions, validity_dates):
+            _download_and_write(mission, date, save_dir)
             logger.info('Finished {}'.format(link))
 
 
@@ -165,7 +154,7 @@ def eof_list(start_date):
     return [result['remote_url'] for result in response.json()['results']]
 
 
-def _download_and_write(link, save_dir="."):
+def _download_and_write(mission, date, save_dir="."):
     """Wrapper function to run the link downloading in parallel
 
     Args:
@@ -175,17 +164,29 @@ def _download_and_write(link, save_dir="."):
     Returns:
         None
     """
-    fname = os.path.join(save_dir, link.split('/')[-1])
-    if os.path.isfile(fname):
-        logger.info("%s already exists, skipping download.", link)
+    try:
+        cur_links = eof_list(date)
+    except ValueError as e:  # 0 found for date
+        logger.warning(e.args[0])
+        logger.warning('Skipping {}'.format(date.strftime('%Y-%m-%d')))
         return
 
-    logger.info("Downloading %s", link)
-    response = requests.get(link)
-    response.raise_for_status()
-    logger.info("Saving to %s", fname)
-    with open(fname, 'wb') as f:
-        f.write(response.content)
+    if mission:
+        cur_links = [link for link in cur_links if mission in link]
+
+    assert len(cur_links) < 2
+    for link in cur_links:
+        fname = os.path.join(save_dir, link.split('/')[-1])
+        if os.path.isfile(fname):
+            logger.info("%s already exists, skipping download.", link)
+            return
+
+        logger.info("Downloading %s", link)
+        response = requests.get(link)
+        response.raise_for_status()
+        logger.info("Saving to %s", fname)
+        with open(fname, 'wb') as f:
+            f.write(response.content)
 
 
 def find_sentinel_products(startpath='./'):
