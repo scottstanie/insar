@@ -194,8 +194,8 @@ def shift_stack(stack, ref_row, ref_col, window=3):
     if not isinstance(window, int) or window < 1:
         raise ValueError("Invalid window %s: must be odd positive int" % window)
     elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
-        raise ValueError(
-            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
+        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col,
+                                                                                 stack.shape))
 
     if window % 2 == 0:
         window -= 1
@@ -471,7 +471,7 @@ def matrix_indices(shape, flatten=True):
          [ 3  4  5]
          [ 6  7  8]
          [ 9 10 11]]
-        >>> rs, cs = matrix_indices(4, 3)
+        >>> rs, cs = matrix_indices(a.shape)
         >>> rs
         array([0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3])
         >>> cs
@@ -481,7 +481,7 @@ def matrix_indices(shape, flatten=True):
     """
     nrows, ncols = shape
     row_block, col_block = np.mgrid[0:nrows, 0:ncols]
-    if flatten == True:
+    if flatten:
         return row_block.flatten(), col_block.flatten()
     else:
         return row_block, col_block
@@ -494,7 +494,7 @@ def _estimate_ramp(z):
     # c_ stacks 1D arrays as columns into a 2D array
     A = np.c_[xidxs, yidxs, np.ones(xidxs.shape)]
 
-    coeffs, _, _, _ = np.linalg.lstsq(A, z.flatten())
+    coeffs, _, _, _ = np.linalg.lstsq(A, z.flatten(), rcond=None)
     # coeffs will be a, b, c in the equation z = ax + by + c
     return coeffs
 

@@ -126,6 +126,10 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
         return load_real(filename, ann_info=ann_info, rsc_data=rsc_data)
 
 
+# Make a shorter alias for load_file
+load = load_file
+
+
 def load_elevation(filename):
     """Loads a digital elevation map from either .hgt file or .dem
 
