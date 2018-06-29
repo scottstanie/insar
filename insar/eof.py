@@ -44,37 +44,8 @@ from insar.parsers import Sentinel
 
 logger = get_log()
 
-# BASE_URL = "https://qc.sentinel1.eo.esa.int/aux_poeorb/"
 BASE_URL = "https://qc.sentinel1.eo.esa.int/api/v1/?product_type=AUX_POEORB&validity_start__lt={start_date}&validity_stop__gt={stop_date}"
 DATE_FMT = "%Y-%m-%d"  # Used in sentinel API url
-
-#
-
-
-def get_valid_dates(orbit_dates):
-    """Takes a list of desired orbit dates and find the correct EOF date
-
-    Sentinel EOFs have a validity starting one day before, and end one day after
-
-    Args:
-        list[str or datetime.datetime]: a list of dates of radar acquistions to
-            get precise orbits (Sentinel 1).
-            String format is flexible (uses dateutil.parser)
-
-    Examples:
-        >>> get_valid_dates(['20160102'])
-        [datetime.datetime(2016, 1, 1, 0, 0)]
-        >>> get_valid_dates(['01/02/2016'])
-        [datetime.datetime(2016, 1, 1, 0, 0)]
-        >>> import datetime
-        >>> get_valid_dates(['2017-01-03', datetime.datetime(2017, 1, 5, 0, 0)])
-        [datetime.datetime(2017, 1, 2, 0, 0), datetime.datetime(2017, 1, 4, 0, 0)]
-    """
-    # Conver any string dates to a datetime
-    orbit_dates = [parse(date) if isinstance(date, str) else date for date in orbit_dates]
-
-    # Subtract one day from desired orbits to get correct files
-    return [date + relativedelta(days=-1) for date in orbit_dates]
 
 
 def download_eofs(orbit_dates, missions=None, save_dir="."):
@@ -101,7 +72,6 @@ def download_eofs(orbit_dates, missions=None, save_dir="."):
         missions = itertools.repeat(None)
 
     validity_dates = list(set(orbit_dates))
-    # validity_dates = get_valid_dates(orbit_dates)
 
     if CONCURRENT:
         # Download and save all links in parallel
@@ -137,8 +107,6 @@ def eof_list(start_date):
     if isinstance(start_date, str):
         start_date = parse(start_date)
 
-    # TODO: maybe responses library for tests?
-    # url = BASE_URL + '?validity_start_time={}'.format(start_date.strftime('%Y-%m-%d'))
     url = BASE_URL.format(
         start_date=start_date.strftime(DATE_FMT),
         stop_date=(start_date + timedelta(days=1)).strftime(DATE_FMT),
