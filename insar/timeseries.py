@@ -17,6 +17,7 @@ import numpy as np
 
 from insar.parsers import Sentinel
 from insar import sario
+from insar import utils
 from insar.log import get_log, log_runtime
 
 SENTINEL_WAVELENGTH = 5.5465763  # cm
@@ -193,8 +194,8 @@ def shift_stack(stack, ref_row, ref_col, window=3):
     if not isinstance(window, int) or window < 1:
         raise ValueError("Invalid window %s: must be odd positive int" % window)
     elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
-        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col,
-                                                                                 stack.shape))
+        raise ValueError(
+            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
 
     if window % 2 == 0:
         window -= 1
@@ -456,3 +457,53 @@ def load_deformation(igram_path, ref_row=None, ref_col=None, alpha=0, difference
         save_deformation(igram_path, deformation, geolist)
 
     return geolist, deformation
+
+
+def matrix_indices(nrows, ncols):
+    """Returns a pair of vectors for all indices of a 2D array
+
+    Example:
+        >>> a = np.arange(12).reshape((4, 3))
+        >>> print(a)
+        [[ 0  1  2]
+         [ 3  4  5]
+         [ 6  7  8]
+         [ 9 10 11]]
+        >>> rs, cs = matrix_indices(4, 3)
+        >>> rs
+        array([0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3])
+        >>> cs
+        array([0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2])
+        >>> print(a[rs[1], cs[1]] == a[0, 1])
+        True
+    """
+    row_block, col_block = np.mgrid[0:nrows, 0:ncols]
+    return row_block.flatten(), col_block.flatten()
+
+
+def _estimate_ramp(z):
+    """Takes a 2D array an fits a linear plane to the data"""
+    # Note: rows == ys, cols are xs
+    yidxs, xidxs = matrix_indices(*z.shape)
+    # c_ stacks 1D arrays as columns into a 2D array
+    A = np.c_[xidxs, yidxs, np.ones(xidxs.shape)]
+
+    coeffs, _, _, _ = np.linalg.lstsq(A, z.flatten())
+    # coeffs will be a, b, c in the equation z = ax + by + c
+    return coeffs
+
+
+def remove_ramp(z):
+    """Estimates a linear plane through data and subtracts to flatten
+
+    Used to remove noise artifacts from unwrapped interferograms
+
+    Args:
+        z (ndarray): 2D array, interpreted as heights
+
+    Returns:
+        ndarray: flattened 2D array with linear ramp removed
+    """
+    a, b, c = _estimate_ramp(z)
+    y, x = np.mgrid[:z.shape[0], :z.shape[1]]
+    return z - (a*x + b*y + c)  # yapf: disable

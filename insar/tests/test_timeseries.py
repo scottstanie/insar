@@ -146,3 +146,12 @@ class TestInvertSbas(unittest.TestCase):
         timediffs = np.arange(3)
         # Checks for no errors in shape (todo: get good expected output)
         timeseries.invert_sbas(dphis, timediffs, B, alpha=1)
+
+    def test_remove_ramp(self):
+        z = np.arange(1, 9, 2).reshape((4, 1)) + np.arange(4)  # (1-4)*(1-7)
+        # First test coefficient extimation for z = ax + by + c
+        a, b, c = timeseries._estimate_ramp(z)
+        assert_array_almost_equal(np.array((a, b, c)), np.array((1, 2, 1)))
+
+        expected_deramped = np.zeros((4, 4))
+        assert_array_almost_equal(expected_deramped, timeseries.remove_ramp(z))
