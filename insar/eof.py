@@ -83,13 +83,13 @@ def download_eofs(orbit_dates, missions=None, save_dir="."):
             }
             for future in as_completed(future_to_date):
                 future.result()
-                finished_date = future_to_date[future]
-                logger.info('Finished {}'.format(finished_date))
+                date = future_to_date[future]
+                logger.info('Finished {}'.format(date))
     else:
         # Fall back for python 2:
         for mission, date in zip(missions, validity_dates):
             _download_and_write(mission, date, save_dir)
-            logger.info('Finished {}'.format(link))
+            logger.info('Finished {}'.format(date))
 
 
 def eof_list(start_date):
