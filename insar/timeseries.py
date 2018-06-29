@@ -17,7 +17,6 @@ import numpy as np
 
 from insar.parsers import Sentinel
 from insar import sario
-from insar import utils
 from insar.log import get_log, log_runtime
 
 SENTINEL_WAVELENGTH = 5.5465763  # cm
@@ -194,8 +193,8 @@ def shift_stack(stack, ref_row, ref_col, window=3):
     if not isinstance(window, int) or window < 1:
         raise ValueError("Invalid window %s: must be odd positive int" % window)
     elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
-        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col,
-                                                                                 stack.shape))
+        raise ValueError(
+            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
 
     if window % 2 == 0:
         window -= 1
@@ -507,7 +506,7 @@ def _estimate_ramp(z, order):
     yidxs, xidxs = matrix_indices(z.shape, flatten=True)
     # c_ stacks 1D arrays as columns into a 2D array
     if order == 1:
-        A = np.c_[xidxs, yidxs, np.ones(xidxs.shape)]
+        A = np.c_[np.ones(xidxs.shape), xidxs, yidxs]
     elif order == 2:
         A = np.c_[np.ones(xidxs.shape), xidxs, yidxs, xidxs * yidxs, xidxs**2, yidxs**2]
 
@@ -532,7 +531,7 @@ def remove_ramp(z, order=1):
     coeffs = _estimate_ramp(z, order)
     if order == 1:
         # We want full blocks, as opposed to matrix_index flattened
-        a, b, c = coeffs
+        c, a, b = coeffs
         y_block, x_block = matrix_indices(z.shape, flatten=False)
         return z - (a * x_block + b * y_block + c)
     elif order == 2:

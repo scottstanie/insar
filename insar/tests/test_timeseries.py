@@ -149,9 +149,15 @@ class TestInvertSbas(unittest.TestCase):
 
     def test_remove_ramp(self):
         z = np.arange(1, 9, 2).reshape((4, 1)) + np.arange(4)  # (1-4)*(1-7)
-        # First test coefficient extimation for z = ax + by + c
-        a, b, c = timeseries._estimate_ramp(z)
-        assert_array_almost_equal(np.array((a, b, c)), np.array((1, 2, 1)))
+        # First test coefficient extimation for z = c + ax + by
+        coeffs = timeseries._estimate_ramp(z, order=1)
+        assert_array_almost_equal(coeffs, np.array((1, 1, 2)))
 
         expected_deramped = np.zeros((4, 4))
-        assert_array_almost_equal(expected_deramped, timeseries.remove_ramp(z))
+        assert_array_almost_equal(expected_deramped, timeseries.remove_ramp(z, order=1))
+
+        coeffs = timeseries._estimate_ramp(z, order=2)
+        assert_array_almost_equal(coeffs, np.array((1, 1, 2, 0, 0, 0)))
+
+        expected_deramped = np.zeros((4, 4))
+        assert_array_almost_equal(expected_deramped, timeseries.remove_ramp(z, order=2))
