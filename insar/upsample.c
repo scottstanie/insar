@@ -1,3 +1,6 @@
+/*
+ * Process to perform bilinear interpolation to upsample a DEM
+*/
 #include <endian.h>
 #include <stdbool.h>
 #include <stdint.h>

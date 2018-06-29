@@ -37,7 +37,6 @@ import requests
 
 from datetime import timedelta
 from dateutil.parser import parse
-from dateutil.relativedelta import relativedelta
 import insar.sario
 from insar.log import get_log, log_runtime
 from insar.parsers import Sentinel

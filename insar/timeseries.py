@@ -14,6 +14,7 @@ scott@lidar igrams]$ head geolist
 import os
 import datetime
 import numpy as np
+from scipy.ndimage.filters import uniform_filter
 
 from insar.parsers import Sentinel
 from insar import sario
@@ -371,6 +372,7 @@ def cols_to_stack(columns, rows, cols):
 def run_inversion(igram_path,
                   reference=(None, None),
                   window=None,
+                  deramp=True,
                   alpha=0,
                   difference=False,
                   verbose=False):
@@ -382,6 +384,7 @@ def run_inversion(igram_path,
         reference (tuple[int, int]): row and col index of the reference pixel to subtract
         window (int): size of the group around ref pixel to avg for reference.
             if window=1 or None, only the single pixel used to shift the group.
+        deramp (bool): Fits plane to each igram and subtracts (to remove orbital error)
         alpha (float): nonnegative Tikhonov regularization parameter.
             See https://en.wikipedia.org/wiki/Tikhonov_regularization
         difference (bool): for regularization, penalize differences in velocity
@@ -405,9 +408,15 @@ def run_inversion(igram_path,
     geolist = read_geolist(filepath=geolist_path)
 
     logger.debug("Reading stack")
-    # unw_stack = read_unw_stack(igram_path, *reference)
     unw_stack = read_stack(igram_path, ".unw")
-    # logger.debug("Reading stack complete")
+
+    if deramp:
+        logger.info("Removing any ramp from each stack layer")
+        unw_stack = np.stack(remove_ramp(layer) for layer in unw_stack)
+
+    # Process the correlation, mask bad corr pixels in the igrams
+    # TODO
+
     ref_row, ref_col = reference
     unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
     logger.debug("Shifting stack complete")
@@ -541,3 +550,35 @@ def remove_ramp(z, order=1):
         return z - z_fit
     else:
         raise NotImplementedError("Order only implemented for 1 and 2")
+
+
+def find_coherent_patch(correlations, window=11):
+    """Looks through 3d stack of correlation layers and finds strongest correlation patch
+
+    Also accepts a 2D array of the pre-compute means of the 3D stack.
+    Uses a window of size (window x window), finds the largest average patch
+
+    Args:
+        correlations (ndarray): 3D array of correlations:
+            correlations = read_stack('path/to/correlations', '.cc')
+
+        window (int): size of the patch to consider
+
+    Returns:
+        tuple[int, int]: the row, column of center of the max patch
+
+    Example:
+        >>> corrs = np.arange(25).reshape((5, 5))
+        >>> print(find_coherent_patch(corrs, window=3))
+        (3, 3)
+    """
+    if correlations.ndim == 2:
+        mean_stack = correlations
+    elif correlations.ndim == 3:
+        mean_stack = np.mean(correlations, axis=0)
+    else:
+        raise ValueError("correlations must be a 2D mean array, or 3D correlations")
+
+    conv = uniform_filter(correlations, size=window, mode='constant')
+    max_idx = conv.argmax()
+    return np.unravel_index(max_idx, mean_stack.shape)
