@@ -129,18 +129,24 @@ def convert_snaphu_tif(max_height=None, **kwargs):
     subprocess.check_call(snaphu_cmd, shell=True)
 
 
-def run_sbas_inversion(ref_row=None, ref_col=None, window=None, alpha=0, difference=False,
+def run_sbas_inversion(ref_row=None,
+                       ref_col=None,
+                       window=None,
+                       alpha=0,
+                       constant_vel=False,
+                       difference=False,
                        **kwargs):
     """10. Perofrm SBAS inversion, save the deformation as .npy
 
     Assumes we are in the directory with all .unw files"""
-    if not ref_row or not ref_col:
-        logger.warning("--ref-row and --ref-col required for run_sbas_inversion: skipping.")
-        return
-
     igram_path = os.path.realpath(os.getcwd())
     geolist, phi_arr, deformation, varr, unw_stack = insar.timeseries.run_inversion(
-        igram_path, reference=(ref_row, ref_col), window=window, alpha=alpha, difference=difference)
+        igram_path,
+        reference=(ref_row, ref_col),
+        window=window,
+        alpha=alpha,
+        constant_vel=constant_vel,
+        difference=difference)
     logger.info("Saving deformation.npy, velocity_array.npy, and geolist.npy")
     np.save('deformation.npy', deformation)
     np.save('velocity_array.npy', varr)

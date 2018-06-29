@@ -160,6 +160,7 @@ def parse_steps(ctx, param, value):
     default=1,
     help="Size of lowpass filter to use on igrams before unwrapping")
 @click.option('--window', default=3, help="Window size for .unw stack reference")
+@click.option('--constant-vel', is_flag=True, help="Use a constant vel for SBAS inversion solution")
 @click.option('--alpha', default=0.0, help="Regularization parameter for SBAS inversion")
 @click.option('--difference', is_flag=True, help="Use velocity differences for regularization")
 @click.option(

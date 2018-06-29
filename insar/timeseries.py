@@ -249,7 +249,7 @@ def _create_diff_matrix(n, order=1):
     return diff_matrix
 
 
-def invert_sbas(delta_phis, timediffs, B, constant_velocity=False, alpha=0, difference=False):
+def invert_sbas(delta_phis, timediffs, B, constant_vel=False, alpha=0, difference=False):
     """Performs and SBAS inversion on each pixel of unw_stack to find deformation
 
     Solves the least squares equation Bv = dphi
@@ -260,7 +260,7 @@ def invert_sbas(delta_phis, timediffs, B, constant_velocity=False, alpha=0, diff
         B (ndarray): output of build_B_matrix for current set of igrams
         timediffs (np.array): dtype=int, days between each SAR acquisitions
             length will be equal to B.shape[1], 1 less than num SAR acquisitions
-        constant_velocity (bool): force solution to have constant velocity
+        constant_vel (bool): force solution to have constant velocity
             mutually exclusive with `alpha` option
         alpha (float): nonnegative Tikhonov regularization parameter.
             If alpha > 0, then the equation is instead to minimize
@@ -294,12 +294,13 @@ def invert_sbas(delta_phis, timediffs, B, constant_velocity=False, alpha=0, diff
 
     # Adjustments to solution:
     # Force velocity constant across time
-    if constant_velocity is True:
-        # Augment only if regularization requested
+    if constant_vel is True:
+        logger.info("Using a constant velocity for inversion solutions.")
         B = np.expand_dims(np.sum(B, axis=1), axis=1)
     # Add regularization to the solution
     elif alpha > 0:
         logger.info("Using regularization with alpha=%s, difference=%s", alpha, difference)
+        # Augment only if regularization requested
         B, delta_phis = _augment_matrices(B, delta_phis, alpha)
 
     # Velocity will be result of the inversion
@@ -386,7 +387,7 @@ def run_inversion(igram_path,
                   reference=(None, None),
                   window=None,
                   deramp=True,
-                  constant_velocity=False,
+                  constant_vel=False,
                   alpha=0,
                   difference=False,
                   verbose=False):
@@ -399,7 +400,7 @@ def run_inversion(igram_path,
         window (int): size of the group around ref pixel to avg for reference.
             if window=1 or None, only the single pixel used to shift the group.
         deramp (bool): Fits plane to each igram and subtracts (to remove orbital error)
-        constant_velocity (bool): force solution to have constant velocity
+        constant_vel (bool): force solution to have constant velocity
             mutually exclusive with `alpha` option
         alpha (float): nonnegative Tikhonov regularization parameter.
             See https://en.wikipedia.org/wiki/Tikhonov_regularization
@@ -430,8 +431,12 @@ def run_inversion(igram_path,
     # Process the correlation, mask bad corr pixels in the igrams
     # TODO
 
+    # Use the given reference, or find one on based on max correlation
     if all(r is None for r in reference):
-        ref_row, ref_col = find_coherent_patch(unw_stack)
+        logger.info("Finding most coherent patch in stack.")
+        cc_stack = read_stack(igram_path, ".cc")
+        ref_row, ref_col = find_coherent_patch(cc_stack)
+        logger.info("Using %s as .unw reference point", (ref_row, ref_col))
     else:
         ref_row, ref_col = reference
 
@@ -447,12 +452,7 @@ def run_inversion(igram_path,
     phi_columns = stack_to_cols(unw_stack)
 
     varr, phi_arr = invert_sbas(
-        phi_columns,
-        timediffs,
-        B,
-        constant_velocity=constant_velocity,
-        alpha=alpha,
-        difference=difference)
+        phi_columns, timediffs, B, constant_vel=constant_vel, alpha=alpha, difference=difference)
     # Multiple by wavelength ratio to go from phase to cm
     deformation = PHASE_TO_CM * phi_arr
 
