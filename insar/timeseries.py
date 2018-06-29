@@ -487,30 +487,58 @@ def matrix_indices(shape, flatten=True):
         return row_block, col_block
 
 
-def _estimate_ramp(z):
-    """Takes a 2D array an fits a linear plane to the data"""
+def _estimate_ramp(z, order):
+    """Takes a 2D array an fits a linear plane to the data
+
+    Args:
+        z (ndarray): 2D array, interpreted as heights
+        order (int): degree of surface estimation
+            order = 1 removes linear ramp, order = 2 fits quadratic surface
+        order (int)
+
+    Returns:
+        ndarray: the estimated coefficients of the surface
+            For order = 1, it will be 3 numbers, a, b, c from
+                 ax + by + c = z
+            For order = 2, it will be 6:
+                f + ax + by + cxy + dx^2 + ey^2
+    """
     # Note: rows == ys, cols are xs
     yidxs, xidxs = matrix_indices(z.shape, flatten=True)
     # c_ stacks 1D arrays as columns into a 2D array
-    A = np.c_[xidxs, yidxs, np.ones(xidxs.shape)]
+    if order == 1:
+        A = np.c_[xidxs, yidxs, np.ones(xidxs.shape)]
+    elif order == 2:
+        A = np.c_[np.ones(xidxs.shape), xidxs, yidxs, xidxs * yidxs, xidxs**2, yidxs**2]
 
     coeffs, _, _, _ = np.linalg.lstsq(A, z.flatten(), rcond=None)
     # coeffs will be a, b, c in the equation z = ax + by + c
     return coeffs
 
 
-def remove_ramp(z):
+def remove_ramp(z, order=1):
     """Estimates a linear plane through data and subtracts to flatten
 
     Used to remove noise artifacts from unwrapped interferograms
 
     Args:
         z (ndarray): 2D array, interpreted as heights
+        order (int): degree of surface estimation
+            order = 1 removes linear ramp, order = 2 fits quadratic surface
 
     Returns:
-        ndarray: flattened 2D array with linear ramp removed
+        ndarray: flattened 2D array with estimated surface removed
     """
-    a, b, c = _estimate_ramp(z)
-    # We want full blocks, as opposed to matrix_index flattened
-    y_block, x_block = matrix_indices(z.shape, flatten=False)
-    return z - (a*x_block + b*y_block + c)  # yapf: disable
+    coeffs = _estimate_ramp(z, order)
+    if order == 1:
+        # We want full blocks, as opposed to matrix_index flattened
+        a, b, c = coeffs
+        y_block, x_block = matrix_indices(z.shape, flatten=False)
+        return z - (a * x_block + b * y_block + c)
+    elif order == 2:
+        yy, xx = matrix_indices(z.shape, flatten=True)
+        idx_matrix = np.c_[np.ones(xx.shape), xx, yy, xx * yy, xx**2, yy**2]
+        z_fit = np.dot(idx_matrix, coeffs).reshape(z.shape)
+        return z - z_fit
+    else:
+        raise NotImplementedError("Order only implemented for 1 and 2")
