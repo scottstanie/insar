@@ -116,18 +116,6 @@ def parse_steps(ctx, param, value):
 
 @cli.command()
 @click.option(
-    '--geojson',
-    '-g',
-    help="File containing the geojson object for DEM bounds",
-    type=click.Path(resolve_path=True))
-@click.option(
-    "--rate", "-r", default=1, help="Rate at which to upsample DEM (default=1, no upsampling)")
-@click.option(
-    "--max-height",
-    default=10,
-    help="Maximum height/max absolute phase for converting .unw files to .tif"
-    "(used for contour_interval option to dishgt)")
-@click.option(
     "--start",
     type=click.IntRange(min=1, max=len(insar.scripts.process.STEPS)),
     help="Choose which step to start on, then run all after. Steps: {}".format(
@@ -139,6 +127,13 @@ def parse_steps(ctx, param, value):
     help="Run a one or a range of steps and exit. "
     "Examples:\n--step 4,5,7\n--step 3-6\n--step 1,9-10",
     required=False)
+@click.option(
+    '--geojson',
+    '-g',
+    help="File containing the geojson object for DEM bounds",
+    type=click.Path(resolve_path=True))
+@click.option(
+    "--rate", "-r", default=1, help="Rate at which to upsample DEM (default=1, no upsampling)")
 @click.option(
     "--max-temporal",
     type=int,
@@ -159,6 +154,11 @@ def parse_steps(ctx, param, value):
     type=int,
     default=1,
     help="Size of lowpass filter to use on igrams before unwrapping")
+@click.option(
+    "--max-height",
+    default=10,
+    help="Maximum height/max absolute phase for converting .unw files to .tif"
+    "(used for contour_interval option to dishgt)")
 @click.option('--window', default=3, help="Window size for .unw stack reference")
 @click.option(
     '--constant-vel', is_flag=True, help="Use a constant velocity for SBAS inversion solution")
