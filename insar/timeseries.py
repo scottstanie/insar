@@ -322,7 +322,7 @@ def invert_sbas(delta_phis, timediffs, B, constant_vel=False, alpha=0, differenc
     return velocity_array, phi_arr
 
 
-def stack_to_cols(stacked, reverse=False):
+def stack_to_cols(stacked):
     """Takes a 3D array, makes vectors along the 3D axes into cols
 
     The reverse function of cols_to_stack
