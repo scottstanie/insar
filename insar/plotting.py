@@ -70,9 +70,9 @@ def rowcol_to_latlon(row, col, rsc_data=None):
         tuple[float, float]: lat, lon for the pixel
 
     Example:
-        >>> rsc_data = {"X_FIRST": 1.0, "Y_FIRST": 2.0, "X_STEP": 0.2, "Y_STEP": 0.1}
-        >>> rowcol_to_latlon(3, 7, rsc_data)
-        (1.4, 2.6)
+        >>> rsc_data = {"X_FIRST": 1.0, "Y_FIRST": 2.0, "X_STEP": 0.2, "Y_STEP": -0.1}
+        >>> rowcol_to_latlon(7, 3, rsc_data)
+        (1.4, 1.4)
     """
     start_lon = rsc_data["X_FIRST"]
     start_lat = rsc_data["Y_FIRST"]
