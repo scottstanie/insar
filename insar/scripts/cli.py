@@ -1,6 +1,7 @@
 """
 Main command line entry point to manage all other sub commands
 """
+import os
 import click
 import insar
 import matplotlib.pyplot as plt
@@ -278,8 +279,9 @@ def animate(context, pause, ref_row, ref_col, save, display):
     help="Column number of pixel to use as unwrapping reference (for SBAS inversion)")
 @click.option("--cmap", default='seismic', help="Colormap for image display.")
 @click.option("--label", default='Centimeters', help="Label on colorbar/yaxis for plot")
+@click.option("--rowcol", help="Use row,col for legened entries (instead of default lat,lon)")
 @click.pass_obj
-def view_stack(context, ref_row, ref_col, cmap, label):
+def view_stack(context, ref_row, ref_col, cmap, label, rowcol):
     """Explore timeseries on deformation image.
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
@@ -293,5 +295,10 @@ def view_stack(context, ref_row, ref_col, cmap, label):
     geolist, deformation = insar.timeseries.load_deformation(context['path'], ref_row, ref_col)
     if geolist is None or deformation is None:
         return
+    if rowcol:
+        rsc_data = None
+    else:
+        rsc_data = insar.sario.load_dem_rsc(os.path.join(context['path'], 'dem.rsc'))
 
-    insar.plotting.view_stack(deformation, geolist, display_img=-1, label=label, cmap=cmap)
+    insar.plotting.view_stack(
+        deformation, geolist, display_img=-1, label=label, cmap=cmap, rsc_data=rsc_data)
