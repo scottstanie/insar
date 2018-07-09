@@ -796,9 +796,9 @@ def create_kml(rsc_data, tif_filename, title="Title", desc="Description"):
 
 def main(geojson, data_source, rate, output_name):
     """Function for entry point to create a DEM with `insar dem`
-    
+
     Args:
-        geojson (str, open file): either name of geojson file or pre-opened file 
+        geojson (str, open file): either name of geojson file or pre-opened file
         data_source (str): 'NASA' or 'AWS', where to download .hgt tiles from
         rate (int): rate to upsample DEM (positive int)
         output_name (str): name of file to save final DEM (usually elevation.dem)

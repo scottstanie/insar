@@ -58,7 +58,38 @@ def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=N
         plt.show()
 
 
-def view_stack(stack, geolist=None, display_img=-1, label="Centimeters", cmap='seismic', title=""):
+def rowcol_to_latlon(row, col, rsc_data=None):
+    """ Takes the row, col of a pixel and finds its lat/lon
+
+    Args:
+        row (int): row number
+        col (int): col number
+        rsc_data (dict): data output from sario.load_dem_rsc
+
+    Returns:
+        tuple[float, float]: lat, lon for the pixel
+
+    Example:
+        >>> rsc_data = {"X_FIRST": 1.0, "Y_FIRST": 2.0, "X_STEP": 0.2, "Y_STEP": 0.1}
+        >>> rowcol_to_latlon(3, 7, rsc_data)
+        (1.4, 2.6)
+    """
+    start_lon = rsc_data["X_FIRST"]
+    start_lat = rsc_data["Y_FIRST"]
+    lon_step, lat_step = rsc_data["X_STEP"], rsc_data["Y_STEP"]
+    lat = start_lat + (row - 1) * lat_step
+    lon = start_lon + (col - 1) * lon_step
+    return lat, lon
+
+
+def view_stack(stack,
+               geolist=None,
+               display_img=-1,
+               label="Centimeters",
+               cmap='seismic',
+               title="",
+               lat_lon=True,
+               rsc_data=None):
     """Displays an image from a stack, allows you to click for timeseries
 
     Args:
@@ -73,6 +104,9 @@ def view_stack(stack, geolist=None, display_img=-1, label="Centimeters", cmap='s
             Default = Centimeters
         cmap (str): Optional- colormap to display stack image (default='seismic')
         title (str): Optional- Title for plot
+        lat_lon (bool): Optional- Use latitude and longitude in legend
+            If False, displays row/col of pixel
+        rsc_data (dict): Optional- if lat_lon=True, data to calc the lat/lon
 
     Returns:
         None
@@ -84,6 +118,9 @@ def view_stack(stack, geolist=None, display_img=-1, label="Centimeters", cmap='s
     # If we don't have dates, use indices as the x-axis
     if geolist is None:
         geolist = np.arange(stack.shape[0])
+
+    if lat_lon and not rsc_data:
+        raise ValueError("rsc_data is required for lat_lon=True")
 
     def get_timeseries(row, col):
         return stack[:, row, col]
@@ -117,7 +154,11 @@ def view_stack(stack, geolist=None, display_img=-1, label="Centimeters", cmap='s
         except IndexError:  # Somehow clicked outside image, but in axis
             return
 
-        legend_entries.append('Row %s, Col %s' % (row, col))
+        if lat_lon:
+            lat, lon = rowcol_to_latlon(row, col, rsc_data)
+            legend_entries.append('Lat {:.3f}, Lon {:.3f}'.format(lat, lon))
+        else:
+            legend_entries.append('Row %s, Col %s' % (row, col))
 
         plt.plot(geolist, timeline, marker='o', linestyle='dashed', linewidth=1, markersize=4)
         plt.legend(legend_entries)
