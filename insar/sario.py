@@ -20,23 +20,26 @@ INT_16_LE = np.dtype('<i2')
 INT_16_BE = np.dtype('>i2')
 
 SENTINEL_EXTS = ['.geo', '.cc', '.int', '.amp', '.unw']
-UAVSAR_EXTS = ['.int', '.mlc', '.slc', '.amp', '.cor']
+UAVSAR_EXTS = ['.int', '.mlc', '.slc', '.amp', '.cor', '.grd']
 
-# Note: .mlc can be either real or complex for UAVSAR
+# Notes: .grd, .mlc can be either real or complex for UAVSAR,
 # .amp files are real only for UAVSAR, complex for sentinel processing
 # However, we label them as real here since we can tell .amp files
 # are from sentinel if there exists .rsc files in the same dir
-COMPLEX_EXTS = ['.int', '.slc', '.geo', '.cc', '.unw', '.mlc']
-REAL_EXTS = ['.amp', '.cor', '.mlc']  # NOTE: .cor might only be real for UAVSAR
+COMPLEX_EXTS = ['.int', '.slc', '.geo', '.cc', '.unw', '.mlc', '.grd']
+REAL_EXTS = ['.amp', '.cor', '.mlc', '.grd']  # NOTE: .cor might only be real for UAVSAR
+# Note about UAVSAR Multi-look products:
+# Will end with `_ML5X5.grd`, e.g., for 5x5 downsampled
+
 ELEVATION_EXTS = ['.dem', '.hgt']
 
 # These file types are not simple complex matrices: see load_stacked for detail
 STACKED_FILES = ['.cc', '.unw']
 
-# For UAVSAR:
-REAL_POLs = ('HHHH', 'HVHV', 'VVVV')
+UAVSAR_POL_DEPENDENT = ['.grd', '.mlc']
+REAL_POLS = ('HHHH', 'HVHV', 'VVVV')
 COMPLEX_POLS = ('HHHV', 'HHVV', 'HVVV')
-POLARIZATIONS = REAL_POLs + COMPLEX_POLS
+POLARIZATIONS = REAL_POLS + COMPLEX_POLS
 
 
 def get_file_ext(filename):
@@ -252,10 +255,13 @@ def _get_file_rows_cols(ann_info=None, rsc_data=None):
         return ann_info['rows'], ann_info['cols']
 
 
-def _assert_valid_size(data, rows, cols):
+def _assert_valid_size(data, rows, cols, iscomplex=True):
     error_str = "Invalid rows, cols for file size %s: (%s, %s)" % (len(data), rows, cols)
     # Note: 2* is since float data is really complex: (real, imag, real,...)
-    assert int(2 * rows * cols) == len(data), error_str
+    if iscomplex:
+        assert int(2 * rows * cols) == len(data), error_str
+    else:
+        assert int(rows * cols) == len(data), error_str
 
 
 def load_real(filename, ann_info=None, rsc_data=None):
@@ -274,7 +280,7 @@ def load_real(filename, ann_info=None, rsc_data=None):
     """
     data = np.fromfile(filename, FLOAT_32_LE)
     rows, cols = _get_file_rows_cols(ann_info=ann_info, rsc_data=rsc_data)
-    _assert_valid_size(data, rows, cols)
+    _assert_valid_size(data, rows, cols, iscomplex=False)
     return data.reshape([-1, cols])
 
 
@@ -293,7 +299,7 @@ def load_complex(filename, ann_info=None, rsc_data=None):
     """
     data = np.fromfile(filename, FLOAT_32_LE)
     rows, cols = _get_file_rows_cols(ann_info=ann_info, rsc_data=rsc_data)
-    _assert_valid_size(data, rows, cols)
+    _assert_valid_size(data, rows, cols, iscomplex=True)
 
     real_data, imag_data = parse_complex_data(data, cols)
     return combine_real_imag(real_data, imag_data)
@@ -335,7 +341,8 @@ def load_stacked(filename, rsc_data, return_amp=False):
     """
     data = np.fromfile(filename, FLOAT_32_LE)
     rows, cols = _get_file_rows_cols(rsc_data=rsc_data)
-    _assert_valid_size(data, rows, cols)
+    # Note really complex, but twice amount of real data in it
+    _assert_valid_size(data, rows, cols, iscomplex=True)
 
     first = data.reshape((rows, 2 * cols))[:, :cols]
     second = data.reshape((rows, 2 * cols))[:, cols:]
@@ -355,7 +362,8 @@ def is_complex(filename):
     if ext not in COMPLEX_EXTS and ext not in REAL_EXTS:
         raise ValueError('Invalid filetype for load_file: %s\n '
                          'Allowed types: %s' % (ext, ' '.join(COMPLEX_EXTS + REAL_EXTS)))
-    if ext == '.mlc':
+
+    if ext in UAVSAR_POL_DEPENDENT:
         # Check if filename has one of the complex polarizations
         return any(pol in filename for pol in COMPLEX_POLS)
     else:
@@ -427,9 +435,13 @@ def make_ann_filename(filename):
         brazos_090_CX_01.ann
         >>> print(make_ann_filename('brazos_090HHVV_CX_01.mlc'))
         brazos_090_CX_01.ann
+        >>> print(make_ann_filename('brazos_090HHVV_CX_01.grd'))
+        brazos_090_CX_01.ann
+        >>> print(make_ann_filename('brazos_090HHVV_CX_01_ML5X5.grd'))
+        brazos_090_CX_01_ML5X5.ann
     """
 
-    # The .mlc files have polarization added to filename, .ann files don't
+    # The .mlc and .grd files have polarization added to filename, .ann files don't
     shortname = filename
     for p in POLARIZATIONS:
         shortname = shortname.replace(p, '')
@@ -480,6 +492,10 @@ def parse_ann_file(filename, ext=None, verbose=False):
             logger.info("No file found: returning None")
         return None
 
+    # Taken from a .ann file: (need to check if this is always true?)
+    # SLC Data Units = linear amplitude
+    # MLC Data Units = linear power
+    # GRD Data Units = linear power
     ann_data = {}
     line_keywords = {
         '.slc': 'slc_mag',
@@ -487,6 +503,7 @@ def parse_ann_file(filename, ext=None, verbose=False):
         '.int': 'slt',
         '.cor': 'slt',
         '.amp': 'slt',
+        '.grd': 'grd_pwr'
     }
     row_starts = {k: v + '.set_rows' for k, v in line_keywords.items()}
     col_starts = {k: v + '.set_cols' for k, v in line_keywords.items()}
