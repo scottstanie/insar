@@ -82,7 +82,13 @@ def clip(image):
 
 def log(image):
     """Converts magnitude amplitude image to log scale"""
+    if np.iscomplexobj(image):
+        image = np.abs(image)
     return 20 * np.log10(image)
+
+
+# Alias: convert
+db = log
 
 
 def split_array_into_blocks(data):
