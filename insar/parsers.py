@@ -6,7 +6,51 @@ import re
 from datetime import datetime
 
 
-class Sentinel:
+class Base:
+    """Base parser to illustrate expected interface/ minimum data available
+    """
+    FILE_REGEX = r''
+    TIME_FMT = '%Y%m%d'
+
+    def __init__(self, filename):
+        self.filename = filename
+        self.full_parse()  # Run a parse to check validity of filename
+
+    def full_parse(self):
+        """Returns all parts of the data contained in filename
+
+        Args:
+            self
+
+        Returns:
+            tuple: parsed file data. Entry order will match `field_meanings()`
+
+        Raises:
+            ValueError: if filename string is invalid
+        """
+        pass
+
+    @staticmethod
+    def field_meanings():
+        """List the fields returned by full_parse()"""
+        pass
+
+    def start_time(self):
+        """Returns start datetime from file name
+        Args:
+            filename (str): filename of a product from self
+
+        Returns:
+            datetime: start datetime of mission
+        """
+        pass
+
+    def stop_time(self):
+        """Returns stop datetime from file name"""
+        pass
+
+
+class Sentinel(Base):
     """
     Sentinel 1 reference:
     https://sentinel.esa.int/web/sentinel/user-guides/sentinel-1-sar/naming-conventions
@@ -70,10 +114,10 @@ class Sentinel:
                 'data-take identified', 'product unique id')
 
     def start_time(self):
-        """Returns start datetime and stop datetime from a sentinel file name
+        """Returns start datetime from a sentinel file name
 
         Args:
-            sentinel_filename (str): filename of a sentinel 1 product
+            filename (str): filename of a sentinel 1 product
 
         Returns:
             datetime: start datetime of mission
@@ -91,7 +135,7 @@ class Sentinel:
         """Returns stop datetime from a sentinel file name
 
         Args:
-            sentinel_filename (str): filename of a sentinel 1 product
+            filename (str): filename of a sentinel 1 product
 
         Returns:
             datetime: stop datetime
@@ -159,3 +203,26 @@ class Sentinel:
     def path(self):
         """Alias for relative orbit number"""
         return self.relative_orbit()
+
+
+class Uavsar(Base):
+    """Uavsar reference for Polsar:
+    https://uavsar.jpl.nasa.gov/science/documents/polsar-format.html
+
+    RPI/ InSAR format reference:
+    https://uavsar.jpl.nasa.gov/science/documents/rpi-format-browse.html
+
+    Naming example:
+    Dthvly_34501_08038_006_080731_L090HH_XX_01.slc
+
+    Dthvly is the site name, 345 degrees is the heading of UAVSAR in flight,
+    with a counter of 01, the flight was the thirty-eighth flight by UAVSAR in
+    2008,this data take was the sixth data take during the flight, the data was
+    acquired on July 31, 2008 (UTC), the frequency band was L-band, pointing at
+    perpendicular to the flight heading (90 degrees counterclockwise), this
+    file contains the HH data, this is the first interation of processing,
+    cross talk calibration has not been applied, and the data type is SLC.
+
+    """
+    FILE_REGEX = r'([\w\d]{6})_([\d]{3})([\d]+)_([\d]{2})([\d]{3})_([\d]{3})_([\d]{6})_(\w)([\d]{3})([\w]{2,4})_(XX|CX)_([\s]{2})'
+    TIME_FMT = '%Y%m%d'
