@@ -56,7 +56,7 @@ class TestLoading(unittest.TestCase):
 
     def test_is_complex(self):
         for ext in sario.COMPLEX_EXTS:
-            if ext == '.mlc':
+            if ext in sario.UAVSAR_POL_DEPENDENT:
                 # Test later, must have a real polarization in name
                 continue
             fname = 'test' + ext
@@ -70,6 +70,14 @@ class TestLoading(unittest.TestCase):
         self.assertTrue(sario.is_complex(mlc_complex))
         mlc_real = 'brazos_090HHHH_CX_01.mlc'
         self.assertFalse(sario.is_complex(mlc_real))
+        # UAVSAR .grd also weird
+        grd_complex = 'brazos_090HHHV_CX_01.grd'
+        self.assertTrue(sario.is_complex(mlc_complex))
+        grd_real = 'brazos_090HHHH_CX_01.grd'
+        self.assertFalse(sario.is_complex(mlc_real))
+        # Also test the downsampled versions
+        grd_complex = 'brazos_090HHHV_CX_01_3x3.grd'
+        self.assertTrue(sario.is_complex(mlc_complex))
 
         self.assertRaises(ValueError, sario.is_complex, 'badext.tif')
 
