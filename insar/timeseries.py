@@ -183,7 +183,7 @@ def find_stack_max(stack):
 '''
 
 
-def shift_stack(stack, ref_row, ref_col, window=3):
+def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
     """Subtracts reference pixel group from each layer
 
     Args:
@@ -192,6 +192,9 @@ def shift_stack(stack, ref_row, ref_col, window=3):
         ref_col (int): col index of the reference pixel to subtract
         window (int): size of the group around ref pixel to avg for reference.
             if window=1 or None, only the single pixel used to shift the group.
+        window_func (str): default='mean', choices ='max', 'min', 'mean'
+            numpy function to use on window. With 'mean', takes the mean of the
+            window and subtracts value from rest of layer.
 
     Raises:
         ValueError: if window is not a positive int, or if ref pixel out of bounds
@@ -200,8 +203,8 @@ def shift_stack(stack, ref_row, ref_col, window=3):
     if not isinstance(window, int) or window < 1:
         raise ValueError("Invalid window %s: must be odd positive int" % window)
     elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
-        raise ValueError(
-            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
+        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col,
+                                                                                 stack.shape))
 
     if window % 2 == 0:
         window -= 1
@@ -213,7 +216,12 @@ def shift_stack(stack, ref_row, ref_col, window=3):
         cur_layer = stack[idx, :, :]
         ref_group = cur_layer[ref_row - win_size:ref_row + win_size + 1,
                               ref_col - win_size:ref_col + win_size + 1]  # yapf: disable
-        shifted[idx, :, :] = cur_layer - np.mean(ref_group)
+        if window_func == 'mean':
+            shifted[idx, :, :] = cur_layer - np.mean(ref_group)
+        elif window_func == 'max':
+            shifted[idx, :, :] = cur_layer - np.max(ref_group)
+        elif window_func == 'min':
+            shifted[idx, :, :] = cur_layer - np.min(ref_group)
 
     return shifted
 
