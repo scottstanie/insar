@@ -19,11 +19,8 @@ class Base(object):
     def full_parse(self):
         """Returns all parts of the data contained in filename
 
-        Args:
-            None
-
         Returns:
-            tuple: parsed file data. Entry order will match `field_meanings()`
+            tuple: parsed file data. Entry order will match `field_meanings`
 
         Raises:
             ValueError: if filename string is invalid
@@ -38,7 +35,7 @@ class Base(object):
         else:
             return match.groups()
 
-    @staticmethod
+    @property
     def field_meanings():
         """List the fields returned by full_parse()"""
         pass
@@ -51,10 +48,6 @@ class Base(object):
         Returns:
             datetime: start datetime of mission
         """
-        pass
-
-    def stop_time(self):
-        """Returns stop datetime from file name"""
         pass
 
 
@@ -94,14 +87,16 @@ class Sentinel(Base):
 
     def __init__(self, filename):
         self.filename = filename
+        self._field_meanings = ('Mission', 'Beam', 'Product type', 'Resolution class',
+                                'Product level', 'Product class', 'Polarization', 'Start datetime',
+                                'Stop datetime', 'Orbit number', 'data-take identified',
+                                'product unique id')
         self.full_parse()  # Run a parse to check validity of filename
 
-    @staticmethod
-    def field_meanings():
+    @property
+    def field_meanings(self):
         """List the fields returned by full_parse()"""
-        return ('Mission', 'Beam', 'Product type', 'Resolution class', 'Product level',
-                'Product class', 'Polarization', 'Start datetime', 'Stop datetime', 'Orbit number',
-                'data-take identified', 'product unique id')
+        return self._field_meanings
 
     def start_time(self):
         """Returns start datetime from a sentinel file name
@@ -118,7 +113,8 @@ class Sentinel(Base):
             >>> print(s.start_time())
             2018-04-08 04:30:25
         """
-        start_time_str = self.full_parse()[7]
+        start_idx = self.field_meanings.index('Start datetime')
+        start_time_str = self.full_parse()[start_idx]
         return datetime.strptime(start_time_str, self.TIME_FMT)
 
     def stop_time(self):
