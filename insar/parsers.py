@@ -6,11 +6,11 @@ import re
 from datetime import datetime
 
 
-class Base:
+class Base(object):
     """Base parser to illustrate expected interface/ minimum data available
     """
-    FILE_REGEX = r''
-    TIME_FMT = '%Y%m%d'
+    FILE_REGEX = None
+    TIME_FMT = None
 
     def __init__(self, filename):
         self.filename = filename
@@ -20,7 +20,7 @@ class Base:
         """Returns all parts of the data contained in filename
 
         Args:
-            self
+            None
 
         Returns:
             tuple: parsed file data. Entry order will match `field_meanings()`
@@ -28,7 +28,15 @@ class Base:
         Raises:
             ValueError: if filename string is invalid
         """
-        pass
+        if not self.FILE_REGEX:
+            raise NotImplementedError("Must define class FILE_REGEX to parse")
+
+        match = re.search(self.FILE_REGEX, self.filename)
+        if not match:
+            raise ValueError('Invalid {} filename: {}'.format(self.__class__.__name__,
+                                                              self.filename))
+        else:
+            return match.groups()
 
     @staticmethod
     def field_meanings():
@@ -87,24 +95,6 @@ class Sentinel(Base):
     def __init__(self, filename):
         self.filename = filename
         self.full_parse()  # Run a parse to check validity of filename
-
-    def full_parse(self):
-        """Returns all parts of the sentinel data contained in filename
-
-        Args:
-            self
-
-        Returns:
-            tuple: parsed file data. Entry order will match `field_meanings()`
-
-        Raises:
-            ValueError: if filename string is invalid
-        """
-        match = re.search(self.FILE_REGEX, self.filename)
-        if not match:
-            raise ValueError('Invalid sentinel product filename: {}'.format(self.filename))
-        else:
-            return match.groups()
 
     @staticmethod
     def field_meanings():
