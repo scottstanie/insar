@@ -11,6 +11,7 @@ class Base(object):
     """
     FILE_REGEX = None
     TIME_FMT = None
+    _FIELD_MEANINGS = None
 
     def __init__(self, filename):
         self.filename = filename
@@ -36,19 +37,14 @@ class Base(object):
             return match.groups()
 
     @property
-    def field_meanings():
+    def field_meanings(self):
         """List the fields returned by full_parse()"""
-        pass
+        return self._FIELD_MEANINGS
 
-    def start_time(self):
-        """Returns start datetime from file name
-        Args:
-            filename (str): filename of a product from self
-
-        Returns:
-            datetime: start datetime of mission
-        """
-        pass
+    def _get_field(self, fieldname):
+        """Pick a specific field based on its name"""
+        idx = self.field_meanings.index(fieldname)
+        return self.full_parse()[idx]
 
 
 class Sentinel(Base):
@@ -84,19 +80,9 @@ class Sentinel(Base):
     """
     FILE_REGEX = r'(S1A|S1B)_([\w\d]{2})_([\w_]{3})([FHM_])_(\d)([SA])([SDHV]{2})_([T\d]{15})_([T\d]{15})_([\d]{6})_([\d\w]{6})_([\d\w]{4})'
     TIME_FMT = '%Y%m%dT%H%M%S'
-
-    def __init__(self, filename):
-        self.filename = filename
-        self._field_meanings = ('Mission', 'Beam', 'Product type', 'Resolution class',
-                                'Product level', 'Product class', 'Polarization', 'Start datetime',
-                                'Stop datetime', 'Orbit number', 'data-take identified',
-                                'product unique id')
-        self.full_parse()  # Run a parse to check validity of filename
-
-    @property
-    def field_meanings(self):
-        """List the fields returned by full_parse()"""
-        return self._field_meanings
+    _FIELD_MEANINGS = ('mission', 'beam', 'product type', 'resolution class', 'product level',
+                       'product class', 'polarization', 'start datetime', 'stop datetime',
+                       'orbit number', 'data-take identified', 'product unique id')
 
     def start_time(self):
         """Returns start datetime from a sentinel file name
@@ -113,10 +99,10 @@ class Sentinel(Base):
             >>> print(s.start_time())
             2018-04-08 04:30:25
         """
-        start_idx = self.field_meanings.index('Start datetime')
-        start_time_str = self.full_parse()[start_idx]
+        start_time_str = self._get_field('start datetime')
         return datetime.strptime(start_time_str, self.TIME_FMT)
 
+    @property
     def stop_time(self):
         """Returns stop datetime from a sentinel file name
 
@@ -128,45 +114,46 @@ class Sentinel(Base):
 
         Example:
             >>> s = Sentinel('S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70')
-            >>> print(s.stop_time())
+            >>> print(s.stop_time)
             2018-04-08 04:30:53
         """
-        stop_time_str = self.full_parse()[8]
+        stop_time_str = self._get_field('stop datetime')
         return datetime.strptime(stop_time_str, self.TIME_FMT)
 
+    @property
     def polarization(self):
         """Returns type of polarization of product
 
         Example:
             >>> s = Sentinel('S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70')
-            >>> print(s.polarization())
+            >>> print(s.polarization)
             DV
         """
-        polarization_index = 6
-        return self.full_parse()[polarization_index]
+        return self._get_field('polarization')
 
+    @property
     def mission(self):
         """Returns satellite/mission of product (S1A/S1B)
 
         Example:
             >>> s = Sentinel('S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70')
-            >>> print(s.mission())
+            >>> print(s.mission)
             S1A
         """
-        mission_index = 0
-        return self.full_parse()[mission_index]
+        return self._get_field('mission')
 
+    @property
     def absolute_orbit(self):
         """Absolute orbit of data, included in file name
 
         Example:
             >>> s = Sentinel('S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70')
-            >>> print(s.absolute_orbit())
+            >>> print(s.absolute_orbit)
             21371
         """
-        abs_orbit_index = 9
-        return int(self.full_parse()[abs_orbit_index])
+        return int(self._get_field('orbit number'))
 
+    @property
     def relative_orbit(self):
         """Relative orbit number/ path
 
@@ -175,20 +162,21 @@ class Sentinel(Base):
 
         Example:
             >>> s = Sentinel('S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70')
-            >>> print(s.relative_orbit())
+            >>> print(s.relative_orbit)
             124
             >>> s = Sentinel('S1B_WV_OCN__2SSV_20180522T161319_20180522T164846_011036_014389_67D8')
-            >>> print(s.relative_orbit())
+            >>> print(s.relative_orbit)
             160
         """
-        if self.mission() == 'S1A':
-            return ((self.absolute_orbit() - 73) % 175) + 1
-        elif self.mission() == 'S1B':
-            return ((self.absolute_orbit() - 27) % 175) + 1
+        if self.mission == 'S1A':
+            return ((self.absolute_orbit - 73) % 175) + 1
+        elif self.mission == 'S1B':
+            return ((self.absolute_orbit - 27) % 175) + 1
 
+    @property
     def path(self):
         """Alias for relative orbit number"""
-        return self.relative_orbit()
+        return self.relative_orbit
 
 
 class Uavsar(Base):
@@ -212,3 +200,17 @@ class Uavsar(Base):
     """
     FILE_REGEX = r'([\w\d]{6})_([\d]{3})([\d]+)_([\d]{2})([\d]{3})_([\d]{3})_([\d]{6})_(\w)([\d]{3})([\w]{2,4})_(XX|CX)_([\s]{2})'
     TIME_FMT = '%Y%m%d'
+    _FIELD_MEANINGS = (
+        'target site',
+        'heading',
+    )
+
+    def start_time(self):
+        """Returns start datetime from file name
+        Args:
+            filename (str): filename of a product from self
+
+        Returns:
+            datetime: start datetime of mission
+        """
+        pass

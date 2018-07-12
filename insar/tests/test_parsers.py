@@ -26,14 +26,14 @@ class TestSentinel(unittest.TestCase):
 
     def test_start_time(self):
         expected_start = datetime(2018, 4, 8, 4, 30, 25)
-        self.assertEqual(self.parser.start_time(), expected_start)
+        self.assertEqual(self.parser.start_time, expected_start)
 
     def test_stop_time(self):
         expected_stop = datetime(2018, 4, 8, 4, 30, 53)
-        self.assertEqual(self.parser.stop_time(), expected_stop)
+        self.assertEqual(self.parser.stop_time, expected_stop)
 
     def test_polarization(self):
-        self.assertEqual(self.parser.polarization(), 'DV')
+        self.assertEqual(self.parser.polarization, 'DV')
 
     def test_mission(self):
-        self.assertEqual(self.parser.mission(), 'S1A')
+        self.assertEqual(self.parser.mission, 'S1A')
