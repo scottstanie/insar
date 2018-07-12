@@ -78,7 +78,7 @@ class Sentinel(Base):
     Attributes:
         filename (str) name of the sentinel data product
     """
-    FILE_REGEX = r'(S1A|S1B)_([\w\d]{2})_([\w_]{3})([FHM_])_(\d)([SA])([SDHV]{2})_([T\d]{15})_([T\d]{15})_([\d]{6})_([\d\w]{6})_([\d\w]{4})'
+    FILE_REGEX = r'(S1A|S1B)_([\w\d]{2})_([\w_]{3})([FHM_])_(\d)([SA])([SDHV]{2})_([T\d]{15})_([T\d]{15})_(\d{6})_([\d\w]{6})_([\d\w]{4})'
     TIME_FMT = '%Y%m%dT%H%M%S'
     _FIELD_MEANINGS = ('mission', 'beam', 'product type', 'resolution class', 'product level',
                        'product class', 'polarization', 'start datetime', 'stop datetime',
@@ -198,20 +198,76 @@ class Uavsar(Base):
     file contains the HH data, this is the first interation of processing,
     cross talk calibration has not been applied, and the data type is SLC.
 
+    For downsampled products (3x3 and 5x5), there is an optional extension
+    of _ML3X3 and _ML5X5 tacked onto the end
+
+    Examples:
+        >>> fname = 'Dthvly_34501_08038_006_080731_L090HH_XX_01.slc'
+        >>> parser = Uavsar(fname)
+
     """
-    FILE_REGEX = r'([\w\d]{6})_([\d]{3})([\d]+)_([\d]{2})([\d]{3})_([\d]{3})_([\d]{6})_(\w)([\d]{3})([\w]{2,4})_(XX|CX)_([\s]{2})'
-    TIME_FMT = '%Y%m%d'
+    FILE_REGEX = r'([\w\d]{6})_(\d{3})(\w+)_(\d{2})(\d{3})_(\d{3})_(\d{6})_(\w)(\d{3})(\w{0,4})_(XX|CX)_(\w{2})(_ML\dX\d)?'
+    TIME_FMT = '%y%m%d'
     _FIELD_MEANINGS = (
         'target site',
         'heading',
+        'counter',
+        'flight year',
+        'flight number',
+        'flight line',
+        'date',
+        'frequency band',
+        'steering angle',
+        'polarization',
+        'cross talk',
+        'version number',
+        'downsampling',
     )
 
-    def start_time(self):
-        """Returns start datetime from file name
+    @property
+    def date(self):
+        """Returns date of flight from file name
         Args:
             filename (str): filename of a product from self
 
         Returns:
-            datetime: start datetime of mission
+            datetime.date: date mission
+
+        Examples:
+            >>> parser = Uavsar('Dthvly_34501_08038_006_080731_L090HH_XX_01.slc')
+            >>> parser.date
+            datetime.date(2008, 7, 31)
         """
-        pass
+        date_str = self._get_field('date')
+        return datetime.strptime(date_str, self.TIME_FMT).date()
+
+    @property
+    def polarization(self):
+        """Polarization of the product, if any
+
+        May be between 2 and 4 chars, though .zip files don't have one
+
+        Examples:
+            >>> Uavsar('brazos_14938_17087_004_170831_L090HH_CX_01.slc').polarization
+            'HH'
+            >>> Uavsar('brazos_14938_17087_004_170831_L090HHHV_CX_01.mlc').polarization
+            'HHHV'
+            >>> Uavsar('brazos_14938_17087_004_170831_L090_CX_01_grd.zip').polarization
+            ''
+        """
+        return self._get_field('polarization')
+
+    @property
+    def downsampling(self):
+        """Amount of downsampling of product, if any
+
+        Examples:
+            >>> print(Uavsar('brazos_14938_17087_004_170831_L090_CX_01_grd.zip').downsampling)
+            None
+            >>> Uavsar('brazos_14938_17087_004_170831_L090_CX_01_ML5X5_grd.zip').downsampling
+            '5X5'
+            >>> Uavsar('brazos_14938_17087_004_170831_L090HHHC_CX_01_ML3X3.grd').downsampling
+            '3X3'
+        """
+        sample_str = self._get_field('downsampling')
+        return sample_str.replace('_ML', '') if sample_str else None
