@@ -1,9 +1,68 @@
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from insar.log import get_log
 
 logger = get_log()
+
+
+def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, name='shiftedcmap'):
+    """Function to offset the "center" of a colormap. Useful for
+    data with a negative min and positive max and you want the
+    middle of the colormap's dynamic range to be at zero
+
+    Args:
+      cmap (str or matplotlib.cmap): The matplotlib colormap to be altered.
+          Can be matplitlib.cm.seismic or 'seismic'
+      start (float): Offset from lowest point in the colormap's range.
+          Defaults to 0.0 (no lower ofset). Should be between
+          0.0 and `midpoint`.
+      midpoint (float): The new center of the colormap. Defaults to
+          0.5 (no shift). Should be between 0.0 and 1.0. In
+          general, this should be  1 - vmax/(vmax + abs(vmin))
+          For example if your data range from -15.0 to +5.0 and
+          you want the center of the colormap at 0.0, `midpoint`
+          should be set to  1 - 5/(5 + 15)) or 0.75
+      stop (float): Offset from highest point in the colormap's range.
+          Defaults to 1.0 (no upper ofset). Should be between
+          `midpoint` and 1.0.
+
+    Returns:
+        matplotlib.cmap
+    """
+    if isinstance(cmap, str):
+        cmap = matplotlib.cm.get_cmap(cmap)
+
+    cdict = {'red': [], 'green': [], 'blue': [], 'alpha': []}
+
+    # regular index to compute the colors
+    reg_index = np.linspace(start, stop, 257)
+
+    # shifted index to match the data
+    shift_index = np.hstack([
+        np.linspace(0.0, midpoint, 128, endpoint=False),
+        np.linspace(midpoint, 1.0, 129, endpoint=True)
+    ])
+
+    for ri, si in zip(reg_index, shift_index):
+        r, g, b, a = cmap(ri)
+
+        cdict['red'].append((si, r, r))
+        cdict['green'].append((si, g, g))
+        cdict['blue'].append((si, b, b))
+        cdict['alpha'].append((si, a, a))
+
+    newcmap = matplotlib.colors.LinearSegmentedColormap(name, cdict)
+    plt.register_cmap(cmap=newcmap)
+
+    return newcmap
+
+
+def make_shifted_cmap(img, cmap_name='seismic'):
+    """Scales the colorbar so that 0 is always centered (white)"""
+    midpoint = 1 - np.max(img) / (abs(np.min(img)) + np.max(img))
+    return shifted_color_map(cmap_name, midpoint=midpoint)
 
 
 def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=None, **savekwargs):
@@ -35,17 +94,17 @@ def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=N
     # Use the same stack min and stack max for all colorbars/ color ranges
     minval, maxval = np.min(stack), np.max(stack)
     fig, ax = plt.subplots()
-    image = plt.imshow(stack[0, :, :], vmin=minval, vmax=maxval)  # Type: AxesImage
+    axes_image = plt.imshow(stack[0, :, :], vmin=minval, vmax=maxval)  # Type: AxesImage
 
-    cbar = fig.colorbar(image)
+    cbar = fig.colorbar(axes_image)
     cbar_ticks = np.linspace(minval, maxval, num=6, endpoint=True)
     cbar.set_ticks(cbar_ticks)
     cbar.set_label("Centimeters")
 
     def update_im(idx):
-        image.set_data(stack[idx, :, :])
+        axes_image.set_data(stack[idx, :, :])
         fig.suptitle(titles[idx])
-        return image,
+        return axes_image,
 
     stack_ani = animation.FuncAnimation(
         fig, update_im, frames=range(num_images), interval=pause_time, blit=False, repeat=True)
@@ -126,14 +185,18 @@ def view_stack(stack,
         return stack[:, row, col]
 
     imagefig = plt.figure()
+
     if isinstance(display_img, int):
-        image = plt.imshow(stack[display_img, :, :], cmap=cmap)  # Type: AxesImage
+        img = stack[display_img, :, :]
     elif display_img == 'mean':
-        image = plt.imshow(np.mean(stack, axis=0), cmap=cmap)
+        img = np.mean(stack, axis=0)
     else:
         raise ValueError("display_img must be an int or 'mean'")
 
-    cbar = imagefig.colorbar(image)
+    shifted_cmap = make_shifted_cmap(img, cmap)
+    axes_image = plt.imshow(img, cmap=shifted_cmap)  # Type: AxesImage
+
+    cbar = imagefig.colorbar(axes_image)
     cbar.set_label(label)
 
     timefig = plt.figure()
