@@ -444,7 +444,7 @@ def run_inversion(igram_path,
     # TODO
 
     # Use the given reference, or find one on based on max correlation
-    if all(r is None for r in reference):
+    if any(r is None for r in reference):
         logger.info("Finding most coherent patch in stack.")
         cc_stack = read_stack(igram_path, ".cc")
         ref_row, ref_col = find_coherent_patch(cc_stack)
