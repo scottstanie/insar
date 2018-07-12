@@ -205,7 +205,7 @@ def kml(tiffile, rscfile, title, desc):
 
 
 # COMMAND: view-dem
-@cli.command()
+@cli.command(name='view-dem')
 @click.argument("demfile", type=click.Path(exists=True, dir_okay=False), nargs=-1)
 def view_dem(demfile):
     """View a .dem file with matplotlib.
@@ -265,8 +265,8 @@ def animate(context, pause, ref_row, ref_col, save, display):
         deformation, pause_time=pause, display=display, titles=titles, save_title=save)
 
 
-# COMMAND: view_stack
-@cli.command()
+# COMMAND: view-stack
+@cli.command('view-stack')
 @click.option(
     "--ref-row",
     '-r',
