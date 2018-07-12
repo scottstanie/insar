@@ -203,15 +203,15 @@ Example:
 from insar.parsers import Sentinel
 
 parser = Sentinel('S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70.zip')
-parser.start_time()
+parser.start_time
     datetime.datetime(2018, 4, 8, 4, 30, 25)
 
-parser.mission()
+parser.mission
     'S1A'
 
-parser.polarization()
+parser.polarization
     'DV'
-parser.full_parse()
+parser.full_parse
 ('S1A',
  'IW',
  'SLC',
@@ -226,7 +226,7 @@ parser.full_parse()
  '1B70')
 
 
-parser.field_meanings()
+parser.field_meanings
 ('Mission',
  'Beam',
  'Product type',

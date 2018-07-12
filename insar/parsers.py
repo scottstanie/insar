@@ -84,6 +84,7 @@ class Sentinel(Base):
                        'product class', 'polarization', 'start datetime', 'stop datetime',
                        'orbit number', 'data-take identified', 'product unique id')
 
+    @property
     def start_time(self):
         """Returns start datetime from a sentinel file name
 
@@ -96,7 +97,7 @@ class Sentinel(Base):
 
         Example:
             >>> s = Sentinel('S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70')
-            >>> print(s.start_time())
+            >>> print(s.start_time)
             2018-04-08 04:30:25
         """
         start_time_str = self._get_field('start datetime')

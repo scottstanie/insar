@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 """Author: Scott Staniewicz
-Helper functions to prepare and process UAVSAR data
-Most functions will be stuck in here until there's a more sensible module.
+Helper functions to prepare and process data
 Email: scott.stanie@utexas.edu
 """
 from __future__ import division

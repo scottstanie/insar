@@ -167,14 +167,12 @@ def find_sentinel_products(startpath='./'):
             logger.info('Skipping {}'.format(filename))
             continue
 
-        start_date = parser.start_time()
-        mission = parser.mission()
-        if start_date in orbit_dates:
+        if parser.start_time in orbit_dates:  # start_time is a datetime
             continue
         logger.info("Downloading precise orbits for {} on {}".format(
-            mission, start_date.strftime('%Y-%m-%d')))
-        orbit_dates.append(start_date)
-        missions.append(mission)
+            parser.mission, parser.start_time.strftime('%Y-%m-%d')))
+        orbit_dates.append(parser.start_time)
+        missions.append(parser.mission)
 
     return orbit_dates, missions
 

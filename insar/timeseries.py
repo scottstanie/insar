@@ -45,7 +45,7 @@ def read_geolist(filepath="./geolist"):
 
     with open(filepath) as f:
         geolist = [os.path.split(geoname)[1] for geoname in f.read().splitlines()]
-    return sorted([Sentinel(geo).start_time().date() for geo in geolist])
+    return sorted([Sentinel(geo).start_time.date() for geo in geolist])
 
 
 def read_intlist(filepath="./intlist", parse=True):
