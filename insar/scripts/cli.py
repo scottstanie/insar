@@ -302,3 +302,17 @@ def view_stack(context, ref_row, ref_col, cmap, label, rowcol):
 
     insar.plotting.view_stack(
         deformation, geolist, display_img=-1, label=label, cmap=cmap, rsc_data=rsc_data)
+
+
+# COMMAND: avg-stack
+@cli.command('avg-stack')
+def avg_stack(context, ref_row, ref_col):
+    """Perform simple igram stack average to get a linear trend
+
+    If .unw files are not in the current directory, user the --path option:
+
+        insar --path /path/to/igrams view_stack
+
+    If --ref-row and --ref-col not provided, most coherent patch found as reference
+    """
+    insar.timeseries.stack_avg
