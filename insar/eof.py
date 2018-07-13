@@ -47,13 +47,13 @@ BASE_URL = "https://qc.sentinel1.eo.esa.int/api/v1/?product_type=AUX_POEORB&vali
 DATE_FMT = "%Y-%m-%d"  # Used in sentinel API url
 
 
-def download_eofs(orbit_dates, missions=None, save_dir="."):
+def download_eofs(orbit_dts, missions=None, save_dir="."):
     """Downloads and saves EOF files for specific dates
 
     Args:
-        orbit_dates (list[str] or list[datetime.datetime])
+        orbit_dts (list[str] or list[datetime.datetime])
         missions (list[str]): optional, to specify S1A or S1B
-            No input downloads both, must be same len as orbit_dates
+            No input downloads both, must be same len as orbit_dts
         save_dir (str): directory to save the EOF files into
 
     Returns:
@@ -65,8 +65,8 @@ def download_eofs(orbit_dates, missions=None, save_dir="."):
     """
     if missions and all(m not in ('S1A', 'S1B') for m in missions):
         raise ValueError('missions argument must be "S1A" or "S1B"')
-    if missions and len(missions) != len(orbit_dates):
-        raise ValueError("missions arg must be same length as orbit_dates")
+    if missions and len(missions) != len(orbit_dts):
+        raise ValueError("missions arg must be same length as orbit_dts")
     if not missions:
         missions = itertools.repeat(None)
 
@@ -75,18 +75,18 @@ def download_eofs(orbit_dates, missions=None, save_dir="."):
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             # Make a dict to refer back to which date is finished downloading
             future_to_date = {
-                executor.submit(_download_and_write, mission, date, save_dir): date
-                for mission, date in zip(missions, orbit_dates)
+                executor.submit(_download_and_write, mission, dt, save_dir): dt
+                for mission, dt in zip(missions, orbit_dts)
             }
             for future in as_completed(future_to_date):
                 future.result()
-                date = future_to_date[future]
-                logger.info('Finished {}'.format(date))
+                dt = future_to_date[future]
+                logger.info('Finished {}'.format(dt.date()))
     else:
         # Fall back for python 2:
-        for mission, date in zip(missions, orbit_dates):
-            _download_and_write(mission, date, save_dir)
-            logger.info('Finished {}'.format(date))
+        for mission, dt in zip(missions, orbit_dts):
+            _download_and_write(mission, dt, save_dir)
+            logger.info('Finished {}'.format(dt.date()))
 
 
 def eof_list(start_date):
@@ -158,7 +158,7 @@ def _download_and_write(mission, dt, save_dir="."):
 
 def find_sentinel_products(startpath='./'):
     """Parse the startpath directory for any Sentinel 1 products' date and mission"""
-    orbit_dates = []
+    orbit_dts = []
     missions = []
     for filename in insar.sario.find_files(startpath, "S1*"):
         try:
@@ -167,14 +167,14 @@ def find_sentinel_products(startpath='./'):
             logger.info('Skipping {}'.format(filename))
             continue
 
-        if parser.start_time in orbit_dates:  # start_time is a datetime
+        if parser.start_time in orbit_dts:  # start_time is a datetime
             continue
         logger.info("Downloading precise orbits for {} on {}".format(
             parser.mission, parser.start_time.strftime('%Y-%m-%d')))
-        orbit_dates.append(parser.start_time)
+        orbit_dts.append(parser.start_time)
         missions.append(parser.mission)
 
-    return orbit_dates, missions
+    return orbit_dts, missions
 
 
 @log_runtime
@@ -185,12 +185,12 @@ def main(path='.', mission=None, date=None):
         sys.exit(1)
     if not date:
         # No command line args given: search current directory
-        orbit_dates, missions = find_sentinel_products(path)
-        if not orbit_dates:
+        orbit_dts, missions = find_sentinel_products(path)
+        if not orbit_dts:
             logger.info("No Sentinel products found in directory %s, exiting", path)
             sys.exit(0)
     if date:
-        orbit_dates = [date]
+        orbit_dts = [date]
         missions = list(mission) if mission else []
 
-    download_eofs(orbit_dates, missions=missions)
+    download_eofs(orbit_dts, missions=missions)
