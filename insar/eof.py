@@ -70,15 +70,13 @@ def download_eofs(orbit_dates, missions=None, save_dir="."):
     if not missions:
         missions = itertools.repeat(None)
 
-    validity_dates = list(set(orbit_dates))
-
     if CONCURRENT:
         # Download and save all links in parallel
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             # Make a dict to refer back to which date is finished downloading
             future_to_date = {
                 executor.submit(_download_and_write, mission, date, save_dir): date
-                for mission, date in zip(missions, validity_dates)
+                for mission, date in zip(missions, orbit_dates)
             }
             for future in as_completed(future_to_date):
                 future.result()
@@ -86,7 +84,7 @@ def download_eofs(orbit_dates, missions=None, save_dir="."):
                 logger.info('Finished {}'.format(date))
     else:
         # Fall back for python 2:
-        for mission, date in zip(missions, validity_dates):
+        for mission, date in zip(missions, orbit_dates):
             _download_and_write(mission, date, save_dir)
             logger.info('Finished {}'.format(date))
 
@@ -103,6 +101,7 @@ def eof_list(start_date):
     Raises:
         ValueError: if start_date returns no results
     """
+    # First make sures it's a datetime if given string
     if isinstance(start_date, str):
         start_date = parse(start_date)
 
@@ -121,21 +120,22 @@ def eof_list(start_date):
     return [result['remote_url'] for result in response.json()['results']]
 
 
-def _download_and_write(mission, date, save_dir="."):
+def _download_and_write(mission, dt, save_dir="."):
     """Wrapper function to run the link downloading in parallel
 
     Args:
-        link (str) url of EOF file to download
+        mission (str): Sentinel mission: either S1A or S1B
+        dt (datetime): datetime of Sentinel product
         save_dir (str): directory to save the EOF files into
 
     Returns:
         None
     """
     try:
-        cur_links = eof_list(date)
+        cur_links = eof_list(dt)
     except ValueError as e:  # 0 found for date
         logger.warning(e.args[0])
-        logger.warning('Skipping {}'.format(date.strftime('%Y-%m-%d')))
+        logger.warning('Skipping {}'.format(dt.strftime('%Y-%m-%d')))
         return
 
     if mission:
