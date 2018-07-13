@@ -5,6 +5,7 @@ Email: scott.stanie@utexas.edu
 """
 import collections
 import glob
+import math
 import os
 import pprint
 import re
@@ -255,13 +256,14 @@ def _get_file_rows_cols(ann_info=None, rsc_data=None):
         return ann_info['rows'], ann_info['cols']
 
 
-def _assert_valid_size(data, rows, cols, iscomplex=True):
-    error_str = "Invalid rows, cols for file size %s: (%s, %s)" % (len(data), rows, cols)
-    # Note: 2* is since float data is really complex: (real, imag, real,...)
-    if iscomplex:
-        assert int(2 * rows * cols) == len(data), error_str
-    else:
-        assert int(rows * cols) == len(data), error_str
+def _assert_valid_size(data, cols):
+    """Make sure the width of the image is valid for the data size
+
+    Note that only width is considered- The number of rows is ignored
+    """
+    error_str = "Invalid number of cols (%s) for file size %s." % (cols, len(data))
+    # math.modf returns (fractional remainder, integer remainder)
+    assert math.modf(float(len(data)) / cols)[0] == 0, error_str
 
 
 def load_real(filename, ann_info=None, rsc_data=None):
@@ -280,7 +282,7 @@ def load_real(filename, ann_info=None, rsc_data=None):
     """
     data = np.fromfile(filename, FLOAT_32_LE)
     rows, cols = _get_file_rows_cols(ann_info=ann_info, rsc_data=rsc_data)
-    _assert_valid_size(data, rows, cols, iscomplex=False)
+    _assert_valid_size(data, cols)
     return data.reshape([-1, cols])
 
 
@@ -299,7 +301,7 @@ def load_complex(filename, ann_info=None, rsc_data=None):
     """
     data = np.fromfile(filename, FLOAT_32_LE)
     rows, cols = _get_file_rows_cols(ann_info=ann_info, rsc_data=rsc_data)
-    _assert_valid_size(data, rows, cols, iscomplex=True)
+    _assert_valid_size(data, cols)
 
     real_data, imag_data = parse_complex_data(data, cols)
     return combine_real_imag(real_data, imag_data)
@@ -341,8 +343,7 @@ def load_stacked(filename, rsc_data, return_amp=False):
     """
     data = np.fromfile(filename, FLOAT_32_LE)
     rows, cols = _get_file_rows_cols(rsc_data=rsc_data)
-    # Note really complex, but twice amount of real data in it
-    _assert_valid_size(data, rows, cols, iscomplex=True)
+    _assert_valid_size(data, cols)
 
     first = data.reshape((rows, 2 * cols))[:, :cols]
     second = data.reshape((rows, 2 * cols))[:, cols:]
