@@ -90,6 +90,28 @@ def log(image):
 db = log
 
 
+def percent_zero(filepath=None, arr=None):
+    """Function to give the percentage of a file that is exactly zero
+
+    Used as a quality assessment check
+
+    Args:
+        filepath (str): path to file to check
+        arr (ndarray): pre-loaded array to check
+
+    Returns:
+        float: decimal from 0 to 1, ratio of zeros to total entries
+
+    Example:
+        >>> a = np.array([[1 + 1j, 0.0], [1, 0.0001]])
+        >>> print(percent_zero(arr=a))
+        0.25
+    """
+    if filepath:
+        arr = insar.sario.load(filepath)
+    return (np.sum(arr == 0) / arr.size)
+
+
 def split_array_into_blocks(data):
     """Takes a long rectangular array (like UAVSAR) and creates blocks
 
