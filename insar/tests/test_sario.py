@@ -74,10 +74,10 @@ class TestLoading(unittest.TestCase):
         grd_complex = 'brazos_090HHHV_CX_01.grd'
         self.assertTrue(sario.is_complex(mlc_complex))
         grd_real = 'brazos_090HHHH_CX_01.grd'
-        self.assertFalse(sario.is_complex(mlc_real))
+        self.assertFalse(sario.is_complex(grd_real))
         # Also test the downsampled versions
         grd_complex = 'brazos_090HHHV_CX_01_3x3.grd'
-        self.assertTrue(sario.is_complex(mlc_complex))
+        self.assertTrue(sario.is_complex(grd_complex))
 
         self.assertRaises(ValueError, sario.is_complex, 'badext.tif')
 
@@ -91,11 +91,10 @@ class TestLoading(unittest.TestCase):
 
     def test_assert_valid_size(self):
         data = np.array([1, 2, 3, 4], '<f4')
-        rows = 2
         cols = 1
-        self.assertIsNone(sario._assert_valid_size(data, rows, cols))
+        self.assertIsNone(sario._assert_valid_size(data, cols))
 
-        self.assertRaises(AssertionError, sario._assert_valid_size, data, rows, 5 * cols)
+        self.assertRaises(AssertionError, sario._assert_valid_size, data, 5 * cols)
 
     def test_load_file(self):
         geo_path = join(
