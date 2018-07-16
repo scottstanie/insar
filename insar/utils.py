@@ -4,6 +4,7 @@ Helper functions to prepare and process data
 Email: scott.stanie@utexas.edu
 """
 from __future__ import division
+import glob
 import math
 import errno
 import os
@@ -110,6 +111,28 @@ def percent_zero(filepath=None, arr=None):
     if filepath:
         arr = insar.sario.load(filepath)
     return (np.sum(arr == 0) / arr.size)
+
+
+def clean_files(ext, path=".", zero_threshold=0.50, test=True):
+    """Remove files of type ext from path with a high pct of zeros
+
+    Args:
+        ext (str): file extension to open. Must be loadable by sario.load
+        path (str): path of directory to search
+        zero_threshold (float): between 0 and 1, threshold to delete files
+            if they contain greater ratio of zeros
+        test (bool): If true, doesn't delete files, just lists
+    """
+    file_glob = os.path.join(path, "*{}".format(ext))
+    logger.info("Searching {} for files with zero threshold {}".format(file_glob, zero_threshold))
+    if test:
+        logger.info("Test mode: not deleting files.")
+    for fp in glob.glob(file_glob):
+        pct = percent_zero(filepath=fp)
+        if pct > zero_threshold:
+            logger.info("Removing {} for having {}% zeros".format(fp, 100 * pct))
+            if not test:
+                os.remove(fp)
 
 
 def split_array_into_blocks(data):

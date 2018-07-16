@@ -51,8 +51,12 @@ def run_sentinel_stack(**kwargs):
     subprocess.check_call('/usr/bin/env python ~/sentinel/sentinel_stack.py', shell=True)
 
 
-def prep_igrams_dir(**kwargs):
-    """4. prepare directory for igrams"""
+def prep_igrams_dir(clean=True, **kwargs):
+    """4. cleans bad .geo files, prepare directory for igrams"""
+    if clean:
+        logger.info("Removing malformed .geo files missing data")
+        insar.utils.clean_files(".geo", path=".", zero_threshold=0.10, test=False)
+
     mkdir_p('igrams')
     os.chdir('igrams')
     logger.info("Changed directory to %s", os.path.realpath(os.getcwd()))
