@@ -55,7 +55,7 @@ def prep_igrams_dir(clean=True, **kwargs):
     """4. cleans bad .geo files, prepare directory for igrams"""
     if clean:
         logger.info("Removing malformed .geo files missing data")
-        insar.utils.clean_files(".geo", path=".", zero_threshold=0.10, test=False)
+        insar.utils.clean_files(".geo", path=".", zero_threshold=0.50, test=False)
 
     mkdir_p('igrams')
     os.chdir('igrams')
