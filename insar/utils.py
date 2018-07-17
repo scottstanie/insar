@@ -9,9 +9,10 @@ import math
 import errno
 import os
 import numpy as np
+import multiprocessing as mp
 
 import insar.sario
-from insar.log import get_log
+from insar.log import get_log, log_runtime
 
 logger = get_log()
 
@@ -113,6 +114,17 @@ def percent_zero(filepath=None, arr=None):
     return (np.sum(arr == 0) / arr.size)
 
 
+def _check_and_remove(fp, zero_threshold, test):
+    """Wrapper func for clean_files multiprocessing"""
+    logger.debug("Checking {}".format(fp))
+    pct = percent_zero(filepath=fp)
+    if pct > zero_threshold:
+        logger.info("Removing {} for having {:.2f}% zeros".format(fp, 100 * pct))
+        if not test:
+            os.remove(fp)
+
+
+@log_runtime
 def clean_files(ext, path=".", zero_threshold=0.50, test=True):
     """Remove files of type ext from path with a high pct of zeros
 
@@ -123,16 +135,19 @@ def clean_files(ext, path=".", zero_threshold=0.50, test=True):
             if they contain greater ratio of zeros
         test (bool): If true, doesn't delete files, just lists
     """
+
     file_glob = os.path.join(path, "*{}".format(ext))
     logger.info("Searching {} for files with zero threshold {}".format(file_glob, zero_threshold))
     if test:
         logger.info("Test mode: not deleting files.")
-    for fp in glob.glob(file_glob):
-        pct = percent_zero(filepath=fp)
-        if pct > zero_threshold:
-            logger.info("Removing {} for having {}% zeros".format(fp, 100 * pct))
-            if not test:
-                os.remove(fp)
+    max_procs = mp.cpu_count() // 2
+    pool = mp.Pool(processes=max_procs)
+    results = [
+        pool.apply_async(_check_and_remove, (fp, zero_threshold, test))
+        for fp in glob.glob(file_glob)
+    ]
+    # Now ask for results so processes launch
+    [res.get() for res in results]
 
 
 def split_array_into_blocks(data):
