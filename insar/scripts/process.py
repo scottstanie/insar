@@ -150,7 +150,8 @@ def run_sbas_inversion(ref_row=None,
         window=window,
         alpha=alpha,
         constant_vel=constant_vel,
-        difference=difference)
+        difference=difference,
+        verbose=kwargs['verbose'])
     logger.info("Saving deformation.npy, velocity_array.npy, and geolist.npy")
     np.save('deformation.npy', deformation)
     np.save('velocity_array.npy', varr)

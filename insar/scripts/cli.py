@@ -178,8 +178,7 @@ def process(context, **kwargs):
     """Process stack of Sentinel interferograms.
 
     Contains the steps from SLC .geo creation to SBAS deformation inversion"""
-    if context['verbose']:
-        click.echo("Verbose mode")
+    kwargs['verbose'] = context['verbose']
 
     insar.scripts.process.main(context['path'], kwargs)
 
