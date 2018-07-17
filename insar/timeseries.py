@@ -425,7 +425,7 @@ def run_inversion(igram_path,
         phi_arr (ndarray): absolute phases of every pixel at each time
         deformation (ndarray): matrix of deformations at each pixel and time
         varr (ndarray): array of volocities solved for from SBAS inversion
-        unw_stack (ndarray): output of read_unw_stack (if desired)
+        unw_stack (ndarray): output of read_unw_stack (if desired for checking)
     """
     if verbose:
         logger.setLevel(10)  # DEBUG
@@ -433,7 +433,7 @@ def run_inversion(igram_path,
     intlist = read_intlist(filepath=igram_path)
     geolist = read_geolist(filepath=igram_path)
 
-    logger.debug("Reading stack")
+    logger.debug("Reading unw stack")
     unw_stack = read_stack(igram_path, ".unw")
 
     if deramp:

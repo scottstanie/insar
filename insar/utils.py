@@ -8,6 +8,7 @@ import glob
 import math
 import errno
 import os
+import shutil
 import numpy as np
 import multiprocessing as mp
 
@@ -114,19 +115,19 @@ def percent_zero(filepath=None, arr=None):
     return (np.sum(arr == 0) / arr.size)
 
 
-def _check_and_remove(fp, zero_threshold, test):
+def _check_and_move(fp, zero_threshold, test, mv_dir):
     """Wrapper func for clean_files multiprocessing"""
     logger.debug("Checking {}".format(fp))
     pct = percent_zero(filepath=fp)
     if pct > zero_threshold:
-        logger.info("Removing {} for having {:.2f}% zeros".format(fp, 100 * pct))
+        logger.info("Moving {} for having {:.2f}% zeros to {}".format(fp, 100 * pct, mv_dir))
         if not test:
-            os.remove(fp)
+            shutil.move(fp, mv_dir)
 
 
 @log_runtime
 def clean_files(ext, path=".", zero_threshold=0.50, test=True):
-    """Remove files of type ext from path with a high pct of zeros
+    """Move files of type ext from path with a high pct of zeros
 
     Args:
         ext (str): file extension to open. Must be loadable by sario.load
@@ -138,12 +139,15 @@ def clean_files(ext, path=".", zero_threshold=0.50, test=True):
 
     file_glob = os.path.join(path, "*{}".format(ext))
     logger.info("Searching {} for files with zero threshold {}".format(file_glob, zero_threshold))
-    if test:
-        logger.info("Test mode: not deleting files.")
+
+    # Make a folder to store the bad geos
+    mv_dir = os.path.join(path, 'bad_{}'.format(ext.replace('.', '')))
+    mkdir_p(mv_dir) if not test else logger.info("Test mode: not moving files.")
+
     max_procs = mp.cpu_count() // 2
     pool = mp.Pool(processes=max_procs)
     results = [
-        pool.apply_async(_check_and_remove, (fp, zero_threshold, test))
+        pool.apply_async(_check_and_move, (fp, zero_threshold, test, mv_dir))
         for fp in glob.glob(file_glob)
     ]
     # Now ask for results so processes launch
