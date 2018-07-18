@@ -840,7 +840,7 @@ def main(geojson, data_source, rate, output_name):
         logger.info("Writing .dem.rsc file to %s", rsc_filename)
         with open(rsc_filename, "w") as f:
             f.write(sario.format_dem_rsc(rsc_dict))
-        sys.exit(0)
+        return
 
     logger.info("Upsampling by {}".format(rate))
     dem_filename_small = output_name.replace(".dem", "_small.dem")
