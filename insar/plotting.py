@@ -148,7 +148,7 @@ def view_stack(stack,
                display_img=-1,
                label="Centimeters",
                cmap='seismic',
-               title="",
+               title="Deformation Time Series",
                lat_lon=True,
                rsc_data=None):
     """Displays an image from a stack, allows you to click for timeseries
@@ -197,13 +197,12 @@ def view_stack(stack,
 
     shifted_cmap = make_shifted_cmap(img, cmap)
     axes_image = plt.imshow(img, cmap=shifted_cmap)  # Type: AxesImage
+    plt.title(title)
 
     cbar = imagefig.colorbar(axes_image)
     cbar.set_label(label)
 
     timefig = plt.figure()
-    if not title:
-        title = "Time series for pixel"
 
     plt.title(title)
     legend_entries = []

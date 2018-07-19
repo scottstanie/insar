@@ -278,9 +278,10 @@ def animate(context, pause, ref_row, ref_col, save, display):
     help="Column number of pixel to use as unwrapping reference (for SBAS inversion)")
 @click.option("--cmap", default='seismic', help="Colormap for image display.")
 @click.option("--label", default='Centimeters', help="Label on colorbar/yaxis for plot")
+@click.option("--title", help="Title for image plot")
 @click.option("--rowcol", help="Use row,col for legened entries (instead of default lat,lon)")
 @click.pass_obj
-def view_stack(context, ref_row, ref_col, cmap, label, rowcol):
+def view_stack(context, ref_row, ref_col, cmap, label, title, rowcol):
     """Explore timeseries on deformation image.
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
@@ -300,7 +301,13 @@ def view_stack(context, ref_row, ref_col, cmap, label, rowcol):
         rsc_data = insar.sario.load_dem_rsc(os.path.join(context['path'], 'dem.rsc'))
 
     insar.plotting.view_stack(
-        deformation, geolist, display_img=-1, label=label, cmap=cmap, rsc_data=rsc_data)
+        deformation,
+        geolist,
+        display_img=-1,
+        title=title,
+        label=label,
+        cmap=cmap,
+        rsc_data=rsc_data)
 
 
 # COMMAND: avg-stack
