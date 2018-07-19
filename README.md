@@ -47,8 +47,8 @@ Commands:
   download    Download Sentinel precise orbit files.
   kml         Creates .kml file for tif image TIFFILE is...
   process     Process stack of Sentinel interferograms.
-  view_dem    View a .dem file with matplotlib.
-  view_stack  Explore timeseries on deformation image.
+  view-dem    View a .dem file with matplotlib.
+  view-stack  Explore timeseries on deformation image.
 ```
 
 ```
@@ -182,15 +182,15 @@ download_eofs(['20180503', '20180507'], ['S1A', 'S1B'])
 #### sario.py
 
 Input/Output functions for SAR data.
-Mostly UAVSAR or DEM functions for now.
+Contains methods to load Sentinel, UAVSAR or DEM files for now.
 
 Main function: 
 
 ```python
 import insar.sario
-my_slc = insar.sario.load_file('/file/path/radar.slc')
-my_dem = insar.sario.load_file('/file/path/elevation.dem')
-my_hgt = insar.sario.load_file('/file/path/N20W100.hgt')
+my_slc = insar.sario.load('/file/path/radar.slc')
+my_dem = insar.sario.load('/file/path/elevation.dem')
+my_hgt = insar.sario.load('/file/path/N20W100.hgt')
 ```
 
 
