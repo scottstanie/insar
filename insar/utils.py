@@ -227,3 +227,104 @@ def combine_cor_amp(corfilename, save=True):
     outfilename = corfilename.replace('.cor', '_withamp.cor')
     insar.sario.save(outfilename, cor_with_amp)
     return cor_with_amp, outfilename
+
+
+def sliding_window_view(x, shape, step=None):
+    """
+    Create sliding window views of the N dimensions array with the given window
+    shape. Window slides across each dimension of `x` and provides subsets of `x`
+    at any window position.
+
+    Adapted from https://github.com/numpy/numpy/pull/10771
+
+    Args:
+        x (ndarray): Array to create sliding window views.
+        shape (sequence of int): The shape of the window.
+            Must have same length as number of input array dimensions.
+        step: (sequence of int), optional
+            The steps of window shifts for each dimension on input array at a time.
+            If given, must have same length as number of input array dimensions.
+            Defaults to 1 on all dimensions.
+    Returns:
+        ndarray: Sliding window views (or copies) of `x`.
+            view.shape = (x.shape - shape) // step + 1
+
+    Notes
+    -----
+    ``sliding_window_view`` create sliding window views of the N dimensions array
+    with the given window shape and its implementation based on ``as_strided``.
+    The returned views are *readonly* due to the numpy sliding tricks.
+    Examples
+    --------
+    >>> i, j = np.ogrid[:3,:4]
+    >>> x = 10*i + j
+    >>> shape = (2,2)
+    >>> sliding_window_view(x, shape)
+    array([[[[ 0,  1],
+             [10, 11]],
+            [[ 1,  2],
+             [11, 12]],
+            [[ 2,  3],
+             [12, 13]]],
+           [[[10, 11],
+             [20, 21]],
+            [[11, 12],
+             [21, 22]],
+            [[12, 13],
+             [22, 23]]]])
+    >>> i, j = np.ogrid[:3,:4]
+    >>> x = 10*i + j
+    >>> shape = (2,2)
+    >>> step = (1,2)
+    >>> sliding_window_view(x, shape, step)
+    array([[[[ 0,  1],
+             [10, 11]],
+            [[ 2,  3],
+             [12, 13]]],
+           [[[10, 11],
+             [20, 21]],
+            [[12, 13],
+             [22, 23]]]])
+    """
+    # first convert input to array, possibly keeping subclass
+    x = np.array(x, copy=False)
+
+    try:
+        shape = np.array(shape, np.int)
+    except ValueError:
+        raise TypeError('`shape` must be a sequence of integer')
+    else:
+        if shape.ndim > 1:
+            raise ValueError('`shape` must be one-dimensional sequence of integer')
+        if len(x.shape) != len(shape):
+            raise ValueError("`shape` length doesn't match with input array dimensions")
+        if np.any(shape <= 0):
+            raise ValueError('`shape` cannot contain non-positive value')
+
+    if step is None:
+        step = np.ones(len(x.shape), np.intp)
+    else:
+        try:
+            step = np.array(step, np.intp)
+        except ValueError:
+            raise TypeError('`step` must be a sequence of integer')
+        else:
+            if step.ndim > 1:
+                raise ValueError('`step` must be one-dimensional sequence of integer')
+            if len(x.shape) != len(step):
+                raise ValueError("`step` length doesn't match with input array dimensions")
+            if np.any(step <= 0):
+                raise ValueError('`step` cannot contain non-positive value')
+
+    o = (np.array(x.shape) - shape) // step + 1  # output shape
+    if np.any(o <= 0):
+        raise ValueError('window shape cannot larger than input array shape')
+
+    strides = x.strides
+    view_strides = strides * step
+
+    view_shape = np.concatenate((o, shape), axis=0)
+    view_strides = np.concatenate((view_strides, strides), axis=0)
+    view = np.lib.stride_tricks.as_strided(x, view_shape, view_strides, writeable=False)
+
+    return view
