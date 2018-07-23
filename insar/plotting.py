@@ -148,7 +148,7 @@ def view_stack(stack,
                display_img=-1,
                label="Centimeters",
                cmap='seismic',
-               title="Deformation Time Series",
+               title='',
                lat_lon=True,
                rsc_data=None):
     """Displays an image from a stack, allows you to click for timeseries
@@ -197,6 +197,7 @@ def view_stack(stack,
 
     shifted_cmap = make_shifted_cmap(img, cmap)
     axes_image = plt.imshow(img, cmap=shifted_cmap)  # Type: AxesImage
+    title = title or "Deformation Time Series"  # Default title
     plt.title(title)
 
     cbar = imagefig.colorbar(axes_image)
@@ -225,7 +226,7 @@ def view_stack(stack,
             legend_entries.append('Row %s, Col %s' % (row, col))
 
         plt.plot(geolist, timeline, marker='o', linestyle='dashed', linewidth=1, markersize=4)
-        plt.legend(legend_entries)
+        plt.legend(legend_entries, loc='lower left')
         x_axis_str = "SAR image date" if geolist is not None else "Image number"
         plt.xlabel(x_axis_str)
         plt.ylabel(label)
