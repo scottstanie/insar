@@ -262,7 +262,11 @@ def find_blobs(image, blob_func='blob_log', **kwargs):
     return blob_func(image, **kwargs)
 
 
-def plot_blobs(image, blobs=None, cur_axes=None, **kwargs):
+def plot_blobs(image, blobs=None, cur_axes=None, color='blue', **kwargs):
+    """Takes the blob results from find_blobs and overlays on image
+
+    Can either make new figure of plot on top of existing axes.
+    """
     if not cur_axes:
         cur_fig = plt.figure()
         cur_axes = cur_fig.gca()
@@ -273,7 +277,7 @@ def plot_blobs(image, blobs=None, cur_axes=None, **kwargs):
 
     for blob in blobs:
         y, x, r = blob
-        c = plt.Circle((x, y), r, fill=False, linewidth=2)
+        c = plt.Circle((x, y), r, color=color, fill=False, linewidth=2, clip_on=False)
         cur_axes.add_patch(c)
 
     return blobs
