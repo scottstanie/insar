@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import skimage.feature
 from insar.log import get_log
 
 logger = get_log()
@@ -234,3 +235,50 @@ def view_stack(stack,
 
     imagefig.canvas.mpl_connect('button_press_event', onclick)
     plt.show(block=True)
+
+
+def find_blobs(image, blob_func='blob_log', **kwargs):
+    """Use skimage to find blobs in image
+
+    Args:
+        image (ndarray): image containing blobs
+        blob_func (str): which of the functions to use to find blobs
+            Options: 'blob_log', 'blob_dog', 'blob_doh'
+
+    Returns:
+        ndarray: list of blobs: [(r, c, s)], r = row num of center,
+        c is column, s is sigma (size of Gaussian that detected blob)
+
+    Notes:
+        kwargs can be passed to the blob_func. Examples extras are
+        threshold (default=0.2, high=fewer blobs), min_sigma,
+        max_sigma, num_sigma (except for blob_dog), overlap.
+        See reference for full list
+
+    Reference:
+    [1] http://scikit-image.org/docs/dev/auto_examples/features_detection/plot_blob.html
+    """
+    blob_func = getattr(skimage.feature, blob_func)
+    return blob_func(image, **kwargs)
+
+
+def plot_blobs(image, blobs=None, cur_axes=None, **kwargs):
+    if not cur_axes:
+        cur_fig = plt.figure()
+        cur_axes = cur_fig.gca()
+        cur_axes.imshow(image)
+
+    if blobs is None:
+        blobs = find_blobs(image, **kwargs)
+
+    for blob in blobs:
+        y, x, r = blob
+        c = plt.Circle((x, y), r, fill=False, linewidth=2)
+        cur_axes.add_patch(c)
+
+    return blobs
+
+
+def get_blob_values(image, blobs):
+    coords = blobs[:, :2].astype(int)
+    return image[coords[:, 0], coords[:, 1]]
