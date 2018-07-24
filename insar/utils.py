@@ -259,32 +259,12 @@ def sliding_window_view(x, shape, step=None):
     >>> i, j = np.ogrid[:3,:4]
     >>> x = 10*i + j
     >>> shape = (2,2)
-    >>> sliding_window_view(x, shape)
-    array([[[[ 0,  1],
-             [10, 11]],
-            [[ 1,  2],
-             [11, 12]],
-            [[ 2,  3],
-             [12, 13]]],
-           [[[10, 11],
-             [20, 21]],
-            [[11, 12],
-             [21, 22]],
-            [[12, 13],
-             [22, 23]]]])
-    >>> i, j = np.ogrid[:3,:4]
-    >>> x = 10*i + j
-    >>> shape = (2,2)
-    >>> step = (1,2)
-    >>> sliding_window_view(x, shape, step)
-    array([[[[ 0,  1],
-             [10, 11]],
-            [[ 2,  3],
-             [12, 13]]],
-           [[[10, 11],
-             [20, 21]],
-            [[12, 13],
-             [22, 23]]]])
+    >>> sliding_window_view(x, shape)[0, 0]
+    array([[ 0,  1],
+           [10, 11]])
+    >>> sliding_window_view(x, shape)[1, 2]
+    array([[12, 13],
+           [22, 23]])
     """
     # first convert input to array, possibly keeping subclass
     x = np.array(x, copy=False)
