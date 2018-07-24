@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import skimage.feature
 from insar.log import get_log
 
 logger = get_log()
@@ -148,7 +149,7 @@ def view_stack(stack,
                display_img=-1,
                label="Centimeters",
                cmap='seismic',
-               title="",
+               title='',
                lat_lon=True,
                rsc_data=None):
     """Displays an image from a stack, allows you to click for timeseries
@@ -197,13 +198,13 @@ def view_stack(stack,
 
     shifted_cmap = make_shifted_cmap(img, cmap)
     axes_image = plt.imshow(img, cmap=shifted_cmap)  # Type: AxesImage
+    title = title or "Deformation Time Series"  # Default title
+    plt.title(title)
 
     cbar = imagefig.colorbar(axes_image)
     cbar.set_label(label)
 
     timefig = plt.figure()
-    if not title:
-        title = "Time series for pixel"
 
     plt.title(title)
     legend_entries = []
@@ -226,7 +227,7 @@ def view_stack(stack,
             legend_entries.append('Row %s, Col %s' % (row, col))
 
         plt.plot(geolist, timeline, marker='o', linestyle='dashed', linewidth=1, markersize=4)
-        plt.legend(legend_entries)
+        plt.legend(legend_entries, loc='lower left')
         x_axis_str = "SAR image date" if geolist is not None else "Image number"
         plt.xlabel(x_axis_str)
         plt.ylabel(label)
@@ -234,3 +235,54 @@ def view_stack(stack,
 
     imagefig.canvas.mpl_connect('button_press_event', onclick)
     plt.show(block=True)
+
+
+def find_blobs(image, blob_func='blob_log', **kwargs):
+    """Use skimage to find blobs in image
+
+    Args:
+        image (ndarray): image containing blobs
+        blob_func (str): which of the functions to use to find blobs
+            Options: 'blob_log', 'blob_dog', 'blob_doh'
+
+    Returns:
+        ndarray: list of blobs: [(r, c, s)], r = row num of center,
+        c is column, s is sigma (size of Gaussian that detected blob)
+
+    Notes:
+        kwargs can be passed to the blob_func. Examples extras are
+        threshold (default=0.2, high=fewer blobs), min_sigma,
+        max_sigma, num_sigma (except for blob_dog), overlap.
+        See reference for full list
+
+    Reference:
+    [1] http://scikit-image.org/docs/dev/auto_examples/features_detection/plot_blob.html
+    """
+    blob_func = getattr(skimage.feature, blob_func)
+    return blob_func(image, **kwargs)
+
+
+def plot_blobs(image, blobs=None, cur_axes=None, color='blue', **kwargs):
+    """Takes the blob results from find_blobs and overlays on image
+
+    Can either make new figure of plot on top of existing axes.
+    """
+    if not cur_axes:
+        cur_fig = plt.figure()
+        cur_axes = cur_fig.gca()
+        cur_axes.imshow(image)
+
+    if blobs is None:
+        blobs = find_blobs(image, **kwargs)
+
+    for blob in blobs:
+        y, x, r = blob
+        c = plt.Circle((x, y), r, color=color, fill=False, linewidth=2, clip_on=False)
+        cur_axes.add_patch(c)
+
+    return blobs
+
+
+def get_blob_values(image, blobs):
+    coords = blobs[:, :2].astype(int)
+    return image[coords[:, 0], coords[:, 1]]
