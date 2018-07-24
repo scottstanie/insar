@@ -5,7 +5,7 @@ Email: scott.stanie@utexas.edu
 """
 from __future__ import division
 import glob
-import math
+from math import floor, sin, cos, sqrt, atan2, radians
 import errno
 import os
 import shutil
@@ -74,7 +74,7 @@ def floor_float(num, ndigits):
         >>> floor_float(1/3600, 12)
         0.000277777777
     """
-    return math.floor((10**ndigits) * num) / (10**ndigits)
+    return floor((10**ndigits) * num) / (10**ndigits)
 
 
 def clip(image):
@@ -308,3 +308,38 @@ def sliding_window_view(x, shape, step=None):
     view = np.lib.stride_tricks.as_strided(x, view_shape, view_strides, writeable=False)
 
     return view
+
+
+def latlon_to_dist(lat_lon_start, lat_lon_end, R=6378):
+    """Find the distance between two lat/lon points on Earth
+
+    Uses the haversine formula: https://en.wikipedia.org/wiki/Haversine_formula
+    so it does not account for the ellopsoidal Earth shape. Will be with about
+    0.5-1% of the correct value.
+
+    Notes: lats and lons are in degrees, and the values used for R Earth
+    (6373 km) are optimized for locations around 39 degrees from the equator
+
+    Reference: https://andrew.hedges.name/experiments/haversine/
+
+    Args:
+        lat_lon_start (tuple[int, int]): (lat, lon) in degrees of start
+        lat_lon_end (tuple[int, int]): (lat, lon) in degrees of end
+        R (float): Radius of earth
+
+    Returns:
+        float: distance between two points in km
+
+    Examples:
+        >>> round(latlon_to_dist((38.8, -77.0), (38.9, -77.1)), 1)
+        14.1
+    """
+    lat1, lon1 = lat_lon_start
+    lat2, lon2 = lat_lon_end
+    dlat = radians(lat2 - lat1)
+    dlon = radians(lon2 - lon1)
+    lat1 = radians(lat1)
+    lat2 = radians(lat2)
+    a = (sin(dlat / 2)**2) + (cos(lat1) * cos(lat2) * sin(dlon / 2)**2)
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    return R * c
