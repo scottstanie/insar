@@ -1,6 +1,6 @@
 /*
  * Process to perform bilinear interpolation to upsample a DEM
-*/
+ */
 #include <endian.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -9,6 +9,8 @@
 #include <string.h>
 #include <time.h>
 
+int upsample(const char *filename, const int rate, const long ncols,
+             const long nrows, const char *outfileUp);
 int getIdx(int r, int c, int ncols) { return ncols * r + c; }
 const char *getFileExt(const char *filename);
 int16_t calcInterp(int16_t *demGrid, int i, int j, int bi, int bj, int rate,
@@ -20,13 +22,14 @@ int main(int argc, char **argv) {
 
   // Parse input filename, rate, and optional output filename
   const char *defaultOutfile = "elevation.dem";
-  if (argc < 3) {
-    fprintf(stderr, "Usage: ./dem filename rate [ncols] [nrows] "
-                    "[outfilename] \n"
-                    "filename must be .hgt or .dem extension.\n"
-                    "Rate must be a positive integer.\n"
-                    "ncols = width of DEM/HGT, ncows = height\n"
-                    "Default outfile name: %s\n",
+  if (argc < 5) {
+    fprintf(stderr,
+            "Usage: ./dem filename rate ncols nrows "
+            "[outfilename] \n"
+            "filename must be .hgt or .dem extension.\n"
+            "Rate must be a positive integer.\n"
+            "ncols = width of DEM/HGT, ncows = height\n"
+            "Default outfile name: %s\n",
             defaultOutfile);
     return EXIT_FAILURE;
   }
@@ -34,10 +37,6 @@ int main(int argc, char **argv) {
   int rate = atoi(argv[2]);
   long ncols = atoi(argv[3]);
   long nrows = atoi(argv[4]);
-
-  // If reading in a .hgt, must swap bytes of integers
-  bool swapBytes = (strcmp(getFileExt(filename), ".hgt") == 0);
-  printf("Swapping bytes: %d\n", swapBytes);
 
   // Optional input:
   const char *outfileUp;
@@ -55,11 +54,21 @@ int main(int argc, char **argv) {
   printf("Reading from %s: %ld rows, %ld cols\n", filename, nrows, ncols);
   printf("Upsampling by %d\n", rate);
 
+  return upsample(filename, rate, ncols, nrows, outfileUp);
+}
+
+int upsample(const char *filename, const int rate, const long ncols,
+             const long nrows, const char *outfileUp) {
+
   FILE *fp = fopen(filename, "r");
   if (fp == NULL) {
     fprintf(stderr, "Failure to open %s. Exiting.\n", filename);
     return EXIT_FAILURE;
   }
+
+  // If reading in a .hgt, must swap bytes of integers
+  bool swapBytes = (strcmp(getFileExt(filename), ".hgt") == 0);
+  printf("Swapping bytes: %d\n", swapBytes);
 
   int nbytes = 2;
   int16_t buf[1];
@@ -166,7 +175,7 @@ int main(int argc, char **argv) {
   printf("%s write complete.\n", outfileUp);
   free(demGrid);
   free(upDemGrid);
-  return 0;
+  return EXIT_SUCCESS;
 }
 
 const char *getFileExt(const char *filename) {
