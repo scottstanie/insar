@@ -1,7 +1,6 @@
 /*
  * Process to perform bilinear interpolation to upsample a DEM
  */
-#include "upsample.h"
 #include <endian.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -9,6 +8,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+static int upsample(const char *filename, const int rate, const long ncols,
+                    const long nrows, const char *outfileUp);
+
+int getIdx(int r, int c, int ncols) { return ncols * r + c; }
+const char *getFileExt(const char *filename);
+int16_t calcInterp(int16_t *demGrid, int i, int j, int bi, int bj, int rate,
+                   int ncols);
+int16_t interpRow(int16_t *demGrid, int i, int j, int bj, int rate, int ncols);
+int16_t interpCol(int16_t *demGrid, int i, int j, int bi, int rate, int ncols);
 
 int main(int argc, char **argv) {
 
@@ -49,8 +57,8 @@ int main(int argc, char **argv) {
   return upsample(filename, rate, ncols, nrows, outfileUp);
 }
 
-int upsample(const char *filename, const int rate, const long ncols,
-             const long nrows, const char *outfileUp) {
+static int upsample(const char *filename, const int rate, const long ncols,
+                    const long nrows, const char *outfileUp) {
 
   FILE *fp = fopen(filename, "r");
   if (fp == NULL) {

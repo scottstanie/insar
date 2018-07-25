@@ -62,5 +62,7 @@ setuptools.setup(
             "insar=insar.scripts.cli:cli",
         ],
     },
-    data_files=[("bin", ["bin/upsample"])],
+    ext_modules=[
+        setuptools.Extension("c_upsample", ["insar/c_upsample.pyx"], extra_compile_args=["-O3"])
+    ],
     zip_safe=False)
