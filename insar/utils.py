@@ -93,6 +93,11 @@ def log(image):
 db = log
 
 
+def mag(db_image):
+    """Reverse of log/db: decibel to magnitude"""
+    return 10**(db_image / 20)
+
+
 def percent_zero(filepath=None, arr=None):
     """Function to give the percentage of a file that is exactly zero
 
