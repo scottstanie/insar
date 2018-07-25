@@ -273,6 +273,7 @@ def plot_blobs(image, blobs=None, cur_axes=None, color='blue', **kwargs):
         cur_axes.imshow(image)
 
     if blobs is None:
+        logger.info("Searching for blobs in image.")
         blobs = find_blobs(image, **kwargs)
 
     for blob in blobs:
@@ -280,9 +281,11 @@ def plot_blobs(image, blobs=None, cur_axes=None, color='blue', **kwargs):
         c = plt.Circle((x, y), r, color=color, fill=False, linewidth=2, clip_on=False)
         cur_axes.add_patch(c)
 
+    plt.show()
     return blobs
 
 
 def get_blob_values(image, blobs):
+    """Finds the image's value of each blob center"""
     coords = blobs[:, :2].astype(int)
     return image[coords[:, 0], coords[:, 1]]
