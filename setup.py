@@ -1,36 +1,11 @@
 import setuptools
-from setuptools.command.develop import develop
-from setuptools.command.install import install
-from subprocess import check_call
-
-
-# Classes for running "make" to compile the bin/upsample
-class PostDevelopCommand(develop):
-    """Post-installation for development mode, installs from Makefile."""
-
-    def run(self):
-        print("=========================================================")
-        check_call("make")
-        print("=========================================================")
-        develop.run(self)
-
-
-class PostInstallCommand(install):
-    """Post-installation for installation mode."""
-
-    def run(self):
-        print("=========================================================")
-        check_call("make")
-        print("=========================================================")
-        install.run(self)
-
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="insar",
-    version="1.0.3",
+    version="1.0.4",
     author="Scott Staniewicz",
     author_email="scott.stanie@utexas.com",
     description="Tools for gathering and preprocessing InSAR data",
@@ -40,10 +15,7 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     include_package_data=True,
     # Extra command to compile the upsample.c script
-    cmdclass={
-        "develop": PostDevelopCommand,
-        "install": PostInstallCommand,
-    },
+    cmdclass=cmdclass,
     classifiers=(
         "Programming Language :: Python",
         "Programming Language :: Python :: 2.7",
