@@ -14,8 +14,6 @@ setuptools.setup(
     url="https://github.com/scottstanie/insar",
     packages=setuptools.find_packages(),
     include_package_data=True,
-    # Extra command to compile the upsample.c script
-    cmdclass=cmdclass,
     classifiers=(
         "Programming Language :: Python",
         "Programming Language :: Python :: 2.7",
@@ -35,6 +33,7 @@ setuptools.setup(
         ],
     },
     ext_modules=[
-        setuptools.Extension("c_upsample", ["insar/c_upsample.pyx"], extra_compile_args=["-O3"])
+        setuptools.Extension(
+            "insar.c_upsample", ["insar/c_upsample.pyx"], extra_compile_args=["-O3"])
     ],
     zip_safe=False)
