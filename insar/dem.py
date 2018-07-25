@@ -66,7 +66,7 @@ import requests
 
 import insar
 from insar.log import get_log
-from insar import sario, utils
+from insar import sario, utils, c_upsample
 
 try:
     input = raw_input  # Check for python 2
@@ -854,16 +854,7 @@ def main(geojson, data_source, rate, output_name):
 
     # Now upsample this block
     nrows, ncols = stitched_dem.shape
-    upsample_path = 'bin/upsample' if os.path.exists('bin/upsample') else 'upsample'
-    upsample_cmd = [
-        utils.which(upsample_path), dem_filename_small,
-        str(rate),
-        str(ncols),
-        str(nrows), output_name
-    ]
-    logger.info("Upsampling using %s:", upsample_cmd[0])
-    logger.info(' '.join(upsample_cmd))
-    subprocess.check_call(upsample_cmd)
+    c_upsample.upsample(str.encode(dem_filename_small), rate, ncols, nrows, str.encode(output_name))
 
     # Redo a new .rsc file for it
     logger.info("Writing new upsampled dem to %s", rsc_filename)
