@@ -6,15 +6,16 @@ MKDIR_P = mkdir -p
 
 TARGET = $(BUILD_DIR)/upsample
 
-SRCS = $(wildcard $(SRC_DIR)/*.c)
+SRC = $(SRC_DIR)/upsample.c
+# SRCS = $(wildcard $(SRC_DIR)/*.c)
 # OBJS = $(patsubst %.c, $(BUILD_DIR)/%.o, $(wildcard $(SRC_DIR)/*.c))
 
 default: $(TARGET)
 all: default
 
 
-$(TARGET): $(SRCS)
-	$(CC) $(SRCS) $(CFLAGS) -o $@
+$(TARGET): $(SRC)
+	$(CC) $(SRC) $(CFLAGS) -o $@
 
 
 .PHONY: test clean upload
