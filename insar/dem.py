@@ -53,7 +53,6 @@ except ImportError:  # Python 2 doesn't have this :(
     PARALLEL = False
 import collections
 import getpass
-import io
 import json
 import math
 import netrc
@@ -794,6 +793,11 @@ def create_kml(rsc_data, tif_filename, title="Title", desc="Description"):
     return output
 
 
+def _is_file(f):
+    """python 2/3 compatible check for file object"""
+    return isinstance(f, file) if sys.version_info[0] == 2 else hasattr(f, 'read')
+
+
 def main(geojson, data_source, rate, output_name):
     """Function for entry point to create a DEM with `insar dem`
 
@@ -803,7 +807,7 @@ def main(geojson, data_source, rate, output_name):
         rate (int): rate to upsample DEM (positive int)
         output_name (str): name of file to save final DEM (usually elevation.dem)
     """
-    geojson_file = geojson if isinstance(geojson, io.IOBase) else open(geojson, 'r')
+    geojson_file = geojson if _is_file(geojson) else open(geojson, 'r')
     geojson_obj = json.load(geojson_file)
     bounds = insar.geojson.bounding_box(geojson_obj)
     geojson_file.close()
