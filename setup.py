@@ -34,6 +34,6 @@ setuptools.setup(
     },
     ext_modules=[
         setuptools.Extension(
-            "insar.c_upsample", ["insar/c_upsample.pyx"], extra_compile_args=["-O3"])
+            "insar.c_upsample", ["insar/c_upsample.pyx"], extra_compile_args=["-O3", "-std=gnu99"])
     ],
     zip_safe=False)
