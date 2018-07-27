@@ -348,3 +348,19 @@ def latlon_to_dist(lat_lon_start, lat_lon_end, R=6378):
     a = (sin(dlat / 2)**2) + (cos(lat1) * cos(lat2) * sin(dlon / 2)**2)
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return R * c
+
+
+def make_latlon_grid(grid_info):
+    """Takes sizes and spacing info, creates a grid of values"""
+    nx = grid_info['cols']
+    ny = grid_info['rows']
+    dx = grid_info['x_step']
+    dy = grid_info['y_step']
+    x0 = grid_info['x_first']
+    y0 = grid_info['y_first']
+    # grid = np.empty((grid_info['rows'], grid_info['cols']))
+    cols = np.linspace(x0, x0 + (nx - 1) * dx, nx).reshape((1, nx))
+    rows = np.linspace(y0, y0 + (ny - 1) * dy, ny).reshape((ny, 1))
+    print(cols[:, :5])
+    # assert cols[0, 1] - cols[0, 0] == dx
+    return rows * cols

@@ -481,6 +481,9 @@ def parse_ann_file(filename, ext=None, verbose=False):
     def _parse_float(line):
         return float(_parse_line(line))
 
+    def _make_line_regex(ext, field):
+        return r'{}.{}'.format(line_keywords.get(ext), field)
+
     if get_file_ext(filename) == '.ann' and not ext:
         raise ValueError('parse_ann_file needs ext argument if the data filename not provided.')
 
@@ -499,17 +502,16 @@ def parse_ann_file(filename, ext=None, verbose=False):
     # GRD Data Units = linear power
     ann_data = {}
     line_keywords = {
+        # ext: line start term
         '.slc': 'slc_mag',
-        '.mlc': 'mlc_pwr',
+        '.mlc': 'mlc_mag',
         '.int': 'slt',
         '.cor': 'slt',
         '.amp': 'slt',
-        '.grd': 'grd_pwr'
+        '.grd': 'grd_mag'
     }
-    row_starts = {k: v + '.set_rows' for k, v in line_keywords.items()}
-    col_starts = {k: v + '.set_cols' for k, v in line_keywords.items()}
-    row_key = row_starts.get(ext)
-    col_key = col_starts.get(ext)
+    row_key = line_keywords.get(ext) + '.set_rows'
+    col_key = line_keywords.get(ext) + '.set_cols'
 
     with open(ann_filename, 'r') as f:
         for line in f.readlines():
@@ -518,10 +520,21 @@ def parse_ann_file(filename, ext=None, verbose=False):
                 ann_data['rows'] = _parse_int(line)
             elif line.startswith(col_key):
                 ann_data['cols'] = _parse_int(line)
-
-            # Example: get the name of the mlc for HHHH polarization
-            elif line.startswith('mlcHHHH'):
-                ann_data['mlcHHHH'] = _parse_line(line)
+            # Center Latitude of Upper Left Pixel
+            # Note: using convention of .rsc files for consitency
+            # I.E. x_first, x_step, y_first, y_step
+            elif re.match(_make_line_regex(ext, 'row_addr'), line):
+                ann_data['y_first'] = _parse_float(line)
+            # Center Longitude of Upper Left Pixel
+            elif re.match(_make_line_regex(ext, 'col_addr'), line):
+                ann_data['x_first'] = _parse_float(line)
+            # GRD Latitude Pixel Spacing
+            # the step is negative in the y (row) direction
+            elif re.match(_make_line_regex(ext, 'row_mult'), line):
+                ann_data['y_step'] = _parse_float(line)
+            # GRD Longitude Pixel Spacing or SLC R (range) Slant Post Spacing
+            elif re.match(_make_line_regex(ext, 'col_mult'), line):
+                ann_data['x_step'] = _parse_float(line)
             # TODO: Add more parsing! whatever is useful from .ann file
 
     if verbose:
