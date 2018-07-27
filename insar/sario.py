@@ -513,6 +513,7 @@ def parse_ann_file(filename, ext=None, verbose=False):
     row_key = line_keywords.get(ext) + '.set_rows'
     col_key = line_keywords.get(ext) + '.set_cols'
 
+    # Peg position the nadir position of aircraft at middle of datatake
     with open(ann_filename, 'r') as f:
         for line in f.readlines():
             # TODO: disambiguate which ones to use, and when
@@ -520,7 +521,8 @@ def parse_ann_file(filename, ext=None, verbose=False):
                 ann_data['rows'] = _parse_int(line)
             elif line.startswith(col_key):
                 ann_data['cols'] = _parse_int(line)
-            # Center Latitude of Upper Left Pixel
+            # Center Latitude of Upper Left Pixel of GRD image, or
+            # range Offset(R0) from Peg in meters
             # Note: using convention of .rsc files for consitency
             # I.E. x_first, x_step, y_first, y_step
             elif re.match(_make_line_regex(ext, 'row_addr'), line):
