@@ -350,6 +350,25 @@ def latlon_to_dist(lat_lon_start, lat_lon_end, R=6378):
     return R * c
 
 
+def offset(im_info1, im_info2, direction):
+    """Calculates how many pixels in the x or y direction two images are
+
+    If image 2 is 3 pixels down and 2 left of image one, the returns would
+    be offset(im1, im2, 'y') = 3, offset(im1, im2, 'x') = -2
+    """
+    if direction not in "xy":
+        raise ValueError("direction must be either y (rows) or x (cols)")
+    first_str = '{}_first'.format(direction)
+    step_str = '{}_step'.format(direction)
+    return (im_info1[first_str] - im_info2[first_str]) / im_info1[step_str]
+
+
+def align_imgs(img_list, info_list):
+    shapes = np.array([i.shape for i in img_list])
+    min_rows, min_cols = np.min(shapes, axis=0)
+    # TODO, maybe from scipy.ndimage.interpolation import shift
+
+
 def make_latlon_grid(grid_info):
     """Takes sizes and spacing info, creates a grid of values"""
     nx = grid_info['cols']
