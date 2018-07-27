@@ -33,12 +33,28 @@ class TestLoading(unittest.TestCase):
 
     def test_parse_ann_file(self):
         ann_info = sario.parse_ann_file(self.ann_path, ext='.int', verbose=True)
-        expected_ann_info = {'rows': 22826, 'cols': 3300}
+        expected_ann_info = {
+            'cols': 3300,
+            'rows': 22826,
+            'x_first': 13450.19161366,
+            'x_step': 4.99654098,
+            'y_first': -84242.1,
+            'y_step': 7.2
+        }
+
         self.assertEqual(expected_ann_info, ann_info)
 
         # Same path and same name as .ann file
         # Different data for the .slc for same ann
-        expected_slc_info = {'rows': 273921, 'cols': 9900}
+        expected_slc_info = {
+            'cols': 9900,
+            'rows': 273921,
+            'x_first': 13448.5261,
+            'x_step': 1.66551366,
+            'y_first': -84245.4,
+            'y_step': 0.6
+        }
+
         fake_slc_path = self.ann_path.replace('.ann', '.slc')
         ann_info = sario.parse_ann_file(fake_slc_path)
         self.assertEqual(expected_slc_info, ann_info)
