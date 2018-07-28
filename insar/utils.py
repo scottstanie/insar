@@ -389,8 +389,31 @@ def align_img(img_pair, info_list):
     return shift(img1, offsets, order=1)
 
 
-def make_latlon_grid(grid_info):
-    """Takes sizes and spacing info, creates a grid of values"""
+def make_latlon_grid(grid_info, sparse=False):
+    """Takes sizes and spacing info, creates a grid of values
+
+    Args:
+        grid_info (dict): contains 'rows', 'cols', x,y_step, x,y_first
+        sparse (bool): Optional (default False). Passed through to
+            np.meshgrid to optionally conserve memory
+
+    Returns:
+        tuple[ndarray, ndarray]: the XX, YY grids of longitudes and lats
+
+    Examples:
+    >>> fake_info = {'cols': 2, 'rows': 3, 'x_first': -155.0, 'x_step': 0.01, 'y_first': 19.5, 'y_step': -0.2}
+    >>> lons, lats = make_latlon_grid(fake_info)
+    >>> lons
+    array([[-155.  , -154.99],
+           [-155.  , -154.99],
+           [-155.  , -154.99]])
+    >>> lats
+    array([[19.5, 19.5],
+           [19.3, 19.3],
+           [19.1, 19.1]])
+
+
+    """
     nx = grid_info['cols']
     ny = grid_info['rows']
     dx = grid_info['x_step']
@@ -398,8 +421,6 @@ def make_latlon_grid(grid_info):
     x0 = grid_info['x_first']
     y0 = grid_info['y_first']
     # grid = np.empty((grid_info['rows'], grid_info['cols']))
-    cols = np.linspace(x0, x0 + (nx - 1) * dx, nx).reshape((1, nx))
-    rows = np.linspace(y0, y0 + (ny - 1) * dy, ny).reshape((ny, 1))
-    print(cols[:, :5])
-    # assert cols[0, 1] - cols[0, 0] == dx
-    return rows * cols
+    x = np.linspace(x0, x0 + (nx - 1) * dx, nx).reshape((1, nx))
+    y = np.linspace(y0, y0 + (ny - 1) * dy, ny).reshape((ny, 1))
+    return np.meshgrid(x, y, sparse=sparse)
