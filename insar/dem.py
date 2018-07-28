@@ -835,7 +835,7 @@ def main(geojson, data_source, rate, output_name):
 
     # Now upsample this block
     nrows, ncols = stitched_dem.shape
-    c_upsample.upsample(str.encode(dem_filename_small), rate, ncols, nrows, str.encode(output_name))
+    c_upsample.upsample(dem_filename_small.encode(), rate, ncols, nrows, output_name.encode())
 
     # Redo a new .rsc file for it
     logger.info("Writing new upsampled dem to %s", rsc_filename)
