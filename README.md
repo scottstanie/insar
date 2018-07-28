@@ -19,8 +19,15 @@ Or for development use (to change code and have it be reflected in what is insta
 
 ```bash
 mkvirtualenv insar
-git clone https://github.com/scottstanie/insar.git && cd insar
+git clone https://github.com/scottstanie/insar.git
+cd insar
+make build     # which runs python setup.py build_ext --inplace for the cython extension
+pip install -r requirements.txt
 pip install --editable .
+```
+and to also install the necessary extras for running unit tests:
+```bash
+pip install -r requirements-dev.txt
 ```
 
 virtualenv is optional but recommended.
@@ -103,7 +110,7 @@ Options:
   --help                   Show this message and exit.
 ```
 
-### Modules and example usage
+### More on subcommands and some module example usage
 
 #### dem.py
 
@@ -156,13 +163,15 @@ They also list that they are discontinuing some services, which is why NASA is t
 
 #### eof.py
 
-Functions for dealing with precise orbit files (POE) for Sentinel 1
+Functions for dealing with precise orbit files (POE) for Sentinel 1 (which are .EOF files)
 
 ```bash
 $ insar download
 ```
 
 The script without arguments will look in the current directory for .EOF files.
+
+
 You can also specify dates, with or without a mission (S1A/S1B):
 
 ```bash
@@ -189,6 +198,7 @@ Main function:
 ```python
 import insar.sario
 my_slc = insar.sario.load('/file/path/radar.slc')
+my_int = insar.sario.load('/file/path/interferogram.int')
 my_dem = insar.sario.load('/file/path/elevation.dem')
 my_hgt = insar.sario.load('/file/path/N20W100.hgt')
 ```
@@ -241,6 +251,8 @@ parser.field_meanings
  'product unique id')
 
 ```
+
+UAVSAR parser also exists.
 
 More will be added in the future.
 
