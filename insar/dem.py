@@ -42,8 +42,6 @@ Example .dem.rsc (for N19W156.hgt and N19W155.hgt stitched horizontally):
         Z_OFFSET      0
         Z_SCALE       1
         PROJECTION    LL
-
-Made for python3, compatible with python2
 """
 from __future__ import division, print_function
 import collections
