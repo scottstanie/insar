@@ -1,8 +1,16 @@
+from __future__ import print_function
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-import skimage.feature
+# Note: This is just a temp stopgap to not make skimage a hard requirement
+# In the future, will port just the blob function, ski rest of skimage
+try:
+    import skimage.feature
+except ImportError:
+    print("Warning: scikit-image not installed. Blob function not available.")
+    print("pip install scikit-image")
+    pass
 from insar.log import get_log
 
 logger = get_log()
