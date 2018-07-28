@@ -53,14 +53,13 @@ class TestDownload(unittest.TestCase):
 
     def test_init(self):
 
-        d = dem.Downloader([self.test_tile], netrc_file=NETRC_PATH, parallel_ok=False)
+        d = dem.Downloader([self.test_tile], netrc_file=NETRC_PATH)
         self.assertEqual(d.data_url, "http://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL1.003/2000.02.11")
 
     @responses.activate
     def test_download(self):
         responses.add(responses.GET, self.hgt_url, body=self.sample_hgt_zip, status=200)
-        d = dem.Downloader(
-            [self.test_tile], netrc_file=NETRC_PATH, parallel_ok=False, cache_dir=self.cache_dir)
+        d = dem.Downloader([self.test_tile], netrc_file=NETRC_PATH, cache_dir=self.cache_dir)
         d.download_all()
         self.assertTrue(os.path.exists(join(d.cache_dir, self.test_tile)))
 
@@ -114,23 +113,23 @@ PROJECTION    LL
         self.assertEqual(expected, dem.rsc_bounds(self.test_rsc_data))
 
     def test_create_kml(self):
-        expected = """\ 
-<?xml version="1.0" encoding="UTF-8"?> 
-<kml xmlns="http://earth.google.com/kml/2.2"> 
-<GroundOverlay> 
-    <name> test_title </name> 
-    <description> my desc </description> 
-    <Icon> 
-          <href> out.tif </href> 
-    </Icon> 
-    <LatLonBox> 
-        <north> 3.0 </north> 
-        <south> 2.5 </south> 
-        <east> -9.0 </east> 
-        <west> -10.0 </west> 
-    </LatLonBox> 
-</GroundOverlay> 
-</kml> 
+        expected = """\
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://earth.google.com/kml/2.2">
+<GroundOverlay>
+    <name> test_title </name>
+    <description> my desc </description>
+    <Icon>
+          <href> out.tif </href>
+    </Icon>
+    <LatLonBox>
+        <north> 3.0 </north>
+        <south> 2.5 </south>
+        <east> -9.0 </east>
+        <west> -10.0 </west>
+    </LatLonBox>
+</GroundOverlay>
+</kml>
 """
         tifname = "out.tif"
         output = dem.create_kml(self.test_rsc_data, tifname)
