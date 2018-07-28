@@ -10,6 +10,7 @@ import errno
 import os
 import shutil
 import numpy as np
+from scipy.ndimage.interpolation import shift
 import multiprocessing as mp
 
 import insar.sario
@@ -348,3 +349,78 @@ def latlon_to_dist(lat_lon_start, lat_lon_end, R=6378):
     a = (sin(dlat / 2)**2) + (cos(lat1) * cos(lat2) * sin(dlon / 2)**2)
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return R * c
+
+
+def offset(img_info1, img_info2, axis=None):
+    """Calculates how many pixels in the row or col direction two images are
+
+    If image 2 is 3 pixels down and 2 left of image one, the returns would
+    be offset(im1, im2) = (-3, -2), offset(im1, im2, axis=1) = -2
+
+    To align image1 with image 2, you can do:
+    offsets = offset(img_info1, img_info2)
+    """
+    row_offset = (img_info1['y_first'] - img_info2['y_first']) / img_info1['y_step']
+    col_offset = (img_info1['x_first'] - img_info2['x_first']) / img_info1['x_step']
+    output_tuple = (row_offset, col_offset)
+    if axis is None:
+        return output_tuple
+    else:
+        if not isinstance(axis, int):
+            raise ValueError("axis must be an int less than 2")
+        return output_tuple[axis]
+
+
+def align_img(img_pair, info_list):
+    """Takes two images, shifts the first to align with the second
+    """
+    shapes = np.array([i.shape for i in img_list])
+    min_rows, min_cols = np.min(shapes, axis=0)
+
+    # Crop so that they can be overlaid
+    img1, img2 = img_list
+    img1 = img1[:min_rows, :min_cols]
+    img2 = img2[:min_rows, :min_cols]
+
+    img1_ann, img2_ann = info_list
+    offset_tup = utils.offset(im1_ann, im2_ann)
+    # Note: we use order=1 since default order=3 spline was giving
+    # negative values for images (leading to invalid nonsense)
+    return shift(img1, offsets, order=1)
+
+
+def make_latlon_grid(grid_info, sparse=False):
+    """Takes sizes and spacing info, creates a grid of values
+
+    Args:
+        grid_info (dict): contains 'rows', 'cols', x,y_step, x,y_first
+        sparse (bool): Optional (default False). Passed through to
+            np.meshgrid to optionally conserve memory
+
+    Returns:
+        tuple[ndarray, ndarray]: the XX, YY grids of longitudes and lats
+
+    Examples:
+    >>> fake_info = {'cols': 2, 'rows': 3, 'x_first': -155.0, 'x_step': 0.01, 'y_first': 19.5, 'y_step': -0.2}
+    >>> lons, lats = make_latlon_grid(fake_info)
+    >>> lons
+    array([[-155.  , -154.99],
+           [-155.  , -154.99],
+           [-155.  , -154.99]])
+    >>> lats
+    array([[19.5, 19.5],
+           [19.3, 19.3],
+           [19.1, 19.1]])
+
+
+    """
+    nx = grid_info['cols']
+    ny = grid_info['rows']
+    dx = grid_info['x_step']
+    dy = grid_info['y_step']
+    x0 = grid_info['x_first']
+    y0 = grid_info['y_first']
+    # grid = np.empty((grid_info['rows'], grid_info['cols']))
+    x = np.linspace(x0, x0 + (nx - 1) * dx, nx).reshape((1, nx))
+    y = np.linspace(y0, y0 + (ny - 1) * dy, ny).reshape((ny, 1))
+    return np.meshgrid(x, y, sparse=sparse)

@@ -289,3 +289,8 @@ def get_blob_values(image, blobs):
     """Finds the image's value of each blob center"""
     coords = blobs[:, :2].astype(int)
     return image[coords[:, 0], coords[:, 1]]
+
+
+def sort_blobs_by_val(image, blobs):
+    blob_vals = get_blob_values(image, blobs)
+    return sorted(zip(blobs, blob_vals), key=lambda tup: abs(tup[1]), reverse=True)
