@@ -1,7 +1,6 @@
 /*
  * Process to perform bilinear interpolation to upsample a DEM
  */
-#include <endian.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -23,13 +22,12 @@ int main(int argc, char **argv) {
   // Parse input filename, rate, and optional output filename
   const char *defaultOutfile = "elevation.dem";
   if (argc < 5) {
-    fprintf(stderr,
-            "Usage: ./dem filename rate ncols nrows "
-            "[outfilename] \n"
-            "filename must be .hgt or .dem extension.\n"
-            "Rate must be a positive integer.\n"
-            "ncols = width of DEM/HGT, ncows = height\n"
-            "Default outfile name: %s\n",
+    fprintf(stderr, "Usage: ./dem filename rate ncols nrows "
+                    "[outfilename] \n"
+                    "filename must be or .dem extension.\n"
+                    "Rate must be a positive integer.\n"
+                    "ncols = width of DEM, ncows = height\n"
+                    "Default outfile name: %s\n",
             defaultOutfile);
     return EXIT_FAILURE;
   }
@@ -66,10 +64,6 @@ static int upsample(const char *filename, const int rate, const long ncols,
     return EXIT_FAILURE;
   }
 
-  // If reading in a .hgt, must swap bytes of integers
-  bool swapBytes = (strcmp(getFileExt(filename), ".hgt") == 0);
-  printf("Swapping bytes: %d\n", swapBytes);
-
   int nbytes = 2;
   int16_t buf[1];
   int16_t *demGrid = (int16_t *)malloc(nrows * ncols * sizeof(*demGrid));
@@ -87,11 +81,7 @@ static int upsample(const char *filename, const int rate, const long ncols,
         fprintf(stderr, "Read failure from %s\n", filename);
         return EXIT_FAILURE;
       }
-      if (swapBytes) {
-        demGrid[getIdx(i, j, ncols)] = be16toh(*buf);
-      } else {
-        demGrid[getIdx(i, j, ncols)] = *buf;
-      }
+      demGrid[getIdx(i, j, ncols)] = *buf;
     }
   }
   fclose(fp);
