@@ -158,6 +158,7 @@ def clean_files(ext, path=".", zero_threshold=0.50, test=True):
     ]
     # Now ask for results so processes launch
     [res.get() for res in results]
+    pool.close()
 
 
 def split_array_into_blocks(data):

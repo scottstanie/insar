@@ -45,16 +45,12 @@ Example .dem.rsc (for N19W156.hgt and N19W155.hgt stitched horizontally):
 
 Made for python3, compatible with python2
 """
-from __future__ import division
-try:
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    PARALLEL = True
-except ImportError:  # Python 2 doesn't have this :(
-    PARALLEL = False
+from __future__ import division, print_function
 import collections
 import getpass
 import json
 import math
+from multiprocessing.pool import ThreadPool
 import netrc
 import os
 import re
@@ -253,7 +249,6 @@ class Downloader:
         data_url (str): Base url where .hgt tiles are stored
         compress_type (str): format .hgt files are stored in online
         data_source (str): choices: NASA, AWS. See module docstring for explanation of sources
-        parallel_ok (bool): true if using python3 or concurrent.futures installed
         cache_dir (str): explcitly specify where to store .hgt files
 
     Raises:
@@ -268,12 +263,7 @@ class Downloader:
     COMPRESS_TYPES = {'NASA': 'zip', 'AWS': 'gz'}
     NASAHOST = 'urs.earthdata.nasa.gov'
 
-    def __init__(self,
-                 tile_names,
-                 data_source='NASA',
-                 netrc_file='~/.netrc',
-                 parallel_ok=PARALLEL,
-                 cache_dir=None):
+    def __init__(self, tile_names, data_source='NASA', netrc_file='~/.netrc', cache_dir=None):
         self.tile_names = tile_names
         self.data_source = data_source
         if data_source not in self.VALID_SOURCES:
@@ -281,7 +271,6 @@ class Downloader:
         self.data_url = self.DATA_URLS[data_source]
         self.compress_type = self.COMPRESS_TYPES[data_source]
         self.netrc_file = os.path.expanduser(netrc_file)
-        self.parallel_ok = parallel_ok
         self.cache_dir = cache_dir or _get_cache_dir()
 
     def _get_netrc_file(self):
@@ -430,19 +419,9 @@ class Downloader:
         ):
             self.handle_credentials()
 
-        if self.parallel_ok:
-            with ThreadPoolExecutor(max_workers=4) as executor:
-                future_to_tile = {
-                    executor.submit(self.download_and_save, tile): tile
-                    for tile in self.tile_names
-                }
-                for future in as_completed(future_to_tile):
-                    future.result()
-                    logger.info('Finished {}'.format(future_to_tile[future]))
-
-        else:
-            for tile_name in self.tile_names:
-                self.download_and_save(tile_name)
+        pool = ThreadPool(processes=5)
+        results = pool.map(self.download_and_save, self.tile_names)
+        pool.close()
 
 
 class Stitcher:
