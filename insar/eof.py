@@ -23,23 +23,17 @@ API documentation: https://qc.sentinel1.eo.esa.int/doc/api/
 
 See insar.parsers for Sentinel file naming description
 """
-try:
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    CONCURRENT = True
-    MAX_WORKERS = 20
-except ImportError:  # Python 2 doesn't have this :(
-    CONCURRENT = False
-
 import os
 import sys
 import itertools
 import requests
-
+from multiprocessing.pool import ThreadPool
 from datetime import timedelta
 from dateutil.parser import parse
 import insar.sario
 from insar.log import get_log, log_runtime
 from insar.parsers import Sentinel
+MAX_WORKERS = 20  # For parallel downloading
 
 logger = get_log()
 
@@ -70,23 +64,16 @@ def download_eofs(orbit_dts, missions=None, save_dir="."):
     if not missions:
         missions = itertools.repeat(None)
 
-    if CONCURRENT:
-        # Download and save all links in parallel
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            # Make a dict to refer back to which date is finished downloading
-            future_to_date = {
-                executor.submit(_download_and_write, mission, dt, save_dir): dt
-                for mission, dt in zip(missions, orbit_dts)
-            }
-            for future in as_completed(future_to_date):
-                future.result()
-                dt = future_to_date[future]
-                logger.info('Finished {}'.format(dt.date()))
-    else:
-        # Fall back for python 2:
-        for mission, dt in zip(missions, orbit_dts):
-            _download_and_write(mission, dt, save_dir)
-            logger.info('Finished {}'.format(dt.date()))
+    # Download and save all links in parallel
+    pool = ThreadPool(processes=MAX_WORKERS)
+    result_dt_dict = {
+        pool.apply_async(_download_and_write, (mission, dt, save_dir)): dt
+        for mission, dt in zip(missions, orbit_dts)
+    }
+    for result in result_dt_dict:
+        result.get()
+        dt = result_dt_dict[result]
+        logger.info('Finished {}'.format(dt.date()))
 
 
 def eof_list(start_date):
