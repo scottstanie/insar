@@ -1,5 +1,8 @@
 /*
  * Process to perform bilinear interpolation to upsample a DEM
+ * Wrapped in cython by c_upsample.pyx
+ * Used to convert a .dem file (little endian, 16-bit int grid)
+ * into an upsampled version of the same grid
  */
 #include <stdbool.h>
 #include <stdint.h>
