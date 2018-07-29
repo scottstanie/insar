@@ -17,6 +17,12 @@ class Base(object):
         self.filename = filename
         self.full_parse()  # Run a parse to check validity of filename
 
+    def __str__(self):
+        return "{} product: {}".format(self.__class__.__name__, self.filename)
+
+    def __repr__(self):
+        return str(self)
+
     def full_parse(self):
         """Returns all parts of the data contained in filename
 
@@ -83,6 +89,10 @@ class Sentinel(Base):
     _FIELD_MEANINGS = ('mission', 'beam', 'product type', 'resolution class', 'product level',
                        'product class', 'polarization', 'start datetime', 'stop datetime',
                        'orbit number', 'data-take identified', 'product unique id')
+
+    def __str__(self):
+        return "{} product from {}: {}".format(self.__class__.__name__, self.start_time,
+                                               self.filename)
 
     @property
     def start_time(self):
@@ -223,6 +233,9 @@ class Uavsar(Base):
         'version number',
         'downsampling',
     )
+
+    def __str__(self):
+        return "{} product from {}: {}".format(self.__class__.__name__, self.date, self.filename)
 
     @property
     def date(self):
