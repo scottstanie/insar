@@ -91,8 +91,8 @@ class Sentinel(Base):
                        'orbit number', 'data-take identified', 'product unique id')
 
     def __str__(self):
-        return "{} product from {}: {}".format(self.__class__.__name__, self.start_time,
-                                               self.filename)
+        return "{} {}, path {} from {}".format(self.__class__.__name__, self.mission, self.path,
+                                               self.date)
 
     @property
     def start_time(self):
@@ -235,7 +235,7 @@ class Uavsar(Base):
     )
 
     def __str__(self):
-        return "{} product from {}: {}".format(self.__class__.__name__, self.date, self.filename)
+        return "{} {} from {}".format(self.__class__.__name__, self.polarization, self.date)
 
     @property
     def date(self):
