@@ -14,6 +14,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from insar.log import get_log
+from insar import parsers
 logger = get_log()
 
 FLOAT_32_LE = np.dtype('<f4')
@@ -36,7 +37,7 @@ ELEVATION_EXTS = ['.dem', '.hgt']
 
 # These file types are not simple complex matrices: see load_stacked for detail
 STACKED_FILES = ['.cc', '.unw']
-
+# real of complex for these depends on the polarization
 UAVSAR_POL_DEPENDENT = ['.grd', '.mlc']
 REAL_POLS = ('HHHH', 'HVHV', 'VVVV')
 COMPLEX_POLS = ('HHHV', 'HHVV', 'HVVV')
@@ -366,7 +367,7 @@ def is_complex(filename):
 
     if ext in UAVSAR_POL_DEPENDENT:
         # Check if filename has one of the complex polarizations
-        return any(pol in filename for pol in COMPLEX_POLS)
+        return any(pol in filename for pol in parser.Uavsar.COMPLEX_POLS)
     else:
         return ext in COMPLEX_EXTS
 
@@ -424,121 +425,3 @@ def save(filename, array):
 
 
 # TODO: possibly separate into a "parser" file
-def make_ann_filename(filename):
-    """Take the name of a data file and return corresponding .ann name
-
-    Examples:
-        >>> print(make_ann_filename('brazos.cor'))
-        brazos.ann
-        >>> print(make_ann_filename('brazos.1.int'))
-        brazos.ann
-        >>> print(make_ann_filename('brazos_090HHHV_CX_01.mlc'))
-        brazos_090_CX_01.ann
-        >>> print(make_ann_filename('brazos_090HHVV_CX_01.mlc'))
-        brazos_090_CX_01.ann
-        >>> print(make_ann_filename('brazos_090HHVV_CX_01.grd'))
-        brazos_090_CX_01.ann
-        >>> print(make_ann_filename('brazos_090HHVV_CX_01_ML5X5.grd'))
-        brazos_090_CX_01_ML5X5.ann
-    """
-
-    # The .mlc and .grd files have polarization added to filename, .ann files don't
-    shortname = filename
-    for p in POLARIZATIONS:
-        shortname = shortname.replace(p, '')
-    # If this is a block we split up and names .1.int, remove that since
-    # all have the same .ann file
-
-    # TODO: figure out where to get this list from
-    ext = get_file_ext(filename)
-    shortname = re.sub('\.\d' + ext, ext, shortname)
-
-    return shortname.replace(ext, '.ann')
-
-
-def parse_ann_file(filename, ext=None, verbose=False):
-    """Returns the requested data from the UAVSAR annotation in ann_filename
-
-    Args:
-        ann_data (dict): key-values of requested data from .ann file
-        ext (str): extension of desired data file, if filename is the .ann file
-            instead of a data filepath
-        verbose (bool): print extra logging into about file loading
-
-    Returns:
-        dict: the annotation file parsed into a dict. If no annotation file
-            can be found, None is returned
-    """
-
-    def _parse_line(line):
-        wordlist = line.split()
-        # Pick the entry after the equal sign when splitting the line
-        return wordlist[wordlist.index('=') + 1]
-
-    def _parse_int(line):
-        return int(_parse_line(line))
-
-    def _parse_float(line):
-        return float(_parse_line(line))
-
-    def _make_line_regex(ext, field):
-        return r'{}.{}'.format(line_keywords.get(ext), field)
-
-    if get_file_ext(filename) == '.ann' and not ext:
-        raise ValueError('parse_ann_file needs ext argument if the data filename not provided.')
-
-    ext = ext or get_file_ext(filename)  # Use what's passed by default
-    ann_filename = make_ann_filename(filename)
-    if verbose:
-        logger.info("Trying to load ann_data from %s", ann_filename)
-    if not os.path.exists(ann_filename):
-        if verbose:
-            logger.info("No file found: returning None")
-        return None
-
-    # Taken from a .ann file: (need to check if this is always true?)
-    # SLC Data Units = linear amplitude
-    # MLC Data Units = linear power
-    # GRD Data Units = linear power
-    ann_data = {}
-    line_keywords = {
-        # ext: line start term
-        '.slc': 'slc_mag',
-        '.mlc': 'mlc_mag',
-        '.int': 'slt',
-        '.cor': 'slt',
-        '.amp': 'slt',
-        '.grd': 'grd_mag'
-    }
-    row_key = line_keywords.get(ext) + '.set_rows'
-    col_key = line_keywords.get(ext) + '.set_cols'
-
-    # Peg position the nadir position of aircraft at middle of datatake
-    with open(ann_filename, 'r') as f:
-        for line in f.readlines():
-            # TODO: disambiguate which ones to use, and when
-            if line.startswith(row_key):
-                ann_data['rows'] = _parse_int(line)
-            elif line.startswith(col_key):
-                ann_data['cols'] = _parse_int(line)
-            # Center Latitude of Upper Left Pixel of GRD image, or
-            # range Offset(R0) from Peg in meters
-            # Note: using convention of .rsc files for consitency
-            # I.E. x_first, x_step, y_first, y_step
-            elif re.match(_make_line_regex(ext, 'row_addr'), line):
-                ann_data['y_first'] = _parse_float(line)
-            # Center Longitude of Upper Left Pixel
-            elif re.match(_make_line_regex(ext, 'col_addr'), line):
-                ann_data['x_first'] = _parse_float(line)
-            # GRD Latitude Pixel Spacing
-            # the step is negative in the y (row) direction
-            elif re.match(_make_line_regex(ext, 'row_mult'), line):
-                ann_data['y_step'] = _parse_float(line)
-            # GRD Longitude Pixel Spacing or SLC R (range) Slant Post Spacing
-            elif re.match(_make_line_regex(ext, 'col_mult'), line):
-                ann_data['x_step'] = _parse_float(line)
-            # TODO: Add more parsing! whatever is useful from .ann file
-
-    if verbose:
-        logger.info(pprint.pformat(ann_data))
-    return ann_data
