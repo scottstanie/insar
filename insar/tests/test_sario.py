@@ -2,6 +2,7 @@ import unittest
 from collections import OrderedDict
 import os
 from os.path import join, dirname, exists
+import tempfile
 import shutil
 import numpy as np
 from numpy.testing import assert_array_almost_equal
@@ -14,7 +15,6 @@ class TestLoading(unittest.TestCase):
         # self.jsonfile = tempfile.NamedTemporaryFile(mode='w+')
         self.datapath = join(dirname(__file__), 'data')
         self.rsc_path = join(self.datapath, 'elevation.dem.rsc')
-        self.ann_path = join(self.datapath, 'test.ann')
         self.dem_path = join(self.datapath, 'elevation.dem')
         self.rsc_data = OrderedDict(
             [('WIDTH', 2), ('FILE_LENGTH', 3), ('X_FIRST', -155.676388889), ('Y_FIRST',
@@ -30,34 +30,6 @@ class TestLoading(unittest.TestCase):
         output = sario.format_dem_rsc(self.rsc_data)
         read_file = open(self.rsc_path).read()
         self.assertEqual(output, read_file)
-
-    def test_parse_ann_file(self):
-        ann_info = sario.parse_ann_file(self.ann_path, ext='.int', verbose=True)
-        expected_ann_info = {
-            'cols': 3300,
-            'rows': 22826,
-            'x_first': 13450.19161366,
-            'x_step': 4.99654098,
-            'y_first': -84242.1,
-            'y_step': 7.2
-        }
-
-        self.assertEqual(expected_ann_info, ann_info)
-
-        # Same path and same name as .ann file
-        # Different data for the .slc for same ann
-        expected_slc_info = {
-            'cols': 9900,
-            'rows': 273921,
-            'x_first': 13448.5261,
-            'x_step': 1.66551366,
-            'y_first': -84245.4,
-            'y_step': 0.6
-        }
-
-        fake_slc_path = self.ann_path.replace('.ann', '.slc')
-        ann_info = sario.parse_ann_file(fake_slc_path)
-        self.assertEqual(expected_slc_info, ann_info)
 
     def test_get_file_rows_cols(self):
         expected_rows_cols = (3601, 7201)
@@ -147,3 +119,21 @@ class TestLoading(unittest.TestCase):
         os.remove(save_path)
         self.assertFalse(exists(save_path))
         self.assertFalse(exists(new_dem_rsc))
+
+    def test_load_uavsar(self):
+        try:
+            temp_dir = tempfile.mkdtemp()
+            grd1 = 'brazos_14937_17090_017_170903_L090HHHH_CX_01_ML5X5.grd'
+            grdfile = os.path.join(temp_dir, grd1)
+            sario.save(grdfile, np.array([[1, 2], [3, 4]]).astype(sario.FLOAT_32_LE))
+
+            annfile = os.path.join(temp_dir, 'brazos_14937_17090_017_170903_L090_CX_01_ML5X5.ann')
+            print("TEST: ")
+            print(annfile)
+            with open(annfile, 'w') as f:
+                f.write("grd_mag.set_rows (pixels) = 2 ; ground range data lines\n")
+                f.write("grd_mag.set_cols (pixels) = 2 ; ground range data samples\n")
+
+            emptygrd = sario.load(grdfile, verbose=True)
+        finally:
+            shutil.rmtree(temp_dir)

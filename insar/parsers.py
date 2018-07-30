@@ -4,6 +4,7 @@ Utilities for parsing file names of SAR products for relevant info.
 """
 import os
 import re
+import pprint
 from datetime import datetime
 from insar import sario
 from insar.log import get_log
@@ -381,9 +382,13 @@ class Uavsar(Base):
         with open(self.ann_filename, 'r') as f:
             for line in f.readlines():
                 # TODO: disambiguate which ones to use, and when
+                print('LINE!!', line)
+                print('row key', row_key)
                 if line.startswith(row_key):
+                    print('ROW!')
                     ann_data['rows'] = _parse_int(line)
                 elif line.startswith(col_key):
+                    print('COL!')
                     ann_data['cols'] = _parse_int(line)
                 # Center Latitude of Upper Left Pixel of GRD image, or
                 # range Offset(R0) from Peg in meters

@@ -1,7 +1,8 @@
 import unittest
 from datetime import datetime
+from os.path import join, dirname
 
-from insar.parsers import Sentinel
+from insar.parsers import Sentinel, Uavsar
 
 
 class TestSentinel(unittest.TestCase):
@@ -37,3 +38,52 @@ class TestSentinel(unittest.TestCase):
 
     def test_mission(self):
         self.assertEqual(self.parser.mission, 'S1A')
+
+
+class TestUavsar(unittest.TestCase):
+    def setUp(self):
+        self.datapath = join(dirname(__file__), 'data')
+        self.ann = join(self.datapath, 'brazos_14937_17090_017_170903_L090_CX_01.ann')
+        self.int = self.ann.replace('.ann', '.int')
+        self.grd = self.ann.replace('.ann', '.grd')
+        self.slc = self.ann.replace('.ann', '.slc')
+        self.parser_int = Uavsar(self.int, verbose=True)
+        self.parser_grd = Uavsar(self.grd)
+        self.parser_slc = Uavsar(self.slc)
+
+    def test_parse_ann_file(self):
+        int_ann_info = self.parser_int.parse_ann_file()
+        expected_ann_info = {
+            'cols': 3300,
+            'rows': 22826,
+            'x_first': 13450.19161366,
+            'x_step': 4.99654098,
+            'y_first': -84242.1,
+            'y_step': 7.2
+        }
+        self.assertEqual(expected_ann_info, int_ann_info)
+
+        # Same path and same name as .ann file
+        # Different data for the .slc for same ann
+        expected_ann_info = {
+            'cols': 9900,
+            'rows': 273921,
+            'x_first': 13448.5261,
+            'x_step': 1.66551366,
+            'y_first': -84245.4,
+            'y_step': 0.6
+        }
+
+        slc_ann_info = self.parser_slc.parse_ann_file()
+        self.assertEqual(expected_ann_info, slc_ann_info)
+
+        expected_ann_info = {
+            'cols': 19322,
+            'rows': 25751,
+            'x_first': -96.2685342,
+            'x_step': 5.556e-05,
+            'y_first': 30.279311040000003,
+            'y_step': -5.556e-05
+        }
+        grd_ann_info = self.parser_grd.parse_ann_file()
+        self.assertEqual(expected_ann_info, grd_ann_info)
