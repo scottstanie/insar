@@ -13,8 +13,8 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-from insar.log import get_log
 from insar import parsers
+from insar.log import get_log
 logger = get_log()
 
 FLOAT_32_LE = np.dtype('<f4')
@@ -66,7 +66,6 @@ def find_files(directory, search_term):
     >>> print('afakefile.txt' in find_files(temp_dir, "*.txt")[0])
     True
     >>> shutil.rmtree(temp_dir)
-
     """
     return glob.glob(os.path.join(directory, search_term))
 
@@ -119,7 +118,8 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
 
     # UAVSAR files have an annotation file for metadata
     if not ann_info and not rsc_data and ext in UAVSAR_EXTS:
-        ann_info = parse_ann_file(filename, verbose=verbose)
+        u = parsers.Uavsar(filename, verbose=verbose)
+        ann_info = u.parse_ann_file()
 
     if ext in STACKED_FILES:
         return load_stacked(filename, rsc_data)

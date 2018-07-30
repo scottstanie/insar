@@ -2,9 +2,12 @@
 Utilities for parsing file names of SAR products for relevant info.
 
 """
+import os
 import re
 from datetime import datetime
 from insar import sario
+from insar.log import get_log
+logger = get_log()
 
 
 class Base(object):
@@ -14,9 +17,15 @@ class Base(object):
     TIME_FMT = None
     _FIELD_MEANINGS = None
 
-    def __init__(self, filename):
+    def __init__(self, filename, verbose=False):
+        """
+        Extract data from filename
+            filename (str): name of SAR/InSAR product
+            verbose (bool): print extra logging into about file loading
+        """
         self.filename = filename
         self.full_parse()  # Run a parse to check validity of filename
+        self.verbose = verbose
 
     def __str__(self):
         return "{} product: {}".format(self.__class__.__name__, self.filename)
@@ -318,12 +327,11 @@ class Uavsar(Base):
     def ann_filename(self):
         return self._make_ann_filename()
 
-    def parse_ann_file(self, verbose=False):
+    def parse_ann_file(self):
         """Returns the requested data from the UAVSAR annotation in ann_filename
 
         Args:
             ann_data (dict): key-values of requested data from .ann file
-            verbose (bool): print extra logging into about file loading
 
         Returns:
             dict: the annotation file parsed into a dict. If no annotation file
@@ -344,12 +352,11 @@ class Uavsar(Base):
         def _make_line_regex(ext, field):
             return r'{}.{}'.format(line_keywords.get(ext), field)
 
-        ext = ext or sario.get_file_ext(self.filename)  # Use what's passed by default
-        ann_filename = _make_ann_filename(self.filename)
-        if verbose:
-            logger.info("Trying to load ann_data from %s", ann_filename)
-        if not os.path.exists(ann_filename):
-            if verbose:
+        ext = sario.get_file_ext(self.filename)
+        if self.verbose:
+            logger.info("Trying to load ann_data from %s", self.ann_filename)
+        if not os.path.exists(self.ann_filename):
+            if self.verbose:
                 logger.info("No file found: returning None")
             return None
 
@@ -371,7 +378,7 @@ class Uavsar(Base):
         col_key = line_keywords.get(ext) + '.set_cols'
 
         # Peg position the nadir position of aircraft at middle of datatake
-        with open(ann_filename, 'r') as f:
+        with open(self.ann_filename, 'r') as f:
             for line in f.readlines():
                 # TODO: disambiguate which ones to use, and when
                 if line.startswith(row_key):
@@ -396,6 +403,6 @@ class Uavsar(Base):
                     ann_data['x_step'] = _parse_float(line)
                 # TODO: Add more parsing! whatever is useful from .ann file
 
-        if verbose:
+        if self.verbose:
             logger.info(pprint.pformat(ann_data))
         return ann_data
