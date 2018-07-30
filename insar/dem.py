@@ -9,8 +9,8 @@ Once you have signed up, to avoid a username password prompt create/add to a .ne
 file in your home directory:
 
 machine urs.earthdata.nasa.gov
-    login yourusername
-    password yourpassword
+  login yourusername
+  password yourpassword
 
 This will be handled if you run download_all by handle_credentials.
 You can choose to save you username in a netrc file for future use
@@ -28,7 +28,8 @@ Other option is to download from Mapzen's tile set on AWS:
 These do not require a username and password.
 They use the SRTM dataset within the US, but combine other sources to produce
 1 arcsecond (30 m) resolution world wide.
-    Example url: https://s3.amazonaws.com/elevation-tiles-prod/skadi/N19/N19W156.hgt
+
+Example url: https://s3.amazonaws.com/elevation-tiles-prod/skadi/N19/N19W156.hgt
 
 Example .dem.rsc (for N19W156.hgt and N19W155.hgt stitched horizontally):
         WIDTH         7201
