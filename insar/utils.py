@@ -12,8 +12,10 @@ import shutil
 import numpy as np
 from scipy.ndimage.interpolation import shift
 import multiprocessing as mp
+import itertools
 
 import insar.sario
+import insar.parsers
 from insar.log import get_log, log_runtime
 
 logger = get_log()
@@ -353,16 +355,21 @@ def latlon_to_dist(lat_lon_start, lat_lon_end, R=6378):
 
 
 def offset(img_info1, img_info2, axis=None):
-    """Calculates how many pixels in the row or col direction two images are
+    """Calculates how many pixels two images are offset
 
-    If image 2 is 3 pixels down and 2 left of image one, the returns would
-    be offset(im1, im2) = (-3, -2), offset(im1, im2, axis=1) = -2
+    Finds offset FROM img_info2 TO img_info1
 
-    To align image1 with image 2, you can do:
+    If image2 is 3 pixels down and 2 left of image1, the returns would
+    be offset(im1, im2) = (3, 2), offset(im1, im2, axis=1) = 2
+
+    To align image2 with image1, you can do:
     offsets = offset(img_info1, img_info2)
     """
-    row_offset = (img_info1['y_first'] - img_info2['y_first']) / img_info1['y_step']
-    col_offset = (img_info1['x_first'] - img_info2['x_first']) / img_info1['x_step']
+    if img_info1['y_step'] != img_info2['y_step']:
+        raise ValueError("Step sizes must be the same for the two images")
+
+    row_offset = (img_info2['y_first'] - img_info1['y_first']) / img_info1['y_step']
+    col_offset = (img_info2['x_first'] - img_info1['x_first']) / img_info1['x_step']
     output_tuple = (row_offset, col_offset)
     if axis is None:
         return output_tuple
@@ -372,22 +379,56 @@ def offset(img_info1, img_info2, axis=None):
         return output_tuple[axis]
 
 
-def align_img(img_pair, info_list):
-    """Takes two images, shifts the first to align with the second
+def align_image_pair(image_pair, info_list):
+    """Takes two images, shifts the second to align with the first
+
+    Args:
+        image_pair (tuple[ndarray, ndarray]): two images to align
+        info_list (tuple[dict, dict]): the associated rsc_data/ann_info
+            for the two images
+    Returns:
     """
-    shapes = np.array([i.shape for i in img_list])
-    min_rows, min_cols = np.min(shapes, axis=0)
 
-    # Crop so that they can be overlaid
-    img1, img2 = img_list
-    img1 = img1[:min_rows, :min_cols]
-    img2 = img2[:min_rows, :min_cols]
-
+    cropped_images = crop_to_smallest(image_pair)
+    img1, img2 = cropped_images
     img1_ann, img2_ann = info_list
+
     offset_tup = utils.offset(im1_ann, im2_ann)
     # Note: we use order=1 since default order=3 spline was giving
     # negative values for images (leading to invalid nonsense)
-    return shift(img1, offsets, order=1)
+    return shift(img2, offsets, order=1)
+
+
+def crop_to_smallest(image_list):
+    """Makes all images the smallest dimension so they are alignable
+
+    Args:
+        image_list (iterable[ndarray]): list of images, or 3D array
+            with 1st axis as the image number
+    Returns:
+        list[ndarray]: images of all same size
+
+    Example:
+    >>> a = np.arange(10).reshape((5, 2))
+    >>> b = np.arange(9).reshape((3, 3))
+    >>> cropped = crop_to_smallest((a, b))
+    >>> print(all(img.shape == (3, 2) for img in cropped))
+    True
+    """
+    shapes = np.array([i.shape for i in image_list])
+    min_rows, min_cols = np.min(shapes, axis=0)
+    return [img[:min_rows, :min_cols] for img in image_list]
+
+
+def align_uavsar_images(image_list):
+    uav_files = [insar.parsers.Uavsar(f) for f in image_list]
+    # Align all to first acquisition date
+    sorted_dates = sorted(uav_files, key=lambda x: x.date)
+    # Grab each pair of (earlier date, later date)
+    sorted_pairs = list(itertools.combinations(sorted_dates, 2))
+    for early, late in sorted_pairs:
+        shifted_late = align_image_pair((early, late))
+    return sorted_pairs
 
 
 def make_latlon_grid(grid_info, sparse=False):
