@@ -37,11 +37,8 @@ ELEVATION_EXTS = ['.dem', '.hgt']
 
 # These file types are not simple complex matrices: see load_stacked for detail
 STACKED_FILES = ['.cc', '.unw']
-# real of complex for these depends on the polarization
+# real or complex for these depends on the polarization
 UAVSAR_POL_DEPENDENT = ['.grd', '.mlc']
-REAL_POLS = ('HHHH', 'HVHV', 'VVVV')
-COMPLEX_POLS = ('HHHV', 'HHVV', 'HVVV')
-POLARIZATIONS = REAL_POLS + COMPLEX_POLS
 
 
 def get_file_ext(filename):
@@ -63,10 +60,12 @@ def find_files(directory, search_term):
     Path to file is also included.
 
     Examples:
-        >>> open("afakefile.txt", "w").close()
-        >>> find_files(".", "*.txt")
-        ['./afakefile.txt']
-        >>> os.remove("afakefile.txt")
+    >>> import shutil, tempfile
+    >>> temp_dir = tempfile.mkdtemp()
+    >>> open(os.path.join(temp_dir, "afakefile.txt"), "w").close()
+    >>> print('afakefile.txt' in find_files(temp_dir, "*.txt")[0])
+    True
+    >>> shutil.rmtree(temp_dir)
 
     """
     return glob.glob(os.path.join(directory, search_term))
@@ -367,7 +366,7 @@ def is_complex(filename):
 
     if ext in UAVSAR_POL_DEPENDENT:
         # Check if filename has one of the complex polarizations
-        return any(pol in filename for pol in parser.Uavsar.COMPLEX_POLS)
+        return any(pol in filename for pol in parsers.Uavsar.COMPLEX_POLS)
     else:
         return ext in COMPLEX_EXTS
 

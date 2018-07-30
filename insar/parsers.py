@@ -234,6 +234,10 @@ class Uavsar(Base):
         'version number',
         'downsampling',
     )
+    # Filetype of real or complex depends on the polarization for .grd, .mlc
+    REAL_POLS = ('HHHH', 'HVHV', 'VVVV')
+    COMPLEX_POLS = ('HHHV', 'HHVV', 'HVVV')
+    POLARIZATIONS = REAL_POLS + COMPLEX_POLS
 
     def __str__(self):
         return "{} {} from {}".format(self.__class__.__name__, self.polarization, self.date)
@@ -291,32 +295,28 @@ class Uavsar(Base):
 
         Examples:
         >>> u = Uavsar('brazos_14938_17087_004_170831_L090HHHV_CX_01_ML3X3.grd')
-        >>> print(u._make_ann_filename('brazos.cor'))
-        brazos.ann
-        >>> print(u._make_ann_filename('brazos.1.int'))
-        brazos.ann
-        >>> print(u._make_ann_filename('brazos_090HHHV_CX_01.mlc'))
-        brazos_090_CX_01.ann
-        >>> print(u._make_ann_filename('brazos_090HHVV_CX_01.mlc'))
-        brazos_090_CX_01.ann
-        >>> print(u._make_ann_filename('brazos_090HHVV_CX_01.grd'))
-        brazos_090_CX_01.ann
-        >>> print(u._make_ann_filename('brazos_090HHVV_CX_01_ML5X5.grd'))
-        brazos_090_CX_01_ML5X5.ann
+        >>> print(u.ann_filename)
+        brazos_14938_17087_004_170831_L090_CX_01_ML3X3.ann
+        >>> u = Uavsar('brazos_14938_17087_004_170831_L090_CX_01.int')
+        >>> print(u.ann_filename)
+        brazos_14938_17087_004_170831_L090_CX_01.ann
         """
 
         # The .mlc and .grd files have polarization added to filename, .ann files don't
-        shortname = filename
-        for p in sario.POLARIZATIONS:
+        shortname = self.filename
+        for p in self.POLARIZATIONS:
             shortname = shortname.replace(p, '')
+
+        ext = sario.get_file_ext(shortname)
         # If this is a block we split up and names .1.int, remove that since
         # all have the same .ann file
-
-        # TODO: figure out where to get this list from
-        ext = get_file_ext(filename)
         shortname = re.sub('\.\d' + ext, ext, shortname)
 
         return shortname.replace(ext, '.ann')
+
+    @property
+    def ann_filename(self):
+        return self._make_ann_filename()
 
     def parse_ann_file(self, verbose=False):
         """Returns the requested data from the UAVSAR annotation in ann_filename
@@ -344,7 +344,7 @@ class Uavsar(Base):
         def _make_line_regex(ext, field):
             return r'{}.{}'.format(line_keywords.get(ext), field)
 
-        ext = ext or get_file_ext(self.filename)  # Use what's passed by default
+        ext = ext or sario.get_file_ext(self.filename)  # Use what's passed by default
         ann_filename = _make_ann_filename(self.filename)
         if verbose:
             logger.info("Trying to load ann_data from %s", ann_filename)
