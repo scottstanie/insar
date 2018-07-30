@@ -391,7 +391,6 @@ class Uavsar(Base):
         # Peg position the nadir position of aircraft at middle of datatake
         with open(self.ann_filename, 'r') as f:
             for line in f.readlines():
-                # TODO: disambiguate which ones to use, and when
                 if line.startswith(row_key):
                     ann_data['rows'] = _parse_int(line)
                 elif line.startswith(col_key):
@@ -416,4 +415,5 @@ class Uavsar(Base):
 
         if self.verbose:
             logger.info(pprint.pformat(ann_data))
+
         return ann_data

@@ -459,6 +459,25 @@ def align_uavsar_images(image_list):
     return out_images
 
 
+def make_uavsar_time_diffs(image_list):
+    aligned_images = align_uavsar_images(image_list)
+    # Mask out the zeros so we don't divide by zero
+    masked_images = [np.ma.masked_equal(im, 0) for im in aligned_images]
+    return [db(im / masked_images[0]) for im in masked_images[1:]]
+
+
+def plot_uavsar_time_diffs(image_list):
+    # TODO: move this to diff module/ repo
+    ratio_list = make_uavsar_time_diffs(image_list)
+    from insar.plotting import make_shifted_cmap
+    import matplotlib.pyplot as plt
+    cmaps = [make_shifted_cmap(r, cmap_name='seismic') for r in ratio_list]
+    fig, axes = plt.subplots(1, len(ratio_list))
+    for idx, ratio_im in enumerate(ratio_list):
+        axes_im = axes[idx].imshow(ratio_im, cmap=cmaps[idx])
+        fig.colorbar(axes_im, ax=axes[idx])
+
+
 def make_latlon_grid(grid_info, sparse=False):
     """Takes sizes and spacing info, creates a grid of values
 
