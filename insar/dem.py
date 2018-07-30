@@ -373,7 +373,7 @@ class Downloader:
 
     def _unzip_file(self, filepath):
         """Unzips in place the .hgt files downloaded"""
-        ext = sario.get_file_ext(filepath)
+        ext = utils.get_file_ext(filepath)
         if ext == '.gz':
             unzip_cmd = ['gunzip']
         elif ext == '.zip':

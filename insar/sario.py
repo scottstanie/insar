@@ -13,7 +13,8 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-from insar import parsers
+import insar.parsers
+import insar.utils
 from insar.log import get_log
 logger = get_log()
 
@@ -39,19 +40,6 @@ ELEVATION_EXTS = ['.dem', '.hgt']
 STACKED_FILES = ['.cc', '.unw']
 # real or complex for these depends on the polarization
 UAVSAR_POL_DEPENDENT = ['.grd', '.mlc']
-
-
-def get_file_ext(filename):
-    """Extracts the file extension, including the '.' (e.g.: .slc)
-
-    Examples:
-        >>> print(get_file_ext('radarimage.slc'))
-        .slc
-        >>> print(get_file_ext('unwrapped.lowpass.unw'))
-        .unw
-
-    """
-    return os.path.splitext(filename)[1]
 
 
 def find_files(directory, search_term):
@@ -98,7 +86,7 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
             raise ValueError("{} needs a .rsc file with it for width info.".format(filename))
         return possible_rscs[0]
 
-    ext = get_file_ext(filename)
+    ext = insar.utils.get_file_ext(filename)
     # Elevation and rsc files can be immediately loaded without extra data
     if ext in ELEVATION_EXTS:
         return load_elevation(filename)
@@ -118,7 +106,7 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
 
     # UAVSAR files have an annotation file for metadata
     if not ann_info and not rsc_data and ext in UAVSAR_EXTS:
-        u = parsers.Uavsar(filename, verbose=verbose)
+        u = insar.parsers.Uavsar(filename, verbose=verbose)
         ann_info = u.parse_ann_file()
 
     if ext in STACKED_FILES:
@@ -149,7 +137,7 @@ def load_elevation(filename):
         data = np.clip(data, 0, None), or when plotting, plt.imshow(data, vmin=0)
     """
 
-    ext = get_file_ext(filename)
+    ext = insar.utils.get_file_ext(filename)
     data_type = INT_16_LE if ext == '.dem' else INT_16_BE
     data = np.fromfile(filename, dtype=data_type)
     # Make sure we're working with little endian
@@ -359,14 +347,14 @@ def is_complex(filename):
     Uses https://uavsar.jpl.nasa.gov/science/documents/polsar-format.html for UAVSAR
     Note: differences between 3 polarizations for .mlc files: half real, half complex
     """
-    ext = get_file_ext(filename)
+    ext = insar.utils.get_file_ext(filename)
     if ext not in COMPLEX_EXTS and ext not in REAL_EXTS:
         raise ValueError('Invalid filetype for load_file: %s\n '
                          'Allowed types: %s' % (ext, ' '.join(COMPLEX_EXTS + REAL_EXTS)))
 
     if ext in UAVSAR_POL_DEPENDENT:
         # Check if filename has one of the complex polarizations
-        return any(pol in filename for pol in parsers.Uavsar.COMPLEX_POLS)
+        return any(pol in filename for pol in insar.parsers.Uavsar.COMPLEX_POLS)
     else:
         return ext in COMPLEX_EXTS
 
@@ -401,7 +389,7 @@ def save(filename, array):
         """All UAVSAR data products save in little endian byte order"""
         return sys.byteorder == 'little'
 
-    ext = get_file_ext(filename)
+    ext = insar.utils.get_file_ext(filename)
 
     if ext == '.png':  # TODO: or ext == '.jpg':
         # from PIL import Image

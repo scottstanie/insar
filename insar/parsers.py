@@ -6,7 +6,7 @@ import os
 import re
 import pprint
 from datetime import datetime
-import insar.sario
+import insar.utils
 from insar.log import get_log
 logger = get_log()
 
@@ -317,7 +317,7 @@ class Uavsar(Base):
         for p in self.POLARIZATIONS:
             shortname = shortname.replace(p, '')
 
-        ext = insar.sario.get_file_ext(shortname)
+        ext = insar.utils.get_file_ext(shortname)
         # If this is a block we split up and names .1.int, remove that since
         # all have the same .ann file
         shortname = re.sub('\.\d' + ext, ext, shortname)
@@ -326,7 +326,17 @@ class Uavsar(Base):
 
     @property
     def ann_filename(self):
+        """The name of the corresponding .ann file"""
         return self._make_ann_filename()
+
+    @property
+    def ann_data(self):
+        """The dict of ann data for a file
+
+        Note: This will try to read the file, so it must exist
+        (i.e. can't just pass a valid string filename without a file)
+        """
+        return self.parse_ann_file()
 
     def parse_ann_file(self):
         """Returns the requested data from the UAVSAR annotation in ann_filename
@@ -353,7 +363,7 @@ class Uavsar(Base):
         def _make_line_regex(ext, field):
             return r'{}.{}'.format(line_keywords.get(ext), field)
 
-        ext = insar.sario.get_file_ext(self.filename)
+        ext = insar.utils.get_file_ext(self.filename)
         if self.verbose:
             logger.info("Trying to load ann_data from %s", self.ann_filename)
         if not os.path.exists(self.ann_filename):
