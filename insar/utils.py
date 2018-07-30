@@ -21,6 +21,19 @@ from insar.log import get_log, log_runtime
 logger = get_log()
 
 
+def get_file_ext(filename):
+    """Extracts the file extension, including the '.' (e.g.: .slc)
+
+    Examples:
+        >>> print(get_file_ext('radarimage.slc'))
+        .slc
+        >>> print(get_file_ext('unwrapped.lowpass.unw'))
+        .unw
+
+    """
+    return os.path.splitext(filename)[1]
+
+
 def mkdir_p(path):
     """Emulates bash `mkdir -p`, in python style
     Used for igrams directory creation
@@ -393,10 +406,10 @@ def align_image_pair(image_pair, info_list):
     img1, img2 = cropped_images
     img1_ann, img2_ann = info_list
 
-    offset_tup = utils.offset(im1_ann, im2_ann)
+    offset_tup = offset(img1_ann, img2_ann)
     # Note: we use order=1 since default order=3 spline was giving
     # negative values for images (leading to invalid nonsense)
-    return shift(img2, offsets, order=1)
+    return shift(img2, offset_tup, order=1)
 
 
 def crop_to_smallest(image_list):
@@ -421,14 +434,29 @@ def crop_to_smallest(image_list):
 
 
 def align_uavsar_images(image_list):
+    """Aligns stack of images to first
+
+    Args:
+        image_list (list[str]): list of names of files from different dates
+            over same acquisition area
+    """
     uav_files = [insar.parsers.Uavsar(f) for f in image_list]
     # Align all to first acquisition date
-    sorted_dates = sorted(uav_files, key=lambda x: x.date)
+    sorted_by_date = sorted(uav_files, key=lambda x: x.date)
+    # IF WE WANT ALL POSSIBLE PAIRS:
     # Grab each pair of (earlier date, later date)
-    sorted_pairs = list(itertools.combinations(sorted_dates, 2))
-    for early, late in sorted_pairs:
-        shifted_late = align_image_pair((early, late))
-    return sorted_pairs
+    # sorted_pairs = list(itertools.combinations(sorted_by_date, 2))
+    loaded_imgs = [insar.sario.load(u.filename) for u in sorted_by_date]
+    loaded_imgs = crop_to_smallest(loaded_imgs)
+
+    first_ann = sorted_by_date[0].ann_data
+    first_img = loaded_imgs[0]
+    # Align all subsequent images to first
+    out_images = [first_img]
+    for uavsar, img in zip(sorted_by_date[1:], loaded_imgs[1:]):
+        shifted_late = align_image_pair((first_img, img), (first_ann, uavsar.ann_data))
+        out_images.append(shifted_late)
+    return out_images
 
 
 def make_latlon_grid(grid_info, sparse=False):
