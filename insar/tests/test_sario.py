@@ -128,8 +128,6 @@ class TestLoading(unittest.TestCase):
             sario.save(grdfile, np.array([[1, 2], [3, 4]]).astype(sario.FLOAT_32_LE))
 
             annfile = os.path.join(temp_dir, 'brazos_14937_17090_017_170903_L090_CX_01_ML5X5.ann')
-            print("TEST: ")
-            print(annfile)
             with open(annfile, 'w') as f:
                 f.write("grd_mag.set_rows (pixels) = 2 ; ground range data lines\n")
                 f.write("grd_mag.set_cols (pixels) = 2 ; ground range data samples\n")

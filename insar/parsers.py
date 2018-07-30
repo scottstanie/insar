@@ -6,7 +6,7 @@ import os
 import re
 import pprint
 from datetime import datetime
-from insar import sario
+import insar.sario
 from insar.log import get_log
 logger = get_log()
 
@@ -317,7 +317,7 @@ class Uavsar(Base):
         for p in self.POLARIZATIONS:
             shortname = shortname.replace(p, '')
 
-        ext = sario.get_file_ext(shortname)
+        ext = insar.sario.get_file_ext(shortname)
         # If this is a block we split up and names .1.int, remove that since
         # all have the same .ann file
         shortname = re.sub('\.\d' + ext, ext, shortname)
@@ -353,7 +353,7 @@ class Uavsar(Base):
         def _make_line_regex(ext, field):
             return r'{}.{}'.format(line_keywords.get(ext), field)
 
-        ext = sario.get_file_ext(self.filename)
+        ext = insar.sario.get_file_ext(self.filename)
         if self.verbose:
             logger.info("Trying to load ann_data from %s", self.ann_filename)
         if not os.path.exists(self.ann_filename):
@@ -382,13 +382,9 @@ class Uavsar(Base):
         with open(self.ann_filename, 'r') as f:
             for line in f.readlines():
                 # TODO: disambiguate which ones to use, and when
-                print('LINE!!', line)
-                print('row key', row_key)
                 if line.startswith(row_key):
-                    print('ROW!')
                     ann_data['rows'] = _parse_int(line)
                 elif line.startswith(col_key):
-                    print('COL!')
                     ann_data['cols'] = _parse_int(line)
                 # Center Latitude of Upper Left Pixel of GRD image, or
                 # range Offset(R0) from Peg in meters
