@@ -207,8 +207,8 @@ def split_and_save(filename):
     ext = insar.sario.get_file_ext(filename)
     newpaths = []
 
-    for idx, block in enumerate(blocks, start=1):
-        fname = filename.replace(ext, ".{}{}".format(str(idx), ext))
+    for ix_step, block in enumerate(blocks, start=1):
+        fname = filename.replace(ext, ".{}{}".format(str(ix_step), ext))
         print("Saving {}".format(fname))
         insar.sario.save(fname, block)
         newpaths.append(fname)
@@ -441,28 +441,22 @@ def crop_to_smallest(image_list):
     return [img[:min_rows, :min_cols] for img in image_list]
 
 
-def _extract_grid_info(grid_info):
-    """Get values of interest from dict for the latlon grid functions
-
-    Args:
-        grid_info (dict): containing keys 'rows', 'cols', x,y_step, x,y_first
-    Returns:
-        tuple[numeric]
-    """
-    nx = grid_info['cols']
-    ny = grid_info['rows']
-    dx = grid_info['x_step']
-    dy = grid_info['y_step']
-    x0 = grid_info['x_first']
-    y0 = grid_info['y_first']
-    return nx, ny, dx, dy, x0, y0
-
-
-def latlon_grid(grid_info, sparse=False):
+def latlon_grid(rows=None,
+                cols=None,
+                y_step=None,
+                x_step=None,
+                y_first=None,
+                x_first=None,
+                sparse=False):
     """Takes sizes and spacing info, creates a grid of values
 
     Args:
-        grid_info (dict): containing keys 'rows', 'cols', x,y_step, x,y_first
+        rows (int): number of rows
+        cols (int): number of cols
+        y_step (float): spacing between rows
+        x_step (float): spacing between cols
+        y_first (float): starting location of first row at top
+        x_first (float): starting location of first col on left
         sparse (bool): Optional (default False). Passed through to
             np.meshgrid to optionally conserve memory
 
@@ -470,8 +464,8 @@ def latlon_grid(grid_info, sparse=False):
         tuple[ndarray, ndarray]: the XX, YY grids of longitudes and lats
 
     Examples:
-    >>> fake_info = {'cols': 2, 'rows': 3, 'x_first': -155.0, 'x_step': 0.01, 'y_first': 19.5, 'y_step': -0.2}
-    >>> lons, lats = latlon_grid(fake_info)
+    >>> test_grid_data = {'cols': 2, 'rows': 3, 'x_first': -155.0, 'x_step': 0.01, 'y_first': 19.5, 'y_step': -0.2}
+    >>> lons, lats = latlon_grid(**test_grid_data)
     >>> lons
     array([[-155.  , -154.99],
            [-155.  , -154.99],
@@ -481,33 +475,34 @@ def latlon_grid(grid_info, sparse=False):
            [19.3, 19.3],
            [19.1, 19.1]])
     """
-    nx, ny, dx, dy, x0, y0 = _extract_grid_info(grid_info)
+    cols, rows, x_step, y_step, x_first, y_first = _extract_grid_info(grid_info)
     # grid = np.empty((grid_info['rows'], grid_info['cols']))
-    x = np.linspace(x0, x0 + (nx - 1) * dx, nx).reshape((1, nx))
-    y = np.linspace(y0, y0 + (ny - 1) * dy, ny).reshape((ny, 1))
+    x = np.linspace(x_first, x_first + (cols - 1) * x_step, cols).reshape((1, cols))
+    y = np.linspace(y_first, y_first + (rows - 1) * y_step, rows).reshape((rows, 1))
     return np.meshgrid(x, y, sparse=sparse)
 
 
-def latlon_grid_extent(grid_info):
+def latlon_grid_extent(rows=None, cols=None, y_step=None, x_step=None, y_first=None, x_first=None):
     """Takes sizes and spacing info, finds boundaries
 
     Used for `matplotlib.pyplot.imshow` keyword arg `extent`:
     extent : scalars (left, right, bottom, top)
 
     Args:
-        grid_info (dict): containing following keys: rows, cols,
-            x_step, y_step, x_first, y_first
-        sparse (bool): Optional (default False). Passed through to
-            np.meshgrid to optionally conserve memory
+        rows (int): number of rows
+        cols (int): number of cols
+        y_step (float): spacing between rows
+        x_step (float): spacing between cols
+        y_first (float): starting location of first row at top
+        x_first (float): starting location of first col on left
 
     Returns:
         tuple[float]: the boundaries of the latlon grid in order:
         (lon_left,lon_right,lat_bottom,lat_top)
 
     Examples:
-    >>> fake_info = {'cols': 2, 'rows': 3, 'x_first': -155.0, 'x_step': 0.01, 'y_first': 19.5, 'y_step': -0.2}
-    >>> print(latlon_grid_extent(fake_info))
+    >>> test_grid_data = {'cols': 2, 'rows': 3, 'x_first': -155.0, 'x_step': 0.01, 'y_first': 19.5, 'y_step': -0.2}
+    >>> print(latlon_grid_extent(**test_grid_data))
     (-155.0, -154.99, 19.1, 19.5)
     """
-    nx, ny, dx, dy, x0, y0 = _extract_grid_info(grid_info)
-    return (x0, x0 + dx * (nx - 1), y0 + dy * (ny - 1), y0)
+    return (x_first, x_first + x_step * (cols - 1), y_first + y_step * (rows - 1), y_first)
