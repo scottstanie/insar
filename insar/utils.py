@@ -475,7 +475,6 @@ def latlon_grid(rows=None,
            [19.3, 19.3],
            [19.1, 19.1]])
     """
-    cols, rows, x_step, y_step, x_first, y_first = _extract_grid_info(grid_info)
     # grid = np.empty((grid_info['rows'], grid_info['cols']))
     x = np.linspace(x_first, x_first + (cols - 1) * x_step, cols).reshape((1, cols))
     y = np.linspace(y_first, y_first + (rows - 1) * y_step, rows).reshape((rows, 1))
