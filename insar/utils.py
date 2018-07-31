@@ -396,7 +396,7 @@ def offset(img_info1, img_info2, axis=None):
         return output_tuple[axis]
 
 
-def align_image_pair(image_pair, info_list):
+def align_image_pair(image_pair, info_list, verbose=True):
     """Takes two images, shifts the second to align with the first
 
     Args:
@@ -413,6 +413,8 @@ def align_image_pair(image_pair, info_list):
     img1_ann, img2_ann = info_list
 
     offset_tup = offset(img1_ann, img2_ann)
+    if verbose:
+        logger.info("Offset (rows, cols): {}".format(offset_tup))
     # Note: we use order=1 since default order=3 spline was giving
     # negative values for images (leading to invalid nonsense)
     return shift(img2, offset_tup, order=1)
@@ -439,11 +441,28 @@ def crop_to_smallest(image_list):
     return [img[:min_rows, :min_cols] for img in image_list]
 
 
-def make_latlon_grid(grid_info, sparse=False):
+def _extract_grid_info(grid_info):
+    """Get values of interest from dict for the latlon grid functions
+
+    Args:
+        grid_info (dict): containing keys 'rows', 'cols', x,y_step, x,y_first
+    Returns:
+        tuple[numeric]
+    """
+    nx = grid_info['cols']
+    ny = grid_info['rows']
+    dx = grid_info['x_step']
+    dy = grid_info['y_step']
+    x0 = grid_info['x_first']
+    y0 = grid_info['y_first']
+    return nx, ny, dx, dy, x0, y0
+
+
+def latlon_grid(grid_info, sparse=False):
     """Takes sizes and spacing info, creates a grid of values
 
     Args:
-        grid_info (dict): contains 'rows', 'cols', x,y_step, x,y_first
+        grid_info (dict): containing keys 'rows', 'cols', x,y_step, x,y_first
         sparse (bool): Optional (default False). Passed through to
             np.meshgrid to optionally conserve memory
 
@@ -452,7 +471,7 @@ def make_latlon_grid(grid_info, sparse=False):
 
     Examples:
     >>> fake_info = {'cols': 2, 'rows': 3, 'x_first': -155.0, 'x_step': 0.01, 'y_first': 19.5, 'y_step': -0.2}
-    >>> lons, lats = make_latlon_grid(fake_info)
+    >>> lons, lats = latlon_grid(fake_info)
     >>> lons
     array([[-155.  , -154.99],
            [-155.  , -154.99],
@@ -461,16 +480,34 @@ def make_latlon_grid(grid_info, sparse=False):
     array([[19.5, 19.5],
            [19.3, 19.3],
            [19.1, 19.1]])
-
-
     """
-    nx = grid_info['cols']
-    ny = grid_info['rows']
-    dx = grid_info['x_step']
-    dy = grid_info['y_step']
-    x0 = grid_info['x_first']
-    y0 = grid_info['y_first']
+    nx, ny, dx, dy, x0, y0 = _extract_grid_info(grid_info)
     # grid = np.empty((grid_info['rows'], grid_info['cols']))
     x = np.linspace(x0, x0 + (nx - 1) * dx, nx).reshape((1, nx))
     y = np.linspace(y0, y0 + (ny - 1) * dy, ny).reshape((ny, 1))
     return np.meshgrid(x, y, sparse=sparse)
+
+
+def latlon_grid_extent(grid_info):
+    """Takes sizes and spacing info, finds boundaries
+
+    Used for `matplotlib.pyplot.imshow` keyword arg `extent`:
+    extent : scalars (left, right, bottom, top)
+
+    Args:
+        grid_info (dict): containing following keys: rows, cols,
+            x_step, y_step, x_first, y_first
+        sparse (bool): Optional (default False). Passed through to
+            np.meshgrid to optionally conserve memory
+
+    Returns:
+        tuple[float]: the boundaries of the latlon grid in order:
+        (lon_left,lon_right,lat_bottom,lat_top)
+
+    Examples:
+    >>> fake_info = {'cols': 2, 'rows': 3, 'x_first': -155.0, 'x_step': 0.01, 'y_first': 19.5, 'y_step': -0.2}
+    >>> print(latlon_grid_extent(fake_info))
+    (-155.0, -154.99, 19.1, 19.5)
+    """
+    nx, ny, dx, dy, x0, y0 = _extract_grid_info(grid_info)
+    return (x0, x0 + dx * (nx - 1), y0 + dy * (ny - 1), y0)
