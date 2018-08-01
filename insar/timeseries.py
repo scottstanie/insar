@@ -643,6 +643,10 @@ def find_vertical_def(asc_los_file, desc_los_file, asc_deform_path, desc_deform_
     asc_dem_rsc = sario.load_dem_rsc(os.path.join(asc_deform_path, 'dem.rsc'))
     desc_dem_rsc = sario.load_dem_rsc(os.path.join(desc_deform_path, 'dem.rsc'))
 
+    # TODO: change deformation.npy rows/cols into lat/lon coordinates
+    # Note that we only need this if we are using different LOS vecs at different coordinates
+    # Otherwise, call the function to make the file for the specific lat/lon here
+
     enu_asc = np.array(utils.convert_xyz_latlon_to_enu())[0]
     enu_desc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(desc_los_file)))[0]
     eu_asc = enu_asc[::2]

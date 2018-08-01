@@ -184,9 +184,12 @@ def clean_files(ext, path=".", zero_threshold=0.50, test=True):
 def rowcol_to_latlon(row, col, rsc_data=None):
     """ Takes the row, col of a pixel and finds its lat/lon
 
+    Can also pass numpy arrays of row, col.
+    row, col must match size
+
     Args:
-        row (int): row number
-        col (int): col number
+        row (int or ndarray): row number
+        col (int or ndarray): col number
         rsc_data (dict): data output from sario.load_dem_rsc
 
     Returns:
