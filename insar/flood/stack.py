@@ -24,14 +24,14 @@ def align_uavsar_images(image_list):
     # Grab each pair of (earlier date, later date)
     # sorted_pairs = list(itertools.combinations(sorted_by_date, 2))
     loaded_imgs = [insar.sario.load(u.filename) for u in sorted_by_date]
-    loaded_imgs = insar.utils.crop_to_smallest(loaded_imgs)
+    loaded_imgs = utils.crop_to_smallest(loaded_imgs)
 
     first_ann = sorted_by_date[0].ann_data
     first_img = loaded_imgs[0]
     # Align all subsequent images to first
     out_images = [first_img]
     for uavsar, img in zip(sorted_by_date[1:], loaded_imgs[1:]):
-        shifted_late = insar.utils.align_image_pair((first_img, img), (first_ann, uavsar.ann_data))
+        shifted_late = utils.align_image_pair((first_img, img), (first_ann, uavsar.ann_data))
         out_images.append(shifted_late)
     return out_images
 
@@ -39,8 +39,8 @@ def align_uavsar_images(image_list):
 def make_uavsar_time_diffs(image_list):
     aligned_images = align_uavsar_images(image_list)
     # Mask out the zeros so we don't divide by zero
-    masked_images = [np.ma.masked_equal(im, 0) for im in aligned_images]
-    return [insar.utils.db(im / masked_images[0]) for im in masked_images[1:]]
+    masked_images = [utils.mask_zeros(im) for im in aligned_images]
+    return [utils.db(im / masked_images[0]) for im in masked_images[1:]]
 
 
 def plot_uavsar_time_diffs(image_list):
@@ -67,13 +67,13 @@ def overlay(under_image, over_image, under_image_info=None, ax=None, alpha=0.5):
     if not ax:
         fig, ax = plt.subplots(1, 1)
     if under_image_info:
-        under_extent = insar.utils.latlon_grid_extent(**under_image_info)
-        xlabel, ylabel = 'longitude', 'latitude'
+        under_extent = utils.latlon_grid_extent(**under_image_info)
+        xlabel, ylabel = 'Longitude', 'Latitude'
         # Now get extent of under image, which mage be different due to crop
         over_image_info = copy(under_image_info)
         over_image_info['rows'] = over_image.shape[0]
         over_image_info['cols'] = over_image.shape[1]
-        over_extent = insar.utils.latlon_grid_extent(**over_image_info)
+        over_extent = utils.latlon_grid_extent(**over_image_info)
     else:
         # No lat/lon provided: jsut use row, col, no extend arg
         xlabel, ylabel = 'col number', 'row number'

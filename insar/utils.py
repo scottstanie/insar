@@ -114,6 +114,11 @@ def mag(db_image):
     return 10**(db_image / 20)
 
 
+def mask_zeros(image):
+    """Turn image into masked array, 0s masked"""
+    return np.ma.masked_equal(image, 0)
+
+
 def percent_zero(filepath=None, arr=None):
     """Function to give the percentage of a file that is exactly zero
 
