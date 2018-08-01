@@ -12,6 +12,7 @@ except ImportError:
     print("pip install scikit-image")
     pass
 from insar.log import get_log
+from insar import utils
 
 logger = get_log()
 
@@ -128,30 +129,6 @@ def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=N
         plt.show()
 
 
-def rowcol_to_latlon(row, col, rsc_data=None):
-    """ Takes the row, col of a pixel and finds its lat/lon
-
-    Args:
-        row (int): row number
-        col (int): col number
-        rsc_data (dict): data output from sario.load_dem_rsc
-
-    Returns:
-        tuple[float, float]: lat, lon for the pixel
-
-    Example:
-        >>> rsc_data = {"X_FIRST": 1.0, "Y_FIRST": 2.0, "X_STEP": 0.2, "Y_STEP": -0.1}
-        >>> rowcol_to_latlon(7, 3, rsc_data)
-        (1.4, 1.4)
-    """
-    start_lon = rsc_data["X_FIRST"]
-    start_lat = rsc_data["Y_FIRST"]
-    lon_step, lat_step = rsc_data["X_STEP"], rsc_data["Y_STEP"]
-    lat = start_lat + (row - 1) * lat_step
-    lon = start_lon + (col - 1) * lon_step
-    return lat, lon
-
-
 def view_stack(stack,
                geolist=None,
                display_img=-1,
@@ -229,7 +206,7 @@ def view_stack(stack,
             return
 
         if lat_lon:
-            lat, lon = rowcol_to_latlon(row, col, rsc_data)
+            lat, lon = utils.rowcol_to_latlon(row, col, rsc_data)
             legend_entries.append('Lat {:.3f}, Lon {:.3f}'.format(lat, lon))
         else:
             legend_entries.append('Row %s, Col %s' % (row, col))
