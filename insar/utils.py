@@ -10,9 +10,9 @@ import errno
 import os
 import shutil
 import numpy as np
+from numpy import deg2rad
 from scipy.ndimage.interpolation import shift
 import multiprocessing as mp
-import itertools
 
 import insar.sario
 import insar.parsers
@@ -179,6 +179,30 @@ def clean_files(ext, path=".", zero_threshold=0.50, test=True):
     # Now ask for results so processes launch
     [res.get() for res in results]
     pool.close()
+
+
+def rowcol_to_latlon(row, col, rsc_data=None):
+    """ Takes the row, col of a pixel and finds its lat/lon
+
+    Args:
+        row (int): row number
+        col (int): col number
+        rsc_data (dict): data output from sario.load_dem_rsc
+
+    Returns:
+        tuple[float, float]: lat, lon for the pixel
+
+    Example:
+        >>> rsc_data = {"X_FIRST": 1.0, "Y_FIRST": 2.0, "X_STEP": 0.2, "Y_STEP": -0.1}
+        >>> rowcol_to_latlon(7, 3, rsc_data)
+        (1.4, 1.4)
+    """
+    start_lon = rsc_data["X_FIRST"]
+    start_lat = rsc_data["Y_FIRST"]
+    lon_step, lat_step = rsc_data["X_STEP"], rsc_data["Y_STEP"]
+    lat = start_lat + (row - 1) * lat_step
+    lon = start_lon + (col - 1) * lon_step
+    return lat, lon
 
 
 def split_array_into_blocks(data):
@@ -509,3 +533,75 @@ def latlon_grid_extent(rows=None, cols=None, y_step=None, x_step=None, y_first=N
     (-155.0, -154.99, 19.1, 19.5)
     """
     return (x_first, x_first + x_step * (cols - 1), y_first + y_step * (rows - 1), y_first)
+
+
+def rotate_xyz_to_enu(xyz, lat, lon):
+    """Rotates a vector in XYZ coords to ENU
+
+    Args:
+        xyz (list[float], ndarray[float]): length 3 x, y, z coordinates
+        lat (float): latitude of point to rotate into
+        lon (float): longitude of point to rotate into
+    """
+    # Rotate about axis 3 with longitude, then axis 1 with latitude
+    R3 = rot(90 + lon, 3)
+    R1 = rot(90 - lat, 1)
+    R = np.matmul(R3, R1)
+    return np.matmul(R, xyz)
+
+
+def rot(angle, axis):
+    """
+    Find a 3x3 euler rotation matrix given an angle and axis.
+
+    Rotation matrix used for rotating a vector about a single axis.
+
+    Args:
+        angle (float): angle in degrees to rotate
+        axis (int): 1, 2 or 3
+    """
+    R = np.eye(3)
+    cang = cos(deg2rad(angle))
+    sang = sin(deg2rad(angle))
+    if (axis == 1):
+        R[1, 1] = cang
+        R[2, 2] = cang
+        R[1, 2] = sang
+        R[2, 1] = -sang
+    elif (axis == 2):
+        R[0, 0] = cang
+        R[2, 2] = cang
+        R[0, 2] = -sang
+        R[2, 0] = sang
+    elif (axis == 3):
+        R[0, 0] = cang
+        R[1, 1] = cang
+        R[1, 0] = -sang
+        R[0, 1] = sang
+    else:
+        raise ValueError("axis must be 1, 2 or 2")
+    return R
+
+
+def read_los_output(los_file):
+    """Reads file of x,y,z positions, parses for lat/lon and vectors
+
+    Example line:
+     19.0  -155.0
+        0.94451263868681301      -0.30776088245682498      -0.11480032487005554
+         35999       35999
+    """
+
+    def _line_to_floats(line, split_char=None):
+        return tuple(map(float, line.split(split_char)))
+
+    with open(los_file) as f:
+        los_lines = f.read().splitlines()
+
+    lat_lon_list = [_line_to_floats(line) for line in los_lines[::3]]
+    xyz_list = [_line_to_floats(line) for line in los_lines[1::3]]
+    return lat_lon_list, xyz_list
+
+
+def convert_xyz_latlon_to_enu(lat_lons, xyz_array):
+    return [rotate_xyz_to_enu(xyz, lat, lon) for (lat, lon), xyz in zip(lat_lons, xyz_array)]
