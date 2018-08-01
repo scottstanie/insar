@@ -64,6 +64,9 @@ def download_eofs(orbit_dts, missions=None, save_dir="."):
     if not missions:
         missions = itertools.repeat(None)
 
+    # First make sures all are datetimes if given string
+    orbit_dts = [parse(dt) if isinstance(dt, str) else dt for dt in orbit_dts]
+
     # Download and save all links in parallel
     pool = ThreadPool(processes=MAX_WORKERS)
     result_dt_dict = {
@@ -88,10 +91,6 @@ def eof_list(start_date):
     Raises:
         ValueError: if start_date returns no results
     """
-    # First make sures it's a datetime if given string
-    if isinstance(start_date, str):
-        start_date = parse(start_date)
-
     url = BASE_URL.format(
         start_date=start_date.strftime(DATE_FMT),
         stop_date=(start_date + timedelta(days=1)).strftime(DATE_FMT),
@@ -128,7 +127,8 @@ def _download_and_write(mission, dt, save_dir="."):
     if mission:
         cur_links = [link for link in cur_links if mission in link]
 
-    assert len(cur_links) < 2
+    # There should be a max of 2
+    assert len(cur_links) <= 2, "Too many links found for {}: {}".format(dt, cur_links)
     for link in cur_links:
         fname = os.path.join(save_dir, link.split('/')[-1])
         if os.path.isfile(fname):

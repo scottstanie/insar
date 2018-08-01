@@ -28,7 +28,7 @@ def cli(ctx, verbose, path):
 
 # COMMAND: DOWNLOAD
 @cli.command()
-@click.option("--date", "-r", help="Validity date for EOF to download")
+@click.option("--date", "-d", help="Validity date for EOF to download")
 @click.option(
     "--mission",
     "-m",

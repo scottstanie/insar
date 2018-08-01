@@ -1,6 +1,6 @@
 from copy import copy
 import numpy as np
-import insar
+from insar import utils, sario, parsers
 from insar.plotting import make_shifted_cmap
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
@@ -17,13 +17,13 @@ def align_uavsar_images(image_list):
         image_list (list[str]): list of names of files from different dates
             over same acquisition area
     """
-    uav_files = [insar.parsers.Uavsar(f) for f in image_list]
+    uav_files = [parsers.Uavsar(f) for f in image_list]
     # Align all to first acquisition date
     sorted_by_date = sorted(uav_files, key=lambda x: x.date)
     # IF WE WANT ALL POSSIBLE PAIRS:
     # Grab each pair of (earlier date, later date)
     # sorted_pairs = list(itertools.combinations(sorted_by_date, 2))
-    loaded_imgs = [insar.sario.load(u.filename) for u in sorted_by_date]
+    loaded_imgs = [sario.load(u.filename) for u in sorted_by_date]
     loaded_imgs = utils.crop_to_smallest(loaded_imgs)
 
     first_ann = sorted_by_date[0].ann_data
