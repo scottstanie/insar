@@ -8,7 +8,6 @@ import glob
 import math
 import os
 import pprint
-import re
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
