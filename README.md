@@ -18,7 +18,10 @@ This will put the executable `insar` on your path with several commands availabl
 Or for development use (to change code and have it be reflected in what is installed):
 
 ```bash
-mkvirtualenv insar
+# Optional for using virtualenv
+virtualenv ~/envs/insar && source ~/envs/insar/bin/activate  # Or wherever you store your virtual envs
+# Or if you have virtualenv wrapper: mkvirtualenv insar
+
 git clone https://github.com/scottstanie/insar.git
 cd insar
 make build     # which runs python setup.py build_ext --inplace for the cython extension
