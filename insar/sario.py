@@ -58,13 +58,15 @@ def find_files(directory, search_term):
     return glob.glob(os.path.join(directory, search_term))
 
 
-def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
+def load_file(filename, downsample=None, rsc_file=None, ann_info=None, verbose=False):
     """Examines file type for real/complex and runs appropriate load
 
     Args:
         filename (str): path to the file to open
         rsc_file (str): path to a dem.rsc file (if Sentinel)
         ann_info (dict): data parsed from annotation file (UAVSAR)
+        downsample (int): rate at which to downsample the file
+            None is equivalent to 1, no downsampling.
         verbose (bool): print extra logging info while loading files
 
     Returns:
@@ -86,10 +88,15 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
             raise ValueError("{} needs a .rsc file with it for width info.".format(filename))
         return possible_rscs[0]
 
+    if downsample and (downsample < 1 or not isinstance(downsample, int)):
+        raise ValueError("downsample must be a positive integer")
+    else:
+        downsample = downsample or 1
+
     ext = insar.utils.get_file_ext(filename)
     # Elevation and rsc files can be immediately loaded without extra data
     if ext in ELEVATION_EXTS:
-        return load_elevation(filename)
+        return load_elevation(filename)[::downsample, ::downsample]
     elif ext == '.rsc':
         return load_dem_rsc(filename)
 
@@ -110,12 +117,13 @@ def load_file(filename, rsc_file=None, ann_info=None, verbose=False):
         ann_info = u.parse_ann_file()
 
     if ext in STACKED_FILES:
-        return load_stacked(filename, rsc_data)
+        return load_stacked(filename, rsc_data)[::downsample, ::downsample]
     # having rsc_data implies that this is not a UAVSAR file, so is complex
     elif rsc_data or is_complex(filename):
-        return load_complex(filename, ann_info=ann_info, rsc_data=rsc_data)
+        return load_complex(
+            filename, ann_info=ann_info, rsc_data=rsc_data)[::downsample, ::downsample]
     else:
-        return load_real(filename, ann_info=ann_info, rsc_data=rsc_data)
+        return load_real(filename, ann_info=ann_info, rsc_data=rsc_data)[::downsample, ::downsample]
 
 
 # Make a shorter alias for load_file
