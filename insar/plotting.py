@@ -222,6 +222,15 @@ def view_stack(stack,
     plt.show(block=True)
 
 
+def equalize_and_mask(image, low=1e-6, high=2, fill_value=np.inf, db=True):
+    """Clips an image to increase contrast"""
+    # Mask the invalids, then mask zeros, then clip rest
+    im = np.clip(utils.mask_zeros(np.ma.masked_invalid(image)), low, high)
+    if fill_value:
+        im.set_fill_value(fill_value)
+    return utils.db(im) if db else im
+
+
 def find_blobs(image, blob_func='blob_log', **kwargs):
     """Use skimage to find blobs in image
 

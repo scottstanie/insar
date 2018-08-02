@@ -1,9 +1,10 @@
 from copy import copy
 import numpy as np
-from insar import utils, sario, parsers
+from insar import utils, sario, parsers, plotting
 from insar.plotting import make_shifted_cmap
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes, mark_inset
 
 # Used for a red mask overlaid on other image
 colors = [(1, 0, 0, c) for c in np.linspace(0, 1, 100)]
@@ -57,7 +58,7 @@ def plot_uavsar_time_diffs(image_list):
     return ratio_list, fig, axes
 
 
-def overlay(under_image, over_image, under_image_info=None, ax=None, alpha=0.5):
+def overlay(under_image, over_image, under_image_info=None, ax=None, alpha=0.5, title=''):
     """Plots two images, one under, one transparent over
 
     under_image will be cmap=gray, over_image with shifted cmap, default=seismic
@@ -70,6 +71,7 @@ def overlay(under_image, over_image, under_image_info=None, ax=None, alpha=0.5):
     """
     if not ax:
         fig, ax = plt.subplots(1, 1)
+
     if under_image_info:
         under_extent = utils.latlon_grid_extent(**under_image_info)
         xlabel, ylabel = 'Longitude', 'Latitude'
@@ -91,36 +93,72 @@ def overlay(under_image, over_image, under_image_info=None, ax=None, alpha=0.5):
     ax.set_ylabel(ylabel)
     cmap = make_shifted_cmap(over_image, cmap_name='seismic')
     ax.imshow(over_image, cmap=cmap, alpha=0.5, extent=over_extent)
-    return ax, over_extent
+    ax.set_title(title)
+    return ax, under_extent, over_extent
 
 
-def zoomed_box(image, bbox, zoom=500, loc='upper right'):
+def zoomed_box(under,
+               over,
+               zoom_bbox,
+               ax=None,
+               under_image_info=None,
+               cmap='gray',
+               zoom=500,
+               loc='upper right',
+               title=''):
     """
     Args:
-        bbox (tuple): (left, bottom, width, height)
-    """
-    x0, y0 = 500, 1000
-    axins = zoomed_inset_axes(ax, zoom, loc=loc)
+        zoom_bbox (tuple): (left, bottom, width, height)
 
+    Notes:
+        locations: 1, 2, 3, 4 = 'upper right', 'upper left', 'lower left', 'lower right'
+    """
     # TODO: how to recreate this with multiple imshow steps??
     # Ideally pass in the axins
-    ax, extent = stack.overlay(under, rlist[0])
-    axins = zoomed_inset_axes(ax, zoom, loc='upper right')
+    ax, under_extent, over_extent = overlay(
+        under, over, under_image_info=under_image_info, ax=ax, title=title)
+    # ax.imshow(under, cmap='gray')
+    # ax.imshow(over, cmap=cmap, alpha=0.5)
+    axins = zoomed_inset_axes(ax, zoom, loc=loc)
 
-    axins.imshow(image)
-    # axins.imshow(under, cmap='gray')
-    # axins.imshow(rlist[0], cmap=cmap, alpha=0.5)
+    # To zoom, we plot the whole thing again, then change axis limits
+    print(under_extent)
+    print(over_extent)
+    plt.show(block=False)
+    import pdb
+    pdb.set_trace()
 
-    x0, y0, width, height
+    axins.imshow(under, cmap='gray', extent=under_extent)
+    axins.imshow(over, cmap=cmap, alpha=0.5, extent=over_extent)
+
+    print(zoom_bbox)
+    x0, y0, width, height = zoom_bbox
     axins.set_xlim(x0, x0 + width)
     axins.set_ylim(y0 + height, y0)
 
     # TODO: making this pick locations based on 'loc'?
-    # fc = facecolor, ec = edgecolor
+    # Note: fc = facecolor, ec = edgecolor
     _patch, pp1, pp2 = mark_inset(ax, axins, loc1=3, loc2=1, fc="none", ec="0.5")
-    # For inverted axes (in image), must flip manually
+    # Hack for inverted axes (in image), must flip manually
     # https://stackoverflow.com/a/48987903/4174466
     pp1.loc1, pp1.loc2 = 2, 3
-    pp2.loc1, pp2.loc2 = 4, 1
+    pp2.loc1, pp2.loc2 = 3, 2
+
     plt.draw()
-    return axins
+    plt.show(block=True)
+    return ax, axins, pp1, pp2
+
+
+def demo_zoom():
+    import glob
+    hhfiles = glob.glob("/home/scott/Documents/Learning/research/uav-sar-data/grd/*14937*HHHH*.grd")
+    ratio_list = make_uavsar_time_diffs(hhfiles)
+
+    under = plotting.equalize_and_mask(sario.load(hhfiles[0]), fill_value=0.0)
+    over = ratio_list[0]
+    cmap = make_shifted_cmap(over, cmap_name='seismic')
+    under_image_info = parsers.Uavsar(hhfiles[0]).ann_data
+
+    bbox_ll = (-96.17, 30.05, 0.05, 0.07)
+
+    zoomed_box(under, over, bbox_ll, under_image_info=under_image_info, cmap=cmap)
