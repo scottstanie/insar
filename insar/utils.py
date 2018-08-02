@@ -479,7 +479,8 @@ def latlon_grid(rows=None,
                 x_step=None,
                 y_first=None,
                 x_first=None,
-                sparse=False):
+                sparse=False,
+                **kwargs):
     """Takes sizes and spacing info, creates a grid of values
 
     Args:
@@ -512,7 +513,15 @@ def latlon_grid(rows=None,
     return np.meshgrid(x, y, sparse=sparse)
 
 
-def latlon_grid_extent(rows=None, cols=None, y_step=None, x_step=None, y_first=None, x_first=None):
+def latlon_grid_extent(rows=None,
+                       cols=None,
+                       y_step=None,
+                       x_step=None,
+                       y_first=None,
+                       x_first=None,
+                       file_length=None,
+                       width=None,
+                       **kwargs):
     """Takes sizes and spacing info, finds boundaries
 
     Used for `matplotlib.pyplot.imshow` keyword arg `extent`:
@@ -525,6 +534,10 @@ def latlon_grid_extent(rows=None, cols=None, y_step=None, x_step=None, y_first=N
         x_step (float): spacing between cols
         y_first (float): starting location of first row at top
         x_first (float): starting location of first col on left
+        file_length (int): alias for number of rows (used in dem.rsc)
+            Not needed if `rows` is supplied
+        width (int): alias for number of cols (used in dem.rsc)
+            Not needed if `cols` is supplied
 
     Returns:
         tuple[float]: the boundaries of the latlon grid in order:
@@ -535,6 +548,8 @@ def latlon_grid_extent(rows=None, cols=None, y_step=None, x_step=None, y_first=N
     >>> print(latlon_grid_extent(**test_grid_data))
     (-155.0, -154.99, 19.1, 19.5)
     """
+    rows = rows or file_length
+    cols = cols or width
     return (x_first, x_first + x_step * (cols - 1), y_first + y_step * (rows - 1), y_first)
 
 

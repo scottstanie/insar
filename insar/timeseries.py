@@ -1,4 +1,5 @@
-"""Functions for performing time series analysis of unwrapped interferograms
+"""
+Functions for performing time series analysis of unwrapped interferograms
 
 files in the igrams folder:
     geolist, intlist, sbas_list
@@ -17,6 +18,7 @@ import datetime
 import numpy as np
 import pprint
 from shutil import copyfile
+import subprocess
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import uniform_filter
 
@@ -622,11 +624,39 @@ def find_coherent_patch(correlations, window=11):
     return np.unravel_index(max_idx, mean_stack.shape)
 
 
-def find_vertical_def(asc_los_file, desc_los_file, asc_deform_path, desc_deform_path):
+def record_xyz_los_vector(lat, lon, db_path=".", outfile="./los_vectors.txt"):
+    """Given one lat and lon, find the LOS from Sat to ground
+
+    Records answer in outfile, can be read by utils.read_los_output
+    """
+    exec_path = os.path.expanduser("~/sentinel/look_angle/losvec/losvec_yj")
+    cur_dir = os.getcwd()  # To return to after
+    db_path = os.path.realpath(db_path)
+    db_files = glob.glob(os.path.join(db_path, "*.db*"))
+    try:
+        db_file = db_files[0]
+    except IndexError:
+        raise ValueError("Bad db_path, no .db files found: {}".format(db_path))
+
+    stationname = "'{} {}'".format(lat, lon)  # Record where vec is from
+
+    # usage: losvel_yj file_db lat lon stationname outfilename
+    print("Changing to directory {}".format(db_path))
+    os.chdir(db_path)
+    cmd = "{} {} {} {} {} {}".format(exec_path, db_file, lat, lon, stationname, outfile)
+    print("Running command:")
+    print(cmd)
+    subprocess.check_call(cmd, shell=True)
+    print("Returning to {}".format(cur_dir))
+    os.chdir(cur_dir)
+    return outfile
+
+
+def find_vertical_def(asc_path, desc_path):  # desc_los_file, asc_deform_path, desc_deform_path):
     """Calculates vertical deformation for all points in the LOS files
 
     Args:
-        asc_los_file (str): path to the file with the output of the LOS xyz unit
+        asc_path (str): path to the file with the output of the LOS xyz unit
             vectors for the ascending path
         desc_los_file (str): path to the descending path LOS file
         asc_deform_path (str): path to deformation.npy for ascending path
@@ -634,18 +664,32 @@ def find_vertical_def(asc_los_file, desc_los_file, asc_deform_path, desc_deform_
     Returns:
         TODO
     """
-    lat_lon_list_asc, xyz_list_asc = utils.read_los_output(asc_los_file)
-    lat_lon_list_desc, xyz_list_desc = utils.read_los_output(desc_los_file)
+    # lat_lon_list_asc, xyz_list_asc = utils.read_los_output(asc_los_file)
+    # lat_lon_list_desc, xyz_list_desc = utils.read_los_output(desc_los_file)
 
-    asc_geolist, asc_deform = load_deformation(asc_deform_path)
-    desc_geolist, desc_deform = load_deformation(desc_deform_path)
-
-    asc_dem_rsc = sario.load_dem_rsc(os.path.join(asc_deform_path, 'dem.rsc'))
-    desc_dem_rsc = sario.load_dem_rsc(os.path.join(desc_deform_path, 'dem.rsc'))
+    asc_path = os.path.realpath(asc_path)
+    desc_path = os.path.realpath(desc_path)
+    asc_dem_rsc = sario.load_dem_rsc(os.path.join(asc_path, 'dem.rsc'), lower=True)
+    asc_bounds = utils.latlon_grid_extent(**asc_dem_rsc)
+    left, right, bot, top = asc_bounds
+    point1 = (bot, left)
+    point2 = (top, right)
+    # TODO: Do I only need one? Or really need both? shouldnt they be the same
+    # desc_dem_rsc = sario.load_dem_rsc(os.path.join(desc_deform_path, 'dem.rsc'), lower=True)
+    # desc_bounds = utils.latlon_grid_extent(**desc_dem_rsc)
+    db_path = os.path.dirname(asc_path)
+    print('db path')
+    print(db_path)
+    outfile_asc = os.path.realpath(os.path.join(asc_path, 'los_vectors.txt'))
+    for p in (point1, point2):
+        print(p)
+        record_xyz_los_vector(*p, db_path=db_path, outfile=outfile_asc)
 
     # TODO: change deformation.npy rows/cols into lat/lon coordinates
     # Note that we only need this if we are using different LOS vecs at different coordinates
     # Otherwise, call the function to make the file for the specific lat/lon here
+    asc_geolist, asc_deform = load_deformation(asc_path)
+    desc_geolist, desc_deform = load_deformation(desc_path)
 
     enu_asc = np.array(utils.convert_xyz_latlon_to_enu())[0]
     enu_desc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(desc_los_file)))[0]

@@ -173,12 +173,13 @@ def load_elevation(filename):
     return dem_img
 
 
-def load_dem_rsc(filename):
+def load_dem_rsc(filename, lower=False):
     """Loads and parses the .dem.rsc file
 
     Args:
         filename (str) path to either the .dem or .dem.rsc file.
             Function will add .rsc to path if passed .dem file
+        lower (bool): make keys of the dict lowercase
 
     Returns:
         dict: dem.rsc file parsed out, keys are all caps
@@ -211,6 +212,8 @@ def load_dem_rsc(filename):
                 if line.startswith(field):
                     output_data[field] = num_type(line.split()[1])
 
+    if lower:
+        output_data = {k.lower(): d for k, d in output_data.items()}
     return output_data
 
 
