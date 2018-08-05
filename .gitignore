@@ -16,3 +16,6 @@ dist
 *.sql
 
 docs/_build
+
+# cython build product
+*cpython*.so
