@@ -77,6 +77,19 @@ def make_shifted_cmap(img, cmap_name='seismic'):
     return shifted_color_map(cmap_name, midpoint=midpoint)
 
 
+def plot_image_shifted(img, imagefig=None, cmap='seismic', title='', label=''):
+    """Plot an image with a zero-shifted colorbar"""
+    if not imagefig:
+        imagefig = plt.figure()
+    shifted_cmap = make_shifted_cmap(img, cmap)
+    axes_image = plt.imshow(img, cmap=shifted_cmap)  # Type: AxesImage
+    plt.title(title)
+
+    cbar = imagefig.colorbar(axes_image)
+    cbar.set_label(label)
+    return imagefig, axes_image
+
+
 def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=None, **savekwargs):
     """Runs a matplotlib loop to show each image in a 3D stack
 
@@ -181,13 +194,8 @@ def view_stack(stack,
     else:
         raise ValueError("display_img must be an int or 'mean'")
 
-    shifted_cmap = make_shifted_cmap(img, cmap)
-    axes_image = plt.imshow(img, cmap=shifted_cmap)  # Type: AxesImage
     title = title or "Deformation Time Series"  # Default title
-    plt.title(title)
-
-    cbar = imagefig.colorbar(axes_image)
-    cbar.set_label(label)
+    plot_image_shifted(img, fig=imagefig, title=title, cmap=shifted_cmap, label=label)
 
     timefig = plt.figure()
 
