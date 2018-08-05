@@ -144,8 +144,8 @@ def zoomed_box(under,
     pp1.loc1, pp1.loc2 = 2, 3
     pp2.loc1, pp2.loc2 = 3, 2
 
-    plt.draw()
-    plt.show(block=True)
+    # plt.draw()
+    # plt.show(block=True)
     return ax, axins, pp1, pp2
 
 

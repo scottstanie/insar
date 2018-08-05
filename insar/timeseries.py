@@ -641,13 +641,13 @@ def record_xyz_los_vector(lat, lon, db_path=".", outfile="./los_vectors.txt"):
     stationname = "'{} {}'".format(lat, lon)  # Record where vec is from
 
     # usage: losvel_yj file_db lat lon stationname outfilename
-    print("Changing to directory {}".format(db_path))
+    # print("Changing to directory {}".format(db_path))
     os.chdir(db_path)
     cmd = "{} {} {} {} {} {}".format(exec_path, db_file, lat, lon, stationname, outfile)
-    print("Running command:")
-    print(cmd)
-    subprocess.check_call(cmd, shell=True)
-    print("Returning to {}".format(cur_dir))
+    # print("Running command:")
+    # print(cmd)
+    output = subprocess.check_output(cmd, shell=True)
+    # print("Returning to {}".format(cur_dir))
     os.chdir(cur_dir)
     return outfile
 
@@ -677,27 +677,55 @@ def find_vertical_def(asc_path, desc_path):  # desc_los_file, asc_deform_path, d
     # TODO: Do I only need one? Or really need both? shouldnt they be the same
     # desc_dem_rsc = sario.load_dem_rsc(os.path.join(desc_deform_path, 'dem.rsc'), lower=True)
     # desc_bounds = utils.latlon_grid_extent(**desc_dem_rsc)
-    db_path = os.path.dirname(asc_path)
-    print('db path')
-    print(db_path)
-    outfile_asc = os.path.realpath(os.path.join(asc_path, 'los_vectors.txt'))
+    db_path_asc = os.path.dirname(asc_path)
+    # db_path_desc = os.path.dirname(desc_path)
+
+    db_path_desc = os.path.dirname(asc_path)
+
+    # print('db path')
+    # print(db_path_asc)
+    asc_los_file = os.path.realpath(os.path.join(asc_path, 'los_vectors.txt'))
+    desc_los_file = os.path.realpath(os.path.join(desc_path, 'los_vectors.txt'))
+    # clear the output file:
+    open(asc_los_file, 'w').close()
     for p in (point1, point2):
         print(p)
-        record_xyz_los_vector(*p, db_path=db_path, outfile=outfile_asc)
+        record_xyz_los_vector(*p, db_path=db_path_asc, outfile=asc_los_file)
+        record_xyz_los_vector(*p, db_path=db_path_desc, outfile=desc_los_file)
+
+    # enu_asc = np.array(utils.convert_xyz_latlon_to_enu())[0]
+    enu_asc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(asc_los_file)))[0]
+    enu_desc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(desc_los_file)))[0]
+
+    # TEMP: GET REAL FILES
+    enu_desc = np.array([0.30235374, 0.08998821, -0.90590215])
+    print("ENU asc and desc:")
+    print(enu_asc)
+    print(enu_desc)
+    # Get only East and Up out of ENU
+    eu_asc = enu_asc[::2]
+    eu_desc = enu_desc[::2]
+    # Stack and solve for the East and Up deformation
+    coeffs = np.vstack((eu_asc, eu_desc))
 
     # TODO: change deformation.npy rows/cols into lat/lon coordinates
     # Note that we only need this if we are using different LOS vecs at different coordinates
     # Otherwise, call the function to make the file for the specific lat/lon here
     asc_geolist, asc_deform = load_deformation(asc_path)
     desc_geolist, desc_deform = load_deformation(desc_path)
+    # TODO: Is this all i want to do? load deform and get last image in stack??
+    asc_deform = asc_deform[-1]
+    desc_deform = desc_deform[-1]
 
-    enu_asc = np.array(utils.convert_xyz_latlon_to_enu())[0]
-    enu_desc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(desc_los_file)))[0]
-    eu_asc = enu_asc[::2]
-    eu_desc = enu_desc[::2]
-    coeffs = np.vstack((eu_asc, eu_desc))
-    d_asc_desc = np.array([5.0, 5.9])
-    np.linalg.solve(-coeffs, d_asc_desc)
+    nrows, ncols = asc_deform.shape
+    assert asc_deform.shape == desc_deform.shape, 'Asc and desc def images not same size'
+
+    d_asc_desc = np.vstack([asc_deform.reshape(-1), desc_deform.reshape(-1)])
+    dd = np.linalg.solve(-coeffs, d_asc_desc)
+    def_east = dd[0, :].reshape((nrows, ncols))
+    def_vertical = dd[1, :].reshape((nrows, ncols))
+
+    return def_east, def_vertical
 
 
 def avg_stack(igram_path, row, col):
