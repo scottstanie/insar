@@ -1,4 +1,4 @@
-"""
+"""timeseries.py
 Functions for performing time series analysis of unwrapped interferograms
 
 files in the igrams folder:
@@ -21,6 +21,7 @@ from shutil import copyfile
 import subprocess
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import uniform_filter
+from scipy import interpolate
 
 from insar.parsers import Sentinel
 from insar import sario, utils, plotting
@@ -624,8 +625,8 @@ def find_coherent_patch(correlations, window=11):
     return np.unravel_index(max_idx, mean_stack.shape)
 
 
-def record_xyz_los_vector(lat, lon, db_path=".", outfile="./los_vectors.txt"):
-    """Given one lat and lon, find the LOS from Sat to ground
+def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt"):
+    """Given one (lon, lat) point, find the LOS from Sat to ground
 
     Records answer in outfile, can be read by utils.read_los_output
     """
@@ -670,17 +671,14 @@ def find_vertical_def(asc_path, desc_path):  # desc_los_file, asc_deform_path, d
     asc_path = os.path.realpath(asc_path)
     desc_path = os.path.realpath(desc_path)
     asc_dem_rsc = sario.load_dem_rsc(os.path.join(asc_path, 'dem.rsc'), lower=True)
-    asc_bounds = utils.latlon_grid_extent(**asc_dem_rsc)
-    left, right, bot, top = asc_bounds
-    point1 = (bot, left)
-    point2 = (top, right)
+    midpoint = utils.latlon_grid_midpoint(**asc_dem_rsc)
+    # grid_corners = utils.latlon_grid_corners(**asc_dem_rsc)
+
     # TODO: Do I only need one? Or really need both? shouldnt they be the same
     # desc_dem_rsc = sario.load_dem_rsc(os.path.join(desc_deform_path, 'dem.rsc'), lower=True)
     # desc_bounds = utils.latlon_grid_extent(**desc_dem_rsc)
     db_path_asc = os.path.dirname(asc_path)
-    # db_path_desc = os.path.dirname(desc_path)
-
-    db_path_desc = os.path.dirname(asc_path)
+    db_path_desc = os.path.dirname(desc_path)
 
     # print('db path')
     # print(db_path_asc)
@@ -688,43 +686,54 @@ def find_vertical_def(asc_path, desc_path):  # desc_los_file, asc_deform_path, d
     desc_los_file = os.path.realpath(os.path.join(desc_path, 'los_vectors.txt'))
     # clear the output file:
     open(asc_los_file, 'w').close()
-    for p in (point1, point2):
-        print(p)
+    open(desc_los_file, 'w').close()
+    # for p in grid_corners:
+    for p in [midpoint]:
+        print("Finding LOS vector for", p)
         record_xyz_los_vector(*p, db_path=db_path_asc, outfile=asc_los_file)
         record_xyz_los_vector(*p, db_path=db_path_desc, outfile=desc_los_file)
 
     # enu_asc = np.array(utils.convert_xyz_latlon_to_enu())[0]
-    enu_asc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(asc_los_file)))[0]
-    enu_desc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(desc_los_file)))[0]
+    enu_asc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(asc_los_file)))
+    enu_desc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(desc_los_file)))
 
-    # TEMP: GET REAL FILES
-    enu_desc = np.array([0.30235374, 0.08998821, -0.90590215])
-    print("ENU asc and desc:")
-    print(enu_asc)
-    print(enu_desc)
     # Get only East and Up out of ENU
-    eu_asc = enu_asc[::2]
-    eu_desc = enu_desc[::2]
-    # Stack and solve for the East and Up deformation
-    coeffs = np.vstack((eu_asc, eu_desc))
+    eu_asc = enu_asc[:, ::2]
+    eu_desc = enu_desc[:, ::2]
+
+    print("East-up asc and desc:")
+    print(eu_asc)
+    print(eu_desc)
 
     # TODO: change deformation.npy rows/cols into lat/lon coordinates
     # Note that we only need this if we are using different LOS vecs at different coordinates
     # Otherwise, call the function to make the file for the specific lat/lon here
     asc_geolist, asc_deform = load_deformation(asc_path)
     desc_geolist, desc_deform = load_deformation(desc_path)
-    # TODO: Is this all i want to do? load deform and get last image in stack??
+    # Is this all i want to do? load deform and get last image in stack??
     asc_deform = asc_deform[-1]
     desc_deform = desc_deform[-1]
 
     nrows, ncols = asc_deform.shape
     assert asc_deform.shape == desc_deform.shape, 'Asc and desc def images not same size'
 
+    # This will be if we want to solve the exact coefficients
+    # # Make grid to interpolate one
+    # xx, yy = utils.latlon_grid(sparse=True, **asc_dem_rsc)
+    # interpolated_east_up = np.empty((2, nrows, ncols))
+    # for idx in (0, 1):
+    #     component = eu_asc[:, idx]
+    #     interpolated_east_up[idx] = interpolate.griddata(
+    #         points=grid_corners, values=component, xi=(xx, yy))
+    # interpolated_east_up = interpolated_east_up.reshape((2, nrows * ncols))
+
+    # Stack and solve for the East and Up deformation
+    coeffs = np.vstack((eu_asc, eu_desc))
+
     d_asc_desc = np.vstack([asc_deform.reshape(-1), desc_deform.reshape(-1)])
     dd = np.linalg.solve(-coeffs, d_asc_desc)
     def_east = dd[0, :].reshape((nrows, ncols))
     def_vertical = dd[1, :].reshape((nrows, ncols))
-
     return def_east, def_vertical
 
 
