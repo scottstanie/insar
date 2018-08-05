@@ -479,6 +479,8 @@ def latlon_grid(rows=None,
                 x_step=None,
                 y_first=None,
                 x_first=None,
+                width=None,
+                file_length=None,
                 sparse=False,
                 **kwargs):
     """Takes sizes and spacing info, creates a grid of values
@@ -508,6 +510,8 @@ def latlon_grid(rows=None,
            [19.3, 19.3],
            [19.1, 19.1]])
     """
+    rows = rows or file_length
+    cols = cols or width
     x = np.linspace(x_first, x_first + (cols - 1) * x_step, cols).reshape((1, cols))
     y = np.linspace(y_first, y_first + (rows - 1) * y_step, rows).reshape((rows, 1))
     return np.meshgrid(x, y, sparse=sparse)
@@ -551,6 +555,27 @@ def latlon_grid_extent(rows=None,
     rows = rows or file_length
     cols = cols or width
     return (x_first, x_first + x_step * (cols - 1), y_first + y_step * (rows - 1), y_first)
+
+
+def latlon_grid_corners(**kwargs):
+    """Takes sizes and spacing info, finds corner points in (x, y) form
+
+    Returns:
+        list[tuple[float]]: the corners of the latlon grid in order:
+        (top right, top left, bottom left, bottom right)
+    """
+    left, right, bot, top = latlon_grid_extent(**kwargs)
+    return [(right, top), (left, top), (left, bot), (right, bot)]
+
+
+def latlon_grid_midpoint(**kwargs):
+    """Takes sizes and spacing info, finds midpoint in (x, y) form
+
+    Returns:
+        tuple[float]: midpoint of the latlon grid
+    """
+    left, right, bot, top = latlon_grid_extent(**kwargs)
+    return (left + right) / 2, (top + bot) / 2
 
 
 def rotate_xyz_to_enu(xyz, lat, lon):
