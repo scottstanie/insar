@@ -484,23 +484,26 @@ def save_deformation(igram_path, deformation, geolist):
     np.save(os.path.join(igram_path, 'geolist.npy'), geolist)
 
 
-def load_deformation(igram_path, ref_row=None, ref_col=None, alpha=0, difference=False):
+def load_deformation(igram_path, filename='deformation.npy'):
+    """Loads a stack of deformation images from igram_path
+
+    igram_path must also contain the "geolist.npy" file
+
+    Args:
+        igram_path (str): directory of .npy file
+        filename (str): default='deformation.npy', a .npy file of a 3D ndarray
+
+    Returns:
+        tuple[ndarray, ndarray]: geolist 1D array, deformation 3D array
+    """
     try:
-        deformation = np.load(os.path.join(igram_path, 'deformation.npy'))
+        deformation = np.load(os.path.join(igram_path, filename))
         # geolist is a list of datetimes: encoding must be bytes
         geolist = np.load(os.path.join(igram_path, 'geolist.npy'), encoding='bytes')
-
     except (IOError, OSError):
-        if not ref_col and not ref_col:
-            logger.error("deformation.npy or geolist.npy not found in path %s", igram_path)
-            logger.error("Need ref_row, ref_col to run inversion and create files")
-            return None, None
-        else:
-            logger.warning("No deformation.npy detected: running inversion")
-
-        geolist, phi_arr, deformation, varr, unw_stack = run_inversion(
-            igram_path, reference=(ref_row, ref_col), alpha=alpha, difference=difference)
-        save_deformation(igram_path, deformation, geolist)
+        logger.error("%s or geolist.npy not found in path %s", filename, igram_path)
+        logger.error("Need ref_row, ref_col to run inversion and create files")
+        return None, None
 
     return geolist, deformation
 
@@ -657,6 +660,11 @@ def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt", cl
 
 
 def check_corner_differences(asc_dem_rsc, db_path_asc, db_path_desc, asc_los_file, desc_los_file):
+    """Finds value range for ENU coefficients of the LOS vectors in dem.rsc area
+
+    Used to see if east, north, and up components vary too much for a single value
+    to be used to solve for east + vertical part from LOS components
+    """
     grid_corners = utils.latlon_grid_corners(**asc_dem_rsc)
     # clear the output file:
     open(desc_los_file, 'w').close()
@@ -747,12 +755,8 @@ def find_vertical_def(asc_path, desc_path):  # desc_los_file, asc_deform_path, d
     asc_geolist, asc_deform = load_deformation(asc_path)
     desc_geolist, desc_deform = load_deformation(desc_path)
 
-    # TODO: calculate vertical/ east for all stack layers
-    asc_deform = asc_deform[-1]
-    desc_deform = desc_deform[-1]
-
-    nrows, ncols = asc_deform.shape
     assert asc_deform.shape == desc_deform.shape, 'Asc and desc def images not same size'
+    nlayers, nrows, ncols = asc_deform.shape
 
     # This will be if we want to solve the exact coefficients
     # # Make grid to interpolate one
@@ -767,8 +771,8 @@ def find_vertical_def(asc_path, desc_path):  # desc_los_file, asc_deform_path, d
     # Stack and solve for the East and Up deformation
     d_asc_desc = np.vstack([asc_deform.reshape(-1), desc_deform.reshape(-1)])
     dd = np.linalg.solve(east_up_coeffs, d_asc_desc)
-    def_east = dd[0, :].reshape((nrows, ncols))
-    def_vertical = dd[1, :].reshape((nrows, ncols))
+    def_east = dd[0, :].reshape((nlayers, nrows, ncols))
+    def_vertical = dd[1, :].reshape((nlayers, nrows, ncols))
     return def_east, def_vertical
 
 
