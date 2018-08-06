@@ -2,7 +2,10 @@
 set -e
 # TODO: pass in the path: currently only runs on the current directory
 # Wrapper to run in parallel:
-PHASE_UNWRAP_DIR=~/phase_unwrap/bin
+if [ -z $PHASE_UNWRAP_DIR ]; then
+  PHASE_UNWRAP_DIR=~/phase_unwrap/bin
+fi
+
 call_snaphu() {
 	echo $#
 	INTFILE=$1
