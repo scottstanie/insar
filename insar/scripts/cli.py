@@ -134,6 +134,11 @@ def parse_steps(ctx, param, value):
     help="File containing the geojson object for DEM bounds",
     type=click.Path(resolve_path=True))
 @click.option(
+    "--sentinel-path",
+    envvar="SENTINEL_PATH",
+    default="~/sentinel/",
+    help="Directory containing sentinel scripts.")
+@click.option(
     "--rate", "-r", default=1, help="Rate at which to upsample DEM (default=1, no upsampling)")
 @click.option(
     "--max-temporal",

@@ -46,9 +46,10 @@ def create_dem(geojson=None, rate=1, data_source='NASA', **kwargs):
     insar.dem.main(geojson, data_source, rate, output_name)
 
 
-def run_sentinel_stack(**kwargs):
+def run_sentinel_stack(sentinel_path="~/sentinel/", **kwargs):
     """3. Create geocoded slcs as .geo files for each .zip file"""
-    subprocess.check_call('/usr/bin/env python ~/sentinel/sentinel_stack.py', shell=True)
+    script_path = os.path.join(sentinel_path, "sentinel_stack.py")
+    subprocess.check_call('/usr/bin/env python {}'.format(script_path), shell=True)
 
 
 def prep_igrams_dir(clean=True, **kwargs):
