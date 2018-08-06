@@ -229,16 +229,6 @@ def view_dem(demfile):
 # COMMAND: animate
 @cli.command()
 @click.option(
-    "--ref-row",
-    '-r',
-    type=click.INT,
-    help="Row number of pixel to use as unwrapping reference (for SBAS inversion)")
-@click.option(
-    "--ref-col",
-    '-c',
-    type=click.INT,
-    help="Column number of pixel to use as unwrapping reference (for SBAS inversion)")
-@click.option(
     "--pause",
     '-p',
     default=200,
@@ -252,7 +242,7 @@ def view_dem(demfile):
     help="Pop up matplotlib figure to view (instead of just saving)",
     default=True)
 @click.pass_obj
-def animate(context, pause, ref_row, ref_col, save, display):
+def animate(context, pause, save, display):
     """Creates animation for 3D image stack.
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
@@ -263,7 +253,7 @@ def animate(context, pause, ref_row, ref_col, save, display):
     Note: --ref-row and --ref-col only needed if the inversion
     has not already been done and saved as deformation.npy
     """
-    geolist, deformation = insar.timeseries.load_deformation(context['path'], ref_row, ref_col)
+    geolist, deformation = insar.timeseries.load_deformation(context['path'])
     titles = [d.strftime("%Y-%m-%d") for d in geolist]
     insar.plotting.animate_stack(
         deformation, pause_time=pause, display=display, titles=titles, save_title=save)
@@ -271,22 +261,12 @@ def animate(context, pause, ref_row, ref_col, save, display):
 
 # COMMAND: view-stack
 @cli.command('view-stack')
-@click.option(
-    "--ref-row",
-    '-r',
-    type=click.INT,
-    help="Row number of pixel to use as unwrapping reference (for SBAS inversion)")
-@click.option(
-    "--ref-col",
-    '-c',
-    type=click.INT,
-    help="Column number of pixel to use as unwrapping reference (for SBAS inversion)")
 @click.option("--cmap", default='seismic', help="Colormap for image display.")
 @click.option("--label", default='Centimeters', help="Label on colorbar/yaxis for plot")
 @click.option("--title", help="Title for image plot")
 @click.option("--rowcol", help="Use row,col for legened entries (instead of default lat,lon)")
 @click.pass_obj
-def view_stack(context, ref_row, ref_col, cmap, label, title, rowcol):
+def view_stack(context, cmap, label, title, rowcol):
     """Explore timeseries on deformation image.
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
@@ -294,12 +274,11 @@ def view_stack(context, ref_row, ref_col, cmap, label, title, rowcol):
 
         insar --path /path/to/igrams view_stack
 
-    Note: --ref-row and --ref-col only needed if the inversion
-    has not already been done and saved as deformation.npy
     """
-    geolist, deformation = insar.timeseries.load_deformation(context['path'], ref_row, ref_col)
+    geolist, deformation = insar.timeseries.load_deformation(context['path'])
     if geolist is None or deformation is None:
         return
+
     if rowcol:
         rsc_data = None
     else:
