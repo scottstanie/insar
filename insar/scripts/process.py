@@ -57,12 +57,6 @@ def run_sentinel_stack(sentinel_path="~/sentinel/", **kwargs):
 def _reorganize_files():
     """Records the current file names for Sentinel folder, renames to easier names
     """
-    # First, store the original .zips separately for easy reprocessing
-    logger.info("Storing .zip files in zip_files folder")
-    zip_folder = 'zip_files'
-    mkdir_p(zip_folder)
-    subprocess.call("mv ./*.zip {}".format(zip_folder), shell=True)
-
     # Start by recording filelist, then moving all files to new folder
     mkdir_p('extra_files')
     orig_filelist = 'original_filelist.txt'
