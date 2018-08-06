@@ -261,12 +261,13 @@ def animate(context, pause, save, display):
 
 # COMMAND: view-stack
 @cli.command('view-stack')
+@click.option("--filename", default='deformation.npy', help="Name of saved deformation stack")
 @click.option("--cmap", default='seismic', help="Colormap for image display.")
 @click.option("--label", default='Centimeters', help="Label on colorbar/yaxis for plot")
 @click.option("--title", help="Title for image plot")
 @click.option("--rowcol", help="Use row,col for legened entries (instead of default lat,lon)")
 @click.pass_obj
-def view_stack(context, cmap, label, title, rowcol):
+def view_stack(context, filename, cmap, label, title, rowcol):
     """Explore timeseries on deformation image.
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
@@ -275,7 +276,7 @@ def view_stack(context, cmap, label, title, rowcol):
         insar --path /path/to/igrams view_stack
 
     """
-    geolist, deformation = insar.timeseries.load_deformation(context['path'])
+    geolist, deformation = insar.timeseries.load_deformation(context['path'], filename=filename)
     if geolist is None or deformation is None:
         return
 
