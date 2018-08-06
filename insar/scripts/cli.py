@@ -137,7 +137,7 @@ def parse_steps(ctx, param, value):
     "--sentinel-path",
     envvar="SENTINEL_PATH",
     default="~/sentinel/",
-    help="Directory containing sentinel scripts.")
+    help="(default=~/sentinel/) Directory containing sentinel scripts.")
 @click.option(
     "--rate", "-r", default=1, help="Rate at which to upsample DEM (default=1, no upsampling)")
 @click.option(

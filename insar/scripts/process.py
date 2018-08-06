@@ -25,6 +25,7 @@ import numpy as np
 import insar
 from insar.log import get_log, log_runtime
 from insar.utils import mkdir_p
+from insar.parsers import Sentinel
 
 logger = get_log()
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -52,11 +53,33 @@ def run_sentinel_stack(sentinel_path="~/sentinel/", **kwargs):
     subprocess.check_call('/usr/bin/env python {}'.format(script_path), shell=True)
 
 
+def _reorganize_files():
+    """Records the current file names for Sentinel folder, renames to easier names
+    """
+    mkdir_p('extra_files')
+    # Start by recording filelist, then moving all files to new folder
+    subprocess.check_call("ls -1 ./* > original_filelist.txt", shell=True)
+    subprocess.check_call("mv ./* extra_files/", shell=True)
+
+    # Then bring back the useful ones, renamed
+    geofiles = glob.glob(os.path.join("extra_files", "*.geo"))
+    for geofile in geofiles:
+        geodate = Sentinel(geofile).start_time.date().srtftime("%Y%m%d")
+        logger.info("Renaming {} to {}".format(geofile, geodate))
+        os.rename(geofile, geodate + ".geo")
+        # also move corresponding orb timing file
+        os.rename(geofile.replace('geo', 'orbtiming'), geodate + ".orbtiming")
+
+    # Move extra useful files back in main directory
+    os.rename(os.path.join("extra_file", 'params'), './params')
+
+
 def prep_igrams_dir(clean=True, **kwargs):
     """4. cleans bad .geo files, prepare directory for igrams"""
     if clean:
         logger.info("Removing malformed .geo files missing data")
         insar.utils.clean_files(".geo", path=".", zero_threshold=0.50, test=False)
+        _reorganize_files()
 
     mkdir_p('igrams')
     os.chdir('igrams')
@@ -66,7 +89,9 @@ def prep_igrams_dir(clean=True, **kwargs):
 def create_sbas_list(max_temporal=500, max_spatial=500, **kwargs):
     """ 5.run the sbas_list script
 
-    Uses the outputs of the geo coded SLCS to find files with small baselines"""
+    Uses the outputs of the geo coded SLCS to find files with small baselines
+    Searches one directory up from where script is run for .geo files
+    """
 
     sbas_cmd = '/usr/bin/env python ~/sentinel/sbas_list.py {} {}'.format(max_temporal, max_spatial)
     logger.info(sbas_cmd)
