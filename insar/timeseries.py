@@ -625,11 +625,14 @@ def find_coherent_patch(correlations, window=11):
     return np.unravel_index(max_idx, mean_stack.shape)
 
 
-def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt"):
+def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt", clear=False):
     """Given one (lon, lat) point, find the LOS from Sat to ground
 
     Records answer in outfile, can be read by utils.read_los_output
     """
+    if clear:
+        open(outfile, 'w').close()
+
     exec_path = os.path.expanduser("~/sentinel/look_angle/losvec/losvec_yj")
     cur_dir = os.getcwd()  # To return to after
     db_path = os.path.realpath(db_path)
@@ -671,26 +674,30 @@ def check_corner_differences(asc_dem_rsc, db_path_asc, db_path_desc, asc_los_fil
     return np.max(np.stack((ranges_asc, ranges_desc)))
 
 
-def find_vertical_def(asc_path, desc_path):  # desc_los_file, asc_deform_path, desc_deform_path):
-    """Calculates vertical deformation for all points in the LOS files
+def find_east_up_coeffs(asc_path, desc_path):
+    """Find the coefficients for east and up components for LOS deformation
 
     Args:
-        asc_path (str): path to the file with the output of the LOS xyz unit
-            vectors for the ascending path
-        desc_los_file (str): path to the descending path LOS file
-        asc_deform_path (str): path to deformation.npy for ascending path
-        desc_deform_path (str): path to deformation.npy for descending path
+        asc_path (str): path to the directory with the ascending sentinel
+            timeseries inversion (contains line-of-sight deformation.npy, dem.rsc,
+            and has .db files one directory higher)
+        desc_path (str): same as asc_path but for descending orbit solution
+
     Returns:
-        tuple[ndarray, ndarray]: def_east, def_vertical, the two matrices of
-            deformation separated by verticl and eastward motion
+        ndarray: east_up_coeffs contains 4 numbers for solving east-up deformation:
+            [east_asc,  up_asc;
+             east_desc, up_desc]
+        Used as the "A" matrix for solving Ax = b, where x is [east_def; up_def]
     """
     asc_path = os.path.realpath(asc_path)
     desc_path = os.path.realpath(desc_path)
     asc_dem_rsc = sario.load_dem_rsc(os.path.join(asc_path, 'dem.rsc'), lower=True)
+
     midpoint = utils.latlon_grid_midpoint(**asc_dem_rsc)
-    # The path to each orbit's .db files
+    # The path to each orbit's .db files: assumed one directory higher
     db_path_asc = os.path.dirname(asc_path)
     db_path_desc = os.path.dirname(desc_path)
+
     asc_los_file = os.path.realpath(os.path.join(asc_path, 'los_vectors.txt'))
     desc_los_file = os.path.realpath(os.path.join(desc_path, 'los_vectors.txt'))
 
@@ -703,10 +710,8 @@ def find_vertical_def(asc_path, desc_path):  # desc_los_file, asc_deform_path, d
     logger.info("Using midpoint of area for line of sight vectors")
 
     print("Finding LOS vector for midpoint", midpoint)
-    open(desc_los_file, 'w').close()
-    open(asc_los_file, 'w').close()
-    record_xyz_los_vector(*midpoint, db_path=db_path_asc, outfile=asc_los_file)
-    record_xyz_los_vector(*midpoint, db_path=db_path_desc, outfile=desc_los_file)
+    record_xyz_los_vector(*midpoint, db_path=db_path_asc, outfile=asc_los_file, clear=True)
+    record_xyz_los_vector(*midpoint, db_path=db_path_desc, outfile=desc_los_file, clear=True)
 
     enu_asc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(asc_los_file)))
     enu_desc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(desc_los_file)))
@@ -714,17 +719,35 @@ def find_vertical_def(asc_path, desc_path):  # desc_los_file, asc_deform_path, d
     # Get only East and Up out of ENU
     eu_asc = enu_asc[:, ::2]
     eu_desc = enu_desc[:, ::2]
+    # -1 multiplied since vectors are from sat to ground, so vert is negative
+    east_up_coeffs = -1 * np.vstack((eu_asc, eu_desc))
 
+    return east_up_coeffs
+
+
+def find_vertical_def(asc_path, desc_path):  # desc_los_file, asc_deform_path, desc_deform_path):
+    """Calculates vertical deformation for all points in the LOS files
+
+    Args:
+        asc_path (str): path to the directory with the ascending sentinel
+            timeseries inversion (contains line-of-sight deformation.npy, dem.rsc,
+            and has .db files one directory higher)
+        desc_path (str): same as asc_path but for descending orbit solution
+    Returns:
+        tuple[ndarray, ndarray]: def_east, def_vertical, the two matrices of
+            deformation separated by verticl and eastward motion
+    """
+    asc_path = os.path.realpath(asc_path)
+    desc_path = os.path.realpath(desc_path)
+
+    east_up_coeffs = find_east_up_coeffs(asc_path, desc_path)
     print("East-up asc and desc:")
-    print(eu_asc)
-    print(eu_desc)
+    print(east_up_coeffs)
 
-    # TODO: change deformation.npy rows/cols into lat/lon coordinates
-    # Note that we only need this if we are using different LOS vecs at different coordinates
-    # Otherwise, call the function to make the file for the specific lat/lon here
     asc_geolist, asc_deform = load_deformation(asc_path)
     desc_geolist, desc_deform = load_deformation(desc_path)
-    # Is this all i want to do? load deform and get last image in stack??
+
+    # TODO: calculate vertical/ east for all stack layers
     asc_deform = asc_deform[-1]
     desc_deform = desc_deform[-1]
 
@@ -742,10 +765,8 @@ def find_vertical_def(asc_path, desc_path):  # desc_los_file, asc_deform_path, d
     # interpolated_east_up = interpolated_east_up.reshape((2, nrows * ncols))
 
     # Stack and solve for the East and Up deformation
-    coeffs = np.vstack((eu_asc, eu_desc))
-
     d_asc_desc = np.vstack([asc_deform.reshape(-1), desc_deform.reshape(-1)])
-    dd = np.linalg.solve(-coeffs, d_asc_desc)
+    dd = np.linalg.solve(east_up_coeffs, d_asc_desc)
     def_east = dd[0, :].reshape((nrows, ncols))
     def_vertical = dd[1, :].reshape((nrows, ncols))
     return def_east, def_vertical
