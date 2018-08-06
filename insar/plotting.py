@@ -220,7 +220,7 @@ def view_stack(stack,
             legend_entries.append('Row %s, Col %s' % (row, col))
 
         plt.plot(geolist, timeline, marker='o', linestyle='dashed', linewidth=1, markersize=4)
-        plt.legend(legend_entries, loc='lower left')
+        plt.legend(legend_entries, loc='upper left')
         x_axis_str = "SAR image date" if geolist is not None else "Image number"
         plt.xlabel(x_axis_str)
         plt.ylabel(label)
