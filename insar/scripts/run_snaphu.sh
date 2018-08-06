@@ -2,6 +2,7 @@
 set -e
 # TODO: pass in the path: currently only runs on the current directory
 # Wrapper to run in parallel:
+PHASE_UNWRAP_DIR=~/phase_unwrap/bin
 call_snaphu() {
 	echo $#
 	INTFILE=$1
@@ -9,7 +10,7 @@ call_snaphu() {
 	CORNAME=$(echo $INTFILE | sed 's/.int/.cc/' | sed 's/.lowpass//' )
 	OUTNAME=$(echo $INTFILE | sed 's/.int/.unw/' | sed 's/.lowpass//' )
 	echo "Running snaphu on $INTFILE with width $WIDTH: output to $OUTNAME"
-	~/phase_upwrap/bin/snaphu -s $INTFILE $WIDTH -c $CORNAME -o $OUTNAME;
+  $PHASE_UNWRAP_DIR/snaphu -s $INTFILE $WIDTH -c $CORNAME -o $OUTNAME;
 	return 0;
 }
 # Need to export so that subprocesses called by xargs have call_snaphu
@@ -44,7 +45,7 @@ then
 	SNAFU_FILE_EXT=".int"
 else
 	BOX_SIZE=$2
-	LOWPASS=~/phase_upwrap/bin/lowpass
+  LOWPASS=$PHASE_UNWRAP_DIR/lowpass
 	echo "Running $LOWPASS with box size $BOX_SIZE"
 
 	# For loop is faster for the fortran program than xargs
