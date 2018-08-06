@@ -33,6 +33,10 @@ PHASE_TO_CM = SENTINEL_WAVELENGTH / (-4 * np.pi)
 logger = get_log()
 
 
+def _parse(datestr):
+    return datetime.datetime.strptime(datestr, "%Y%m%d").date()
+
+
 def read_geolist(filepath="./geolist"):
     """Reads in the list of .geo files used, in time order
 
@@ -48,7 +52,11 @@ def read_geolist(filepath="./geolist"):
 
     with open(filepath) as f:
         geolist = [os.path.split(geoname)[1] for geoname in f.read().splitlines()]
-    return sorted([Sentinel(geo).start_time.date() for geo in geolist])
+
+    if len(geolist[0]) == 12:  # YYYYmmdd.geo
+        return sorted([_parse(geo.strip(".geo")) for geo in geolist])
+    else:
+        return sorted([Sentinel(geo).start_time.date() for geo in geolist])
 
 
 def read_intlist(filepath="./intlist", parse=True):
@@ -63,9 +71,6 @@ def read_intlist(filepath="./intlist", parse=True):
             if parse=False: returns list[str], filenames of the igrams
 
     """
-
-    def _parse(datestr):
-        return datetime.datetime.strptime(datestr, "%Y%m%d").date()
 
     if os.path.isdir(filepath):
         filepath = os.path.join(filepath, 'intlist')
@@ -828,8 +833,8 @@ def avg_stack(igram_path, row, col):
     unw_shifted = shift_stack(unw_stack, 100, 100, window=9, window_func='mean')
     stack_mean = np.mean(unw_shifted, axis=0)
 
-    start_dt = datetime.datetime.strptime(pairs2[0][0], "%Y%m%d")
-    end_dt = datetime.datetime.strptime(pairs2[-1][1], "%Y%m%d")
+    start_dt = _parse(pairs2[0][0])
+    end_dt = _parse(pairs2[-1][1])
     total_days = (end_dt - start_dt).days
     print("Start date:", start_dt.date())
     print("End date:", end_dt.date())
@@ -854,10 +859,7 @@ def avg_stack(igram_path, row, col):
     plot_deformation(PHASE_TO_CM * stack_mean, title=title)
 
     # Account for the different time periods in the igrams
-    tds = [
-        datetime.datetime.strptime(d2, "%Y%m%d") - datetime.datetime.strptime(d1, "%Y%m%d")
-        for d1, d2 in pairs2
-    ]
+    tds = [_parse(d2) - _parse(d1) for d1, d2 in pairs2]
     td_days = [d.days for d in tds]
     print("Igram intervals (in days):")
     print(td_days)
