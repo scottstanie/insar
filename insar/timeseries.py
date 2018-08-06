@@ -653,6 +653,24 @@ def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt"):
     return outfile
 
 
+def check_corner_differences(asc_dem_rsc, db_path_asc, db_path_desc, asc_los_file, desc_los_file):
+    grid_corners = utils.latlon_grid_corners(**asc_dem_rsc)
+    # clear the output file:
+    open(desc_los_file, 'w').close()
+    open(asc_los_file, 'w').close()
+    for p in grid_corners:
+        record_xyz_los_vector(*p, db_path=db_path_desc, outfile=desc_los_file)
+        record_xyz_los_vector(*p, db_path=db_path_asc, outfile=asc_los_file)
+
+    enu_asc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(asc_los_file)))
+    enu_desc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(desc_los_file)))
+
+    # Find range of data for E, N and U
+    ranges_asc = np.ptp(enu_asc, axis=0)
+    ranges_desc = np.ptp(enu_desc, axis=0)
+    return np.max(np.stack((ranges_asc, ranges_desc)))
+
+
 def find_vertical_def(asc_path, desc_path):  # desc_los_file, asc_deform_path, desc_deform_path):
     """Calculates vertical deformation for all points in the LOS files
 
@@ -663,37 +681,33 @@ def find_vertical_def(asc_path, desc_path):  # desc_los_file, asc_deform_path, d
         asc_deform_path (str): path to deformation.npy for ascending path
         desc_deform_path (str): path to deformation.npy for descending path
     Returns:
-        TODO
+        tuple[ndarray, ndarray]: def_east, def_vertical, the two matrices of
+            deformation separated by verticl and eastward motion
     """
-    # lat_lon_list_asc, xyz_list_asc = utils.read_los_output(asc_los_file)
-    # lat_lon_list_desc, xyz_list_desc = utils.read_los_output(desc_los_file)
-
     asc_path = os.path.realpath(asc_path)
     desc_path = os.path.realpath(desc_path)
     asc_dem_rsc = sario.load_dem_rsc(os.path.join(asc_path, 'dem.rsc'), lower=True)
     midpoint = utils.latlon_grid_midpoint(**asc_dem_rsc)
-    # grid_corners = utils.latlon_grid_corners(**asc_dem_rsc)
-
-    # TODO: Do I only need one? Or really need both? shouldnt they be the same
-    # desc_dem_rsc = sario.load_dem_rsc(os.path.join(desc_deform_path, 'dem.rsc'), lower=True)
-    # desc_bounds = utils.latlon_grid_extent(**desc_dem_rsc)
+    # The path to each orbit's .db files
     db_path_asc = os.path.dirname(asc_path)
     db_path_desc = os.path.dirname(desc_path)
-
-    # print('db path')
-    # print(db_path_asc)
     asc_los_file = os.path.realpath(os.path.join(asc_path, 'los_vectors.txt'))
     desc_los_file = os.path.realpath(os.path.join(desc_path, 'los_vectors.txt'))
-    # clear the output file:
-    open(asc_los_file, 'w').close()
-    open(desc_los_file, 'w').close()
-    # for p in grid_corners:
-    for p in [midpoint]:
-        print("Finding LOS vector for", p)
-        record_xyz_los_vector(*p, db_path=db_path_asc, outfile=asc_los_file)
-        record_xyz_los_vector(*p, db_path=db_path_desc, outfile=desc_los_file)
 
-    # enu_asc = np.array(utils.convert_xyz_latlon_to_enu())[0]
+    max_corner_difference = check_corner_differences(asc_dem_rsc, db_path_asc, db_path_desc,
+                                                     asc_los_file, desc_los_file)
+    logger.info(
+        "Max difference in ENU LOS vectors for area corners: {:2f}".format(max_corner_difference))
+    if max_corner_difference > 0.05:
+        logger.warning("Area is not small, actual LOS vector differs over area.")
+    logger.info("Using midpoint of area for line of sight vectors")
+
+    print("Finding LOS vector for midpoint", midpoint)
+    open(desc_los_file, 'w').close()
+    open(asc_los_file, 'w').close()
+    record_xyz_los_vector(*midpoint, db_path=db_path_asc, outfile=asc_los_file)
+    record_xyz_los_vector(*midpoint, db_path=db_path_desc, outfile=desc_los_file)
+
     enu_asc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(asc_los_file)))
     enu_desc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(desc_los_file)))
 
