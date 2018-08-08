@@ -4,6 +4,7 @@ Helper functions to prepare and process data
 Email: scott.stanie@utexas.edu
 """
 from __future__ import division
+import copy
 import glob
 from math import floor, sin, cos, sqrt, atan2, radians
 import errno
@@ -200,168 +201,15 @@ def rowcol_to_latlon(row, col, rsc_data=None):
         >>> rowcol_to_latlon(7, 3, rsc_data)
         (1.4, 1.4)
     """
-    start_lon = rsc_data["X_FIRST"]
-    start_lat = rsc_data["Y_FIRST"]
-    lon_step, lat_step = rsc_data["X_STEP"], rsc_data["Y_STEP"]
+    # Force keys to lowercase
+    rsc_data = {k.lower(): v for k, v in rsc_data.items()}
+    start_lon = rsc_data["x_first"]
+    start_lat = rsc_data["y_first"]
+    lon_step, lat_step = rsc_data["x_step"], rsc_data["y_step"]
     lat = start_lat + (row - 1) * lat_step
     lon = start_lon + (col - 1) * lon_step
+
     return lat, lon
-
-
-def split_array_into_blocks(data):
-    """Takes a long rectangular array (like UAVSAR) and creates blocks
-
-    Useful to look at small data pieces at a time in dismph
-
-    Returns:
-        blocks (list[np.ndarray])
-    """
-    rows, cols = data.shape
-    blocks = np.array_split(data, np.ceil(rows / cols))
-    return blocks
-
-
-def split_and_save(filename):
-    """Creates several files from one long data file
-
-    Saves them with same filename with .1,.2,.3... at end before ext
-    e.g. brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.int produces
-        brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.1.int
-        brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.2.int...
-
-    Output:
-        newpaths (list[str]): full paths to new files created
-    """
-
-    data = insar.sario.load_file(filename)
-    blocks = split_array_into_blocks(data)
-
-    ext = insar.sario.get_file_ext(filename)
-    newpaths = []
-
-    for ix_step, block in enumerate(blocks, start=1):
-        fname = filename.replace(ext, ".{}{}".format(str(ix_step), ext))
-        print("Saving {}".format(fname))
-        insar.sario.save(fname, block)
-        newpaths.append(fname)
-
-    return newpaths
-
-
-def combine_cor_amp(corfilename, save=True):
-    """Takes a .cor file from UAVSAR (which doesn't contain amplitude),
-    and creates a new file with amplitude data interleaved for dishgt
-
-    dishgt brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01_withamp.cor 3300 1 5000 1
-      where 3300 is number of columns/samples, and we want the first 5000 rows. the final
-      1 is needed for the contour interval to set a max of 1 for .cor data
-
-    Inputs:
-        corfilename (str): string filename of the .cor from UAVSAR
-        save (bool): True if you want to save the combined array
-
-    Returns:
-        cor_with_amp (np.ndarray) combined correlation + amplitude (as complex64)
-        outfilename (str): same name as corfilename, but _withamp.cor
-            Saves a new file under outfilename
-    Note: .ann and .int files must be in same directory as .cor
-    """
-    ext = insar.sario.get_file_ext(corfilename)
-    assert ext == '.cor', 'corfilename must be a .cor file'
-
-    intfilename = corfilename.replace('.cor', '.int')
-
-    intdata = insar.sario.load_file(intfilename)
-    amp = np.abs(intdata)
-
-    cordata = insar.sario.load_file(corfilename)
-    # For dishgt, it expects the two matrices stacked [[amp]; [cor]]
-    cor_with_amp = np.vstack((amp, cordata))
-
-    outfilename = corfilename.replace('.cor', '_withamp.cor')
-    insar.sario.save(outfilename, cor_with_amp)
-    return cor_with_amp, outfilename
-
-
-def sliding_window_view(x, shape, step=None):
-    """
-    Create sliding window views of the N dimensions array with the given window
-    shape. Window slides across each dimension of `x` and provides subsets of `x`
-    at any window position.
-
-    Adapted from https://github.com/numpy/numpy/pull/10771
-
-    Args:
-        x (ndarray): Array to create sliding window views.
-        shape (sequence of int): The shape of the window.
-            Must have same length as number of input array dimensions.
-        step: (sequence of int), optional
-            The steps of window shifts for each dimension on input array at a time.
-            If given, must have same length as number of input array dimensions.
-            Defaults to 1 on all dimensions.
-    Returns:
-        ndarray: Sliding window views (or copies) of `x`.
-            view.shape = (x.shape - shape) // step + 1
-
-    Notes
-    -----
-    ``sliding_window_view`` create sliding window views of the N dimensions array
-    with the given window shape and its implementation based on ``as_strided``.
-    The returned views are *readonly* due to the numpy sliding tricks.
-    Examples
-    --------
-    >>> i, j = np.ogrid[:3,:4]
-    >>> x = 10*i + j
-    >>> shape = (2,2)
-    >>> sliding_window_view(x, shape)[0, 0]
-    array([[ 0,  1],
-           [10, 11]])
-    >>> sliding_window_view(x, shape)[1, 2]
-    array([[12, 13],
-           [22, 23]])
-    """
-    # first convert input to array, possibly keeping subclass
-    x = np.array(x, copy=False)
-
-    try:
-        shape = np.array(shape, np.int)
-    except ValueError:
-        raise TypeError('`shape` must be a sequence of integer')
-    else:
-        if shape.ndim > 1:
-            raise ValueError('`shape` must be one-dimensional sequence of integer')
-        if len(x.shape) != len(shape):
-            raise ValueError("`shape` length doesn't match with input array dimensions")
-        if np.any(shape <= 0):
-            raise ValueError('`shape` cannot contain non-positive value')
-
-    if step is None:
-        step = np.ones(len(x.shape), np.intp)
-    else:
-        try:
-            step = np.array(step, np.intp)
-        except ValueError:
-            raise TypeError('`step` must be a sequence of integer')
-        else:
-            if step.ndim > 1:
-                raise ValueError('`step` must be one-dimensional sequence of integer')
-            if len(x.shape) != len(step):
-                raise ValueError("`step` length doesn't match with input array dimensions")
-            if np.any(step <= 0):
-                raise ValueError('`step` cannot contain non-positive value')
-
-    o = (np.array(x.shape) - shape) // step + 1  # output shape
-    if np.any(o <= 0):
-        raise ValueError('window shape cannot larger than input array shape')
-
-    strides = x.strides
-    view_strides = strides * step
-
-    view_shape = np.concatenate((o, shape), axis=0)
-    view_strides = np.concatenate((view_strides, strides), axis=0)
-    view = np.lib.stride_tricks.as_strided(x, view_shape, view_strides, writeable=False)
-
-    return view
 
 
 def latlon_to_dist(lat_lon_start, lat_lon_end, R=6378):
@@ -450,6 +298,31 @@ def align_image_pair(image_pair, info_list, verbose=True):
     # Note: we use order=1 since default order=3 spline was giving
     # negative values for images (leading to invalid nonsense)
     return shift(img2, offset_tup, order=1)
+
+
+def crop_dem_rsc(dem_rsc, cropped_img):
+    """Adjusts the old dem_rsc for a cropped image
+
+    Takes the 'file_length' and 'width' keys for a cropped image
+    and adjusts for the smaller size with a new dict
+
+    Example:
+    >>> im_3x2 = np.arange(6).reshape((3, 2))
+    >>> new_info = crop_dem_rsc({'file_length': 1325,'width': 1000}, im_3x2)
+    >>> print(sorted(new_info.items()))
+    [('file_length', 3), ('width', 2)]
+    """
+    nrows, ncols = cropped_img.shape
+    new_dem_rsc = copy.copy(dem_rsc)
+    # Handle upper or lower, don't change what they give
+    is_upper = 'WIDTH' in new_dem_rsc
+    if is_upper:
+        new_dem_rsc['WIDTH'] = ncols
+        new_dem_rsc['FILE_LENGTH'] = nrows
+    else:
+        new_dem_rsc['width'] = ncols
+        new_dem_rsc['file_length'] = nrows
+    return new_dem_rsc
 
 
 def crop_to_smallest(image_list):
@@ -648,3 +521,159 @@ def read_los_output(los_file):
 
 def convert_xyz_latlon_to_enu(lat_lons, xyz_array):
     return [rotate_xyz_to_enu(xyz, lat, lon) for (lat, lon), xyz in zip(lat_lons, xyz_array)]
+
+
+def split_array_into_blocks(data):
+    """Takes a long rectangular array (like UAVSAR) and creates blocks
+
+    Useful to look at small data pieces at a time in dismph
+
+    Returns:
+        blocks (list[np.ndarray])
+    """
+    rows, cols = data.shape
+    blocks = np.array_split(data, np.ceil(rows / cols))
+    return blocks
+
+
+def split_and_save(filename):
+    """Creates several files from one long data file
+
+    Saves them with same filename with .1,.2,.3... at end before ext
+    e.g. brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.int produces
+        brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.1.int
+        brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.2.int...
+
+    Output:
+        newpaths (list[str]): full paths to new files created
+    """
+
+    data = insar.sario.load_file(filename)
+    blocks = split_array_into_blocks(data)
+
+    ext = insar.sario.get_file_ext(filename)
+    newpaths = []
+
+    for ix_step, block in enumerate(blocks, start=1):
+        fname = filename.replace(ext, ".{}{}".format(str(ix_step), ext))
+        print("Saving {}".format(fname))
+        insar.sario.save(fname, block)
+        newpaths.append(fname)
+
+    return newpaths
+
+
+def combine_cor_amp(corfilename, save=True):
+    """Takes a .cor file from UAVSAR (which doesn't contain amplitude),
+    and creates a new file with amplitude data interleaved for dishgt
+
+    dishgt brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01_withamp.cor 3300 1 5000 1
+      where 3300 is number of columns/samples, and we want the first 5000 rows. the final
+      1 is needed for the contour interval to set a max of 1 for .cor data
+
+    Inputs:
+        corfilename (str): string filename of the .cor from UAVSAR
+        save (bool): True if you want to save the combined array
+
+    Returns:
+        cor_with_amp (np.ndarray) combined correlation + amplitude (as complex64)
+        outfilename (str): same name as corfilename, but _withamp.cor
+            Saves a new file under outfilename
+    Note: .ann and .int files must be in same directory as .cor
+    """
+    ext = insar.sario.get_file_ext(corfilename)
+    assert ext == '.cor', 'corfilename must be a .cor file'
+
+    intfilename = corfilename.replace('.cor', '.int')
+
+    intdata = insar.sario.load_file(intfilename)
+    amp = np.abs(intdata)
+
+    cordata = insar.sario.load_file(corfilename)
+    # For dishgt, it expects the two matrices stacked [[amp]; [cor]]
+    cor_with_amp = np.vstack((amp, cordata))
+
+    outfilename = corfilename.replace('.cor', '_withamp.cor')
+    insar.sario.save(outfilename, cor_with_amp)
+    return cor_with_amp, outfilename
+
+
+def sliding_window_view(x, shape, step=None):
+    """
+    Create sliding window views of the N dimensions array with the given window
+    shape. Window slides across each dimension of `x` and provides subsets of `x`
+    at any window position.
+
+    Adapted from https://github.com/numpy/numpy/pull/10771
+
+    Args:
+        x (ndarray): Array to create sliding window views.
+        shape (sequence of int): The shape of the window.
+            Must have same length as number of input array dimensions.
+        step: (sequence of int), optional
+            The steps of window shifts for each dimension on input array at a time.
+            If given, must have same length as number of input array dimensions.
+            Defaults to 1 on all dimensions.
+    Returns:
+        ndarray: Sliding window views (or copies) of `x`.
+            view.shape = (x.shape - shape) // step + 1
+
+    Notes
+    -----
+    ``sliding_window_view`` create sliding window views of the N dimensions array
+    with the given window shape and its implementation based on ``as_strided``.
+    The returned views are *readonly* due to the numpy sliding tricks.
+    Examples
+    --------
+    >>> i, j = np.ogrid[:3,:4]
+    >>> x = 10*i + j
+    >>> shape = (2,2)
+    >>> sliding_window_view(x, shape)[0, 0]
+    array([[ 0,  1],
+           [10, 11]])
+    >>> sliding_window_view(x, shape)[1, 2]
+    array([[12, 13],
+           [22, 23]])
+    """
+    # first convert input to array, possibly keeping subclass
+    x = np.array(x, copy=False)
+
+    try:
+        shape = np.array(shape, np.int)
+    except ValueError:
+        raise TypeError('`shape` must be a sequence of integer')
+    else:
+        if shape.ndim > 1:
+            raise ValueError('`shape` must be one-dimensional sequence of integer')
+        if len(x.shape) != len(shape):
+            raise ValueError("`shape` length doesn't match with input array dimensions")
+        if np.any(shape <= 0):
+            raise ValueError('`shape` cannot contain non-positive value')
+
+    if step is None:
+        step = np.ones(len(x.shape), np.intp)
+    else:
+        try:
+            step = np.array(step, np.intp)
+        except ValueError:
+            raise TypeError('`step` must be a sequence of integer')
+        else:
+            if step.ndim > 1:
+                raise ValueError('`step` must be one-dimensional sequence of integer')
+            if len(x.shape) != len(step):
+                raise ValueError("`step` length doesn't match with input array dimensions")
+            if np.any(step <= 0):
+                raise ValueError('`step` cannot contain non-positive value')
+
+    o = (np.array(x.shape) - shape) // step + 1  # output shape
+    if np.any(o <= 0):
+        raise ValueError('window shape cannot larger than input array shape')
+
+    strides = x.strides
+    view_strides = strides * step
+
+    view_shape = np.concatenate((o, shape), axis=0)
+    view_strides = np.concatenate((view_strides, strides), axis=0)
+    view = np.lib.stride_tricks.as_strided(x, view_shape, view_strides, writeable=False)
+
+    return view
