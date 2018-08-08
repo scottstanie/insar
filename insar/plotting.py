@@ -90,7 +90,13 @@ def plot_image_shifted(img, fig=None, cmap='seismic', title='', label=''):
     return fig, axes_image
 
 
-def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=None, **savekwargs):
+def animate_stack(stack,
+                  pause_time=200,
+                  display=True,
+                  titles=None,
+                  label=None,
+                  save_title=None,
+                  **savekwargs):
     """Runs a matplotlib loop to show each image in a 3D stack
 
     Args:
@@ -101,6 +107,7 @@ def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=N
             False would be if you jsut want to save the movie with as save_title
         titles (list[str]): Optional- Names of images corresponding to stack.
             Length must match stack's 1st dimension length
+        label (str): Optional- Label for the colorbar
         save_title (str): Optional- if provided, will save the animation to a file
             extension must be a valid extension for a animation writer:
         savekwargs: extra keyword args passed to animation.save
@@ -124,7 +131,8 @@ def animate_stack(stack, pause_time=200, display=True, titles=None, save_title=N
     cbar = fig.colorbar(axes_image)
     cbar_ticks = np.linspace(minval, maxval, num=6, endpoint=True)
     cbar.set_ticks(cbar_ticks)
-    cbar.set_label("Centimeters")
+    if label:
+        cbar.set_label(label)
 
     def update_im(idx):
         axes_image.set_data(stack[idx, :, :])
