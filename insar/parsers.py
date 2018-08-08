@@ -200,6 +200,11 @@ class Sentinel(Base):
         """Alias for relative orbit number"""
         return self.relative_orbit
 
+    @property
+    def date(self):
+        """Date of acquisition: shortcut for start_time.date()"""
+        return self.start_time.date()
+
 
 class Uavsar(Base):
     """Uavsar reference for Polsar:
