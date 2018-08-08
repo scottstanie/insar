@@ -57,7 +57,7 @@ def find_files(directory, search_term):
     return glob.glob(os.path.join(directory, search_term))
 
 
-def load_file(filename, downsample=None, rsc_file=None, ann_info=None, verbose=False):
+def load_file(filename, downsample=None, rsc_file=None, ann_info=None, verbose=False, **kwargs):
     """Examines file type for real/complex and runs appropriate load
 
     Args:
@@ -97,7 +97,7 @@ def load_file(filename, downsample=None, rsc_file=None, ann_info=None, verbose=F
     if ext in ELEVATION_EXTS:
         return load_elevation(filename)[::downsample, ::downsample]
     elif ext == '.rsc':
-        return load_dem_rsc(filename)
+        return load_dem_rsc(filename, **kwargs)
 
     # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
     rsc_data = None
@@ -173,7 +173,7 @@ def load_elevation(filename):
     return dem_img
 
 
-def load_dem_rsc(filename, lower=False):
+def load_dem_rsc(filename, lower=False, **kwargs):
     """Loads and parses the .dem.rsc file
 
     Args:
