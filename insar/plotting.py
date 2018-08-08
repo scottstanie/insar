@@ -77,13 +77,41 @@ def make_shifted_cmap(img, cmap_name='seismic'):
     return shifted_color_map(cmap_name, midpoint=midpoint)
 
 
-def plot_image_shifted(img, fig=None, cmap='seismic', title='', label=''):
-    """Plot an image with a zero-shifted colorbar"""
+def plot_image_shifted(img,
+                       fig=None,
+                       cmap='seismic',
+                       img_data=None,
+                       title='',
+                       label='',
+                       xlabel='',
+                       ylabel=''):
+    """Plot an image with a zero-shifted colorbar
+
+    Args:
+        img (ndarray): 2D numpy array to imshow
+        fig (matplotlib.Figure): Figure to plot image onto
+        ax (matplotlib.AxesSubplot): Axes to plot image onto
+            mutually exclusive with fig option
+        cmap (str): name of colormap to shift
+        img_data (dict): rsc_data from sario.load_dem_rsc containing lat/lon
+            data about image, used to make axes into lat/lon instead of row/col
+        title (str): Title for image
+        label (str): label for colorbar
+    """
+    if img_data:
+        extent = utils.latlon_grid_extent(**img_data)
+    else:
+        nrows, ncols = img.shape
+        extent = (0, ncols, nrows, 0)
+
     if not fig:
         fig = plt.figure()
+    ax = fig.gca()
     shifted_cmap = make_shifted_cmap(img, cmap)
-    axes_image = plt.imshow(img, cmap=shifted_cmap)  # Type: AxesImage
-    plt.title(title)
+    axes_image = ax.imshow(img, cmap=shifted_cmap, extent=extent)  # Type: AxesImage
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
 
     cbar = fig.colorbar(axes_image)
     cbar.set_label(label)
@@ -272,12 +300,14 @@ def find_blobs(image, blob_func='blob_log', **kwargs):
     return blob_func(image, **kwargs)
 
 
-def plot_blobs(image, blobs=None, cur_axes=None, color='blue', **kwargs):
+def plot_blobs(image, blobs=None, cur_fig=None, cur_axes=None, color='blue', **kwargs):
     """Takes the blob results from find_blobs and overlays on image
 
     Can either make new figure of plot on top of existing axes.
     """
-    if not cur_axes:
+    if cur_fig:
+        cur_axes = cur_fig.gca()
+    elif not cur_axes:
         cur_fig = plt.figure()
         cur_axes = cur_fig.gca()
         cur_axes.imshow(image)
@@ -291,8 +321,9 @@ def plot_blobs(image, blobs=None, cur_axes=None, color='blue', **kwargs):
         c = plt.Circle((x, y), r, color=color, fill=False, linewidth=2, clip_on=False)
         cur_axes.add_patch(c)
 
+    plt.draw()
     plt.show()
-    return blobs
+    return blobs, cur_axes
 
 
 def get_blob_values(image, blobs):
@@ -304,3 +335,20 @@ def get_blob_values(image, blobs):
 def sort_blobs_by_val(image, blobs):
     blob_vals = get_blob_values(image, blobs)
     return sorted(zip(blobs, blob_vals), key=lambda tup: abs(tup[1]), reverse=True)
+
+
+def blobs_rowcol_to_latlon(blobs, blob_info):
+    """Converts (y, x, sigma) format to (lat, lon, sigma_latlon)
+
+    Uses the dem x_step/y_step data to rescale blobs so that appear on an
+    image using lat/lon as the `extent` argument of imshow.
+    """
+    blob_info = {k.lower(): v for k, v in blob_info.items()}
+    blobs_latlon = []
+    for blob in blobs:
+        row, col, r = blob
+        lat, lon = utils.rowcol_to_latlon(row, col, blob_info)
+        new_radius = r * blob_info['x_step']
+        blobs_latlon.append((lat, lon, new_radius))
+
+    return blobs_latlon
