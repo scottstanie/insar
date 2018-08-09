@@ -1,4 +1,5 @@
 import unittest
+import glob
 import os
 from os.path import join, dirname
 
@@ -15,6 +16,10 @@ class TestInvertSbas(unittest.TestCase):
         self.geolist_path = join(self.igram_path, 'geolist')
         self.intlist_path = join(self.igram_path, 'intlist')
         self.actual_time_diffs = np.array([2, 6, 4])
+
+    def tearDown(self):
+        for f in glob.glob(join(self.igram_path, "*flat*")):
+            os.remove(f)
 
     def test_time_diff(self):
         geolist = timeseries.read_geolist(self.geolist_path)

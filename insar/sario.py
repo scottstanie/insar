@@ -21,14 +21,14 @@ FLOAT_32_LE = np.dtype('<f4')
 INT_16_LE = np.dtype('<i2')
 INT_16_BE = np.dtype('>i2')
 
-SENTINEL_EXTS = ['.geo', '.cc', '.int', '.amp', '.unw']
+SENTINEL_EXTS = ['.geo', '.cc', '.int', '.amp', '.unw', '.unwflat']
 UAVSAR_EXTS = ['.int', '.mlc', '.slc', '.amp', '.cor', '.grd']
 
 # Notes: .grd, .mlc can be either real or complex for UAVSAR,
 # .amp files are real only for UAVSAR, complex for sentinel processing
 # However, we label them as real here since we can tell .amp files
 # are from sentinel if there exists .rsc files in the same dir
-COMPLEX_EXTS = ['.int', '.slc', '.geo', '.cc', '.unw', '.mlc', '.grd']
+COMPLEX_EXTS = ['.int', '.slc', '.geo', '.cc', '.unw', '.unwflat', '.mlc', '.grd']
 REAL_EXTS = ['.amp', '.cor', '.mlc', '.grd']  # NOTE: .cor might only be real for UAVSAR
 # Note about UAVSAR Multi-look products:
 # Will end with `_ML5X5.grd`, e.g., for 5x5 downsampled
@@ -36,7 +36,8 @@ REAL_EXTS = ['.amp', '.cor', '.mlc', '.grd']  # NOTE: .cor might only be real fo
 ELEVATION_EXTS = ['.dem', '.hgt']
 
 # These file types are not simple complex matrices: see load_stacked for detail
-STACKED_FILES = ['.cc', '.unw']
+# .unwflat are same as .unw, but with a linear ramp removed
+STACKED_FILES = ['.cc', '.unw', '.unwflat']
 # real or complex for these depends on the polarization
 UAVSAR_POL_DEPENDENT = ['.grd', '.mlc']
 
@@ -104,7 +105,7 @@ def load_file(filename, downsample=None, rsc_file=None, ann_info=None, verbose=F
     if rsc_file:
         rsc_data = load_dem_rsc(rsc_file)
     if ext in SENTINEL_EXTS:
-        rsc_file = rsc_file if rsc_file else _find_rsc_file(filename)
+        rsc_file = rsc_file if rsc_file else _find_rsc_file(filename, verbose=verbose)
         rsc_data = load_dem_rsc(rsc_file)
         if verbose:
             logger.info("Loaded rsc_data from %s", rsc_file)

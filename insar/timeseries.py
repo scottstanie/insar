@@ -602,11 +602,11 @@ def remove_ramp(z, order=1):
 def deramp_stack(path, unw_ext):
     """Handles removing linear ramps for all files in a stack
 
-    Saves the files to a ".flat" version if save=True
+    Saves the files to a ".unwflat" version if save=True
     """
     logger.info("Removing any ramp from each stack layer")
     # Get file names to save results/ check if we deramped already
-    flat_ext = ".flat" + unw_ext
+    flat_ext = unw_ext + 'flat'
     unw_file_names = sorted(sario.find_files(path, "*" + unw_ext))
     unw_file_names = [f for f in unw_file_names if flat_ext not in f]
     flat_file_names = [filename.replace(unw_ext, flat_ext) for filename in unw_file_names]
