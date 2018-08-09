@@ -163,7 +163,7 @@ def build_B_matrix(geolist, intlist):
     return B
 
 
-def read_stack(directory, file_ext):
+def read_stack(directory, file_ext, **kwargs):
     """Reads a set of images into a 3D ndarray
 
     Args:
@@ -175,7 +175,7 @@ def read_stack(directory, file_ext):
             1st dim is the index of the image: stack[0, :, :]
     """
     all_file_names = sorted(sario.find_files(directory, "*" + file_ext))
-    all_files = [sario.load_file(filename) for filename in all_file_names]
+    all_files = [sario.load_file(filename, **kwargs) for filename in all_file_names]
     return np.stack(all_files, axis=0)
 
 
@@ -442,11 +442,12 @@ def run_inversion(igram_path,
     geolist = read_geolist(filepath=igram_path)
 
     logger.debug("Reading unw stack")
-    unw_stack = read_stack(igram_path, ".unw")
 
+    unw_ext = ".unw"
     if deramp:
-        logger.info("Removing any ramp from each stack layer")
-        unw_stack = np.stack(remove_ramp(layer) for layer in unw_stack)
+        unw_stack = deramp_stack(igram_path, unw_ext)
+    else:
+        unw_stack = read_stack(igram_path, unw_ext)
 
     # Process the correlation, mask bad corr pixels in the igrams
     # TODO
@@ -596,6 +597,33 @@ def remove_ramp(z, order=1):
         return z - z_fit
     else:
         raise NotImplementedError("Order only implemented for 1 and 2")
+
+
+def deramp_stack(path, unw_ext):
+    """Handles removing linear ramps for all files in a stack
+
+    Saves the files to a ".flat" version if save=True
+    """
+    logger.info("Removing any ramp from each stack layer")
+    # Get file names to save results/ check if we deramped already
+    flat_ext = ".flat" + unw_ext
+    unw_file_names = sorted(sario.find_files(path, "*" + unw_ext))
+    unw_file_names = [f for f in unw_file_names if flat_ext not in f]
+    flat_file_names = [filename.replace(unw_ext, flat_ext) for filename in unw_file_names]
+    if not all(os.path.exists(f) for f in flat_file_names):
+        logger.info("Removing and saving files.")
+        test_unw = sario.load(unw_file_names[0])
+        out_stack = np.empty((len(unw_file_names), *test_unw.shape), dtype=sario.FLOAT_32_LE)
+        # Shape of read_stack with return_amp is (nlayers, 2, nrows, ncols)
+        for idx, (amp_data, height_data) in enumerate(read_stack(path, unw_ext, return_amp=True)):
+            # return_amp gives a 3D ndarray, [amp, height]
+            r = remove_ramp(height_data)
+            new_unw = np.stack((amp_data, r), axis=0)
+            sario.save(flat_file_names[idx], new_unw)
+            out_stack[idx] = r
+        return out_stack
+    else:
+        return np.stack(remove_ramp(layer) for layer in read_stack(path, flat_ext))
 
 
 def find_coherent_patch(correlations, window=11):
