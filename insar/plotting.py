@@ -275,29 +275,44 @@ def equalize_and_mask(image, low=1e-6, high=2, fill_value=np.inf, db=True):
     return utils.db(im) if db else im
 
 
-def find_blobs(image, blob_func='blob_log', **kwargs):
+def find_blobs(image,
+               blob_func='blob_log',
+               sort_by_value=True,
+               value_threshold=1.0,
+               min_sigma=3,
+               max_sigma=60,
+               threshold=0.5,
+               **kwargs):
     """Use skimage to find blobs in image
 
     Args:
         image (ndarray): image containing blobs
         blob_func (str): which of the functions to use to find blobs
             Options: 'blob_log', 'blob_dog', 'blob_doh'
+        value_threshold (float): absolute value in the image that blob must surpass
+        threshold (float): response threshold passed to the blob finding function
+        min_sigma (int): minimum pixel size to check for blobs
+        max_sigma (int): max pixel size to check for blobs
 
     Returns:
         ndarray: list of blobs: [(r, c, s)], r = row num of center,
         c is column, s is sigma (size of Gaussian that detected blob)
 
     Notes:
-        kwargs can be passed to the blob_func. Examples extras are
-        threshold (default=0.2, high=fewer blobs), min_sigma,
-        max_sigma, num_sigma (except for blob_dog), overlap.
+        kwargs are passed to the blob_func (such as overlap).
         See reference for full list
 
     Reference:
     [1] http://scikit-image.org/docs/dev/auto_examples/features_detection/plot_blob.html
     """
     blob_func = getattr(skimage.feature, blob_func)
-    return blob_func(image, **kwargs)
+    blobs = blob_func(
+        image, threshold=threshold, min_sigma=min_sigma, max_sigma=max_sigma, **kwargs)
+    blobs, values = sort_blobs_by_val(blobs, image)
+
+    if value_threshold:
+        blobs = [blob for blob, value in zip(blobs, values) if abs(value) >= value_threshold]
+    return np.array(blobs)
 
 
 def plot_blobs(image, blobs=None, cur_fig=None, cur_axes=None, color='blue', **kwargs):
@@ -318,7 +333,7 @@ def plot_blobs(image, blobs=None, cur_fig=None, cur_axes=None, color='blue', **k
 
     for blob in blobs:
         y, x, r = blob
-        c = plt.Circle((x, y), r, color=color, fill=False, linewidth=2, clip_on=False)
+        c = plt.Circle((x, y), np.sqrt(2) * r, color=color, fill=False, linewidth=2, clip_on=False)
         cur_axes.add_patch(c)
 
     plt.draw()
@@ -326,15 +341,25 @@ def plot_blobs(image, blobs=None, cur_fig=None, cur_axes=None, color='blue', **k
     return blobs, cur_axes
 
 
-def get_blob_values(image, blobs):
+def get_blob_values(blobs, image):
     """Finds the image's value of each blob center"""
     coords = blobs[:, :2].astype(int)
     return image[coords[:, 0], coords[:, 1]]
 
 
-def sort_blobs_by_val(image, blobs):
-    blob_vals = get_blob_values(image, blobs)
-    return sorted(zip(blobs, blob_vals), key=lambda tup: abs(tup[1]), reverse=True)
+def sort_blobs_by_val(blobs, image):
+    """Sort the blobs by their absolute value in the image
+
+    Note: blobs must be in (row, col, sigma) form, not (lat, lon, sigma_ll)
+
+    Returns:
+        tuple[tuple[ndarrays], tuple[floats]]: The pair of (blobs, values)
+    """
+    blob_vals = get_blob_values(blobs, image)
+    blob_val_tuples = sorted(zip(blobs, blob_vals), key=lambda tup: abs(tup[1]), reverse=True)
+    # Now return as separated into (tuple of blobs, tuple of values)
+    # zip is it's own inverse
+    return tuple(zip(*blob_val_tuples))
 
 
 def blobs_rowcol_to_latlon(blobs, blob_info):
@@ -351,4 +376,4 @@ def blobs_rowcol_to_latlon(blobs, blob_info):
         new_radius = r * blob_info['x_step']
         blobs_latlon.append((lat, lon, new_radius))
 
-    return blobs_latlon
+    return np.array(blobs_latlon)
