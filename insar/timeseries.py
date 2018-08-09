@@ -216,8 +216,8 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
     if not isinstance(window, int) or window < 1:
         raise ValueError("Invalid window %s: must be odd positive int" % window)
     elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
-        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col,
-                                                                                 stack.shape))
+        raise ValueError(
+            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
 
     if window % 2 == 0:
         window -= 1
@@ -603,7 +603,7 @@ def remove_ramp(z, order=1):
 def deramp_stack(path, unw_ext):
     """Handles removing linear ramps for all files in a stack
 
-    Saves the files to a ".unwflat" version if save=True
+    Saves the files to a ".unwflat" version
     """
     logger.info("Removing any ramp from each stack layer")
     # Get file names to save results/ check if we deramped already
@@ -624,7 +624,7 @@ def deramp_stack(path, unw_ext):
             out_stack[idx] = r
         return out_stack
     else:
-        return np.stack(remove_ramp(layer) for layer in read_stack(path, flat_ext))
+        return read_stack(path, flat_ext)
 
 
 def find_coherent_patch(correlations, window=11):
@@ -899,5 +899,6 @@ def avg_stack(igram_path, row, col):
     print(total_days * (np.max(unw_normed_shifted.reshape(
         (num_igrams, -1)), axis=1) - np.min(unw_normed_shifted.reshape((num_igrams, -1)), axis=1)))
     print("Converted to CM:")
-    print(total_days * (np.max(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1) -
-                        np.min(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
+    print(total_days * (np.max(unw_normed_shifted.reshape(
+        (num_igrams, -1)) * PHASE_TO_CM, axis=1) - np.min(
+            unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
