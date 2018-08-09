@@ -216,8 +216,8 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
     if not isinstance(window, int) or window < 1:
         raise ValueError("Invalid window %s: must be odd positive int" % window)
     elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
-        raise ValueError(
-            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
+        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col,
+                                                                                 stack.shape))
 
     if window % 2 == 0:
         window -= 1
@@ -613,8 +613,8 @@ def deramp_stack(path, unw_ext):
     flat_file_names = [filename.replace(unw_ext, flat_ext) for filename in unw_file_names]
     if not all(os.path.exists(f) for f in flat_file_names):
         logger.info("Removing and saving files.")
-        test_unw = sario.load(unw_file_names[0])
-        out_stack = np.empty((len(unw_file_names), *test_unw.shape), dtype=sario.FLOAT_32_LE)
+        nrows, ncols = sario.load(unw_file_names[0]).shape
+        out_stack = np.empty((len(unw_file_names), nrows, ncols), dtype=sario.FLOAT_32_LE)
         # Shape of read_stack with return_amp is (nlayers, 2, nrows, ncols)
         for idx, (amp_data, height_data) in enumerate(read_stack(path, unw_ext, return_amp=True)):
             # return_amp gives a 3D ndarray, [amp, height]
@@ -899,6 +899,5 @@ def avg_stack(igram_path, row, col):
     print(total_days * (np.max(unw_normed_shifted.reshape(
         (num_igrams, -1)), axis=1) - np.min(unw_normed_shifted.reshape((num_igrams, -1)), axis=1)))
     print("Converted to CM:")
-    print(total_days * (np.max(unw_normed_shifted.reshape(
-        (num_igrams, -1)) * PHASE_TO_CM, axis=1) - np.min(
-            unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
+    print(total_days * (np.max(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1) -
+                        np.min(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
