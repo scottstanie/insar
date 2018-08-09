@@ -66,11 +66,13 @@ def _reorganize_files():
     # Then bring back the useful ones, renamed
     geofiles = glob.glob(os.path.join("extra_files", "*.geo"))
     for geofile in geofiles:
-        geodate = Sentinel(geofile).start_time.date().strftime("%Y%m%d")
-        logger.info("Renaming {} to {}".format(geofile, geodate))
-        os.rename(geofile, geodate + ".geo")
+        s = Sentinel(geofile)
+        # Use just mission and date: S1A_20170101.geo
+        new_name = "{}_{}".format(s.mission, s.start_time.date().strftime("%Y%m%d"))
+        logger.info("Renaming {} to {}".format(geofile, new_name))
+        os.rename(geofile, new_name + ".geo")
         # also move corresponding orb timing file
-        os.rename(geofile.replace('geo', 'orbtiming'), geodate + ".orbtiming")
+        os.rename(geofile.replace('geo', 'orbtiming'), new_name + ".orbtiming")
 
     # Move extra useful files back in main directory
     for fname in ('params', 'elevation.dem', 'elevation.dem.rsc', orig_filelist):

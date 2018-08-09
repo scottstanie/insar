@@ -13,6 +13,7 @@ scott@lidar igrams]$ head geolist
 
 """
 import os
+import re
 import glob
 import datetime
 import numpy as np
@@ -53,9 +54,9 @@ def read_geolist(filepath="./geolist"):
     with open(filepath) as f:
         geolist = [os.path.split(geoname)[1] for geoname in f.read().splitlines()]
 
-    if len(geolist[0]) == 12:  # YYYYmmdd.geo
-        return sorted([_parse(geo.strip(".geo")) for geo in geolist])
-    else:
+    if re.match(r'S1[AB]_\d{8}\.geo', geolist[0]):  # S1A_YYYYmmdd.geo
+        return sorted([_parse(geo.strip("S1AB_.geo")) for geo in geolist])
+    else:  # Full sentinel product name
         return sorted([Sentinel(geo).start_time.date() for geo in geolist])
 
 
