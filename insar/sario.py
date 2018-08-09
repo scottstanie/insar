@@ -116,7 +116,9 @@ def load_file(filename, downsample=None, rsc_file=None, ann_info=None, verbose=F
         ann_info = u.parse_ann_file()
 
     if ext in STACKED_FILES:
-        return load_stacked(filename, rsc_data)[::downsample, ::downsample]
+        stacked = load_stacked(filename, rsc_data, **kwargs)
+        return (stacked[::downsample, ::downsample]
+                if stacked.ndim == 2 else stacked[:, ::downsample, ::downsample])
     # having rsc_data implies that this is not a UAVSAR file, so is complex
     elif rsc_data or is_complex(filename):
         return load_complex(
@@ -305,7 +307,7 @@ def load_complex(filename, ann_info=None, rsc_data=None):
     return combine_real_imag(real_data, imag_data)
 
 
-def load_stacked(filename, rsc_data, return_amp=False):
+def load_stacked(filename, rsc_data, return_amp=False, **kwargs):
     """Helper function to load .unw and .cor files
 
     Format is two stacked matrices:
@@ -321,7 +323,7 @@ def load_stacked(filename, rsc_data, return_amp=False):
 
     Returns:
         ndarray: dtype=float32, the second matrix (height, correlation, ...) parsed
-        if return_amp == True, returns a tuple (ndarray, ndarray)
+        if return_amp == True, returns two ndarrays stacked along axis=0
 
     Example illustrating how strips of data alternate:
     reading unw (unwrapped phase) data
@@ -346,7 +348,7 @@ def load_stacked(filename, rsc_data, return_amp=False):
     first = data.reshape((rows, 2 * cols))[:, :cols]
     second = data.reshape((rows, 2 * cols))[:, cols:]
     if return_amp:
-        return first, second
+        return np.stack((first, second), axis=0)
     else:
         return second
 
@@ -415,10 +417,11 @@ def save(filename, array):
 
         array.tofile(filename)
     elif ext in STACKED_FILES:
-        # TODO
-        raise NotImplementedError("{} saving not yet implemented (TODO).".format(ext))
+        if array.ndim != 3:
+            raise ValueError("Need 3D stack ([amp, data]) to save.")
+        # first = data.reshape((rows, 2 * cols))[:, :cols]
+        # second = data.reshape((rows, 2 * cols))[:, cols:]
+        np.hstack((array[0], array[1])).astype(FLOAT_32_LE).tofile(filename)
+
     else:
         raise NotImplementedError("{} saving not implemented.".format(ext))
-
-
-# TODO: possibly separate into a "parser" file
