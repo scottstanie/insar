@@ -20,6 +20,7 @@ import math
 import sys
 import subprocess
 import os
+import glob
 import numpy as np
 
 import insar
@@ -56,22 +57,24 @@ def run_sentinel_stack(sentinel_path="~/sentinel/", **kwargs):
 def _reorganize_files():
     """Records the current file names for Sentinel folder, renames to easier names
     """
-    mkdir_p('extra_files')
     # Start by recording filelist, then moving all files to new folder
-    subprocess.check_call("ls -1 ./* > original_filelist.txt", shell=True)
-    subprocess.check_call("mv ./* extra_files/", shell=True)
+    mkdir_p('extra_files')
+    orig_filelist = 'original_filelist.txt'
+    subprocess.check_call("find -maxdepth 1 > {}".format(orig_filelist), shell=True)
+    subprocess.call("mv ./* extra_files/", shell=True)
 
     # Then bring back the useful ones, renamed
     geofiles = glob.glob(os.path.join("extra_files", "*.geo"))
     for geofile in geofiles:
-        geodate = Sentinel(geofile).start_time.date().srtftime("%Y%m%d")
+        geodate = Sentinel(geofile).start_time.date().strftime("%Y%m%d")
         logger.info("Renaming {} to {}".format(geofile, geodate))
         os.rename(geofile, geodate + ".geo")
         # also move corresponding orb timing file
         os.rename(geofile.replace('geo', 'orbtiming'), geodate + ".orbtiming")
 
     # Move extra useful files back in main directory
-    os.rename(os.path.join("extra_file", 'params'), './params')
+    for fname in ('params', 'elevation.dem', 'elevation.dem.rsc', orig_filelist):
+        os.rename(os.path.join("extra_files", fname), os.path.join('.', fname))
 
 
 def prep_igrams_dir(clean=True, **kwargs):
