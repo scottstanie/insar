@@ -121,8 +121,7 @@ def load_file(filename, downsample=None, rsc_file=None, ann_info=None, verbose=F
 
     if ext in STACKED_FILES:
         stacked = load_stacked(filename, rsc_data, **kwargs)
-        return (stacked[::downsample, ::downsample]
-                if stacked.ndim == 2 else stacked[:, ::downsample, ::downsample])
+        return stacked[..., ::downsample, ::downsample]
     # having rsc_data implies that this is not a UAVSAR file, so is complex
     elif rsc_data or is_complex(filename):
         return load_complex(
