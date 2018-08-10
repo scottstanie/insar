@@ -1,7 +1,7 @@
 from __future__ import division
 import copy
 from math import sin, cos, sqrt, atan2, radians
-# import os
+import os
 import numpy as np
 from insar import sario
 from insar.log import get_log
@@ -10,14 +10,16 @@ logger = get_log()
 
 
 class LatlonImage(object):
-    def __init__(self, filename=None, image=None, dem_rsc_file=None, dem_rsc=None):
+    def __init__(self, filename=None, data=None, dem_rsc_file=None, dem_rsc=None):
         """Can pass in either filenames to load, or 2D arrays/dem_rsc dicts"""
-        # TODO: do we need to check that the rsc info matches the image?
+        # TODO: do we need to check that the rsc info matches the data?
         self.filename = filename
-        if filename and not image:
-            self.image = sario.load(filename)
+        if data:
+            self.data = data
+        elif filename:
+            self.data = sario.load(filename)
         else:
-            self.image = image
+            raise ValueError("Need data or filename")
 
         if dem_rsc_file:
             self.dem_rsc_file = dem_rsc_file
@@ -32,42 +34,45 @@ class LatlonImage(object):
             self.dem_rsc = None
 
     def __str__(self):
-        return "<LatlonImage %s>" % (self.filename or str(self.image.shape))
+        return "<LatlonImage %s>" % (self.filename or str(self.data.shape))
 
     def __repr__(self):
         return str(self)
 
     @property
     def shape(self):
-        return self.image.shape
+        return self.data.shape
 
     def __getitem__(self, item):
-        return self.image[item]
+        return self.data[item]
 
     def crop(self, start_row, end_row, start_col, end_col):
-        """Adjusts the old dem_rsc for a cropped image
+        """Adjusts the old dem_rsc for a cropped data
 
-        Takes the 'file_length' and 'width' keys for a cropped image
+        Takes the 'file_length' and 'width' keys for a cropped data
         and adjusts for the smaller size with a new dict
 
         Example:
         >>> im_test = np.arange(20).reshape((4, 5))
         >>> rsc_info = {'x_first': 1.0, 'y_first': 2.0, 'x_step': 0.1, 'y_step': 0.2, 'file_length': 1325,'width': 1000}
-        >>> im = LatlonImage(image=im_test, dem_rsc=rsc_info)
+        >>> im = LatlonImage(data=im_test, dem_rsc=rsc_info)
         >>> im.crop(0, 3, 0, 2)
         >>> print(sorted(im.dem_rsc.items()))
         [('file_length', 3), ('width', 2), ('x_first', 1.0), ('x_step', 0.1), ('y_first', 2.0), ('y_step', 0.2)]
-        >>> im2 = LatlonImage(image=im_test, dem_rsc=rsc_info)
+        >>> im2 = LatlonImage(data=im_test, dem_rsc=rsc_info)
         >>> im2.crop(1, 4, 2, 5)
         >>> print(sorted(im2.dem_rsc.items()))
         [('file_length', 3), ('width', 3), ('x_first', 1.1), ('x_step', 0.1), ('y_first', 2.4), ('y_step', 0.2)]
 
         """
-        # Note: this will overwrite the old self.image
+        # Note: this will overwrite the old self.data
         # Do we want some copy version option?
         rsc_copy = copy.copy(self.dem_rsc)
-        self.image = self.image[start_row:end_row, start_col:end_col]
-        nrows, ncols = self.image.shape
+        self.data = self.data[..., start_row:end_row, start_col:end_col]
+        if self.data.ndim > 2:
+            nlayers, nrows, ncols = self.data.shape
+        else:
+            nrows, ncols = self.data.shape
 
         rsc_copy['x_first'] = rsc_copy['x_first'] + rsc_copy['x_step'] * start_row
         rsc_copy['y_first'] = rsc_copy['y_first'] + rsc_copy['y_step'] * start_col
@@ -75,6 +80,33 @@ class LatlonImage(object):
         rsc_copy['width'] = ncols
         rsc_copy['file_length'] = nrows
         self.dem_rsc = rsc_copy
+
+
+def LatlonStack(LatlonImage):
+    """3D stack version of LatlonImage"""
+
+    def __init__(self, stack_path=None, ext=None, data=None, dem_rsc_file=None, dem_rsc=None):
+        """Can pass in either filenames to load, or 2D arrays/dem_rsc dicts"""
+        # TODO: extract common stuff from this and Latlon Image
+        self.stack_path = stack_path
+        if data:
+            self.data = data
+        elif stack_path and ext:
+            self.data = sario.load_stack(stack_path, ext)
+        else:
+            raise ValueError("Need `data` or `stack_path` and `ext`")
+
+        if dem_rsc_file:
+            self.dem_rsc_file = dem_rsc_file
+        else:
+            self.dem_rsc_file = os.path.join(stack_path, 'dem.rsc') if stack_path else None
+
+        if dem_rsc:
+            self.dem_rsc = dem_rsc
+        elif self.dem_rsc_file:
+            self.dem_rsc = sario.load(self.dem_rsc_file)
+        else:
+            self.dem_rsc = None
 
 
 def rowcol_to_latlon(row, col, rsc_data=None):
