@@ -70,12 +70,12 @@ class TestRsc(unittest.TestCase):
         self.rsc_path = join(DATAPATH, 'elevation.dem.rsc')
         # Sample dict with only lat/lon info
         self.test_rsc_data = {
-            "WIDTH": 4,
-            "FILE_LENGTH": 2,
-            "X_FIRST": -10.0,
-            "Y_FIRST": 3.0,
-            "X_STEP": 0.25,
-            "Y_STEP": -0.25
+            "width": 4,
+            "file_length": 2,
+            "x_first": -10.0,
+            "y_first": 3.0,
+            "x_step": 0.25,
+            "y_step": -0.25
         }
 
     def test_upsample_dem_rsc(self):

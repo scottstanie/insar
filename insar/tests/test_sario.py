@@ -17,10 +17,10 @@ class TestLoading(unittest.TestCase):
         self.rsc_path = join(self.datapath, 'elevation.dem.rsc')
         self.dem_path = join(self.datapath, 'elevation.dem')
         self.rsc_data = OrderedDict(
-            [('WIDTH', 2), ('FILE_LENGTH', 3), ('X_FIRST', -155.676388889), ('Y_FIRST',
+            [('width', 2), ('file_length', 3), ('x_first', -155.676388889), ('y_first',
                                                                              19.5755555567),
-             ('X_STEP', 0.000138888888), ('Y_STEP', -0.000138888888), ('X_UNIT', 'degrees'),
-             ('Y_UNIT', 'degrees'), ('Z_OFFSET', 0), ('Z_SCALE', 1), ('PROJECTION', 'LL')])
+             ('x_step', 0.000138888888), ('y_step', -0.000138888888), ('x_unit', 'degrees'),
+             ('y_unit', 'degrees'), ('z_offset', 0), ('z_scale', 1), ('projection', 'LL')])
 
     def test_load_dem_rsc(self):
         rsc_data = sario.load_dem_rsc(self.rsc_path)
@@ -37,7 +37,7 @@ class TestLoading(unittest.TestCase):
         output = sario._get_file_rows_cols(ann_info=test_ann_info)
         self.assertEqual(expected_rows_cols, output)
 
-        test_rsc_data = {'FILE_LENGTH': 3601, 'WIDTH': 7201}
+        test_rsc_data = {'file_length': 3601, 'width': 7201}
         output = sario._get_file_rows_cols(rsc_data=test_rsc_data)
         self.assertEqual(expected_rows_cols, output)
         self.assertRaises(ValueError, sario._get_file_rows_cols)
