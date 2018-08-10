@@ -58,6 +58,21 @@ def find_files(directory, search_term):
     return glob.glob(os.path.join(directory, search_term))
 
 
+def find_rsc_file(filename, verbose=False):
+    basepath = os.path.split(filename)[0]
+    # Should be just elevation.dem.rsc (for .geo folder) or dem.rsc (for igrams)
+    possible_rscs = find_files(basepath, '*.rsc')
+    if verbose:
+        logger.info("Possible rsc files:")
+        logger.info(possible_rscs)
+    if len(possible_rscs) < 1:
+        raise ValueError("{} needs a .rsc file with it for width info.".format(filename))
+    elif len(possible_rscs) > 1:
+        raise ValueError("{} has multiple .rsc files in its directory: {}".format(
+            filename, possible_rscs))
+    return possible_rscs[0]
+
+
 def load_file(filename, downsample=None, rsc_file=None, ann_info=None, verbose=False, **kwargs):
     """Examines file type for real/complex and runs appropriate load
 
@@ -76,18 +91,6 @@ def load_file(filename, downsample=None, rsc_file=None, ann_info=None, verbose=F
         ValueError: if sentinel files loaded without a .rsc file in same path
             to give the file width
     """
-
-    def _find_rsc_file(filename, verbose=False):
-        basepath = os.path.split(filename)[0]
-        # Should be just elevation.dem.rsc (for .geo folder) or dem.rsc (for igrams)
-        possible_rscs = find_files(basepath, '*.rsc')
-        if verbose:
-            logger.info("Possible rsc files:")
-            logger.info(possible_rscs)
-        if len(possible_rscs) < 1:
-            raise ValueError("{} needs a .rsc file with it for width info.".format(filename))
-        return possible_rscs[0]
-
     if downsample and (downsample < 1 or not isinstance(downsample, int)):
         raise ValueError("downsample must be a positive integer")
     else:
@@ -105,7 +108,7 @@ def load_file(filename, downsample=None, rsc_file=None, ann_info=None, verbose=F
     if rsc_file:
         rsc_data = load_dem_rsc(rsc_file)
     if ext in SENTINEL_EXTS:
-        rsc_file = rsc_file if rsc_file else _find_rsc_file(filename, verbose=verbose)
+        rsc_file = rsc_file if rsc_file else find_rsc_file(filename, verbose=verbose)
         rsc_data = load_dem_rsc(rsc_file)
         if verbose:
             logger.info("Loaded rsc_data from %s", rsc_file)
