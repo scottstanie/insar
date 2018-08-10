@@ -4,9 +4,8 @@ Helper functions to prepare and process data
 Email: scott.stanie@utexas.edu
 """
 from __future__ import division
-import copy
 import glob
-from math import floor, sin, cos, sqrt, atan2, radians
+from math import floor, sin, cos
 import errno
 import os
 import shutil
@@ -182,71 +181,6 @@ def clean_files(ext, path=".", zero_threshold=0.50, test=True):
     pool.close()
 
 
-def rowcol_to_latlon(row, col, rsc_data=None):
-    """ Takes the row, col of a pixel and finds its lat/lon
-
-    Can also pass numpy arrays of row, col.
-    row, col must match size
-
-    Args:
-        row (int or ndarray): row number
-        col (int or ndarray): col number
-        rsc_data (dict): data output from sario.load_dem_rsc
-
-    Returns:
-        tuple[float, float]: lat, lon for the pixel
-
-    Example:
-        >>> rsc_data = {"X_FIRST": 1.0, "Y_FIRST": 2.0, "X_STEP": 0.2, "Y_STEP": -0.1}
-        >>> rowcol_to_latlon(7, 3, rsc_data)
-        (1.4, 1.4)
-    """
-    # Force keys to lowercase
-    rsc_data = {k.lower(): v for k, v in rsc_data.items()}
-    start_lon = rsc_data["x_first"]
-    start_lat = rsc_data["y_first"]
-    lon_step, lat_step = rsc_data["x_step"], rsc_data["y_step"]
-    lat = start_lat + (row - 1) * lat_step
-    lon = start_lon + (col - 1) * lon_step
-
-    return lat, lon
-
-
-def latlon_to_dist(lat_lon_start, lat_lon_end, R=6378):
-    """Find the distance between two lat/lon points on Earth
-
-    Uses the haversine formula: https://en.wikipedia.org/wiki/Haversine_formula
-    so it does not account for the ellopsoidal Earth shape. Will be with about
-    0.5-1% of the correct value.
-
-    Notes: lats and lons are in degrees, and the values used for R Earth
-    (6373 km) are optimized for locations around 39 degrees from the equator
-
-    Reference: https://andrew.hedges.name/experiments/haversine/
-
-    Args:
-        lat_lon_start (tuple[int, int]): (lat, lon) in degrees of start
-        lat_lon_end (tuple[int, int]): (lat, lon) in degrees of end
-        R (float): Radius of earth
-
-    Returns:
-        float: distance between two points in km
-
-    Examples:
-        >>> round(latlon_to_dist((38.8, -77.0), (38.9, -77.1)), 1)
-        14.1
-    """
-    lat1, lon1 = lat_lon_start
-    lat2, lon2 = lat_lon_end
-    dlat = radians(lat2 - lat1)
-    dlon = radians(lon2 - lon1)
-    lat1 = radians(lat1)
-    lat2 = radians(lat2)
-    a = (sin(dlat / 2)**2) + (cos(lat1) * cos(lat2) * sin(dlon / 2)**2)
-    c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    return R * c
-
-
 def offset(img_info1, img_info2, axis=None):
     """Calculates how many pixels two images are offset
 
@@ -300,31 +234,6 @@ def align_image_pair(image_pair, info_list, verbose=True):
     return shift(img2, offset_tup, order=1)
 
 
-def crop_dem_rsc(dem_rsc, cropped_img):
-    """Adjusts the old dem_rsc for a cropped image
-
-    Takes the 'file_length' and 'width' keys for a cropped image
-    and adjusts for the smaller size with a new dict
-
-    Example:
-    >>> im_3x2 = np.arange(6).reshape((3, 2))
-    >>> new_info = crop_dem_rsc({'file_length': 1325,'width': 1000}, im_3x2)
-    >>> print(sorted(new_info.items()))
-    [('file_length', 3), ('width', 2)]
-    """
-    nrows, ncols = cropped_img.shape
-    new_dem_rsc = copy.copy(dem_rsc)
-    # Handle upper or lower, don't change what they give
-    is_upper = 'WIDTH' in new_dem_rsc
-    if is_upper:
-        new_dem_rsc['WIDTH'] = ncols
-        new_dem_rsc['FILE_LENGTH'] = nrows
-    else:
-        new_dem_rsc['width'] = ncols
-        new_dem_rsc['file_length'] = nrows
-    return new_dem_rsc
-
-
 def crop_to_smallest(image_list):
     """Makes all images the smallest dimension so they are alignable
 
@@ -344,126 +253,6 @@ def crop_to_smallest(image_list):
     shapes = np.array([i.shape for i in image_list])
     min_rows, min_cols = np.min(shapes, axis=0)
     return [img[:min_rows, :min_cols] for img in image_list]
-
-
-def latlon_grid(rows=None,
-                cols=None,
-                y_step=None,
-                x_step=None,
-                y_first=None,
-                x_first=None,
-                width=None,
-                file_length=None,
-                sparse=False,
-                **kwargs):
-    """Takes sizes and spacing info, creates a grid of values
-
-    Args:
-        rows (int): number of rows
-        cols (int): number of cols
-        y_step (float): spacing between rows
-        x_step (float): spacing between cols
-        y_first (float): starting location of first row at top
-        x_first (float): starting location of first col on left
-        sparse (bool): Optional (default False). Passed through to
-            np.meshgrid to optionally conserve memory
-
-    Returns:
-        tuple[ndarray, ndarray]: the XX, YY grids of longitudes and lats
-
-    Examples:
-    >>> test_grid_data = {'cols': 2, 'rows': 3, 'x_first': -155.0, 'x_step': 0.01, 'y_first': 19.5, 'y_step': -0.2}
-    >>> lons, lats = latlon_grid(**test_grid_data)
-    >>> lons
-    array([[-155.  , -154.99],
-           [-155.  , -154.99],
-           [-155.  , -154.99]])
-    >>> lats
-    array([[19.5, 19.5],
-           [19.3, 19.3],
-           [19.1, 19.1]])
-    """
-    rows = rows or file_length
-    cols = cols or width
-    x = np.linspace(x_first, x_first + (cols - 1) * x_step, cols).reshape((1, cols))
-    y = np.linspace(y_first, y_first + (rows - 1) * y_step, rows).reshape((rows, 1))
-    return np.meshgrid(x, y, sparse=sparse)
-
-
-def latlon_grid_extent(rows=None,
-                       cols=None,
-                       y_step=None,
-                       x_step=None,
-                       y_first=None,
-                       x_first=None,
-                       file_length=None,
-                       width=None,
-                       **kwargs):
-    """Takes sizes and spacing info, finds boundaries
-
-    Used for `matplotlib.pyplot.imshow` keyword arg `extent`:
-    extent : scalars (left, right, bottom, top)
-
-    Args:
-        rows (int): number of rows
-        cols (int): number of cols
-        y_step (float): spacing between rows
-        x_step (float): spacing between cols
-        y_first (float): starting location of first row at top
-        x_first (float): starting location of first col on left
-        file_length (int): alias for number of rows (used in dem.rsc)
-            Not needed if `rows` is supplied
-        width (int): alias for number of cols (used in dem.rsc)
-            Not needed if `cols` is supplied
-
-    Returns:
-        tuple[float]: the boundaries of the latlon grid in order:
-        (lon_left,lon_right,lat_bottom,lat_top)
-
-    Examples:
-    >>> test_grid_data = {'cols': 2, 'rows': 3, 'x_first': -155.0, 'x_step': 0.01, 'y_first': 19.5, 'y_step': -0.2}
-    >>> print(latlon_grid_extent(**test_grid_data))
-    (-155.0, -154.99, 19.1, 19.5)
-    """
-    rows = rows or file_length
-    cols = cols or width
-    return (x_first, x_first + x_step * (cols - 1), y_first + y_step * (rows - 1), y_first)
-
-
-def latlon_grid_corners(**kwargs):
-    """Takes sizes and spacing info, finds corner points in (x, y) form
-
-    Returns:
-        list[tuple[float]]: the corners of the latlon grid in order:
-        (top right, top left, bottom left, bottom right)
-    """
-    left, right, bot, top = latlon_grid_extent(**kwargs)
-    return [(right, top), (left, top), (left, bot), (right, bot)]
-
-
-def latlon_grid_midpoint(**kwargs):
-    """Takes sizes and spacing info, finds midpoint in (x, y) form
-
-    Returns:
-        tuple[float]: midpoint of the latlon grid
-    """
-    left, right, bot, top = latlon_grid_extent(**kwargs)
-    return (left + right) / 2, (top + bot) / 2
-
-
-def rotate_xyz_to_enu(xyz, lat, lon):
-    """Rotates a vector in XYZ coords to ENU
-
-    Args:
-        xyz (list[float], ndarray[float]): length 3 x, y, z coordinates
-        lat (float): latitude of point to rotate into
-        lon (float): longitude of point to rotate into
-    """
-    # Rotate about axis 3 with longitude, then axis 1 with latitude
-    R3 = rot(90 + lon, 3)
-    R1 = rot(90 - lat, 1)
-    R = np.matmul(R3, R1)
-    return np.matmul(R, xyz)
 
 
 def rot(angle, axis):
@@ -517,6 +306,21 @@ def read_los_output(los_file):
     lat_lon_list = [_line_to_floats(line) for line in los_lines[::3]]
     xyz_list = [_line_to_floats(line) for line in los_lines[1::3]]
     return lat_lon_list, xyz_list
+
+
+def rotate_xyz_to_enu(xyz, lat, lon):
+    """Rotates a vector in XYZ coords to ENU
+
+    Args:
+        xyz (list[float], ndarray[float]): length 3 x, y, z coordinates
+        lat (float): latitude of point to rotate into
+        lon (float): longitude of point to rotate into
+    """
+    # Rotate about axis 3 with longitude, then axis 1 with latitude
+    R3 = rot(90 + lon, 3)
+    R1 = rot(90 - lat, 1)
+    R = np.matmul(R3, R1)
+    return np.matmul(R, xyz)
 
 
 def convert_xyz_latlon_to_enu(lat_lons, xyz_array):
