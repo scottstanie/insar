@@ -41,6 +41,21 @@ STACKED_FILES = ['.cc', '.unw', '.unwflat']
 # real or complex for these depends on the polarization
 UAVSAR_POL_DEPENDENT = ['.grd', '.mlc']
 
+RSC_KEY_TYPES = [
+    ('width', int),
+    ('file_length', int),
+    ('x_step', float),
+    ('y_step', float),
+    ('x_first', float),
+    ('y_first', float),
+    ('x_unit', str),
+    ('y_unit', str),
+    ('z_offset', int),
+    ('z_scale', int),
+    ('projection', str),
+]
+RSC_KEYS = [tup[0] for tup in RSC_KEY_TYPES]
+
 
 def find_files(directory, search_term):
     """Searches for files in `directory` using globbing on search_term
@@ -206,14 +221,11 @@ def load_dem_rsc(filename, lower=False, **kwargs):
     # Use OrderedDict so that upsample_dem_rsc creates with same ordering as old
     output_data = collections.OrderedDict()
     # Second part in tuple is used to cast string to correct type
-    field_tups = (('WIDTH', int), ('FILE_LENGTH', int), ('X_STEP', float), ('Y_STEP', float),
-                  ('X_FIRST', float), ('Y_FIRST', float), ('X_UNIT', str), ('Y_UNIT', str),
-                  ('Z_OFFSET', int), ('Z_SCALE', int), ('PROJECTION', str))
 
     rsc_filename = '{}.rsc'.format(filename) if not filename.endswith('.rsc') else filename
     with open(rsc_filename, 'r') as f:
         for line in f.readlines():
-            for field, num_type in field_tups:
+            for field, num_type in RSC_KEY_TYPES:
                 if line.startswith(field):
                     output_data[field] = num_type(line.split()[1])
 
@@ -239,7 +251,8 @@ def format_dem_rsc(rsc_dict):
     """
     outstring = ""
     for field, value in rsc_dict.items():
-        # Files seemed to be left justified with 13 spaces? Not sure why 13
+        # Files seemed to be left justified with 14 spaces? Not sure why 14
+        # Apparently it was an old fortran format, where they use "read(15)"
         if field.lower() in ('x_step', 'y_step'):
             # give step floats proper sig figs to not output scientific notation
             outstring += "{field:<14s}{val:0.12f}\n".format(field=field.upper(), val=value)

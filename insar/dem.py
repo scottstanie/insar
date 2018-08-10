@@ -68,19 +68,20 @@ except NameError:
     pass
 
 logger = get_log()
-RSC_KEYS = [
-    'WIDTH',
-    'FILE_LENGTH',
-    'X_FIRST',
-    'Y_FIRST',
-    'X_STEP',
-    'Y_STEP',
-    'X_UNIT',
-    'Y_UNIT',
-    'Z_OFFSET',
-    'Z_SCALE',
-    'PROJECTION',
+RSC_KEY_TYPES = [
+    ('WIDTH', int),
+    ('FILE_LENGTH', int),
+    ('X_STEP', float),
+    ('Y_STEP', float),
+    ('X_FIRST', float),
+    ('Y_FIRST', float),
+    ('X_UNIT', str),
+    ('Y_UNIT', str),
+    ('Z_OFFSET', int),
+    ('Z_SCALE', int),
+    ('PROJECTION', str),
 ]
+RSC_KEYS = [tup[0] for tup in RSC_KEY_TYPES]
 
 
 def _get_cache_dir():
@@ -487,12 +488,12 @@ class Stitcher:
 
         The reverse of Tile.srtm1_tile_names()
 
-        Used for .rsc file formation to make X_FIRST and Y_FIRST
+        Used for .rsc file formation to make x_first and y_first
         The names of individual data tiles refer to the longitude
         and latitude of the lower-left (southwest) corner of the tile.
 
         Example: N19W156.hgt refers to `bottom left` corner, while data starts
-        at top left. This would return (X_FIRST, Y_FIRST) = (-156.0, 20.0)
+        at top left. This would return (x_first, y_first) = (-156.0, 20.0)
 
         Args:
             tile_name (str): name of .hgt file for SRTM1 tile
@@ -597,28 +598,28 @@ class Stitcher:
         Examples:
             >>> s = Stitcher(['N19W156.hgt', 'N19W155.hgt'])
             >>> s.create_dem_rsc()
-            OrderedDict([('WIDTH', 7201), ('FILE_LENGTH', 3601), ('X_FIRST', -156.0), ('Y_FIRST', 20.0), ('X_STEP', 0.000277777777), ('Y_STEP', -0.000277777777), ('X_UNIT', 'degrees'), ('Y_UNIT', 'degrees'), ('Z_OFFSET', 0), ('Z_SCALE', 1), ('PROJECTION', 'LL')])
+            OrderedDict([('width', 7201), ('file_length', 3601), ('x_first', -156.0), ('y_first', 20.0), ('x_step', 0.000277777777), ('y_step', -0.000277777777), ('x_unit', 'degrees'), ('y_unit', 'degrees'), ('z_offset', 0), ('z_scale', 1), ('projection', 'LL')])
         """
 
         # Use an OrderedDict for the key/value pairs so writing to file easy
         rsc_dict = collections.OrderedDict.fromkeys(RSC_KEYS)
         rsc_dict.update({
-            'X_UNIT': 'degrees',
-            'Y_UNIT': 'degrees',
-            'Z_OFFSET': 0,
-            'Z_SCALE': 1,
-            'PROJECTION': 'LL',
+            'x_unit': 'degrees',
+            'y_unit': 'degrees',
+            'z_offset': 0,
+            'z_scale': 1,
+            'projection': 'LL',
         })
 
         # Remove paths from tile filenames, if they exist
         x_first, y_first = self.start_lon_lat(self.tile_file_list[0])
         nrows, ncols = self.shape
         # TODO: figure out where to generalize for SRTM3
-        rsc_dict.update({'WIDTH': ncols, 'FILE_LENGTH': nrows})
-        rsc_dict.update({'X_FIRST': x_first, 'Y_FIRST': y_first})
+        rsc_dict.update({'width': ncols, 'file_length': nrows})
+        rsc_dict.update({'x_first': x_first, 'y_first': y_first})
 
         x_step, y_step = self._find_step_sizes()
-        rsc_dict.update({'X_STEP': x_step, 'Y_STEP': y_step})
+        rsc_dict.update({'x_step': x_step, 'y_step': y_step})
         return rsc_dict
 
 
@@ -724,10 +725,10 @@ def crop_stitched_dem(bounds, stitched_dem, rsc_data):
     """
     indexes, new_starts = find_bounding_idxs(
         bounds,
-        rsc_data['X_STEP'],
-        rsc_data['Y_STEP'],
-        rsc_data['X_FIRST'],
-        rsc_data['Y_FIRST'],
+        rsc_data['x_step'],
+        rsc_data['y_step'],
+        rsc_data['x_first'],
+        rsc_data['y_first'],
     )
     left_idx, bot_idx, right_idx, top_idx = indexes
     cropped_dem = stitched_dem[top_idx:bot_idx, left_idx:right_idx]
@@ -737,10 +738,10 @@ def crop_stitched_dem(bounds, stitched_dem, rsc_data):
 
 def rsc_bounds(rsc_data):
     """Uses the x/y and step data from a .rsc file to generate LatLonBox for .kml"""
-    north = rsc_data['Y_FIRST']
-    west = rsc_data['X_FIRST']
-    east = west + rsc_data['WIDTH'] * rsc_data['X_STEP']
-    south = north + rsc_data['FILE_LENGTH'] * rsc_data['Y_STEP']
+    north = rsc_data['y_first']
+    west = rsc_data['x_first']
+    east = west + rsc_data['width'] * rsc_data['x_step']
+    south = north + rsc_data['file_length'] * rsc_data['y_step']
     return {'north': north, 'south': south, 'east': east, 'west': west}
 
 
@@ -808,10 +809,10 @@ def main(geojson, data_source, rate, output_name):
     new_x_first, new_y_first = new_starts
     new_rows, new_cols = new_sizes
     # Now adjust the .dem.rsc data to reflect new top-left corner and new shape
-    rsc_dict['X_FIRST'] = new_x_first
-    rsc_dict['Y_FIRST'] = new_y_first
-    rsc_dict['FILE_LENGTH'] = new_rows
-    rsc_dict['WIDTH'] = new_cols
+    rsc_dict['x_first'] = new_x_first
+    rsc_dict['y_first'] = new_y_first
+    rsc_dict['file_length'] = new_rows
+    rsc_dict['width'] = new_cols
 
     # Upsampling:
     rsc_filename = output_name + '.rsc'
