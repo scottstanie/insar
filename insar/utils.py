@@ -481,3 +481,29 @@ def sliding_window_view(x, shape, step=None):
     view = np.lib.stride_tricks.as_strided(x, view_shape, view_strides, writeable=False)
 
     return view
+
+
+# Randoms using the sentinelapi
+def find_slc_products(gj_obj, date_start, date_end, area_relation='contains'):
+    """Query for Sentinel 1 SCL products with common options
+
+    from sentinelsat import SentinelAPI, read_geojson, geojson_to_wkt
+    api = api = SentinelAPI(user, pw)
+    pecosgeo = geojson_to_wkt(geojson.read_json('pecosBig.geojson'))
+    find_slc_products(pecosgeo, '20150101', '20171230')
+
+    Returns:
+        OrderedDict: key = '528c0630-bbbf-4a95-8415-c55aa5ce915a', the sentinel
+    """
+    # area_relation : 'Intersection', 'Contains', 'IsWithin'
+    # contains means that the Sentinel footprint completely contains your geojson object
+    return api.query(
+        gj_obj,
+        date=(date_start, date_end),
+        platformname='Sentinel-1',
+        producttype='SLC',
+        area_relation=area_relation)
+
+
+def show_titles(products):
+    return [p['title'] for p in products.values()]
