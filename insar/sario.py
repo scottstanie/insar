@@ -35,7 +35,7 @@ REAL_EXTS = ['.amp', '.cor', '.mlc', '.grd']  # NOTE: .cor might only be real fo
 
 ELEVATION_EXTS = ['.dem', '.hgt']
 
-# These file types are not simple complex matrices: see load_stacked for detail
+# These file types are not simple complex matrices: see load_stacked_img for detail
 # .unwflat are same as .unw, but with a linear ramp removed
 STACKED_FILES = ['.cc', '.unw', '.unwflat']
 # real or complex for these depends on the polarization
@@ -135,7 +135,7 @@ def load_file(filename, downsample=None, rsc_file=None, ann_info=None, verbose=F
         ann_info = u.parse_ann_file()
 
     if ext in STACKED_FILES:
-        stacked = load_stacked(filename, rsc_data, **kwargs)
+        stacked = load_stacked_img(filename, rsc_data, **kwargs)
         return stacked[..., ::downsample, ::downsample]
     # having rsc_data implies that this is not a UAVSAR file, so is complex
     elif rsc_data or is_complex(filename):
@@ -323,7 +323,7 @@ def load_complex(filename, ann_info=None, rsc_data=None):
     return combine_real_imag(real_data, imag_data)
 
 
-def load_stacked(filename, rsc_data, return_amp=False, **kwargs):
+def load_stacked_img(filename, rsc_data, return_amp=False, **kwargs):
     """Helper function to load .unw and .cor files
 
     Format is two stacked matrices:
