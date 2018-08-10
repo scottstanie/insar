@@ -308,7 +308,7 @@ def avg_stack(context, ref_row, ref_col):
     """
     if not ref_row or ref_col:
         click.echo("Finding most coherent patch in stack.")
-        cc_stack = insar.timeseries.read_stack(context['path'], ".cc")
+        cc_stack = insar.sario.load_stack(context['path'], ".cc")
         ref_row, ref_col = insar.timeseries.find_coherent_patch(cc_stack)
         click.echo("Using %s as .unw reference point", (ref_row, ref_col))
     insar.timeseries.avg_stack(context['path'], ref_row, ref_col)

@@ -164,22 +164,6 @@ def build_B_matrix(geolist, intlist):
     return B
 
 
-def read_stack(directory, file_ext, **kwargs):
-    """Reads a set of images into a 3D ndarray
-
-    Args:
-        directory (str): path to a dir containing all files
-        file_ext (str): ending type of files to read (e.g. '.unw')
-
-    Returns:
-        ndarray: 3D array of each file stacked
-            1st dim is the index of the image: stack[0, :, :]
-    """
-    all_file_names = sorted(sario.find_files(directory, "*" + file_ext))
-    all_files = [sario.load_file(filename, **kwargs) for filename in all_file_names]
-    return np.stack(all_files, axis=0)
-
-
 ''' TODO: may not need this after all
 def find_stack_max(stack):
     """Gets the row, col of the max value for the mean of the stack
@@ -277,7 +261,7 @@ def invert_sbas(delta_phis, timediffs, B, constant_vel=False, alpha=0, differenc
 
     Args:
         delta_phis (ndarray): 1D array of unwrapped phases (delta phis)
-            comes from 1 pixel of read_stack along 3rd axis
+            comes from 1 pixel of load_stack along 3rd axis
         B (ndarray): output of build_B_matrix for current set of igrams
         timediffs (np.array): dtype=int, days between each SAR acquisitions
             length will be equal to B.shape[1], 1 less than num SAR acquisitions
@@ -448,7 +432,7 @@ def run_inversion(igram_path,
     if deramp:
         unw_stack = deramp_stack(igram_path, unw_ext)
     else:
-        unw_stack = read_stack(igram_path, unw_ext)
+        unw_stack = sario.load_stack(igram_path, unw_ext)
 
     # Process the correlation, mask bad corr pixels in the igrams
     # TODO
@@ -456,7 +440,7 @@ def run_inversion(igram_path,
     # Use the given reference, or find one on based on max correlation
     if any(r is None for r in reference):
         logger.info("Finding most coherent patch in stack.")
-        cc_stack = read_stack(igram_path, ".cc")
+        cc_stack = sario.load_stack(igram_path, ".cc")
         ref_row, ref_col = find_coherent_patch(cc_stack)
         logger.info("Using %s as .unw reference point", (ref_row, ref_col))
     else:
@@ -615,8 +599,9 @@ def deramp_stack(path, unw_ext):
         logger.info("Removing and saving files.")
         nrows, ncols = sario.load(unw_file_names[0]).shape
         out_stack = np.empty((len(unw_file_names), nrows, ncols), dtype=sario.FLOAT_32_LE)
-        # Shape of read_stack with return_amp is (nlayers, 2, nrows, ncols)
-        for idx, (amp_data, height_data) in enumerate(read_stack(path, unw_ext, return_amp=True)):
+        # Shape of sario.load_stack with return_amp is (nlayers, 2, nrows, ncols)
+        for idx, (amp_data, height_data) in enumerate(
+                sario.load_stack(path, unw_ext, return_amp=True)):
             # return_amp gives a 3D ndarray, [amp, height]
             r = remove_ramp(height_data)
             new_unw = np.stack((amp_data, r), axis=0)
@@ -624,7 +609,7 @@ def deramp_stack(path, unw_ext):
             out_stack[idx] = r
         return out_stack
     else:
-        return read_stack(path, flat_ext)
+        return sario.load_stack(path, flat_ext)
 
 
 def find_coherent_patch(correlations, window=11):
@@ -635,7 +620,7 @@ def find_coherent_patch(correlations, window=11):
 
     Args:
         correlations (ndarray): 3D array of correlations:
-            correlations = read_stack('path/to/correlations', '.cc')
+            correlations = sario.load_stack('path/to/correlations', '.cc')
 
         window (int): size of the patch to consider
 
@@ -855,7 +840,7 @@ def avg_stack(igram_path, row, col):
         dest = os.path.join(subset_dir, n)
         copyfile(src, dest)
 
-    unw_stack = read_stack(subset_dir, '.unw')
+    unw_stack = sario.load_stack(subset_dir, '.unw')
     unw_stack = np.stack(remove_ramp(layer) for layer in unw_stack)
 
     # Pick reference point and shift

@@ -441,3 +441,19 @@ def save(filename, array):
 
     else:
         raise NotImplementedError("{} saving not implemented.".format(ext))
+
+
+def load_stack(directory, file_ext, **kwargs):
+    """Reads a set of images into a 3D ndarray
+
+    Args:
+        directory (str): path to a dir containing all files
+        file_ext (str): ending type of files to read (e.g. '.unw')
+
+    Returns:
+        ndarray: 3D array of each file stacked
+            1st dim is the index of the image: stack[0, :, :]
+    """
+    all_file_names = sorted(find_files(directory, "*" + file_ext))
+    all_files = [load(filename, **kwargs) for filename in all_file_names]
+    return np.stack(all_files, axis=0)

@@ -32,7 +32,7 @@ class LatlonImage(object):
             self.dem_rsc = None
 
     def __str__(self):
-        return "<LatlonImage (%s)>" % self.filename or self.image.shape
+        return "<LatlonImage %s>" % (self.filename or str(self.image.shape))
 
     def __repr__(self):
         return str(self)

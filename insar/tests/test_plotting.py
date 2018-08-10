@@ -4,7 +4,7 @@ import tempfile
 import shutil
 import matplotlib.pyplot as plt
 
-from insar import plotting, timeseries
+from insar import plotting, timeseries, sario
 
 
 class TestPlotting(unittest.TestCase):
@@ -12,7 +12,7 @@ class TestPlotting(unittest.TestCase):
         self.datapath = join(dirname(__file__), 'data')
         igram_path = join(self.datapath, 'sbas_test')
         self.igram_path = igram_path
-        self.stack = timeseries.read_stack(igram_path, ".unw")
+        self.stack = sario.load_stack(igram_path, ".unw")
 
     def test_animate_stack(self):
         try:
