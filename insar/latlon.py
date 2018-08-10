@@ -12,6 +12,7 @@ logger = get_log()
 class LatlonImage(object):
     def __init__(self, filename=None, image=None, dem_rsc_file=None, dem_rsc=None):
         """Can pass in either filenames to load, or 2D arrays/dem_rsc dicts"""
+        # TODO: do we need to check that the rsc info matches the image?
         self.filename = filename
         if filename and not image:
             self.image = sario.load(filename)
@@ -21,12 +22,14 @@ class LatlonImage(object):
         if dem_rsc_file:
             self.dem_rsc_file = dem_rsc_file
         else:
-            self.dem_rsc_file = sario.find_rsc_file(filename)
+            self.dem_rsc_file = sario.find_rsc_file(filename) if filename else None
 
-        if self.dem_rsc_file:
+        if dem_rsc:
+            self.dem_rsc = dem_rsc
+        elif self.dem_rsc_file:
             self.dem_rsc = sario.load(self.dem_rsc_file)
         else:
-            self.dem_rsc = dem_rsc
+            self.dem_rsc = None
 
     def __str__(self):
         return "<LatlonImage (%s)>" % self.filename or self.image.shape
@@ -41,29 +44,37 @@ class LatlonImage(object):
     def __getitem__(self, item):
         return self.image[item]
 
-    def crop(self, stac):
+    def crop(self, start_row, end_row, start_col, end_col):
         """Adjusts the old dem_rsc for a cropped image
 
         Takes the 'file_length' and 'width' keys for a cropped image
         and adjusts for the smaller size with a new dict
 
         Example:
-        >>> im_3x2 = np.arange(6).reshape((3, 2))
-        >>> new_info = crop_dem_rsc({'file_length': 1325,'width': 1000}, im_3x2)
-        >>> print(sorted(new_info.items()))
-        [('file_length', 3), ('width', 2)]
+        >>> im_test = np.arange(20).reshape((4, 5))
+        >>> rsc_info = {'x_first': 1.0, 'y_first': 2.0, 'x_step': 0.1, 'y_step': 0.2, 'file_length': 1325,'width': 1000}
+        >>> im = LatlonImage(image=im_test, dem_rsc=rsc_info)
+        >>> im.crop(0, 3, 0, 2)
+        >>> print(sorted(im.dem_rsc.items()))
+        [('file_length', 3), ('width', 2), ('x_first', 1.0), ('x_step', 0.1), ('y_first', 2.0), ('y_step', 0.2)]
+        >>> im2 = LatlonImage(image=im_test, dem_rsc=rsc_info)
+        >>> im2.crop(1, 4, 2, 5)
+        >>> print(sorted(im2.dem_rsc.items()))
+        [('file_length', 3), ('width', 3), ('x_first', 1.1), ('x_step', 0.1), ('y_first', 2.4), ('y_step', 0.2)]
+
         """
+        # Note: this will overwrite the old self.image
+        # Do we want some copy version option?
+        rsc_copy = copy.copy(self.dem_rsc)
+        self.image = self.image[start_row:end_row, start_col:end_col]
         nrows, ncols = self.image.shape
-        new_dem_rsc = copy.copy(self.dem_rsc)
-        # Handle upper or lower, don't change what they give
-        is_upper = 'WIDTH' in new_dem_rsc
-        if is_upper:
-            new_dem_rsc['WIDTH'] = ncols
-            new_dem_rsc['FILE_LENGTH'] = nrows
-        else:
-            new_dem_rsc['width'] = ncols
-            new_dem_rsc['file_length'] = nrows
-        return new_dem_rsc
+
+        rsc_copy['x_first'] = rsc_copy['x_first'] + rsc_copy['x_step'] * start_row
+        rsc_copy['y_first'] = rsc_copy['y_first'] + rsc_copy['y_step'] * start_col
+
+        rsc_copy['width'] = ncols
+        rsc_copy['file_length'] = nrows
+        self.dem_rsc = rsc_copy
 
 
 def rowcol_to_latlon(row, col, rsc_data=None):
