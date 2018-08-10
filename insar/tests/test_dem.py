@@ -5,10 +5,8 @@ import shutil
 from os.path import join, dirname
 import os
 import responses
-import numpy as np
-from numpy.testing import assert_array_almost_equal
 
-from insar import dem, geojson, sario
+from insar import dem, geojson
 
 DATAPATH = join(dirname(__file__), 'data')
 NETRC_PATH = join(DATAPATH, 'netrc')
@@ -132,7 +130,8 @@ PROJECTION    LL
 </kml>
 """
         tifname = "out.tif"
-        output = dem.create_kml(self.test_rsc_data, tifname)
+        output = dem.create_kml(self.test_rsc_data, tifname, desc="my desc", title="test_title")
+        self.assertEqual(expected, output)
 
 
 """
