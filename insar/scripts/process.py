@@ -114,7 +114,7 @@ def run_ps_sbas_igrams(rate=1, looks=None, **kwargs):
     logger.info("Gathering file size info from elevation.dem.rsc")
     elevation_dem_rsc_file = '../elevation.dem.rsc'
     rsc_data = insar.sario.load_dem_rsc(elevation_dem_rsc_file)
-    xsize, ysize = calc_sizes(rate, rsc_data['WIDTH'], rsc_data['FILE_LENGTH'])
+    xsize, ysize = calc_sizes(rate, rsc_data['width'], rsc_data['file_length'])
 
     # the "1 1" is xstart ystart
     # Default number of looks is the upsampling rate so that
@@ -133,7 +133,7 @@ def convert_int_tif(**kwargs):
     # Default name by ps_sbas_igrams
     igram_rsc = insar.sario.load_dem_rsc('dem.rsc')
     convert_cmd = """for i in ./*.int ; do dismphfile "$i" {igram_width} ; mv dismph.tif `echo "$i" | sed 's/int$/tif/'` ; done""".format(
-        igram_width=igram_rsc['WIDTH'])
+        igram_width=igram_rsc['width'])
     logger.info(convert_cmd)
     subprocess.check_call(convert_cmd, shell=True)
 
@@ -147,7 +147,7 @@ def run_snaphu(lowpass=None, **kwargs):
     igram_rsc = insar.sario.load_dem_rsc('dem.rsc')
     snaphu_script = os.path.join(SCRIPTS_DIR, 'run_snaphu.sh')
     snaphu_cmd = '{filepath} {width} {lowpass}'.format(
-        filepath=snaphu_script, width=igram_rsc['WIDTH'], lowpass=lowpass)
+        filepath=snaphu_script, width=igram_rsc['width'], lowpass=lowpass)
     logger.info(snaphu_cmd)
     subprocess.check_call(snaphu_cmd, shell=True)
 

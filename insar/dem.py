@@ -68,20 +68,6 @@ except NameError:
     pass
 
 logger = get_log()
-RSC_KEY_TYPES = [
-    ('WIDTH', int),
-    ('FILE_LENGTH', int),
-    ('X_STEP', float),
-    ('Y_STEP', float),
-    ('X_FIRST', float),
-    ('Y_FIRST', float),
-    ('X_UNIT', str),
-    ('Y_UNIT', str),
-    ('Z_OFFSET', int),
-    ('Z_SCALE', int),
-    ('PROJECTION', str),
-]
-RSC_KEYS = [tup[0] for tup in RSC_KEY_TYPES]
 
 
 def _get_cache_dir():
@@ -602,7 +588,7 @@ class Stitcher:
         """
 
         # Use an OrderedDict for the key/value pairs so writing to file easy
-        rsc_dict = collections.OrderedDict.fromkeys(RSC_KEYS)
+        rsc_dict = collections.OrderedDict.fromkeys(sario.RSC_KEYS)
         rsc_dict.update({
             'x_unit': 'degrees',
             'y_unit': 'degrees',

@@ -44,10 +44,10 @@ UAVSAR_POL_DEPENDENT = ['.grd', '.mlc']
 RSC_KEY_TYPES = [
     ('width', int),
     ('file_length', int),
-    ('x_step', float),
-    ('y_step', float),
     ('x_first', float),
     ('y_first', float),
+    ('x_step', float),
+    ('y_step', float),
     ('x_unit', str),
     ('y_unit', str),
     ('z_offset', int),
@@ -175,7 +175,7 @@ def load_elevation(filename):
     # Either get info from .dem.rsc
     if ext == '.dem':
         info = load_dem_rsc(filename)
-        dem_img = data.reshape((info['FILE_LENGTH'], info['WIDTH']))
+        dem_img = data.reshape((info['file_length'], info['width']))
 
     # Or check if we are using STRM1 (3601x3601) or SRTM3 (1201x1201)
     else:
@@ -226,7 +226,7 @@ def load_dem_rsc(filename, lower=False, **kwargs):
     with open(rsc_filename, 'r') as f:
         for line in f.readlines():
             for field, num_type in RSC_KEY_TYPES:
-                if line.startswith(field):
+                if line.startswith(field.upper()):
                     output_data[field] = num_type(line.split()[1])
 
     if lower:
@@ -267,7 +267,7 @@ def _get_file_rows_cols(ann_info=None, rsc_data=None):
     if (not rsc_data and not ann_info) or (rsc_data and ann_info):
         raise ValueError("needs either ann_info or rsc_data (but not both) to find number of cols")
     elif rsc_data:
-        return rsc_data['FILE_LENGTH'], rsc_data['WIDTH']
+        return rsc_data['file_length'], rsc_data['width']
     elif ann_info:
         return ann_info['rows'], ann_info['cols']
 
