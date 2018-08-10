@@ -14,7 +14,7 @@ class LatlonImage(object):
         """Can pass in either filenames to load, or 2D arrays/dem_rsc dicts"""
         # TODO: do we need to check that the rsc info matches the data?
         self.filename = filename
-        if data:
+        if data is not None:
             self.data = data
         elif filename:
             self.data = sario.load(filename)
