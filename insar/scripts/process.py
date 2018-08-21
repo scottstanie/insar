@@ -25,7 +25,7 @@ import numpy as np
 
 import insar
 import sardem
-import sentineleof
+import eof
 from insar.log import get_log, log_runtime
 from insar.utils import mkdir_p
 from insar.parsers import Sentinel
@@ -36,7 +36,7 @@ SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def download_eof(mission=None, date=None, **kwargs):
     """1. Download precision orbit files"""
-    sentineleof.main(mission=mission, date=date)
+    eof.main(mission=mission, date=date)
 
 
 def create_dem(geojson=None, rate=1, data_source='NASA', **kwargs):
