@@ -36,7 +36,7 @@ SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def download_eof(mission=None, date=None, **kwargs):
     """1. Download precision orbit files"""
-    eof.main(mission=mission, date=date)
+    eof.download.main(mission=mission, date=date)
 
 
 def create_dem(geojson=None, rate=1, data_source='NASA', **kwargs):

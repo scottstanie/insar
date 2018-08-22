@@ -4,7 +4,6 @@ Main command line entry point to manage all other sub commands
 import os
 import click
 import insar
-import matplotlib.pyplot as plt
 
 
 # Main entry point:
