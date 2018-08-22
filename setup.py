@@ -26,7 +26,7 @@ setuptools.setup(
         "Topic :: Scientific/Engineering",
         "Intended Audience :: Science/Research",
     ),
-    install_requires=["numpy", "scipy", "requests", "matplotlib", "click"],
+    install_requires=["numpy", "scipy", "requests", "matplotlib", "click", "sardem", "sentineleof"],
     entry_points={
         "console_scripts": [
             "insar=insar.scripts.cli:cli",

@@ -22,15 +22,6 @@ class TestLoading(unittest.TestCase):
              ('x_step', 0.000138888888), ('y_step', -0.000138888888), ('x_unit', 'degrees'),
              ('y_unit', 'degrees'), ('z_offset', 0), ('z_scale', 1), ('projection', 'LL')])
 
-    def test_load_dem_rsc(self):
-        rsc_data = sario.load_dem_rsc(self.rsc_path)
-        self.assertEqual(self.rsc_data, rsc_data)
-
-    def test_format_dem_rsc(self):
-        output = sario.format_dem_rsc(self.rsc_data)
-        read_file = open(self.rsc_path).read()
-        self.assertEqual(output, read_file)
-
     def test_get_file_rows_cols(self):
         expected_rows_cols = (3601, 7201)
         test_ann_info = {'rows': 3601, 'cols': 7201}
