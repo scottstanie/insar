@@ -4,7 +4,6 @@ Main command line entry point to manage all other sub commands
 import os
 import click
 import insar
-import matplotlib.pyplot as plt
 
 
 # Main entry point:
@@ -24,75 +23,6 @@ def cli(ctx, verbose, path):
     ctx.obj = {}
     ctx.obj['verbose'] = verbose
     ctx.obj['path'] = path
-
-
-# COMMAND: DOWNLOAD
-@cli.command()
-@click.option("--date", "-d", help="Validity date for EOF to download")
-@click.option(
-    "--mission",
-    "-m",
-    type=click.Choice(["S1A", "S1B"]),
-    help="Sentinel satellite to download (None gets both S1A and S1B)")
-@click.pass_obj
-def download(context, **kwargs):
-    """Download Sentinel precise orbit files.
-
-    Saves files to current directory, regardless of what --path
-    is given to search.
-
-    Download EOFs for specific date, or searches for Sentinel files in --path.
-    With no arguments, searches current directory for Sentinel 1 products
-    """
-    insar.eof.main(context['path'], kwargs['mission'], kwargs['date'])
-
-
-# COMMAND: DEM
-@cli.command()
-@click.option(
-    "--geojson",
-    "-g",
-    required=True,
-    type=click.File('r'),
-    help="File containing the geojson object for DEM bounds")
-@click.option(
-    "--rate",
-    "-r",
-    default=1,
-    type=click.IntRange(0, 30),  # Reasonable range of upsampling rates
-    help="Rate at which to upsample DEM (default=1, no upsampling)")
-@click.option(
-    "--output",
-    "-o",
-    default="elevation.dem",
-    help="Name of output dem file (default=elevation.dem)")
-@click.option(
-    "--data-source",
-    "-d",
-    type=click.Choice(['NASA', 'AWS']),
-    default='NASA',
-    help="Source of SRTM data. See insar.dem docstring for more about data.")
-@click.pass_obj
-def dem(context, geojson, data_source, rate, output):
-    """Stiches .hgt files to make one DEM and .dem.rsc file
-
-    Pick a lat/lon bounding box for a DEM, and it will download
-    the necessary SRTM1 tile, combine into one array,
-    then upsample using upsample.c
-
-    Suggestion for box: http://geojson.io gives you geojson for any polygon
-    Take the output of that and save to a file (e.g. mybox.geojson
-
-    Usage:
-
-        insar dem --geojson data/mybox.geojson --rate 2
-
-        insar dem -g data/mybox.geojson -r 2 -o elevation.dem
-
-    Default out is elevation.dem for upsampled version, elevation_small.dem
-    Also creates elevation.dem.rsc with start lat/lon, stride, and other info.
-    """
-    insar.dem.main(geojson, data_source, rate, output)
 
 
 # COMMAND: PROCESS
@@ -186,44 +116,6 @@ def process(context, **kwargs):
     kwargs['verbose'] = context['verbose']
 
     insar.scripts.process.main(context['path'], kwargs)
-
-
-# COMMAND: kml
-@cli.command()
-@click.argument("tiffile", required=True)
-@click.argument("rscfile", default="dem.rsc")
-@click.option("--title", "-t", help="Title of the KML object once loaded.")
-@click.option("--desc", "-d", help="Description for google Earth.")
-def kml(tiffile, rscfile, title, desc):
-    """Creates .kml file for tif image
-
-    TIFFILE is the .tif image to load into Google Earth
-    RSCFILE is the .rsc file containing lat/lon start and steps
-        Default will be 'dem.rsc'
-
-
-        insar kml 20180420_20180502.tif dem.rsc -t "My igram" -d "From April in Hawaii" > out.kml
-    """
-    rsc_data = insar.sario.load_dem_rsc(rscfile)
-    print(insar.dem.create_kml(rsc_data, tiffile, title=title, desc=desc))
-
-
-# COMMAND: view-dem
-@cli.command(name='view-dem')
-@click.argument("demfile", type=click.Path(exists=True, dir_okay=False), nargs=-1)
-def view_dem(demfile):
-    """View a .dem file with matplotlib.
-
-    Can list multiple .dem files to open in separate figures.
-    """
-    for fname in demfile:
-        dem = insar.sario.load_file(fname)
-        plt.figure()
-        plt.imshow(dem)
-        plt.colorbar()
-
-    # Wait for windows to close to exit the script
-    plt.show(block=True)
 
 
 # COMMAND: animate

@@ -1,8 +1,2 @@
 include README.md
 include LICENSE.txt
-include insar/upsample.c
-include Makefile
-include insar/scripts/run_snaphu.sh
-include insar/*.pyx
-include insar/*.pyd
-include insar/c_upsample.c

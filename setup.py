@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="insar",
-    version="1.1.3",
+    version="1.2.0",
     author="Scott Staniewicz",
     author_email="scott.stanie@utexas.com",
     description="Tools for gathering and preprocessing InSAR data",
@@ -32,8 +32,4 @@ setuptools.setup(
             "insar=insar.scripts.cli:cli",
         ],
     },
-    ext_modules=[
-        setuptools.Extension(
-            "insar.c_upsample", ["insar/c_upsample.pyx"], extra_compile_args=["-O3", "-std=gnu99"])
-    ],
     zip_safe=False)
