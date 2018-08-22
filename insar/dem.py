@@ -617,7 +617,7 @@ def _up_size(cur_size, rate):
         >>> _up_size(3, 2)
         5
     """
-    return math.floor(1 + (cur_size - 1) * rate)
+    return int(math.floor(1 + (cur_size - 1) * rate))
 
 
 def upsample_dem_rsc(rate=None, rsc_dict=None, rsc_filepath=None):
