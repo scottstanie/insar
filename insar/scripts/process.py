@@ -39,15 +39,18 @@ def download_eof(mission=None, date=None, **kwargs):
     eof.download.main(mission=mission, date=date)
 
 
-def create_dem(geojson=None, rate=1, data_source='NASA', **kwargs):
+def create_dem(geojson=None,
+               corner=None,
+               dlat=None,
+               dlon=None,
+               rate=1,
+               data_source='NASA',
+               **kwargs):
     """2. Download, upsample, and stich a DEM"""
-    if not geojson:
-        logger.error("For step 2 (dem creation), --geojson is needed.")
-        sys.exit(1)
     # Don't think this name needs to be an option for process
     output_name = 'elevation.dem'
     logger.info("Running: sardem.dem:main")
-    sardem.dem.main(geojson, data_source, rate, output_name)
+    sardem.dem.main(corner, dlon, dlat, geojson, data_source, rate, output_name)
 
 
 def run_sentinel_stack(sentinel_path="~/sentinel/", **kwargs):
