@@ -118,7 +118,7 @@ def rowcol_to_latlon(row, col, rsc_data=None):
     Args:
         row (int or ndarray): row number
         col (int or ndarray): col number
-        rsc_data (dict): data output from sario.load_dem_rsc
+        rsc_data (dict): data output from load_dem_rsc
 
     Returns:
         tuple[float, float]: lat, lon for the pixel

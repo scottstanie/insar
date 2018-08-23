@@ -23,6 +23,7 @@ import subprocess
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import uniform_filter
 from scipy import interpolate
+import sardem.loading
 
 from insar.parsers import Sentinel
 from insar import sario, utils, plotting
@@ -718,7 +719,7 @@ def find_east_up_coeffs(asc_path, desc_path):
     """
     asc_path = os.path.realpath(asc_path)
     desc_path = os.path.realpath(desc_path)
-    asc_dem_rsc = sario.load_dem_rsc(os.path.join(asc_path, 'dem.rsc'), lower=True)
+    asc_dem_rsc = sardem.loading.load_dem_rsc(os.path.join(asc_path, 'dem.rsc'), lower=True)
 
     midpoint = utils.latlon_grid_midpoint(**asc_dem_rsc)
     # The path to each orbit's .db files: assumed one directory higher

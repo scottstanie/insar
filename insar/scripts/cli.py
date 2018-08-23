@@ -4,6 +4,7 @@ Main command line entry point to manage all other sub commands
 import os
 import click
 import insar
+import sardem
 
 
 # Main entry point:
@@ -175,7 +176,7 @@ def view_stack(context, filename, cmap, label, title, rowcol):
     if rowcol:
         rsc_data = None
     else:
-        rsc_data = insar.sario.load_dem_rsc(os.path.join(context['path'], 'dem.rsc'))
+        rsc_data = sardem.loading.load_dem_rsc(os.path.join(context['path'], 'dem.rsc'))
 
     insar.plotting.view_stack(
         deformation,

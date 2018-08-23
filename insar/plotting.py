@@ -93,7 +93,7 @@ def plot_image_shifted(img,
         ax (matplotlib.AxesSubplot): Axes to plot image onto
             mutually exclusive with fig option
         cmap (str): name of colormap to shift
-        img_data (dict): rsc_data from sario.load_dem_rsc containing lat/lon
+        img_data (dict): rsc_data from load_dem_rsc containing lat/lon
             data about image, used to make axes into lat/lon instead of row/col
         title (str): Title for image
         label (str): label for colorbar

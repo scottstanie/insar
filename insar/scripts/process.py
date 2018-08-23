@@ -118,7 +118,7 @@ def run_ps_sbas_igrams(rate=1, looks=None, **kwargs):
 
     logger.info("Gathering file size info from elevation.dem.rsc")
     elevation_dem_rsc_file = '../elevation.dem.rsc'
-    rsc_data = insar.sario.load_dem_rsc(elevation_dem_rsc_file)
+    rsc_data = sardem.loading.load_dem_rsc(elevation_dem_rsc_file)
     xsize, ysize = calc_sizes(rate, rsc_data['width'], rsc_data['file_length'])
 
     # the "1 1" is xstart ystart
@@ -136,7 +136,7 @@ def convert_int_tif(**kwargs):
     # TODO: Make this into the script like the convert_snaphu
 
     # Default name by ps_sbas_igrams
-    igram_rsc = insar.sario.load_dem_rsc('dem.rsc')
+    igram_rsc = sardem.loading.load_dem_rsc('dem.rsc')
     convert_cmd = """for i in ./*.int ; do dismphfile "$i" {igram_width} ; mv dismph.tif `echo "$i" | sed 's/int$/tif/'` ; done""".format(
         igram_width=igram_rsc['width'])
     logger.info(convert_cmd)
@@ -149,7 +149,7 @@ def run_snaphu(lowpass=None, **kwargs):
     Assumes we are in the directory with all .unw files
     """
     # TODO: probably shouldn't call these like this? idk alternative right now
-    igram_rsc = insar.sario.load_dem_rsc('dem.rsc')
+    igram_rsc = sardem.loading.load_dem_rsc('dem.rsc')
     snaphu_script = os.path.join(SCRIPTS_DIR, 'run_snaphu.sh')
     snaphu_cmd = '{filepath} {width} {lowpass}'.format(
         filepath=snaphu_script, width=igram_rsc['width'], lowpass=lowpass)

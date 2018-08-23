@@ -13,6 +13,7 @@ import subprocess
 import os.path
 from os.path import abspath, dirname
 
+import sardem.loading
 import insar.sario
 from insar.log import get_log
 
@@ -69,7 +70,7 @@ def main():
         files_to_convert = insar.sario.find_files(dir_path, '*.unw')
 
     dem_rsc_file = os.path.join(dir_path, 'dem.rsc')
-    rsc_data = insar.sario.load_dem_rsc(dem_rsc_file)
+    rsc_data = sardem.loading.load_dem_rsc(dem_rsc_file)
     for file_ in files_to_convert:
         logger.info("Converting %s", file_)
         unw_to_tif(file_, rsc_data['width'], rsc_data['file_length'], args.max_height)
