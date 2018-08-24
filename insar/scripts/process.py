@@ -17,11 +17,11 @@
 
 """
 import math
-import sys
 import subprocess
 import os
 import glob
 import numpy as np
+from click import BadOptionUsage
 
 import insar
 import sardem
@@ -40,17 +40,20 @@ def download_eof(mission=None, date=None, **kwargs):
 
 
 def create_dem(geojson=None,
-               corner=None,
+               left_lon=None,
+               top_lat=None,
                dlat=None,
                dlon=None,
                rate=1,
                data_source='NASA',
                **kwargs):
     """2. Download, upsample, and stich a DEM"""
-    # Don't think this name needs to be an option for process
+    if not (left_lon and top_lat and dlon and dlat) and not geojson:
+        raise BadOptionUsage("Need either lat/lon arguments or --geojson option"
+                             " for create_dem step.")
     output_name = 'elevation.dem'
     logger.info("Running: sardem.dem:main")
-    sardem.dem.main(corner, dlon, dlat, geojson, data_source, rate, output_name)
+    sardem.dem.main(left_lon, top_lat, dlon, dlat, data_source, rate, output_name)
 
 
 def run_sentinel_stack(sentinel_path="~/sentinel/", **kwargs):
@@ -126,7 +129,8 @@ def run_ps_sbas_igrams(rate=1, looks=None, **kwargs):
     # the igram is the size of the original DEM (elevation_small.dem)
     looks = looks or rate
     logger.info("Running ps_sbas_igrams.py")
-    ps_sbas_cmd = "/usr/bin/env python ~/sentinel/ps_sbas_igrams.py sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
+    ps_sbas_cmd = "/usr/bin/env python ~/sentinel/ps_sbas_igrams.py\
+sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
         rsc_file=elevation_dem_rsc_file, xsize=xsize, ysize=ysize, looks=looks)
     logger.info(ps_sbas_cmd)
     subprocess.check_call(ps_sbas_cmd, shell=True)
@@ -137,8 +141,8 @@ def convert_int_tif(**kwargs):
 
     # Default name by ps_sbas_igrams
     igram_rsc = sardem.loading.load_dem_rsc('dem.rsc')
-    convert_cmd = """for i in ./*.int ; do dismphfile "$i" {igram_width} ; mv dismph.tif `echo "$i" | sed 's/int$/tif/'` ; done""".format(
-        igram_width=igram_rsc['width'])
+    convert_cmd = """for i in ./*.int ; do dismphfile "$i" {igram_width} ;\
+ mv dismph.tif `echo "$i" | sed 's/int$/tif/'` ; done""".format(igram_width=igram_rsc['width'])
     logger.info(convert_cmd)
     subprocess.check_call(convert_cmd, shell=True)
 

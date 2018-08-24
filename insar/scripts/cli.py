@@ -59,6 +59,10 @@ def parse_steps(ctx, param, value):
     help="Run a one or a range of steps and exit. "
     "Examples:\n--step 4,5,7\n--step 3-6\n--step 1,9-10",
     required=False)
+@click.argument("left_lon", type=float, required=False)
+@click.argument("top_lat", type=float, required=False)
+@click.argument("dlon", type=float, required=False)
+@click.argument("dlat", type=float, required=False)
 @click.option(
     '--geojson',
     '-g',
@@ -113,8 +117,16 @@ def parse_steps(ctx, param, value):
 def process(context, **kwargs):
     """Process stack of Sentinel interferograms.
 
-    Contains the steps from SLC .geo creation to SBAS deformation inversion"""
+    Contains the steps from SLC .geo creation to SBAS deformation inversion
+
+    left_lon, top_lat, dlon, dlat are used to specify the DEM bounding box.
+    They may be ignored if not running step 2, and are an alternative to
+    using --geojson
+    """
     kwargs['verbose'] = context['verbose']
+    if kwargs['left_lon'] and kwargs['geojson']:
+        raise click.BadOptionUsage("Can't use both positional arguments "
+                                   "(left_lon top_lat dlon dlat) and --geojson")
 
     insar.scripts.process.main(context['path'], kwargs)
 
