@@ -1,6 +1,6 @@
 from copy import copy
 import numpy as np
-from insar import utils, sario, parsers, plotting
+from insar import utils, sario, parsers, plotting, latlon
 from insar.plotting import make_shifted_cmap
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
@@ -38,6 +38,13 @@ def align_uavsar_images(image_list):
 
 
 def make_uavsar_time_diffs(image_list):
+    """
+    Args:
+        image_list (list[str]): list of names of files from different dates
+            over same acquisition area
+    Returns:
+        list[ndarray]: list of ratioed images
+    """
     aligned_images = align_uavsar_images(image_list)
     # Mask out the zeros so we don't divide by zero
     masked_images = [utils.mask_zeros(im) for im in aligned_images]
@@ -45,6 +52,11 @@ def make_uavsar_time_diffs(image_list):
 
 
 def plot_uavsar_time_diffs(image_list):
+    """
+    Args:
+        image_list (list[str]): list of names of files from different dates
+            over same acquisition area
+    """
     ratio_list = make_uavsar_time_diffs(image_list)
     cmaps = [make_shifted_cmap(r, cmap_name='seismic') for r in ratio_list]
     fig, axes = plt.subplots(1, len(ratio_list))
@@ -58,7 +70,13 @@ def plot_uavsar_time_diffs(image_list):
     return ratio_list, fig, axes
 
 
-def overlay(under_image, over_image, under_image_info=None, ax=None, alpha=0.5, title=''):
+def overlay(under_image,
+            over_image,
+            under_image_info=None,
+            ax=None,
+            alpha=0.5,
+            title='',
+            show_colorbar=True):
     """Plots two images, one under, one transparent over
 
     under_image will be cmap=gray, over_image with shifted cmap, default=seismic
@@ -71,15 +89,17 @@ def overlay(under_image, over_image, under_image_info=None, ax=None, alpha=0.5, 
     """
     if not ax:
         fig, ax = plt.subplots(1, 1)
+    else:
+        fig = ax.get_figure()
 
     if under_image_info:
-        under_extent = utils.latlon_grid_extent(**under_image_info)
+        under_extent = latlon.latlon_grid_extent(**under_image_info)
         xlabel, ylabel = 'Longitude', 'Latitude'
         # Now get extent of under image, which mage be different due to crop
         over_image_info = copy(under_image_info)
         over_image_info['rows'] = over_image.shape[0]
         over_image_info['cols'] = over_image.shape[1]
-        over_extent = utils.latlon_grid_extent(**over_image_info)
+        over_extent = latlon.latlon_grid_extent(**over_image_info)
     else:
         # No lat/lon provided: jsut use row, col, no extend arg
         xlabel, ylabel = 'col number', 'row number'
@@ -94,6 +114,10 @@ def overlay(under_image, over_image, under_image_info=None, ax=None, alpha=0.5, 
     cmap = make_shifted_cmap(over_image, cmap_name='seismic')
     ax.imshow(over_image, cmap=cmap, alpha=0.5, extent=over_extent)
     ax.set_title(title)
+    if show_colorbar:
+        # Get second image, the over one with seismic
+        fig.colorbar(ax.get_images()[1], ax=ax)
+
     return ax, under_extent, over_extent
 
 
@@ -125,8 +149,8 @@ def zoomed_box(under,
     print(under_extent)
     print(over_extent)
     plt.show(block=False)
-    import pdb
-    pdb.set_trace()
+    # import pdb
+    # pdb.set_trace()
 
     axins.imshow(under, cmap='gray', extent=under_extent)
     axins.imshow(over, cmap=cmap, alpha=0.5, extent=over_extent)
@@ -144,14 +168,12 @@ def zoomed_box(under,
     pp1.loc1, pp1.loc2 = 2, 3
     pp2.loc1, pp2.loc2 = 3, 2
 
-    # plt.draw()
-    # plt.show(block=True)
+    plt.draw()
+    plt.show(block=True)
     return ax, axins, pp1, pp2
 
 
-def demo_zoom():
-    import glob
-    hhfiles = glob.glob("/home/scott/Documents/Learning/research/uav-sar-data/grd/*14937*HHHH*.grd")
+def demo_zoom(hhfiles):
     ratio_list = make_uavsar_time_diffs(hhfiles)
 
     under = plotting.equalize_and_mask(sario.load(hhfiles[0]), fill_value=0.0)
