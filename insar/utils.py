@@ -5,12 +5,10 @@ Email: scott.stanie@utexas.edu
 """
 from __future__ import division
 import glob
-from math import sin, cos
 import errno
 import os
 import shutil
 import numpy as np
-from numpy import deg2rad
 from scipy.ndimage.interpolation import shift
 import multiprocessing as mp
 
@@ -254,7 +252,7 @@ def remove_dupes(lat_lon_list, xyz_list):
     """
 
     latlons, xyzs = [], []
-    idx = -1
+    idx = -1  # Will increment to 1 upon first append
     for latlon, xyz in zip(lat_lon_list, xyz_list):
         if latlon in latlons:
             # If we added a (0,0,0) vector, check to update it
@@ -282,8 +280,7 @@ def read_los_output(los_file, dedupe=True):
 
     Returns:
         lat_lon_list (list[tuple]): (lat, lon) tuples of points in file
-        xyz_list (list[tuple]): (x, y, z) components of line of sight 
-
+        xyz_list (list[tuple]): (x, y, z) components of line of sight
     """
 
     def _line_to_floats(line, split_char=None):
@@ -294,8 +291,7 @@ def read_los_output(los_file, dedupe=True):
 
     lat_lon_list = [_line_to_floats(line) for line in los_lines[::3]]
     xyz_list = [_line_to_floats(line) for line in los_lines[1::3]]
-    if not dedupe:
-        return lat_lon_list, xyz_list
+    return remove_dupes(lat_lon_list, xyz_list) if dedupe else (lat_lon_list, xyz_list)
 
 
 def split_array_into_blocks(data):
