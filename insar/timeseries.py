@@ -26,7 +26,7 @@ from scipy import interpolate
 import sardem.loading
 
 from insar.parsers import Sentinel
-from insar import sario, utils, plotting
+from insar import sario, utils, plotting, latlon
 from insar.log import get_log, log_runtime
 
 SENTINEL_WAVELENGTH = 5.5465763  # cm
@@ -201,8 +201,8 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
     if not isinstance(window, int) or window < 1:
         raise ValueError("Invalid window %s: must be odd positive int" % window)
     elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
-        raise ValueError(
-            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
+        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col,
+                                                                                 stack.shape))
 
     if window % 2 == 0:
         window -= 1
@@ -673,7 +673,7 @@ def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt", cl
     cmd = "{} {} {} {} {} {}".format(exec_path, db_file, lat, lon, stationname, outfile)
     # print("Running command:")
     # print(cmd)
-    output = subprocess.check_output(cmd, shell=True)
+    subprocess.check_call(cmd, shell=True)
     # print("Returning to {}".format(cur_dir))
     os.chdir(cur_dir)
     return outfile
@@ -685,7 +685,7 @@ def check_corner_differences(asc_dem_rsc, db_path_asc, db_path_desc, asc_los_fil
     Used to see if east, north, and up components vary too much for a single value
     to be used to solve for east + vertical part from LOS components
     """
-    grid_corners = utils.latlon_grid_corners(**asc_dem_rsc)
+    grid_corners = latlon.latlon_grid_corners(**asc_dem_rsc)
     # clear the output file:
     open(desc_los_file, 'w').close()
     open(asc_los_file, 'w').close()
@@ -693,11 +693,11 @@ def check_corner_differences(asc_dem_rsc, db_path_asc, db_path_desc, asc_los_fil
         record_xyz_los_vector(*p, db_path=db_path_desc, outfile=desc_los_file)
         record_xyz_los_vector(*p, db_path=db_path_asc, outfile=asc_los_file)
 
-    enu_asc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(asc_los_file)))
-    enu_desc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(desc_los_file)))
+    enu_asc = np.array(latlon.convert_xyz_latlon_to_enu(*utils.read_los_output(asc_los_file)))
+    enu_desc = np.array(latlon.convert_xyz_latlon_to_enu(*utils.read_los_output(desc_los_file)))
 
     # Find range of data for E, N and U
-    ranges_asc = np.ptp(enu_asc, axis=0)
+    ranges_asc = np.ptp(enu_asc, axis=0)  # ptp = 'peak to peak' aka range
     ranges_desc = np.ptp(enu_desc, axis=0)
     return np.max(np.stack((ranges_asc, ranges_desc)))
 
@@ -721,7 +721,7 @@ def find_east_up_coeffs(asc_path, desc_path):
     desc_path = os.path.realpath(desc_path)
     asc_dem_rsc = sardem.loading.load_dem_rsc(os.path.join(asc_path, 'dem.rsc'), lower=True)
 
-    midpoint = utils.latlon_grid_midpoint(**asc_dem_rsc)
+    midpoint = latlon.latlon_grid_midpoint(**asc_dem_rsc)
     # The path to each orbit's .db files: assumed one directory higher
     db_path_asc = os.path.dirname(asc_path)
     db_path_desc = os.path.dirname(desc_path)
@@ -741,8 +741,8 @@ def find_east_up_coeffs(asc_path, desc_path):
     record_xyz_los_vector(*midpoint, db_path=db_path_asc, outfile=asc_los_file, clear=True)
     record_xyz_los_vector(*midpoint, db_path=db_path_desc, outfile=desc_los_file, clear=True)
 
-    enu_asc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(asc_los_file)))
-    enu_desc = np.array(utils.convert_xyz_latlon_to_enu(*utils.read_los_output(desc_los_file)))
+    enu_asc = np.array(latlon.convert_xyz_latlon_to_enu(*utils.read_los_output(asc_los_file)))
+    enu_desc = np.array(latlon.convert_xyz_latlon_to_enu(*utils.read_los_output(desc_los_file)))
 
     # Get only East and Up out of ENU
     eu_asc = enu_asc[:, ::2]
@@ -780,7 +780,7 @@ def find_vertical_def(asc_path, desc_path):  # desc_los_file, asc_deform_path, d
 
     # This will be if we want to solve the exact coefficients
     # # Make grid to interpolate one
-    # xx, yy = utils.latlon_grid(sparse=True, **asc_dem_rsc)
+    # xx, yy = latlon.latlon_grid(sparse=True, **asc_dem_rsc)
     # interpolated_east_up = np.empty((2, nrows, ncols))
     # for idx in (0, 1):
     #     component = eu_asc[:, idx]
@@ -885,6 +885,5 @@ def avg_stack(igram_path, row, col):
     print(total_days * (np.max(unw_normed_shifted.reshape(
         (num_igrams, -1)), axis=1) - np.min(unw_normed_shifted.reshape((num_igrams, -1)), axis=1)))
     print("Converted to CM:")
-    print(total_days * (np.max(unw_normed_shifted.reshape(
-        (num_igrams, -1)) * PHASE_TO_CM, axis=1) - np.min(
-            unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
+    print(total_days * (np.max(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1) -
+                        np.min(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))

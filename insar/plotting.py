@@ -12,7 +12,7 @@ except ImportError:
     print("pip install scikit-image")
     pass
 from insar.log import get_log
-from insar import utils
+from insar import utils, latlon
 
 logger = get_log()
 
@@ -99,7 +99,7 @@ def plot_image_shifted(img,
         label (str): label for colorbar
     """
     if img_data:
-        extent = utils.latlon_grid_extent(**img_data)
+        extent = latlon.latlon_grid_extent(**img_data)
     else:
         nrows, ncols = img.shape
         extent = (0, ncols, nrows, 0)
@@ -250,7 +250,7 @@ def view_stack(stack,
             return
 
         if lat_lon:
-            lat, lon = utils.rowcol_to_latlon(row, col, rsc_data)
+            lat, lon = latlon.rowcol_to_latlon(row, col, rsc_data)
             legend_entries.append('Lat {:.3f}, Lon {:.3f}'.format(lat, lon))
         else:
             legend_entries.append('Row %s, Col %s' % (row, col))
@@ -362,7 +362,7 @@ def sort_blobs_by_val(blobs, image):
     return tuple(zip(*blob_val_tuples))
 
 
-def blobs_rowcol_to_latlon(blobs, blob_info):
+def blobs_latlon(blobs, blob_info):
     """Converts (y, x, sigma) format to (lat, lon, sigma_latlon)
 
     Uses the dem x_step/y_step data to rescale blobs so that appear on an
@@ -372,7 +372,7 @@ def blobs_rowcol_to_latlon(blobs, blob_info):
     blobs_latlon = []
     for blob in blobs:
         row, col, r = blob
-        lat, lon = utils.rowcol_to_latlon(row, col, blob_info)
+        lat, lon = latlon.rowcol_to_latlon(row, col, blob_info)
         new_radius = r * blob_info['x_step']
         blobs_latlon.append((lat, lon, new_radius))
 
