@@ -3,7 +3,7 @@ import copy
 from math import sin, cos, sqrt, atan2, radians
 import os
 import numpy as np
-from insar import sario
+from insar import sario, utils
 from insar.log import get_log
 
 logger = get_log()
@@ -277,3 +277,55 @@ def latlon_grid_midpoint(**kwargs):
     """
     left, right, bot, top = latlon_grid_extent(**kwargs)
     return (left + right) / 2, (top + bot) / 2
+
+
+def rot(angle, axis):
+    """
+    Find a 3x3 euler rotation matrix given an angle and axis.
+
+    Rotation matrix used for rotating a vector about a single axis.
+
+    Args:
+        angle (float): angle in degrees to rotate
+        axis (int): 1, 2 or 3
+    """
+    R = np.eye(3)
+    cang = cos(np.deg2rad(angle))
+    sang = sin(np.deg2rad(angle))
+    if (axis == 1):
+        R[1, 1] = cang
+        R[2, 2] = cang
+        R[1, 2] = sang
+        R[2, 1] = -sang
+    elif (axis == 2):
+        R[0, 0] = cang
+        R[2, 2] = cang
+        R[0, 2] = -sang
+        R[2, 0] = sang
+    elif (axis == 3):
+        R[0, 0] = cang
+        R[1, 1] = cang
+        R[1, 0] = -sang
+        R[0, 1] = sang
+    else:
+        raise ValueError("axis must be 1, 2 or 2")
+    return R
+
+
+def rotate_xyz_to_enu(xyz, lat, lon):
+    """Rotates a vector in XYZ coords to ENU
+
+    Args:
+        xyz (list[float], ndarray[float]): length 3 x, y, z coordinates
+        lat (float): latitude of point to rotate into
+        lon (float): longitude of point to rotate into
+    """
+    # Rotate about axis 3 with longitude, then axis 1 with latitude
+    R3 = rot(90 + lon, 3)
+    R1 = rot(90 - lat, 1)
+    R = np.matmul(R3, R1)
+    return np.matmul(R, xyz)
+
+
+def convert_xyz_latlon_to_enu(lat_lons, xyz_array):
+    return [rotate_xyz_to_enu(xyz, lat, lon) for (lat, lon), xyz in zip(lat_lons, xyz_array)]
