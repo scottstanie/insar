@@ -22,7 +22,7 @@ from shutil import copyfile
 import subprocess
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import uniform_filter
-from scipy import interpolate
+# from scipy import interpolate
 import sardem.loading
 
 from insar.parsers import Sentinel
@@ -652,31 +652,54 @@ def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt", cl
     """Given one (lon, lat) point, find the LOS from Sat to ground
 
     Records answer in outfile, can be read by utils.read_los_output
+
+    Returns:
+        db_files [list]: names of files used to find the xyz vectors
+        May be multiple if first failed and produced 0s
     """
     if clear:
         open(outfile, 'w').close()
+    print("Recording xyz los vectors for %s, %s" % (lat, lon))
 
     exec_path = os.path.expanduser("~/sentinel/look_angle/losvec/losvec_yj")
-    cur_dir = os.getcwd()  # To return to after
-    db_path = os.path.realpath(db_path)
-    db_files = glob.glob(os.path.join(db_path, "*.db*"))
-    try:
-        db_file = db_files[0]
-    except IndexError:
-        raise ValueError("Bad db_path, no .db files found: {}".format(db_path))
-
     stationname = "'{} {}'".format(lat, lon)  # Record where vec is from
 
-    # usage: losvel_yj file_db lat lon stationname outfilename
-    # print("Changing to directory {}".format(db_path))
+    cur_dir = os.getcwd()  # To return to after
+    db_path = os.path.realpath(db_path)
+    # Make db_files an iterator so we can run through them
+    db_files = glob.iglob(os.path.join(db_path, "*.db*"))
+    try:
+        db_file = next(db_files)
+    except StopIteration:
+        raise ValueError("Bad db_path, no .db files found: {}".format(db_path))
+
     os.chdir(db_path)
-    cmd = "{} {} {} {} {} {}".format(exec_path, db_file, lat, lon, stationname, outfile)
-    # print("Running command:")
-    # print(cmd)
-    subprocess.check_call(cmd, shell=True)
+    db_files_used = []
+    while True:
+        db_files_used.append(db_file)
+        # print("Changing to directory {}".format(db_path))
+        # usage: losvel_yj file_db lat lon stationname outfilename
+        cmd = "{} {} {} {} {} {}".format(exec_path, db_file, lat, lon, stationname, outfile)
+        # print("Running command:")
+        # print(cmd)
+        print("Checking db file: %s" % db_file)
+        subprocess.check_output(cmd, shell=True)
+        _, xyz_list = utils.read_los_output(outfile)
+        print(len(xyz_list))
+        # if not all((any(vector) for vector in xyz_list)):  # Some corner produced 0s
+        if not any(xyz_list[-1]):  # Some corner produced 0s
+            try:
+                db_file = next(db_files)
+            except StopIteration:
+                print('STOP!')
+                break
+        else:
+            break
+
     # print("Returning to {}".format(cur_dir))
+
     os.chdir(cur_dir)
-    return outfile
+    return db_files_used
 
 
 def los_to_enu(los_file):
@@ -688,10 +711,12 @@ def corner_los_vectors(rsc_data, db_path, los_output_file):
     grid_corners = latlon.latlon_grid_corners(**rsc_data)
     # clear the output file:
     open(los_output_file, 'w').close()
+    db_files_used = []
     for p in grid_corners:
-        record_xyz_los_vector(*p, db_path=db_path, outfile=los_output_file)
+        db_files = record_xyz_los_vector(*p, db_path=db_path, outfile=los_output_file)
+        db_files_used.append(db_files)
 
-    utils.read_los_output(asc_los_file)
+    return db_files_used, utils.read_los_output(los_output_file)
 
 
 def check_corner_differences(asc_dem_rsc, db_path_asc, db_path_desc, asc_los_file, desc_los_file):
@@ -834,14 +859,14 @@ def avg_stack(igram_path, row, col):
     for f in glob.glob(subset_dir + "*.unw"):
         os.remove(f)
 
-    intlist = read_intlist(igram_path)
+    # intlist = read_intlist(igram_path)
     geolist = read_geolist(igram_path)
 
     geolist2 = np.array(geolist[9:-16])
     print("List of .geo dates:")
     pprint.pprint(list((idx, g) for idx, g in enumerate(geolist2)))
 
-    timediffs = find_time_diffs(geolist)
+    # timediffs = find_time_diffs(geolist)
 
     pairs2 = [(d1.strftime("%Y%m%d"), d2.strftime("%Y%m%d"))
               for d1, d2 in zip(geolist2[:-len(geolist2) // 2], geolist2[len(geolist2) // 2:])]

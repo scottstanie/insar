@@ -5,7 +5,7 @@ get_ipython().run_line_magic('matplotlib', 'tk')
 import insar
 from insar import sario, utils, geojson, timeseries, plotting, parsers, latlon
 import sardem
-import sentineleof
+import eof
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
