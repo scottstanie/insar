@@ -3,7 +3,7 @@ import copy
 from math import sin, cos, sqrt, atan2, radians
 import os
 import numpy as np
-from insar import sario, utils
+from insar import sario
 from insar.log import get_log
 
 logger = get_log()
@@ -277,6 +277,18 @@ def latlon_grid_midpoint(**kwargs):
     """
     left, right, bot, top = latlon_grid_extent(**kwargs)
     return (left + right) / 2, (top + bot) / 2
+
+
+def latlon_grid_size(**kwargs):
+    """Takes rsc_data and gives width and height of box in km
+
+    Returns:
+        tupls[float, float]: width, height in km
+    """
+    left, right, bot, top = latlon_grid_extent(**kwargs)
+    width = latlon_to_dist((top, left), (top, right))
+    height = latlon_to_dist((top, left), (bot, right))
+    return width, height
 
 
 def rot(angle, axis):

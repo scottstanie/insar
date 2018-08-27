@@ -685,13 +685,12 @@ def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt", cl
         print("Checking db file: %s" % db_file)
         subprocess.check_output(cmd, shell=True)
         _, xyz_list = utils.read_los_output(outfile)
-        print(len(xyz_list))
         # if not all((any(vector) for vector in xyz_list)):  # Some corner produced 0s
-        if not any(xyz_list[-1]):  # Some corner produced 0s
+        if not any(xyz_list[-1]):  # corner produced only 0s
             try:
                 db_file = next(db_files)
             except StopIteration:
-                print('STOP!')
+                print('Ran out of db files!')
                 break
         else:
             break
