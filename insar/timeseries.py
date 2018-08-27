@@ -679,6 +679,21 @@ def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt", cl
     return outfile
 
 
+def los_to_enu(los_file):
+    """Reads in the LOS vec file, returns array of ENU vectors"""
+    return np.array(latlon.convert_xyz_latlon_to_enu(*utils.read_los_output(los_file)))
+
+
+def corner_los_vectors(rsc_data, db_path, los_output_file):
+    grid_corners = latlon.latlon_grid_corners(**rsc_data)
+    # clear the output file:
+    open(los_output_file, 'w').close()
+    for p in grid_corners:
+        record_xyz_los_vector(*p, db_path=db_path, outfile=los_output_file)
+
+    utils.read_los_output(asc_los_file)
+
+
 def check_corner_differences(asc_dem_rsc, db_path_asc, db_path_desc, asc_los_file, desc_los_file):
     """Finds value range for ENU coefficients of the LOS vectors in dem.rsc area
 
@@ -693,8 +708,8 @@ def check_corner_differences(asc_dem_rsc, db_path_asc, db_path_desc, asc_los_fil
         record_xyz_los_vector(*p, db_path=db_path_desc, outfile=desc_los_file)
         record_xyz_los_vector(*p, db_path=db_path_asc, outfile=asc_los_file)
 
-    enu_asc = np.array(latlon.convert_xyz_latlon_to_enu(*utils.read_los_output(asc_los_file)))
-    enu_desc = np.array(latlon.convert_xyz_latlon_to_enu(*utils.read_los_output(desc_los_file)))
+    enu_asc = los_to_enu(asc_los_file)
+    enu_desc = los_to_enu(desc_los_file)
 
     # Find range of data for E, N and U
     ranges_asc = np.ptp(enu_asc, axis=0)  # ptp = 'peak to peak' aka range
@@ -741,8 +756,8 @@ def find_east_up_coeffs(asc_path, desc_path):
     record_xyz_los_vector(*midpoint, db_path=db_path_asc, outfile=asc_los_file, clear=True)
     record_xyz_los_vector(*midpoint, db_path=db_path_desc, outfile=desc_los_file, clear=True)
 
-    enu_asc = np.array(latlon.convert_xyz_latlon_to_enu(*utils.read_los_output(asc_los_file)))
-    enu_desc = np.array(latlon.convert_xyz_latlon_to_enu(*utils.read_los_output(desc_los_file)))
+    enu_asc = los_to_enu(asc_los_file)
+    enu_desc = los_to_enu(desc_los_file)
 
     # Get only East and Up out of ENU
     eu_asc = enu_asc[:, ::2]
@@ -753,7 +768,7 @@ def find_east_up_coeffs(asc_path, desc_path):
     return east_up_coeffs
 
 
-def find_vertical_def(asc_path, desc_path):  # desc_los_file, asc_deform_path, desc_deform_path):
+def find_vertical_def(asc_path, desc_path):
     """Calculates vertical deformation for all points in the LOS files
 
     Args:
