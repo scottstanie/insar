@@ -16,6 +16,8 @@ logger = get_log()
 def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt", clear=False):
     """Given one (lon, lat) point, find the LOS from Sat to ground
 
+    Function will run through all possible .db files until non-zero vector is computed
+
     Records answer in outfile, can be read by utils.read_los_output
 
     Returns:
@@ -197,20 +199,22 @@ def find_vertical_def(asc_path, desc_path):
 
     assert asc_deform.shape == desc_deform.shape, 'Asc and desc def images not same size'
     nlayers, nrows, ncols = asc_deform.shape
-
-    # This will be if we want to solve the exact coefficients
-    # # Make grid to interpolate one
-    # xx, yy = latlon.latlon_grid(sparse=True, **asc_dem_rsc)
-    # interpolated_east_up = np.empty((2, nrows, ncols))
-    # for idx in (0, 1):
-    #     component = eu_asc[:, idx]
-    #     interpolated_east_up[idx] = interpolate.griddata(
-    #         points=grid_corners, values=component, xi=(xx, yy))
-    # interpolated_east_up = interpolated_east_up.reshape((2, nrows * ncols))
-
     # Stack and solve for the East and Up deformation
     d_asc_desc = np.vstack([asc_deform.reshape(-1), desc_deform.reshape(-1)])
     dd = np.linalg.solve(east_up_coeffs, d_asc_desc)
     def_east = dd[0, :].reshape((nlayers, nrows, ncols))
     def_vertical = dd[1, :].reshape((nlayers, nrows, ncols))
     return def_east, def_vertical
+
+
+# def interpolate_coeffs(rsc_data, nrows, ncols, east_up):
+#     # This will be if we want to solve the exact coefficients
+#     # Make grid to interpolate one
+#     grid_corners = latlon.latlon_grid_corners(**rsc_data)
+#     xx, yy = latlon.latlon_grid(sparse=True, **rsc_data)
+#     interpolated_east_up = np.empty((2, nrows, ncols))
+#     for idx in (0, 1):
+#         component = east_up[:, idx]
+#         interpolated_east_up[idx] = interpolate.griddata(
+#             points=grid_corners, values=component, xi=(xx, yy))
+#     interpolated_east_up = interpolated_east_up.reshape((2, nrows * ncols))
