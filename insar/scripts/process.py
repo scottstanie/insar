@@ -85,9 +85,9 @@ def _reorganize_files():
         os.rename(os.path.join("extra_files", fname), os.path.join('.', fname))
 
 
-def prep_igrams_dir(clean=True, **kwargs):
+def prep_igrams_dir(cleanup=False, **kwargs):
     """4. cleans bad .geo files, prepare directory for igrams"""
-    if clean:
+    if cleanup:
         logger.info("Removing malformed .geo files missing data")
         insar.utils.clean_files(".geo", path=".", zero_threshold=0.50, test=False)
         _reorganize_files()
