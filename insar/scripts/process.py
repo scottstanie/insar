@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 """Runs all steps of interferogram processing
 
-    TODO: allow ranges of steps like https://stackoverflow.com/a/4726287
-
     Steps:
     1. Download precise orbits EOF files
     2. Create an upsampled DEM
@@ -129,7 +127,7 @@ def run_ps_sbas_igrams(rate=1, looks=None, **kwargs):
     # the igram is the size of the original DEM (elevation_small.dem)
     looks = looks or rate
     logger.info("Running ps_sbas_igrams.py")
-    ps_sbas_cmd = "/usr/bin/env python ~/sentinel/ps_sbas_igrams.py\
+    ps_sbas_cmd = "/usr/bin/env python ~/sentinel/ps_sbas_igrams.py \
 sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
         rsc_file=elevation_dem_rsc_file, xsize=xsize, ysize=ysize, looks=looks)
     logger.info(ps_sbas_cmd)
@@ -141,7 +139,7 @@ def convert_int_tif(**kwargs):
 
     # Default name by ps_sbas_igrams
     igram_rsc = sardem.loading.load_dem_rsc('dem.rsc')
-    convert_cmd = """for i in ./*.int ; do dismphfile "$i" {igram_width} ;\
+    convert_cmd = """for i in ./*.int ; do dismphfile "$i" {igram_width} ; \
  mv dismph.tif `echo "$i" | sed 's/int$/tif/'` ; done""".format(igram_width=igram_rsc['width'])
     logger.info(convert_cmd)
     subprocess.check_call(convert_cmd, shell=True)
