@@ -204,6 +204,40 @@ def view_stack(context, filename, cmap, label, title, rowcol):
         rsc_data=rsc_data)
 
 
+# COMMAND: blob
+@cli.command(context_settings=dict(ignore_unknown_options=True))
+@click.option('--load/--no-load', default=True, help='Load last calculated blobs')
+@click.option('--title-prefix', default='')
+@click.option('--blob-filename', default='blobs.npy', help='File to save found blobs')
+@click.option('--row-start', default=0)
+@click.option('--row-end', default=-1)
+@click.option('--col-start', default=0)
+@click.option('--col-end', default=-1)
+@click.argument('blobfunc_args', nargs=-1, type=click.UNPROCESSED)
+@click.pass_obj
+def blob(context, load, title_prefix, blob_filename, row_start, row_end, col_start, col_end,
+         blobfunc_args, **kwargs):
+    """Find and view blobs in deformation
+
+    If deformation.npy and geolist.npy or .unw files are not in current directory,
+    use the --path option:
+
+        insar --path /path/to/igrams view_stack
+    """
+    igram_path = context['path']
+    insar.blobs.make_blob_image(
+        igram_path,
+        load,
+        title_prefix,
+        blob_filename,
+        row_start,
+        row_end,
+        col_start,
+        col_end,
+        blobfunc_args,
+    )
+
+
 # COMMAND: avg-stack
 @cli.command('avg-stack')
 def avg_stack(context, ref_row, ref_col):
