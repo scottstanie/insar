@@ -148,20 +148,21 @@ def make_blob_image(igram_path=".",
         blobs = np.load(blob_filename)
     else:
         logger.info("Finding neg blobs")
-        blobs_neg = insar.blobs.find_blobs(-img, threshold=1, min_sigma=3, max_sigma=40)
+        blobs_neg = find_blobs(-img, threshold=1, min_sigma=3, max_sigma=40)
         logger.info("Finding pos blobs")
-        blobs_pos = insar.blobs.find_blobs(img, threshold=.7, min_sigma=3, max_sigma=40)
+        blob_kwarg_defaults['threshold'] = 0.7
+        blobs_pos = find_blobs(img, threshold=.7, min_sigma=3, max_sigma=40)
         logger.info("Blobs found:")
         logger.info(blobs_neg.astype(int))
         logger.info(blobs_pos.astype(int))
         blobs = np.vstack((blobs_neg, blobs_pos))
         np.save(blob_filename, blobs)
 
-    blobs_ll = insar.blobs.blobs_latlon(blobs, rsc_data)
+    blobs_ll = blobs_latlon(blobs, rsc_data)
     for lat, lon, r in blobs_ll:
         logger.info('({0:.4f}, {1:.4f}): radius: {2}'.format(lat, lon, r))
 
-    insar.blobs.plot_blobs(img, blobs=blobs_ll, cur_axes=imagefig.gca())
+    plot_blobs(img, blobs=blobs_ll, cur_axes=imagefig.gca())
 
 
 if __name__ == '__main__':
