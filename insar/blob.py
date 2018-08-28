@@ -12,8 +12,9 @@ except ImportError:
     print("Warning: scikit-image not installed. Blob function not available.")
     print("pip install scikit-image")
     pass
+import sardem
 from insar.log import get_log
-from insar import latlon
+from insar import latlon, plotting, timeseries
 
 logger = get_log()
 
@@ -123,25 +124,27 @@ def blobs_latlon(blobs, blob_info):
 
 
 def make_blob_image(igram_path=".",
-                    load=False,
+                    load=True,
                     title_prefix='',
                     blob_filename='blobs.npy',
                     row_start=0,
                     row_end=-1,
                     col_start=0,
+                    col_end=-1,
                     blobfunc_args=None):
     """Find and view blobs in deformation"""
     logger.info("Searching %s for igram_path" % igram_path)
-    geolist, deformation = insar.timeseries.load_deformation(igram_path)
+    geolist, deformation = timeseries.load_deformation(igram_path)
     rsc_data = sardem.loading.load_dem_rsc(os.path.join(igram_path, 'dem.rsc'))
     img = deformation[-1]
     img = img[row_start:row_end, col_start:col_end]
 
     title = "%s Deformation from %s to %s" % (title_prefix, geolist[0], geolist[-1])
-    imagefig, axes_image = insar.plotting.plot_image_shifted(
+    imagefig, axes_image = plotting.plot_image_shifted(
         img, img_data=rsc_data, title=title, xlabel='Longitude', ylabel='Latitude')
 
     blob_filename = 'blobs.npy'
+    # TODO: handle extra args as ('--max-sigma', '30', '--threshold', '4')
     blob_kwarg_defaults = {'threshold': 1, 'min_sigma': 3, 'max_sigma': 40}
 
     if load and os.path.exists(blob_filename):
@@ -163,7 +166,3 @@ def make_blob_image(igram_path=".",
         logger.info('({0:.4f}, {1:.4f}): radius: {2}'.format(lat, lon, r))
 
     plot_blobs(img, blobs=blobs_ll, cur_axes=imagefig.gca())
-
-
-if __name__ == '__main__':
-    main()

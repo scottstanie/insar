@@ -224,6 +224,8 @@ def blob(context, load, title_prefix, blob_filename, row_start, row_end, col_sta
 
         insar --path /path/to/igrams view_stack
     """
+    print('Extra args to blobfunc:')
+    print(blobfunc_args)
     igram_path = context['path']
     insar.blob.make_blob_image(
         igram_path,
