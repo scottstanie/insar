@@ -7,22 +7,15 @@ if [ -z $PHASE_UNWRAP_DIR ]; then
 fi
 echo "Directory to find snaphu:"
 echo "$PHASE_UNWRAP_DIR"
-exit 0
 
 call_snaphu() {
-	echo $#
 	INTFILE=$1
 	WIDTH=$2
 	CORNAME=$(echo $INTFILE | sed 's/.int/.cc/' | sed 's/.lowpass//' )
 	OUTNAME=$(echo $INTFILE | sed 's/.int/.unw/' | sed 's/.lowpass//' )
 	echo "Running snaphu on $INTFILE with width $WIDTH: output to $OUTNAME"
-  "$PHASE_UNWRAP_DIR/snaphu -s $INTFILE $WIDTH -c $CORNAME -o $OUTNAME";
-	return 0;
-  
+  $PHASE_UNWRAP_DIR/snaphu -s $INTFILE $WIDTH -c $CORNAME -o $OUTNAME;
 }
-# Need to export so that subprocesses called by xargs have call_snaphu
-export -f call_snaphu
-
 
 SCRIPTNAME=`basename "$0"`
 if [ "$#" -lt 1 ]
@@ -62,6 +55,12 @@ else
 	SNAFU_FILE_EXT=".int.lowpass"
 fi
 
+# Need to export so that subprocesses called by xargs have call_snaphu and vars
+export -f call_snaphu
+export PHASE_UNWRAP_DIR
+export WIDTH
+export MAX_PROCS
+
 # Call snaphu with each file name matched by SNAFU_FILE_EXT, and pass WIDTH to each call
-find . -name "*${SNAFU_FILE_EXT}" | xargs --max-procs=$MAX_PROCS -I {} $SHELL -c "call_snaphu {} $WIDTH"
+find . -name "*${SNAFU_FILE_EXT}" -print0 | xargs -0 --max-procs=$MAX_PROCS -I{} $SHELL -c "call_snaphu {} $WIDTH"
 
