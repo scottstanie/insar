@@ -13,7 +13,7 @@ def get_args():
     parser.add_argument('--row-end', default=-1)
     parser.add_argument('--col-start', default=0)
     parser.add_argument('--col-end', default=-1)
-    parser.add_argument('--title-extra', default='')
+    parser.add_argument('--title-prefix', default='')
     return parser.parse_args()
 
 
@@ -25,7 +25,7 @@ def main():
     img = deformation[-1]
     img = img[args.row_start:args.row_end, args.col_start:args.col_end]
 
-    title = "Deformation from %s to %s. %s" % (geolist[0], geolist[-1], args.title_extra)
+    title = "%s Deformation from %s to %s" % (args.title_prefix, geolist[0], geolist[-1])
     imagefig, axes_image = insar.plotting.plot_image_shifted(
         img, img_data=rsc_data, title=title, xlabel='Longitude', ylabel='Latitude')
 

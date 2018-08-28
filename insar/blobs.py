@@ -1,6 +1,7 @@
-"""blobs.py: Functions for finding blobs in deformation maps
+"""blob.py: Functions for finding blobs in deformation maps
 """
 from __future__ import print_function
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 # Note: This is just a temp stopgap to not make skimage a hard requirement
@@ -119,3 +120,49 @@ def blobs_latlon(blobs, blob_info):
         blobs_latlon.append((lat, lon, new_radius))
 
     return np.array(blobs_latlon)
+
+
+def make_blob_image(igram_path=".",
+                    load=False,
+                    title_prefix='',
+                    blob_filename='blobs.npy',
+                    row_start=0,
+                    row_end=-1,
+                    col_start=0,
+                    blobfunc_args=None):
+    """Find and view blobs in deformation"""
+    logger.info("Searching %s for igram_path" % igram_path)
+    geolist, deformation = insar.timeseries.load_deformation(igram_path)
+    rsc_data = sardem.loading.load_dem_rsc(os.path.join(igram_path, 'dem.rsc'))
+    img = deformation[-1]
+    img = img[row_start:row_end, col_start:col_end]
+
+    title = "%s Deformation from %s to %s" % (title_prefix, geolist[0], geolist[-1])
+    imagefig, axes_image = insar.plotting.plot_image_shifted(
+        img, img_data=rsc_data, title=title, xlabel='Longitude', ylabel='Latitude')
+
+    blob_filename = 'blobs.npy'
+    blob_kwarg_defaults = {'threshold': 1, 'min_sigma': 3, 'max_sigma': 40}
+
+    if load and os.path.exists(blob_filename):
+        blobs = np.load(blob_filename)
+    else:
+        logger.info("Finding neg blobs")
+        blobs_neg = insar.blobs.find_blobs(-img, threshold=1, min_sigma=3, max_sigma=40)
+        logger.info("Finding pos blobs")
+        blobs_pos = insar.blobs.find_blobs(img, threshold=.7, min_sigma=3, max_sigma=40)
+        logger.info("Blobs found:")
+        logger.info(blobs_neg.astype(int))
+        logger.info(blobs_pos.astype(int))
+        blobs = np.vstack((blobs_neg, blobs_pos))
+        np.save(blob_filename, blobs)
+
+    blobs_ll = insar.blobs.blobs_latlon(blobs, rsc_data)
+    for lat, lon, r in blobs_ll:
+        logger.info('({0:.4f}, {1:.4f}): radius: {2}'.format(lat, lon, r))
+
+    insar.blobs.plot_blobs(img, blobs=blobs_ll, cur_axes=imagefig.gca())
+
+
+if __name__ == '__main__':
+    main()
