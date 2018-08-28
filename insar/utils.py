@@ -474,3 +474,20 @@ def find_slc_products(api, gj_obj, date_start, date_end, area_relation='contains
 
 def show_titles(products):
     return [p['title'] for p in products.values()]
+
+
+def combine_complex(img1, img2):
+    """Combine two complex images which partially overlap
+
+    Used for SLCs/.geos of adjacent Sentinel frames
+    """
+    # Start with each one where the other is nonzero
+    new_img = np.copy(img1)
+    new_img += img2
+
+    # Now only on overlap, take the average of the two
+    mean_img = 0.5 * (img1 + img2)
+    overlap_idxs = (img1 != 0) & (img2 != 0)
+    new_img[overlap_idxs] = mean_img[overlap_idxs]
+
+    return new_img
