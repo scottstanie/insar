@@ -5,6 +5,9 @@ set -e
 if [ -z $PHASE_UNWRAP_DIR ]; then
   PHASE_UNWRAP_DIR=~/phase_unwrap/bin
 fi
+echo "Directory to find snaphu:"
+echo "$PHASE_UNWRAP_DIR"
+exit 0
 
 call_snaphu() {
 	echo $#
@@ -13,12 +16,12 @@ call_snaphu() {
 	CORNAME=$(echo $INTFILE | sed 's/.int/.cc/' | sed 's/.lowpass//' )
 	OUTNAME=$(echo $INTFILE | sed 's/.int/.unw/' | sed 's/.lowpass//' )
 	echo "Running snaphu on $INTFILE with width $WIDTH: output to $OUTNAME"
-  $PHASE_UNWRAP_DIR/snaphu -s $INTFILE $WIDTH -c $CORNAME -o $OUTNAME;
+  "$PHASE_UNWRAP_DIR/snaphu -s $INTFILE $WIDTH -c $CORNAME -o $OUTNAME";
 	return 0;
+  
 }
 # Need to export so that subprocesses called by xargs have call_snaphu
 export -f call_snaphu
-
 
 
 SCRIPTNAME=`basename "$0"`
@@ -48,8 +51,9 @@ then
 	SNAFU_FILE_EXT=".int"
 else
 	BOX_SIZE=$2
-  LOWPASS=$PHASE_UNWRAP_DIR/lowpass
+ 	LOWPASS=$PHASE_UNWRAP_DIR/lowpass
 	echo "Running $LOWPASS with box size $BOX_SIZE"
+    
 
 	# For loop is faster for the fortran program than xargs
 	for FILE in $(find . -name "*.int"); do
