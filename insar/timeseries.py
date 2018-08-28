@@ -36,6 +36,11 @@ def _parse(datestr):
     return datetime.datetime.strptime(datestr, "%Y%m%d").date()
 
 
+def _strip_geoname(name):
+    """Leaves just date from format S1A_YYYYmmdd.geo"""
+    return name.replace('S1A_', '').replace('S1B_', '').replace('.geo', '')
+
+
 def read_geolist(filepath="./geolist"):
     """Reads in the list of .geo files used, in time order
 
@@ -53,10 +58,7 @@ def read_geolist(filepath="./geolist"):
         geolist = [os.path.split(geoname)[1] for geoname in f.read().splitlines()]
 
     if re.match(r'S1[AB]_\d{8}\.geo', geolist[0]):  # S1A_YYYYmmdd.geo
-        return sorted([
-            _parse(geo.replace('S1A_', '').replace('S1B_', '').replace('.geo', ''))
-            for geo in geolist
-        ])
+        return sorted([_parse(_strip_geoname(geo)) for geo in geolist])
     else:  # Full sentinel product name
         return sorted([Sentinel(geo).start_time.date() for geo in geolist])
 
