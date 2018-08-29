@@ -101,7 +101,7 @@ def corner_los_vectors(rsc_data, db_path, los_output_file):
     return db_files_used, utils.read_los_output(los_output_file)
 
 
-def check_corner_differences(rsc_data, db_path_asc, db_path_desc, asc_los_file, desc_los_file):
+def check_corner_differences(rsc_data, db_path, los_file):
     """Finds value range for ENU coefficients of the LOS vectors in dem.rsc area
 
     Used to see if east, north, and up components vary too much for a single value
@@ -109,26 +109,22 @@ def check_corner_differences(rsc_data, db_path_asc, db_path_desc, asc_los_file, 
     """
     grid_corners = latlon.latlon_grid_corners(**rsc_data)
     # clear the output file:
-    open(desc_los_file, 'w').close()
-    open(asc_los_file, 'w').close()
+    open(los_file, 'w').close()
     for p in grid_corners:
-        record_xyz_los_vector(*p, db_path=db_path_desc, outfile=desc_los_file)
-        record_xyz_los_vector(*p, db_path=db_path_asc, outfile=asc_los_file)
+        record_xyz_los_vector(*p, db_path=db_path, outfile=los_file)
 
-    enu_asc = los_to_enu(asc_los_file)
-    enu_desc = los_to_enu(desc_los_file)
+    enu_coeffs = los_to_enu(los_file)
 
     # Find range of data for E, N and U
-    ranges_asc = np.ptp(enu_asc, axis=0)  # ptp = 'peak to peak' aka range
-    ranges_desc = np.ptp(enu_desc, axis=0)
-    return np.max(np.stack((ranges_asc, ranges_desc)))
+    enu_ranges = np.ptp(enu_coeffs, axis=0)  # ptp = 'peak to peak' aka range
+    return np.max(enu_ranges)
 
 
-def find_east_up_coeffs(swath_path, desc_path):
+def find_east_up_coeffs(sent_path):
     """Find the coefficients for east and up components for LOS deformation
 
     Args:
-        swath_path (str): path to the directory with the sentinel
+        sent_path (str): path to the directory with the sentinel
             timeseries inversion (contains line-of-sight deformation.npy, dem.rsc,
             and has .db files one directory higher)
 
@@ -138,19 +134,17 @@ def find_east_up_coeffs(swath_path, desc_path):
              east_desc, up_desc]
         Used as the "A" matrix for solving Ax = b, where x is [east_def; up_def]
     """
-    swath_path = os.path.realpath(swath_path)
+    sent_path = os.path.realpath(sent_path)
     # Are we doing this in the .geo folder, or the igram folder?
-    # rsc_data = sardem.loading.load_dem_rsc(os.path.join(swath_path, 'dem.rsc'), lower=True)
-    rsc_data = sardem.loading.load_dem_rsc(
-        os.path.join(swath_path, 'elevation.dem.rsc'), lower=True)
+    # rsc_data = sardem.loading.load_dem_rsc(os.path.join(sent_path, 'dem.rsc'), lower=True)
+    rsc_data = sardem.loading.load_dem_rsc(os.path.join(sent_path, 'elevation.dem.rsc'), lower=True)
 
     midpoint = latlon.latlon_grid_midpoint(**rsc_data)
-    # The path to each orbit's .db files: assumed one directory higher
-    db_path_asc = os.path.dirname(swath_path)
+    # The path to each orbit's .db files assumed in same directory as elevation.dem.rsc
 
-    asc_los_file = os.path.realpath(os.path.join(swath_path, 'los_vectors.txt'))
+    los_file = os.path.realpath(os.path.join(sent_path, 'los_vectors.txt'))
 
-    max_corner_difference = check_corner_differences(rsc_data, db_path_asc, asc_los_file)
+    max_corner_difference = check_corner_differences(rsc_data, sent_path, los_file)
     logger.info(
         "Max difference in ENU LOS vectors for area corners: {:2f}".format(max_corner_difference))
     if max_corner_difference > 0.05:
@@ -158,17 +152,14 @@ def find_east_up_coeffs(swath_path, desc_path):
     logger.info("Using midpoint of area for line of sight vectors")
 
     print("Finding LOS vector for midpoint", midpoint)
-    record_xyz_los_vector(*midpoint, db_path=db_path_asc, outfile=asc_los_file, clear=True)
-    record_xyz_los_vector(*midpoint, db_path=db_path_desc, outfile=desc_los_file, clear=True)
+    record_xyz_los_vector(*midpoint, db_path=sent_path, outfile=los_file, clear=True)
 
-    enu_asc = los_to_enu(asc_los_file)
+    enu_coeffs = los_to_enu(los_file)
 
     # Get only East and Up out of ENU
-    eu_asc = enu_asc[:, ::2]
+    east_up_coeffs = enu_coeffs[:, ::2]
     # -1 multiplied since vectors are from sat to ground, so vert is negative
-    east_up_coeffs = -1 * (eu_asc, eu_desc)
-
-    return east_up_coeffs
+    return -1 * east_up_coeffs
 
 
 def find_vertical_def(asc_path, desc_path):
@@ -186,8 +177,10 @@ def find_vertical_def(asc_path, desc_path):
     asc_path = os.path.realpath(asc_path)
     desc_path = os.path.realpath(desc_path)
 
-    east_up_coeffs_asc = find_east_up_coeffs(asc_path, desc_path)
-    east_up_coeffs_desc = -1 * np.vstack((eu_asc, eu_desc))
+    eu_asc = find_east_up_coeffs(asc_path)
+    eu_desc = find_east_up_coeffs(desc_path)
+
+    east_up_coeffs = np.vstack((eu_asc, eu_desc))
     print("East-up asc and desc:")
     print(east_up_coeffs)
 
