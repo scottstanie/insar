@@ -101,8 +101,13 @@ def stitch_same_dates(geo_path):
         print("Stitching geos for %s" % date)
         # TODO: Make combine handle more than 2!
         g1, g2 = geolist[:2]
-        stitched_img = insar.utils.combine_complex(g1, g2)
-        new_name = "{}_{}".format(g1.mission, g1.date.strftime("%Y%m%d"))
+
+        stitched_img = insar.utils.combine_complex(
+            insar.sario.load(g1.filename),
+            insar.sario.load(g2.filename),
+        )
+        new_name = "{}_{}.geo".format(g1.mission, g1.date.strftime("%Y%m%d"))
+        print("Saving stithced to %s" % new_name)
         insar.sario.save(new_name, stitched_img)
 
     return grouped_geos
