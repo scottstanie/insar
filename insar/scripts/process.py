@@ -4,7 +4,7 @@
     Steps:
     1. Download precise orbits EOF files
     2. Create an upsampled DEM
-    3. run sentinel_stack to produce .geo file for all sentinel .zips
+    3. run sentinel_stack to produce .geo file for all sentinel .zips, record LOS
     4. Post processing for sentinel stack (igrams folder prep)
     5. create the sbas_list
     6. run ps_sbas_igrams.py
@@ -55,9 +55,15 @@ def create_dem(geojson=None,
 
 
 def run_sentinel_stack(sentinel_path="~/sentinel/", **kwargs):
-    """3. Create geocoded slcs as .geo files for each .zip file"""
+    """3. Create geocoded slcs as .geo files for each .zip file
+
+    Also records the LOS vectors"""
     script_path = os.path.join(sentinel_path, "sentinel_stack.py")
     subprocess.check_call('/usr/bin/env python {}'.format(script_path), shell=True)
+
+    # With .geos processed, record the ENU LOS vector from DEM center to sat
+    enu_coeffs = insar.los.find_east_up_coeffs(".")
+    np.save("los_enu_midpoint_vector.npy", enu_coeffs)
 
 
 def _reorganize_files():
