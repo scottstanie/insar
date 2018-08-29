@@ -271,7 +271,11 @@ def read_los_output(los_file, dedupe=True):
     Example line:
      19.0  -155.0
         0.94451263868681301      -0.30776088245682498      -0.11480032487005554
-         35999       35999
+         6399       4259
+
+    Where first line is "gps station position", or "lat lon",
+    next line are the 3 LOS vector coordinates to satellite in XYZ,
+    next is x position, y position within the DEM grid
 
     Args:
         los_file (str): Name of file with line of sight vectors
