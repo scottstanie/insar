@@ -166,10 +166,9 @@ def find_vertical_def(asc_path, desc_path):
     """Calculates vertical deformation for all points in the LOS files
 
     Args:
-        asc_path (str): path to the directory with the ascending sentinel
-            timeseries inversion (contains line-of-sight deformation.npy, dem.rsc,
-            and has .db files one directory higher)
-        desc_path (str): same as asc_path but for descending orbit solution
+        asc_path (str): path to the directory with the ascending sentinel files
+            Should contain elevation.dem.rsc, .db files, and igram folder
+        desc_path (str): same as asc_path but for descending orbit
     Returns:
         tuple[ndarray, ndarray]: def_east, def_vertical, the two matrices of
             deformation separated by verticl and eastward motion
@@ -184,8 +183,11 @@ def find_vertical_def(asc_path, desc_path):
     print("East-up asc and desc:")
     print(east_up_coeffs)
 
-    asc_geolist, asc_deform = timeseries.load_deformation(asc_path)
-    desc_geolist, desc_deform = timeseries.load_deformation(desc_path)
+    asc_igram_path = os.path.join(asc_path, 'igrams')
+    desc_igram_path = os.path.join(desc_path, 'igrams')
+
+    asc_geolist, asc_deform = timeseries.load_deformation(asc_igram_path)
+    desc_geolist, desc_deform = timeseries.load_deformation(desc_igram_path)
 
     assert asc_deform.shape == desc_deform.shape, 'Asc and desc def images not same size'
     nlayers, nrows, ncols = asc_deform.shape
