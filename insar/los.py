@@ -117,14 +117,14 @@ def check_corner_differences(rsc_data, db_path, los_file):
 
     # Find range of data for E, N and U
     enu_ranges = np.ptp(enu_coeffs, axis=0)  # ptp = 'peak to peak' aka range
-    return np.max(enu_ranges)
+    return np.max(enu_ranges), enu_coeffs
 
 
-def find_east_up_coeffs(sent_path):
+def find_east_up_coeffs(geo_path):
     """Find the coefficients for east and up components for LOS deformation
 
     Args:
-        sent_path (str): path to the directory with the sentinel
+        geo_path (str): path to the directory with the sentinel
             timeseries inversion (contains line-of-sight deformation.npy, dem.rsc,
             and has .db files one directory higher)
 
@@ -134,25 +134,27 @@ def find_east_up_coeffs(sent_path):
              east_desc, up_desc]
         Used as the "A" matrix for solving Ax = b, where x is [east_def; up_def]
     """
-    sent_path = os.path.realpath(sent_path)
+    geo_path = os.path.realpath(geo_path)
     # Are we doing this in the .geo folder, or the igram folder?
-    # rsc_data = sardem.loading.load_dem_rsc(os.path.join(sent_path, 'dem.rsc'), lower=True)
-    rsc_data = sardem.loading.load_dem_rsc(os.path.join(sent_path, 'elevation.dem.rsc'), lower=True)
+    # rsc_data = sardem.loading.load_dem_rsc(os.path.join(geo_path, 'dem.rsc'), lower=True)
+    rsc_data = sardem.loading.load_dem_rsc(os.path.join(geo_path, 'elevation.dem.rsc'), lower=True)
 
     midpoint = latlon.latlon_grid_midpoint(**rsc_data)
     # The path to each orbit's .db files assumed in same directory as elevation.dem.rsc
 
-    los_file = os.path.realpath(os.path.join(sent_path, 'los_vectors.txt'))
+    los_file = os.path.realpath(os.path.join(geo_path, 'los_vectors.txt'))
 
-    max_corner_difference = check_corner_differences(rsc_data, sent_path, los_file)
+    max_corner_difference, enu_coeffs = check_corner_differences(rsc_data, geo_path, los_file)
     logger.info(
         "Max difference in ENU LOS vectors for area corners: {:2f}".format(max_corner_difference))
     if max_corner_difference > 0.05:
         logger.warning("Area is not small, actual LOS vector differs over area.")
+        logger.info('Corner ENU coeffs:')
+        logger.info(enu_coeffs)
     logger.info("Using midpoint of area for line of sight vectors")
 
     print("Finding LOS vector for midpoint", midpoint)
-    record_xyz_los_vector(*midpoint, db_path=sent_path, outfile=los_file, clear=True)
+    record_xyz_los_vector(*midpoint, db_path=geo_path, outfile=los_file, clear=True)
 
     enu_coeffs = los_to_enu(los_file)
 
