@@ -4,6 +4,8 @@ utils.py: Helper functions to prepare and process data
 Email: scott.stanie@utexas.edu
 """
 from __future__ import division
+import collections
+import itertools
 import glob
 import errno
 import os
@@ -480,18 +482,76 @@ def show_titles(products):
     return [p['title'] for p in products.values()]
 
 
-def combine_complex(img1, img2):
+def combine_complex(img1, img2, overlap='first'):
     """Combine two complex images which partially overlap
 
     Used for SLCs/.geos of adjacent Sentinel frames
+
+    Args:
+        img1 (ndarray): complex image of first .geo
+        img2 (ndarray): complex image of second .geo
+        overlap (str): Options: 'first' (default), 'avg'. How to handle
+            overlapping section of images.
+            'first': just uses values from img1
+            'avg': Takes the mean of img1 and img2 values
     """
     # Start with each one where the other is nonzero
     new_img = np.copy(img1)
     new_img += img2
 
     # Now only on overlap, take the average of the two
-    mean_img = 0.5 * (img1 + img2)
     overlap_idxs = (img1 != 0) & (img2 != 0)
-    new_img[overlap_idxs] = mean_img[overlap_idxs]
+    if overlap == 'avg':
+        mean_img = 0.5 * (img1 + img2)
+        new_img[overlap_idxs] = mean_img[overlap_idxs]
+    elif overlap == 'first':
+        new_img[overlap_idxs] = img1[overlap_idxs]
+    else:
+        raise ValueError("overlap arg must be 'first' or 'avg'")
 
     return new_img
+
+
+def stitch_same_dates(geo_path):
+    """Combines .geo files of the same date in one directory
+    """
+
+    def _group_geos_by_date(geolist):
+        """Groups into sub-lists sharing dates
+        example input:
+        [Sentinel S1B, path 78 from 2017-10-13,
+         Sentinel S1B, path 78 from 2017-10-13,
+         Sentinel S1B, path 78 from 2017-10-25,
+         Sentinel S1B, path 78 from 2017-10-25]
+
+        Output:
+        [(datetime.date(2017, 10, 13),
+          [Sentinel S1B, path 78 from 2017-10-13,
+           Sentinel S1B, path 78 from 2017-10-13]),
+         (datetime.date(2017, 10, 25),
+          [Sentinel S1B, path 78 from 2017-10-25,
+           Sentinel S1B, path 78 from 2017-10-25])]
+
+        """
+        return [(date, list(g)) for date, g in itertools.groupby(geolist, key=lambda x: x.date)]
+
+    geos = [insar.parsers.Sentinel(g) for g in glob.glob(os.path.join(geo_path, "*.geo"))]
+    # Find the dates that have multiple frames/.geos
+    date_counts = collections.Counter([g.date for g in geos])
+    dates_duped = set([date for date, count in date_counts.items() if count > 1])
+    double_geo_files = sorted([g for g in geos if g.date in dates_duped], key=lambda g: g.date)
+    grouped_geos = _group_geos_by_date(double_geo_files)
+    for date, geolist in grouped_geos:
+        print("Stitching geos for %s" % date)
+        # TODO: Make combine handle more than 2!
+        g1, g2 = geolist[:2]
+
+        stitched_img = combine_complex(
+            insar.sario.load(g1.filename),
+            insar.sario.load(g2.filename),
+        )
+        new_name = "{}_{}.geo".format(g1.mission, g1.date.strftime("%Y%m%d"))
+        print("Saving stithced to %s" % new_name)
+        insar.sario.save(new_name, stitched_img)
+
+    return grouped_geos
