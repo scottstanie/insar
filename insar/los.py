@@ -129,7 +129,8 @@ def find_east_up_coeffs(geo_path):
             and has .db files one directory higher)
 
     Returns:
-        ndarray: east_up_coeffs contains 4 numbers for solving east-up deformation:
+        ndarray: east_up_coeffs, a 1x2 array [[east_def, up_def]]
+        Combined with another path, used for solving east-up deformation.:
             [east_asc,  up_asc;
              east_desc, up_desc]
         Used as the "A" matrix for solving Ax = b, where x is [east_def; up_def]

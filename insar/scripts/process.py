@@ -60,7 +60,7 @@ def run_sentinel_stack(sentinel_path="~/sentinel/", **kwargs):
     subprocess.check_call('/usr/bin/env python {}'.format(script_path), shell=True)
 
 
-def record_los_vectors(path="."):
+def record_los_vectors(path=".", **kwargs):
     """4. With .geos processed, record the ENU LOS vector from DEM center to sat"""
     enu_coeffs = insar.los.find_east_up_coeffs(path)
     np.save("los_enu_midpoint_vector.npy", enu_coeffs)
