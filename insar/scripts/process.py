@@ -4,13 +4,13 @@
     Steps:
     1. Download precise orbits EOF files
     2. Create an upsampled DEM
-    3. run sentinel_stack to produce .geo file for all sentinel .zips, record LOS
-    4. Post processing for sentinel stack (igrams folder prep)
-    5. create the sbas_list
-    6. run ps_sbas_igrams.py
-    7. convert .int files to .tif
+    3. run sentinel_stack to produce .geo file for all sentinel .zips
+    4. Record LOS ENU vector from midpoint of DEM
+    5. Post processing for sentinel stack (igrams folder prep)
+    6. create the sbas_list
+    7. run ps_sbas_igrams.py
     8. run snaphu to unwrap all .int files
-    9. Convert snaphu outputs to .tif files
+    9. Convert .int files and .unw files to .tif files
     10. Run an SBAS inversion to get the LOS deformation
 
 """
@@ -55,44 +55,43 @@ def create_dem(geojson=None,
 
 
 def run_sentinel_stack(sentinel_path="~/sentinel/", **kwargs):
-    """3. Create geocoded slcs as .geo files for each .zip file
-
-    Also records the LOS vectors"""
+    """3. Create geocoded slcs as .geo files for each .zip file"""
     script_path = os.path.join(sentinel_path, "sentinel_stack.py")
     subprocess.check_call('/usr/bin/env python {}'.format(script_path), shell=True)
 
-    # With .geos processed, record the ENU LOS vector from DEM center to sat
-    enu_coeffs = insar.los.find_east_up_coeffs(".")
+
+def record_los_vectors(path="."):
+    """4. With .geos processed, record the ENU LOS vector from DEM center to sat"""
+    enu_coeffs = insar.los.find_east_up_coeffs(path)
     np.save("los_enu_midpoint_vector.npy", enu_coeffs)
 
 
-def _reorganize_files():
-    """Records the current file names for Sentinel folder, renames to easier names
-    """
-    # Start by recording filelist, then moving all files to new folder
-    mkdir_p('extra_files')
-    orig_filelist = 'original_filelist.txt'
-    subprocess.check_call("find -maxdepth 1 > {}".format(orig_filelist), shell=True)
-    subprocess.call("mv ./* extra_files/", shell=True)
-
-    # Then bring back the useful ones, renamed
-    geofiles = glob.glob(os.path.join("extra_files", "*.geo"))
-    for geofile in geofiles:
-        s = Sentinel(geofile)
-        # Use just mission and date: S1A_20170101.geo
-        new_name = "{}_{}".format(s.mission, s.start_time.date().strftime("%Y%m%d"))
-        logger.info("Renaming {} to {}".format(geofile, new_name))
-        os.rename(geofile, new_name + ".geo")
-        # also move corresponding orb timing file
-        os.rename(geofile.replace('geo', 'orbtiming'), new_name + ".orbtiming")
-
-    # Move extra useful files back in main directory
-    for fname in ('params', 'elevation.dem', 'elevation.dem.rsc', orig_filelist):
-        os.rename(os.path.join("extra_files", fname), os.path.join('.', fname))
-
-
 def prep_igrams_dir(cleanup=False, **kwargs):
-    """4. cleans bad .geo files, prepare directory for igrams"""
+    """5. cleans bad .geo files, prepare directory for igrams"""
+
+    def _reorganize_files():
+        """Records current file names for Sentinel dir, renames to short names"""
+        # Start by recording filelist, then moving all files to new folder
+        mkdir_p('extra_files')
+        orig_filelist = 'original_filelist.txt'
+        subprocess.check_call("find -maxdepth 1 > {}".format(orig_filelist), shell=True)
+        subprocess.call("mv ./* extra_files/", shell=True)
+
+        # Then bring back the useful ones, renamed
+        geofiles = glob.glob(os.path.join("extra_files", "*.geo"))
+        for geofile in geofiles:
+            s = Sentinel(geofile)
+            # Use just mission and date: S1A_20170101.geo
+            new_name = "{}_{}".format(s.mission, s.start_time.date().strftime("%Y%m%d"))
+            logger.info("Renaming {} to {}".format(geofile, new_name))
+            os.rename(geofile, new_name + ".geo")
+            # also move corresponding orb timing file
+            os.rename(geofile.replace('geo', 'orbtiming'), new_name + ".orbtiming")
+
+        # Move extra useful files back in main directory
+        for fname in ('params', 'elevation.dem', 'elevation.dem.rsc', orig_filelist):
+            os.rename(os.path.join("extra_files", fname), os.path.join('.', fname))
+
     if cleanup:
         logger.info("Removing malformed .geo files missing data")
         insar.utils.clean_files(".geo", path=".", zero_threshold=0.50, test=False)
@@ -104,19 +103,18 @@ def prep_igrams_dir(cleanup=False, **kwargs):
 
 
 def create_sbas_list(max_temporal=500, max_spatial=500, **kwargs):
-    """ 5.run the sbas_list script
+    """6. run the sbas_list script
 
     Uses the outputs of the geo coded SLCS to find files with small baselines
     Searches one directory up from where script is run for .geo files
     """
-
     sbas_cmd = '/usr/bin/env python ~/sentinel/sbas_list.py {} {}'.format(max_temporal, max_spatial)
     logger.info(sbas_cmd)
     subprocess.check_call(sbas_cmd, shell=True)
 
 
 def run_ps_sbas_igrams(rate=1, looks=None, **kwargs):
-    """6. run the ps_sbas_igrams script"""
+    """7. run the ps_sbas_igrams script"""
 
     def calc_sizes(rate, width, length):
         xsize = int(math.floor(width / rate) * rate)
@@ -140,17 +138,6 @@ sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
     subprocess.check_call(ps_sbas_cmd, shell=True)
 
 
-def convert_int_tif(**kwargs):
-    # TODO: Make this into the script like the convert_snaphu
-
-    # Default name by ps_sbas_igrams
-    igram_rsc = sardem.loading.load_dem_rsc('dem.rsc')
-    convert_cmd = """for i in ./*.int ; do dismphfile "$i" {igram_width} ; \
- mv dismph.tif `echo "$i" | sed 's/int$/tif/'` ; done""".format(igram_width=igram_rsc['width'])
-    logger.info(convert_cmd)
-    subprocess.check_call(convert_cmd, shell=True)
-
-
 def run_snaphu(lowpass=None, **kwargs):
     """8. run snaphu to unwrap all .int files
 
@@ -165,11 +152,18 @@ def run_snaphu(lowpass=None, **kwargs):
     subprocess.check_call(snaphu_cmd, shell=True)
 
 
-def convert_snaphu_tif(max_height=None, **kwargs):
-    """9. Convert snaphu outputs to .tif files
+def convert_to_tif(max_height=None, **kwargs):
+    """9. Convert igrams (.int) and snaphu outputs (.unw) to .tif files
 
-    Assumes we are in the directory with all .unw files
+    Assumes we are in the directory with all .int and .unw files
     """
+    # Default name by ps_sbas_igrams
+    igram_rsc = sardem.loading.load_dem_rsc('dem.rsc')
+    convert_cmd = """for i in ./*.int ; do dismphfile "$i" {igram_width} ; \
+ mv dismph.tif `echo "$i" | sed 's/int$/tif/'` ; done""".format(igram_width=igram_rsc['width'])
+    logger.info(convert_cmd)
+    subprocess.check_call(convert_cmd, shell=True)
+
     snaphu_script = os.path.join(SCRIPTS_DIR, 'convert_snaphu.py')
     snaphu_cmd = 'python {filepath} --max-height {hgt}'.format(
         filepath=snaphu_script, hgt=max_height)
@@ -207,12 +201,12 @@ STEPS = [
     download_eof,
     create_dem,
     run_sentinel_stack,
+    record_los_vectors,
     prep_igrams_dir,
     create_sbas_list,
     run_ps_sbas_igrams,
-    convert_int_tif,
     run_snaphu,
-    convert_snaphu_tif,
+    convert_to_tif,
     run_sbas_inversion,
 ]
 # Form string for help function "1:download_eof,2:..."
