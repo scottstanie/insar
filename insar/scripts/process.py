@@ -14,6 +14,8 @@
     10. Run an SBAS inversion to get the LOS deformation
 
 """
+import collections
+import itertools
 import math
 import subprocess
 import os
@@ -66,6 +68,46 @@ def record_los_vectors(path=".", **kwargs):
     np.save("los_enu_midpoint_vector.npy", enu_coeffs)
 
 
+def stitch_same_dates(geo_path):
+    """Combines .geo files of the same date in one directory
+    """
+
+    def _group_geos_by_date(geolist):
+        """Groups into sub-lists sharing dates
+        example input:
+        [Sentinel S1B, path 78 from 2017-10-13,
+         Sentinel S1B, path 78 from 2017-10-13,
+         Sentinel S1B, path 78 from 2017-10-25,
+         Sentinel S1B, path 78 from 2017-10-25]
+
+        Output:
+        [(datetime.date(2017, 10, 13),
+          [Sentinel S1B, path 78 from 2017-10-13,
+           Sentinel S1B, path 78 from 2017-10-13]),
+         (datetime.date(2017, 10, 25),
+          [Sentinel S1B, path 78 from 2017-10-25,
+           Sentinel S1B, path 78 from 2017-10-25])]
+
+        """
+        return [(date, list(g)) for date, g in itertools.groupby(geolist, key=lambda x: x.date)]
+
+    geos = [Sentinel(g) for g in glob.glob(os.path.join(geo_path, "*.geo"))]
+    # Find the dates that have multiple frames/.geos
+    date_counts = collections.Counter([g.date for g in geos])
+    dates_duped = set([date for date, count in date_counts.items() if count > 1])
+    double_geo_files = sorted([g for g in geos if g.date in dates_duped], key=lambda g: g.date)
+    grouped_geos = _group_geos_by_date(double_geo_files)
+    for date, geolist in grouped_geos:
+        print("Stitching geos for %s" % date)
+        # TODO: Make combine handle more than 2!
+        g1, g2 = geolist[:2]
+        stitched_img = insar.utils.combine_complex(g1, g2)
+        new_name = "{}_{}".format(g1.mission, g1.date.strftime("%Y%m%d"))
+        insar.sario.save(new_name, stitched_img)
+
+    return grouped_geos
+
+
 def prep_igrams_dir(cleanup=False, **kwargs):
     """5. cleans bad .geo files, prepare directory for igrams"""
 
@@ -82,7 +124,7 @@ def prep_igrams_dir(cleanup=False, **kwargs):
         for geofile in geofiles:
             s = Sentinel(geofile)
             # Use just mission and date: S1A_20170101.geo
-            new_name = "{}_{}".format(s.mission, s.start_time.date().strftime("%Y%m%d"))
+            new_name = "{}_{}".format(s.mission, s.date.strftime("%Y%m%d"))
             logger.info("Renaming {} to {}".format(geofile, new_name))
             os.rename(geofile, new_name + ".geo")
             # also move corresponding orb timing file
