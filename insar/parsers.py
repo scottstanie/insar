@@ -5,6 +5,8 @@ Utilities for parsing file names of SAR products for relevant info.
 import os
 import re
 import pprint
+import glob
+from xml.etree import ElementTree
 from datetime import datetime
 import insar.utils
 from insar.log import get_log
@@ -204,6 +206,47 @@ class Sentinel(Base):
     def date(self):
         """Date of acquisition: shortcut for start_time.date()"""
         return self.start_time.date()
+
+
+class SentinelMeta(Sentinel):
+    """Extension to parse Sentinel xml metadata (in annotation folder)"""
+
+    def __init__(self, filename, **kwargs):
+        super(SentinelMeta, self).__init__(filename, **kwargs)
+        if not self.filename.strip(os.sep).endswith("SAFE"):
+            raise ValueError("SentinelMeta must be passed a .SAFE folder with xml extracted")
+        annotation_folder = os.path.join(self.filename, 'annotation')
+        self.swath_xmls = glob.glob(os.path.join(annotation_folder, '*slc-vv*.xml'))
+
+    def _get_lat_lon_points(self, xml_file=None, etree=None):
+        if xml_file:
+            etree = ElementTree.parse(xml_file)
+        if not etree:
+            raise ValueError("Need xml_file or etree")
+
+        root = etree.getroot()
+        lats = [float(elem.text) for elem in root.iter('latitude')]
+        lons = [float(elem.text) for elem in root.iter('longitude')]
+        return lats, lons
+
+    def _all_lat_lon_points(self):
+        all_lats, all_lons = [], []
+        for xml in self.swath_xmls:
+            lats, lons = self._get_lat_lon_points(xml)
+            all_lats.extend(lats)
+            all_lons.extend(lons)
+        return all_lats, all_lons
+
+    def get_swath_extent(self):
+        """Matches latlon.latlon_grid_extent(**rsc_data)
+        (lon_left,lon_right,lat_bottom,lat_top)
+        """
+        lats, lons = self._all_lat_lon_points()
+        return min(lons), max(lons), min(lats), max(lats)
+
+    def is_in_dem(self):
+        """Swath is contained in DEM from rsc data"""
+        raise NotImplementedError()
 
 
 class Uavsar(Base):
