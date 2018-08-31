@@ -53,9 +53,15 @@ def find_blobs(image,
     blobs = blob_func(
         image, threshold=threshold, min_sigma=min_sigma, max_sigma=max_sigma, **kwargs)
     blobs, values = sort_blobs_by_val(blobs, image)
+    # Multiply each sigma by sqrt(2) to convert to a radius
+    blobs = blobs * np.array([1, 1, np.sqrt(2)])
 
+    # print('blobs before')
+    # print(blobs)
     if value_threshold:
         blobs = [blob for blob, value in zip(blobs, values) if abs(value) >= value_threshold]
+    # print('blobs after')
+    # print(blobs)
     return np.array(blobs)
 
 
@@ -77,7 +83,7 @@ def plot_blobs(image, blobs=None, cur_fig=None, cur_axes=None, color='blue', **k
 
     for blob in blobs:
         y, x, r = blob
-        c = plt.Circle((x, y), np.sqrt(2) * r, color=color, fill=False, linewidth=2, clip_on=False)
+        c = plt.Circle((x, y), r, color=color, fill=False, linewidth=2, clip_on=False)
         cur_axes.add_patch(c)
 
     plt.draw()
@@ -85,8 +91,18 @@ def plot_blobs(image, blobs=None, cur_fig=None, cur_axes=None, color='blue', **k
     return blobs, cur_axes
 
 
+def indexes_within_circle(cx, cy, radius, height, width):
+    """Get a mask of indexes within a circle"""
+    X, Y = np.ogrid[:height, :width]
+    dist_from_center = np.sqrt((X - cx)**2 + (Y - cy)**2)
+    return dist_from_center <= radius
+
+
 def get_blob_values(blobs, image):
-    """Finds the image's value of each blob center"""
+    """Finds the largest image value within each blob
+
+    Checks all pixels within the radius of the blob
+    """
     coords = blobs[:, :2].astype(int)
     return image[coords[:, 0], coords[:, 1]]
 
@@ -136,12 +152,14 @@ def make_blob_image(igram_path=".",
     logger.info("Searching %s for igram_path" % igram_path)
     geolist, deformation = timeseries.load_deformation(igram_path)
     rsc_data = sardem.loading.load_dem_rsc(os.path.join(igram_path, 'dem.rsc'))
-    img = deformation[-1]
-    img = img[row_start:row_end, col_start:col_end]
+    # TODO: Is mean/max better than just looking at last image? prob
+    img = deformation[-1, row_start:row_end, col_start:col_end]
+    # img = np.mean(deformation[-3:, row_start:row_end, col_start:col_end], axis=0)
 
     title = "%s Deformation from %s to %s" % (title_prefix, geolist[0], geolist[-1])
-    imagefig, axes_image = plotting.plot_image_shifted(
-        img, img_data=rsc_data, title=title, xlabel='Longitude', ylabel='Latitude')
+    # imagefig, axes_image = plotting.plot_image_shifted(
+    # img, img_data=rsc_data, title=title, xlabel='Longitude', ylabel='Latitude')
+    imagefig, axes_image = plotting.plot_image_shifted(img, title=title)
 
     blob_filename = 'blobs.npy'
     # TODO: handle extra args as ('--max-sigma', '30', '--threshold', '4')
@@ -165,4 +183,5 @@ def make_blob_image(igram_path=".",
     for lat, lon, r in blobs_ll:
         logger.info('({0:.4f}, {1:.4f}): radius: {2}'.format(lat, lon, r))
 
-    plot_blobs(img, blobs=blobs_ll, cur_axes=imagefig.gca())
+    # plot_blobs(img, blobs=blobs_ll, cur_axes=imagefig.gca())
+    plot_blobs(img, blobs=blobs, cur_axes=imagefig.gca())
