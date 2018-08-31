@@ -172,14 +172,20 @@ def animate_stack(stack,
         plt.show()
 
 
-def view_stack(stack,
-               geolist=None,
-               display_img=-1,
-               label="Centimeters",
-               cmap='seismic',
-               title='',
-               lat_lon=True,
-               rsc_data=None):
+def view_stack(
+        stack,
+        geolist=None,
+        display_img=-1,
+        label="Centimeters",
+        cmap='seismic',
+        title='',
+        lat_lon=True,
+        rsc_data=None,
+        row_start=0,
+        row_end=-1,
+        col_start=0,
+        col_end=-1,
+):
     """Displays an image from a stack, allows you to click for timeseries
 
     Args:
@@ -205,6 +211,7 @@ def view_stack(stack,
         ValueError: if display_img is not an int or the string 'mean'
 
     """
+    stack = stack[:, row_start:row_end, col_start:col_end]
     # If we don't have dates, use indices as the x-axis
     if geolist is None:
         geolist = np.arange(stack.shape[0])

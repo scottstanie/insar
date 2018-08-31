@@ -174,9 +174,14 @@ def animate(context, pause, save, display):
 @click.option("--cmap", default='seismic', help="Colormap for image display.")
 @click.option("--label", default='Centimeters', help="Label on colorbar/yaxis for plot")
 @click.option("--title", help="Title for image plot")
+@click.option('--row-start', default=0)
+@click.option('--row-end', default=-1)
+@click.option('--col-start', default=0)
+@click.option('--col-end', default=-1)
 @click.option("--rowcol", help="Use row,col for legened entries (instead of default lat,lon)")
 @click.pass_obj
-def view_stack(context, filename, cmap, label, title, rowcol):
+def view_stack(context, filename, cmap, label, title, row_start, row_end, col_start, col_end,
+               rowcol):
     """Explore timeseries on deformation image.
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
@@ -201,7 +206,12 @@ def view_stack(context, filename, cmap, label, title, rowcol):
         title=title,
         label=label,
         cmap=cmap,
-        rsc_data=rsc_data)
+        rsc_data=rsc_data,
+        row_start=row_start,
+        row_end=row_end,
+        col_start=col_start,
+        col_end=col_end,
+    )
 
 
 # COMMAND: blob
