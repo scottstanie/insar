@@ -29,6 +29,10 @@ def find_blobs(image,
                **kwargs):
     """Use skimage to find blobs in image
 
+    Note: when looking for negative blobs, you should pass in -image,
+    as the sorter performs a `max` to find the largest value within the
+    radius of the blob
+
     Args:
         image (ndarray): image containing blobs
         blob_func (str): which of the functions to use to find blobs
@@ -56,12 +60,8 @@ def find_blobs(image,
     # Multiply each sigma by sqrt(2) to convert to a radius
     blobs = blobs * np.array([1, 1, np.sqrt(2)])
 
-    # print('blobs before')
-    # print(blobs)
     if value_threshold:
         blobs = [blob for blob, value in zip(blobs, values) if abs(value) >= value_threshold]
-    # print('blobs after')
-    # print(blobs)
     return np.array(blobs)
 
 
@@ -98,13 +98,29 @@ def indexes_within_circle(cx, cy, radius, height, width):
     return dist_from_center <= radius
 
 
-def get_blob_values(blobs, image):
-    """Finds the largest image value within each blob
+def get_blob_values(blobs, image, center_only=False):
+    """Finds most extreme image value within each blob
 
     Checks all pixels within the radius of the blob
+
+    Args:
+        blobs (ndarray): 2D, entries [row, col, radius], from find_blobs
+        image (ndarray): 2D image where blobs were found
+        center_only (bool): (default False) Only look at the center pixel of the blob.
+            False means searching all pixels within the blob radius on the image
+
+    Returns:
+        ndarray: length = number of blobs, each value is the max of the image
+        within the blob radius
     """
-    coords = blobs[:, :2].astype(int)
-    return image[coords[:, 0], coords[:, 1]]
+    if center_only:
+        coords = blobs[:, :2].astype(int)
+        return image[coords[:, 0], coords[:, 1]]
+
+    height, width = image.shape
+    masks = [indexes_within_circle(row, col, rad, height, width) for row, col, rad in blobs]
+    # TODO: max(x.min(), x.max(), key=abs) ? or is assuming pos fine
+    return np.stack([np.max(image[mask]) for mask in masks])
 
 
 def sort_blobs_by_val(blobs, image):
