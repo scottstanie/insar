@@ -8,7 +8,10 @@ import pprint
 import glob
 from xml.etree import ElementTree
 from datetime import datetime
+import shapely.geometry
+
 import insar.utils
+from insar import latlon
 from insar.log import get_log
 logger = get_log()
 
@@ -221,13 +224,24 @@ class Sentinel(Base):
     def swath_extent(self):
         """Give the lon and lat boundaries for the swath
 
-        Matches latlon.latlon_grid_extent(**rsc_data)
+        Matches latlon.latlon_grid_extent(**dem_rsc_data)
         (lon_left,lon_right,lat_bottom,lat_top)
         """
         if not self.swath_xmls:
             raise ValueError("No annotation xmls found in %s" % self._annotation_folder)
         lats, lons = self._all_lat_lon_points()
         return min(lons), max(lons), min(lats), max(lats)
+
+    @property
+    def swath_width_height(self):
+        """Width and height of the swath area"""
+        left, right, bot, top = self.swath_extent
+        return right - left, top - bot
+
+    @property
+    def swath_polygon(self):
+        left, bot, right, top = self.swath_extent
+        return shapely.geometry.box(left, bot, right, top)
 
     def _get_lat_lon_points(self, xml_file=None, etree=None):
         if xml_file:
@@ -248,9 +262,11 @@ class Sentinel(Base):
             all_lons.extend(lons)
         return all_lats, all_lons
 
-    def is_in_dem(self):
+    def overlaps_dem(self, dem_rsc_data):
         """Swath is contained in DEM from rsc data"""
-        raise NotImplementedError()
+        left, right, bot, top = latlon.latlon_grid_extent(**dem_rsc_data)
+        dem_polygon = shapely.geometry.box(left, bot, right, top)
+        return self.swath_polygon.intersects(dem_polygon)
 
 
 class Uavsar(Base):

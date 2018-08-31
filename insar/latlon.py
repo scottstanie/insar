@@ -291,6 +291,18 @@ def latlon_grid_size(**kwargs):
     return width, height
 
 
+def latlon_grid_bounds(**kwargs):
+    """Same to latlon_grid_extent, but in the order (left, bottom, right, top)"""
+    left, right, bot, top = latlon_grid_extent(**kwargs)
+    return left, bot, right, top
+
+
+def latlon_grid_width_height(**kwargs):
+    """Finds the width and height in deg of the latlon grid"""
+    left, right, bot, top = latlon_grid_extent(**kwargs)
+    return (right - left, top - bot)
+
+
 def rot(angle, axis):
     """
     Find a 3x3 euler rotation matrix given an angle and axis.
