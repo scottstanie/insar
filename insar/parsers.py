@@ -12,6 +12,8 @@ import insar.utils
 from insar.log import get_log
 logger = get_log()
 
+__all__ = ['Sentinel', 'Uavsar']
+
 
 class Base(object):
     """Base parser to illustrate expected interface/ minimum data available
@@ -90,9 +92,10 @@ class Sentinel(Base):
     Stop date + time
     OOOOOO: absolute orbit number: 000001-999999
     DDDDDD: mission data-take identifier: 000001-FFFFFF.
-    CCCC: product unique identifier: hexadecimal string from CRC-16 the manifest file using CRC-CCITT.
+    CCCC: product unique identifier: hexadecimal string from CRC-16 hashing
+        the manifest file using CRC-CCITT.
 
-    Once unzipped, the folder extension is always "SAFE".
+    Once unzipped, the folder extension is always "SAFE"
 
     Attributes:
         filename (str) name of the sentinel data product
@@ -102,6 +105,13 @@ class Sentinel(Base):
     _FIELD_MEANINGS = ('mission', 'beam', 'product type', 'resolution class', 'product level',
                        'product class', 'polarization', 'start datetime', 'stop datetime',
                        'orbit number', 'data-take identified', 'product unique id')
+
+    def __init__(self, filename, **kwargs):
+        super(Sentinel, self).__init__(filename, **kwargs)
+        # The name of the unzipped .SAFE directory (with .zip stripped)
+        self._safe_dir = os.path.splitext(self.filename)[0] + '.SAFE'
+        self._annotation_folder = os.path.join(self._safe_dir, 'annotation')
+        self.swath_xmls = glob.glob(os.path.join(self._annotation_folder, '*slc-vv*.xml'))
 
     def __str__(self):
         return "{} {}, path {} from {}".format(self.__class__.__name__, self.mission, self.path,
@@ -207,16 +217,17 @@ class Sentinel(Base):
         """Date of acquisition: shortcut for start_time.date()"""
         return self.start_time.date()
 
+    @property
+    def swath_extent(self):
+        """Give the lon and lat boundaries for the swath
 
-class SentinelMeta(Sentinel):
-    """Extension to parse Sentinel xml metadata (in annotation folder)"""
-
-    def __init__(self, filename, **kwargs):
-        super(SentinelMeta, self).__init__(filename, **kwargs)
-        if not self.filename.strip(os.sep).endswith("SAFE"):
-            raise ValueError("SentinelMeta must be passed a .SAFE folder with xml extracted")
-        annotation_folder = os.path.join(self.filename, 'annotation')
-        self.swath_xmls = glob.glob(os.path.join(annotation_folder, '*slc-vv*.xml'))
+        Matches latlon.latlon_grid_extent(**rsc_data)
+        (lon_left,lon_right,lat_bottom,lat_top)
+        """
+        if not self.swath_xmls:
+            raise ValueError("No annotation xmls found in %s" % self._annotation_folder)
+        lats, lons = self._all_lat_lon_points()
+        return min(lons), max(lons), min(lats), max(lats)
 
     def _get_lat_lon_points(self, xml_file=None, etree=None):
         if xml_file:
@@ -236,13 +247,6 @@ class SentinelMeta(Sentinel):
             all_lats.extend(lats)
             all_lons.extend(lons)
         return all_lats, all_lons
-
-    def get_swath_extent(self):
-        """Matches latlon.latlon_grid_extent(**rsc_data)
-        (lon_left,lon_right,lat_bottom,lat_top)
-        """
-        lats, lons = self._all_lat_lon_points()
-        return min(lons), max(lons), min(lats), max(lats)
 
     def is_in_dem(self):
         """Swath is contained in DEM from rsc data"""
