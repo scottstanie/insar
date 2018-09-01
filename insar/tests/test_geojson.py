@@ -34,7 +34,7 @@ class TestGeojson(unittest.TestCase):
 
     def test_print_coordinates(self):
         self.assertEqual(
-            geojson.print_coordinates(self.geojson),
+            geojson.format_coords(self.geojson),
             '-156.0,18.7,-154.6,18.7,-154.6,20.3,-156.0,20.3,-156.0,18.7')
 
     def test_corner_input(self):

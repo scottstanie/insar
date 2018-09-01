@@ -82,7 +82,7 @@ def coords(geojson):
     return geojson['coordinates'][0]
 
 
-def print_coordinates(geojson_dict):
+def format_coords(geojson_dict, decimals=4):
     """Prints out the lon,lat points in the polygon joined in one string
 
     Used for ASF API queries: https://www.asf.alaska.edu/get-data/learn-by-doing/
@@ -96,4 +96,16 @@ def print_coordinates(geojson_dict):
         str: lon,lat points of the Polygon in order as 'lon1,lat1,lon2,lat2,...'
     """
     c = coords(geojson_dict)
-    return ','.join(str(coord) for coord in itertools.chain.from_iterable(c))
+    return ','.join('{0:4f}'.format(coord) for coord in itertools.chain.from_iterable(c))
+
+
+if __name__ == '__main__':
+    import sys
+    import json
+    try:
+        gj_file = sys.argv[1]
+    except IndexError:
+        print("Usage: %s file.geojson" % sys.argv[0])
+
+    with open(gj_file) as f:
+        print(format_coords(json.load(f)))
