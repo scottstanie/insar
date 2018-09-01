@@ -8,7 +8,11 @@ import pprint
 import glob
 from xml.etree import ElementTree
 from datetime import datetime
-import shapely.geometry
+try:
+    import shapely.geometry
+except ImportError:
+    print("Warning: shapely not installed, Polygon functions will fail.")
+    print("pip install shapely")
 
 import insar.utils
 from insar import latlon
