@@ -14,8 +14,7 @@ except ImportError:
     print("Warning: shapely not installed, Polygon functions will fail.")
     print("pip install shapely")
 
-import insar.utils
-from insar import latlon
+import insar
 from insar.log import get_log
 logger = get_log()
 
@@ -268,7 +267,7 @@ class Sentinel(Base):
 
     def overlaps_dem(self, dem_rsc_data):
         """Swath is contained in DEM from rsc data"""
-        left, right, bot, top = latlon.latlon_grid_extent(**dem_rsc_data)
+        left, right, bot, top = insar.latlon.latlon_grid_extent(**dem_rsc_data)
         dem_polygon = shapely.geometry.box(left, bot, right, top)
         return self.swath_polygon.intersects(dem_polygon)
 
