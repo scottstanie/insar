@@ -59,9 +59,6 @@ def run_sentinel_stack(sentinel_path="~/sentinel/", **kwargs):
     script_path = os.path.join(sentinel_path, "sentinel_stack.py")
     subprocess.check_call('/usr/bin/env python {}'.format(script_path), shell=True)
 
-    # Now stitch together duplicate dates of .geos
-    insar.utils.stitch_same_dates(".")
-
 
 def record_los_vectors(path=".", **kwargs):
     """4. With .geos processed, record the ENU LOS vector from DEM center to sat"""
@@ -69,31 +66,40 @@ def record_los_vectors(path=".", **kwargs):
     np.save("los_enu_midpoint_vector.npy", enu_coeffs)
 
 
+def _move_files():
+    # Start by recording filelist, then moving all files to new folder
+    mkdir_p('extra_files')
+    orig_filelist = 'original_filelist.txt'
+    subprocess.check_call("find -maxdepth 1 > {}".format(orig_filelist), shell=True)
+    # Now move all files in current dir to 'extra_files/'
+    subprocess.call("mv ./* extra_files/", shell=True)
+    return orig_filelist
+
+
+def _reorganize_files():
+    """Records current file names for Sentinel dir, renames to short names"""
+    orig_filelist = _move_files()
+    # Then bring back the useful ones to the , renamed, as symlinks
+    geofiles = glob.glob(os.path.join("extra_files", "*.geo"))
+    for geofile in geofiles:
+        s = Sentinel(geofile)
+        # Use just mission and date: S1A_20170101.geo
+        new_name = "{}_{}".format(s.mission, s.date.strftime("%Y%m%d"))
+        logger.info("Renaming {} to {}".format(geofile, new_name))
+        os.symlink(geofile, new_name + ".geo")
+        # also move corresponding orb timing file
+        os.symlink(geofile.replace('geo', 'orbtiming'), new_name + ".orbtiming")
+
+    # Move extra useful files back in main directory
+    for fname in ('params', 'elevation.dem', 'elevation.dem.rsc', orig_filelist):
+        os.symlink(os.path.join("extra_files", fname), os.path.join('.', fname))
+
+
 def prep_igrams_dir(cleanup=False, **kwargs):
     """5. cleans bad .geo files, prepare directory for igrams"""
 
-    def _reorganize_files():
-        """Records current file names for Sentinel dir, renames to short names"""
-        # Start by recording filelist, then moving all files to new folder
-        mkdir_p('extra_files')
-        orig_filelist = 'original_filelist.txt'
-        subprocess.check_call("find -maxdepth 1 > {}".format(orig_filelist), shell=True)
-        subprocess.call("mv ./* extra_files/", shell=True)
-
-        # Then bring back the useful ones, renamed
-        geofiles = glob.glob(os.path.join("extra_files", "*.geo"))
-        for geofile in geofiles:
-            s = Sentinel(geofile)
-            # Use just mission and date: S1A_20170101.geo
-            new_name = "{}_{}".format(s.mission, s.date.strftime("%Y%m%d"))
-            logger.info("Renaming {} to {}".format(geofile, new_name))
-            os.rename(geofile, new_name + ".geo")
-            # also move corresponding orb timing file
-            os.rename(geofile.replace('geo', 'orbtiming'), new_name + ".orbtiming")
-
-        # Move extra useful files back in main directory
-        for fname in ('params', 'elevation.dem', 'elevation.dem.rsc', orig_filelist):
-            os.rename(os.path.join("extra_files", fname), os.path.join('.', fname))
+    # Now stitch together duplicate dates of .geos
+    insar.utils.stitch_same_dates(".")
 
     if cleanup:
         logger.info("Removing malformed .geo files missing data")
