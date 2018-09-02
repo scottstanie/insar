@@ -356,7 +356,20 @@ def convert_xyz_latlon_to_enu(lat_lons, xyz_array):
 
 
 def intersects1d(low1, high1, low2, high2):
-    """Checks if two line segments intersect"""
+    """Checks if two line segments intersect
+    
+    Example:
+    >>> low1, high1 = [1, 5]
+    >>> low2, high2 = [4, 6]
+    >>> print(intersects1d(low1, high1, low2, high2))
+    True
+    >>> low2 = 5.5
+    >>> print(intersects1d(low1, high1, low2, high2))
+    False
+    >>> high1 = 7
+    >>> print(intersects1d(low1, high1, low2, high2))
+    True
+    """
     # Is this easier?
     # return not (high2 <= low1 or high2 <= low1)
     return high1 >= low2 and high2 >= low1
