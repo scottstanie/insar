@@ -206,10 +206,10 @@ def latlon_grid(rows=None,
     array([[-155.  , -154.99],
            [-155.  , -154.99],
            [-155.  , -154.99]])
-    >>> lats
-    array([[19.5, 19.5],
-           [19.3, 19.3],
-           [19.1, 19.1]])
+    >>> print(lats)
+    [[19.5 19.5]
+     [19.3 19.3]
+     [19.1 19.1]]
     """
     rows = rows or file_length
     cols = cols or width
