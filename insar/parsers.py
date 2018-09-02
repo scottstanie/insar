@@ -110,7 +110,7 @@ class Sentinel(Base):
     def __init__(self, filename, **kwargs):
         super(Sentinel, self).__init__(filename, **kwargs)
         # The name of the unzipped .SAFE directory (with .zip stripped)
-        self._safe_dir = os.path.splitext(self.filename)[0] + '.SAFE'
+        self._safe_dir = self.filename.split('.')[0] + '.SAFE'
         self._annotation_folder = os.path.join(self._safe_dir, 'annotation')
         self.swath_xmls = glob.glob(os.path.join(self._annotation_folder, '*slc-vv*.xml'))
 
@@ -258,7 +258,7 @@ class Sentinel(Base):
     def overlaps_dem(self, dem_rsc_data):
         """Swath is contained in DEM from rsc data"""
         dem_extent = insar.latlon.grid_extent(**dem_rsc_data)
-        return latlon.intersects(self.swath_extent, dem_extent)
+        return insar.latlon.intersects(self.swath_extent, dem_extent)
 
 
 class Uavsar(Base):
