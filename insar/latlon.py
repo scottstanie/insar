@@ -355,14 +355,27 @@ def convert_xyz_latlon_to_enu(lat_lons, xyz_array):
     return [rotate_xyz_to_enu(xyz, lat, lon) for (lat, lon), xyz in zip(lat_lons, xyz_array)]
 
 
-def intersects1d(left1, right1, left2, right2):
+def intersects1d(low1, high1, low2, high2):
+    """Checks if two line segments intersect"""
     # Is this easier?
-    # return right1 <= left1 or right2 <= left2
-    return right1 >= left1 and right2 >= left2
+    # return not (high2 <= low1 or high2 <= low1)
+    return high1 >= low2 and high2 >= low1
 
 
 def intersects(box1, box2):
+    """Returns true if box1 intersects box2
+
+    box = (left, right, bot, top), same as matplotlib `extent` format
+
+    Example:
+    >>> box1 = (-105.1, -102.2, 31.4, 33.4)
+    >>> box2 = (-103.4, -102.7, 30.9, 31.8)
+    >>> print(intersects(box1, box2))
+    True
+    >>> box2 = (-103.4, -102.7, 30.9, 31.0)
+    >>> print(intersects(box2, box1))
+    False
+    """
     left1, right1, bot1, top1 = box1
     left2, right2, bot2, top2 = box2
-    return (intersects1d((left1, right1), (left2, right2)) and intersects1d((top1, bot1),
-                                                                            (top2, bot2)))
+    return (intersects1d(left1, right1, left2, right2) and intersects1d(bot1, top1, bot2, top2))
