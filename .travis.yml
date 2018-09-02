@@ -5,6 +5,7 @@ python:
 install:
   - pip install -r requirements-dev.txt
   - pip install -r requirements.txt
+  - pip install -U numpy
   - python setup.py build_ext -i
 
 # https://stackoverflow.com/a/35403128
