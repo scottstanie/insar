@@ -82,8 +82,8 @@ class Sentinel(Base):
         MMM_BB_TTTR_LFPP_YYYYMMDDTHHMMSS_YYYYMMDDTHHMMSS_OOOOOO_DDDDDD_CCCC.EEEE
 
     MMM: mission/satellite S1A or S1B
-    BB: Mode/beam identifier. The S1-S6 beams apply to SM products
-        IW, EW and WV identifiers appply to products from the respective modes.
+    BB: Mode/beam identifier. The S1-S6 beams apply to SM products IW,
+      EW and WV identifiers appply to products from the respective modes.
     TTT: Product Type: RAW, SLC, GRD, OCN
     R: Resolution class: F, H, M, or _ (N/A)
     L: Processing Level: 0, 1, 2

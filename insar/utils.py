@@ -318,8 +318,8 @@ def split_and_save(filename):
 
     Saves them with same filename with .1,.2,.3... at end before ext
     e.g. brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.int produces
-        brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.1.int
-        brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.2.int...
+    brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.1.int
+    brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01.2.int...
 
     Output:
         newpaths (list[str]): full paths to new files created
@@ -345,8 +345,8 @@ def combine_cor_amp(corfilename, save=True):
     and creates a new file with amplitude data interleaved for dishgt
 
     dishgt brazos_14937_17087-002_17088-003_0001d_s01_L090HH_01_withamp.cor 3300 1 5000 1
-      where 3300 is number of columns/samples, and we want the first 5000 rows. the final
-      1 is needed for the contour interval to set a max of 1 for .cor data
+    where 3300 is number of columns/samples, and we want the first 5000 rows. the final
+    1 is needed for the contour interval to set a max of 1 for .cor data
 
     Inputs:
         corfilename (str): string filename of the .cor from UAVSAR

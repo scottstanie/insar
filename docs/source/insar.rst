@@ -12,18 +12,10 @@ Subpackages
 Submodules
 ----------
 
-insar.dem module
-----------------
+insar.blob module
+--------------------
 
-.. automodule:: insar.dem
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-insar.eof module
-----------------
-
-.. automodule:: insar.eof
+.. automodule:: insar.blob
     :members:
     :undoc-members:
     :show-inheritance:
@@ -36,10 +28,26 @@ insar.geojson module
     :undoc-members:
     :show-inheritance:
 
+insar.latlon module
+----------------
+
+.. automodule:: insar.latlon
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 insar.log module
 ----------------
 
 .. automodule:: insar.log
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+insar.los module
+----------------
+
+.. automodule:: insar.los
     :members:
     :undoc-members:
     :show-inheritance:
