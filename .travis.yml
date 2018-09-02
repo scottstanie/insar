@@ -2,10 +2,10 @@ language: python
 python:
   - "2.7"
   - "3.4"
+cache: pip
 install:
   - pip install -r requirements-dev.txt
   - pip install -r requirements.txt
-  - pip install -U numpy
   - python setup.py build_ext -i
 
 # https://stackoverflow.com/a/35403128
