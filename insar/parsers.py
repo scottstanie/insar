@@ -8,11 +8,6 @@ import pprint
 import glob
 from xml.etree import ElementTree
 from datetime import datetime
-try:
-    import shapely.geometry
-except ImportError:
-    print("Warning: shapely not installed, Polygon functions will fail.")
-    print("pip install shapely")
 
 import insar
 from insar.log import get_log
@@ -241,11 +236,6 @@ class Sentinel(Base):
         left, right, bot, top = self.swath_extent
         return right - left, top - bot
 
-    @property
-    def swath_polygon(self):
-        left, bot, right, top = self.swath_extent
-        return shapely.geometry.box(left, bot, right, top)
-
     def _get_lat_lon_points(self, xml_file=None, etree=None):
         if xml_file:
             etree = ElementTree.parse(xml_file)
@@ -267,9 +257,8 @@ class Sentinel(Base):
 
     def overlaps_dem(self, dem_rsc_data):
         """Swath is contained in DEM from rsc data"""
-        left, right, bot, top = insar.latlon.grid_extent(**dem_rsc_data)
-        dem_polygon = shapely.geometry.box(left, bot, right, top)
-        return self.swath_polygon.intersects(dem_polygon)
+        dem_extent = insar.latlon.grid_extent(**dem_rsc_data)
+        return latlon.intersects(self.swath_extent, dem_extent)
 
 
 class Uavsar(Base):

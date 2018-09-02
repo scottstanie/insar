@@ -353,3 +353,16 @@ def rotate_xyz_to_enu(xyz, lat, lon):
 
 def convert_xyz_latlon_to_enu(lat_lons, xyz_array):
     return [rotate_xyz_to_enu(xyz, lat, lon) for (lat, lon), xyz in zip(lat_lons, xyz_array)]
+
+
+def intersects1d(left1, right1, left2, right2):
+    # Is this easier?
+    # return right1 <= left1 or right2 <= left2
+    return right1 >= left1 and right2 >= left2
+
+
+def intersects(box1, box2):
+    left1, right1, bot1, top1 = box1
+    left2, right2, bot2, top2 = box2
+    return (intersects1d((left1, right1), (left2, right2)) and intersects1d((top1, bot1),
+                                                                            (top2, bot2)))
