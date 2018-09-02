@@ -174,16 +174,16 @@ def latlon_to_dist(lat_lon_start, lat_lon_end, R=6378):
     return R * c
 
 
-def latlon_grid(rows=None,
-                cols=None,
-                y_step=None,
-                x_step=None,
-                y_first=None,
-                x_first=None,
-                width=None,
-                file_length=None,
-                sparse=False,
-                **kwargs):
+def grid(rows=None,
+         cols=None,
+         y_step=None,
+         x_step=None,
+         y_first=None,
+         x_first=None,
+         width=None,
+         file_length=None,
+         sparse=False,
+         **kwargs):
     """Takes sizes and spacing info, creates a grid of values
 
     Args:
@@ -201,7 +201,7 @@ def latlon_grid(rows=None,
 
     Examples:
     >>> test_grid_data = {'cols': 2, 'rows': 3, 'x_first': -155.0, 'x_step': 0.01, 'y_first': 19.5, 'y_step': -0.2}
-    >>> lons, lats = latlon_grid(**test_grid_data)
+    >>> lons, lats = grid(**test_grid_data)
     >>> lons
     array([[-155.  , -154.99],
            [-155.  , -154.99],
@@ -218,15 +218,15 @@ def latlon_grid(rows=None,
     return np.meshgrid(x, y, sparse=sparse)
 
 
-def latlon_grid_extent(rows=None,
-                       cols=None,
-                       y_step=None,
-                       x_step=None,
-                       y_first=None,
-                       x_first=None,
-                       file_length=None,
-                       width=None,
-                       **kwargs):
+def grid_extent(rows=None,
+                cols=None,
+                y_step=None,
+                x_step=None,
+                y_first=None,
+                x_first=None,
+                file_length=None,
+                width=None,
+                **kwargs):
     """Takes sizes and spacing info, finds boundaries
 
     Used for `matplotlib.pyplot.imshow` keyword arg `extent`:
@@ -250,7 +250,7 @@ def latlon_grid_extent(rows=None,
 
     Examples:
     >>> test_grid_data = {'cols': 2, 'rows': 3, 'x_first': -155.0, 'x_step': 0.01, 'y_first': 19.5, 'y_step': -0.2}
-    >>> print(latlon_grid_extent(**test_grid_data))
+    >>> print(grid_extent(**test_grid_data))
     (-155.0, -154.99, 19.1, 19.5)
     """
     rows = rows or file_length
@@ -258,48 +258,48 @@ def latlon_grid_extent(rows=None,
     return (x_first, x_first + x_step * (cols - 1), y_first + y_step * (rows - 1), y_first)
 
 
-def latlon_grid_corners(**kwargs):
+def grid_corners(**kwargs):
     """Takes sizes and spacing info, finds corner points in (x, y) form
 
     Returns:
         list[tuple[float]]: the corners of the latlon grid in order:
         (top right, top left, bottom left, bottom right)
     """
-    left, right, bot, top = latlon_grid_extent(**kwargs)
+    left, right, bot, top = grid_extent(**kwargs)
     return [(right, top), (left, top), (left, bot), (right, bot)]
 
 
-def latlon_grid_midpoint(**kwargs):
+def grid_midpoint(**kwargs):
     """Takes sizes and spacing info, finds midpoint in (x, y) form
 
     Returns:
         tuple[float]: midpoint of the latlon grid
     """
-    left, right, bot, top = latlon_grid_extent(**kwargs)
+    left, right, bot, top = grid_extent(**kwargs)
     return (left + right) / 2, (top + bot) / 2
 
 
-def latlon_grid_size(**kwargs):
+def grid_size(**kwargs):
     """Takes rsc_data and gives width and height of box in km
 
     Returns:
         tupls[float, float]: width, height in km
     """
-    left, right, bot, top = latlon_grid_extent(**kwargs)
+    left, right, bot, top = grid_extent(**kwargs)
     width = latlon_to_dist((top, left), (top, right))
     height = latlon_to_dist((top, left), (bot, right))
     return width, height
 
 
-def latlon_grid_bounds(**kwargs):
-    """Same to latlon_grid_extent, but in the order (left, bottom, right, top)"""
-    left, right, bot, top = latlon_grid_extent(**kwargs)
+def grid_bounds(**kwargs):
+    """Same to grid_extent, but in the order (left, bottom, right, top)"""
+    left, right, bot, top = grid_extent(**kwargs)
     return left, bot, right, top
 
 
-def latlon_grid_width_height(**kwargs):
+def grid_width_height(**kwargs):
     """Finds the width and height in deg of the latlon grid"""
-    left, right, bot, top = latlon_grid_extent(**kwargs)
+    left, right, bot, top = grid_extent(**kwargs)
     return (right - left, top - bot)
 
 

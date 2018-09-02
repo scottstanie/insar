@@ -227,7 +227,7 @@ class Sentinel(Base):
     def swath_extent(self):
         """Give the lon and lat boundaries for the swath
 
-        Matches latlon.latlon_grid_extent(**dem_rsc_data)
+        Matches latlon.grid_extent(**dem_rsc_data)
         (lon_left,lon_right,lat_bottom,lat_top)
         """
         if not self.swath_xmls:
@@ -267,7 +267,7 @@ class Sentinel(Base):
 
     def overlaps_dem(self, dem_rsc_data):
         """Swath is contained in DEM from rsc data"""
-        left, right, bot, top = insar.latlon.latlon_grid_extent(**dem_rsc_data)
+        left, right, bot, top = insar.latlon.grid_extent(**dem_rsc_data)
         dem_polygon = shapely.geometry.box(left, bot, right, top)
         return self.swath_polygon.intersects(dem_polygon)
 

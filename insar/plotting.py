@@ -93,7 +93,7 @@ def plot_image_shifted(img,
         label (str): label for colorbar
     """
     if img_data:
-        extent = latlon.latlon_grid_extent(**img_data)
+        extent = latlon.grid_extent(**img_data)
     else:
         nrows, ncols = img.shape
         extent = (0, ncols, nrows, 0)

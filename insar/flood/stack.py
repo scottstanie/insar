@@ -93,13 +93,13 @@ def overlay(under_image,
         fig = ax.get_figure()
 
     if under_image_info:
-        under_extent = latlon.latlon_grid_extent(**under_image_info)
+        under_extent = latlon.grid_extent(**under_image_info)
         xlabel, ylabel = 'Longitude', 'Latitude'
         # Now get extent of under image, which mage be different due to crop
         over_image_info = copy(under_image_info)
         over_image_info['rows'] = over_image.shape[0]
         over_image_info['cols'] = over_image.shape[1]
-        over_extent = latlon.latlon_grid_extent(**over_image_info)
+        over_extent = latlon.grid_extent(**over_image_info)
     else:
         # No lat/lon provided: jsut use row, col, no extend arg
         xlabel, ylabel = 'col number', 'row number'
