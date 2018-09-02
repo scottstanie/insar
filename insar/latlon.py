@@ -109,6 +109,14 @@ def LatlonStack(LatlonImage):
             self.dem_rsc = None
 
 
+class DemTile(object):
+    def __init__(self, rsc_file=None, rsc_data=None):
+        if rsc_data:
+            self.rsc_data = rsc_data
+        elif rsc_file:
+            self.rsc_data = sario.load(rsc_file)
+
+
 def rowcol_to_latlon(row, col, rsc_data=None):
     """ Takes the row, col of a pixel and finds its lat/lon
 
@@ -358,7 +366,7 @@ def convert_xyz_latlon_to_enu(lat_lons, xyz_array):
 
 def intersects1d(low1, high1, low2, high2):
     """Checks if two line segments intersect
-    
+
     Example:
     >>> low1, high1 = [1, 5]
     >>> low2, high2 = [4, 6]
