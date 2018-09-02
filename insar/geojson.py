@@ -96,7 +96,8 @@ def format_coords(geojson_dict, decimals=4):
         str: lon,lat points of the Polygon in order as 'lon1,lat1,lon2,lat2,...'
     """
     c = coords(geojson_dict)
-    return ','.join('{0:4f}'.format(coord) for coord in itertools.chain.from_iterable(c))
+    fmt_str = '{{0:.{decimals}f}}'.format(decimals=decimals)
+    return ','.join(fmt_str.format(coord) for coord in itertools.chain.from_iterable(c))
 
 
 if __name__ == '__main__':
