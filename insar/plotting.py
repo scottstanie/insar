@@ -69,7 +69,7 @@ def make_shifted_cmap(img=None, maxval=None, minval=None, cmap_name='seismic'):
     """Scales the colorbar so that 0 is always centered (white)"""
     if img:
         maxval, minval = np.max(img), np.min(img)
-    if not maxval or not minval:
+    if maxval is None or minval is None:
         raise ValueError("Required args: img, or maxval and minval")
     midpoint = 1 - maxval / (abs(minval) + maxval)
     return shifted_color_map(cmap_name, midpoint=midpoint)
