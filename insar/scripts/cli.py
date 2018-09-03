@@ -154,8 +154,9 @@ def process(context, **kwargs):
     "--display/--no-display",
     help="Pop up matplotlib figure to view (instead of just saving)",
     default=True)
+@click.option("--cmap", default='seismic', help="Colormap for image display.")
 @click.pass_obj
-def animate(context, pause, save, display):
+def animate(context, pause, save, display, cmap):
     """Creates animation for 3D image stack.
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
@@ -169,7 +170,13 @@ def animate(context, pause, save, display):
     geolist, deformation = insar.timeseries.load_deformation(context['path'])
     titles = [d.strftime("%Y-%m-%d") for d in geolist]
     insar.plotting.animate_stack(
-        deformation, pause_time=pause, display=display, titles=titles, save_title=save)
+        deformation,
+        pause_time=pause,
+        display=display,
+        titles=titles,
+        save_title=save,
+        cmap_name=cmap,
+    )
 
 
 # COMMAND: view-stack

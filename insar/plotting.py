@@ -65,9 +65,13 @@ def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, name='shiftedcmap')
     return newcmap
 
 
-def make_shifted_cmap(img, cmap_name='seismic'):
+def make_shifted_cmap(img=None, maxval=None, minval=None, cmap_name='seismic'):
     """Scales the colorbar so that 0 is always centered (white)"""
-    midpoint = 1 - np.max(img) / (abs(np.min(img)) + np.max(img))
+    if img:
+        maxval, minval = np.max(img), np.min(img)
+    if not maxval or not minval:
+        raise ValueError("Required args: img, or maxval and minval")
+    midpoint = 1 - maxval / (abs(minval) + maxval)
     return shifted_color_map(cmap_name, midpoint=midpoint)
 
 
@@ -118,6 +122,7 @@ def animate_stack(stack,
                   titles=None,
                   label=None,
                   save_title=None,
+                  cmap_name='seismic',
                   **savekwargs):
     """Runs a matplotlib loop to show each image in a 3D stack
 
@@ -147,8 +152,10 @@ def animate_stack(stack,
 
     # Use the same stack min and stack max for all colorbars/ color ranges
     minval, maxval = np.min(stack), np.max(stack)
+    shifted_cmap = make_shifted_cmap(minval=minval, maxval=maxval, cmap_name='seismic')
     fig, ax = plt.subplots()
-    axes_image = plt.imshow(stack[0, :, :], vmin=minval, vmax=maxval)  # Type: AxesImage
+    axes_image = plt.imshow(
+        stack[0, :, :], vmin=minval, vmax=maxval, cmap=shifted_cmap)  # Type: AxesImage
 
     cbar = fig.colorbar(axes_image)
     cbar_ticks = np.linspace(minval, maxval, num=6, endpoint=True)
@@ -166,7 +173,7 @@ def animate_stack(stack,
 
     if save_title:
         logger.info("Saving to %s", save_title)
-        stack_ani.save(save_title, **savekwargs)
+        stack_ani.save(save_title, writer='imagemagick', **savekwargs)
 
     if display:
         plt.show()
