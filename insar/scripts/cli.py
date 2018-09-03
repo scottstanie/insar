@@ -82,7 +82,7 @@ def parse_steps(ctx, param, value):
 @click.option(
     "--cleanup/--no-cleanup",
     help="Rename .geos and cleanup directory to `extra_files` after .geo processing",
-    default=False)
+    default=True)
 @click.option(
     "--max-temporal",
     type=int,
