@@ -14,6 +14,7 @@
     10. Run an SBAS inversion to get the LOS deformation
 
 """
+import errno
 import math
 import subprocess
 import os
@@ -69,14 +70,18 @@ def record_los_vectors(path=".", **kwargs):
 def _reorganize_files(new_dir="extra_files"):
     """Records current file names for Sentinel dir, renames to short names"""
 
+    def _force_symlink(src, dest):
+        try:
+            os.symlink(src, dest)
+        except OSError as e:
+            if e.errno == errno.EEXIST:
+                os.remove(dest)
+                os.symlink(src, dest)
+
     def _move_files(new_dir):
-        # Start by recording filelist, then moving all files to new folder
+        # Save all sentinel_stack output to new_dir
         mkdir_p(new_dir)
-        orig_filelist = 'original_filelist.txt'
-        subprocess.check_call("find -maxdepth 1 > {}".format(orig_filelist), shell=True)
-        # Now move all files in current dir to 'extra_files/'
         subprocess.call("mv ./* {}/".format(new_dir), shell=True)
-        return orig_filelist
 
     def _make_symlinks(geofiles):
         for geofile in geofiles:
@@ -84,25 +89,26 @@ def _reorganize_files(new_dir="extra_files"):
             # Use just mission and date: S1A_20170101.geo
             new_name = "{}_{}".format(s.mission, s.date.strftime("%Y%m%d"))
             logger.info("Renaming {} to {}".format(geofile, new_name))
-            os.symlink(geofile, new_name + ".geo")
+            _force_symlink(geofile, new_name + ".geo")
             # also move corresponding orb timing file
-            os.symlink(geofile.replace('geo', 'orbtiming'), new_name + ".orbtiming")
+            orbtiming_file = geofile.replace('geo', 'orbtiming')
+            _force_symlink(orbtiming_file, new_name + ".orbtiming")
 
-    orig_filelist = _move_files(new_dir=new_dir)
+    _move_files(new_dir)
     # Then bring back the useful ones to the cur dir as symlinks renamed
     geofiles = glob.glob(os.path.join(new_dir, "*.geo"))
     _make_symlinks(geofiles)
 
     # Move extra useful files back in main directory
-    for fname in ('params', 'elevation.dem', 'elevation.dem.rsc', orig_filelist):
+    for fname in ('params', 'elevation.dem', 'elevation.dem.rsc'):
         os.symlink(os.path.join(new_dir, fname), os.path.join('.', fname))
 
 
 def prep_igrams_dir(cleanup=False, **kwargs):
-    """5. cleans bad .geo files, prepare directory for igrams"""
+    """5. Reorganize and rename .geo files, stitches .geos, prepare for igrams"""
 
     if cleanup:
-        logger.info("Removing malformed .geo files missing data")
+        logger.info("Renaming .geo files, creating symlinks")
         new_dir = 'extra_files'
         _reorganize_files(new_dir)
         # For now, leave out the "bad_geo" making

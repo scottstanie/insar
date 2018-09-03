@@ -512,6 +512,14 @@ def combine_complex(img1, img2, overlap='first'):
     return new_img
 
 
+def rm_if_exists(filename):
+    try:
+        os.remove(filename)
+    except OSError as e:
+        if e.errno != errno.ENOENT:  # errno.ENOENT = no such file or directory
+            raise  # re-raise if different error
+
+
 def stitch_same_dates(geo_path=".", output_path="."):
     """Combines .geo files of the same date in one directory
     """
@@ -552,7 +560,10 @@ def stitch_same_dates(geo_path=".", output_path="."):
         )
         new_name = "{}_{}.geo".format(g1.mission, g1.date.strftime("%Y%m%d"))
         new_name = os.path.join(output_path, new_name)
-        print("Saving stithced to %s" % new_name)
+        print("Saving stitched to %s" % new_name)
+        # Remove any file with same name before saving
+        # This prevents symlink overwriting old files
+        rm_if_exists(new_name)
         insar.sario.save(new_name, stitched_img)
 
     return grouped_geos

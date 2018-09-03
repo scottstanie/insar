@@ -135,6 +135,7 @@ def find_east_up_coeffs(geo_path):
              east_desc, up_desc]
         Used as the "A" matrix for solving Ax = b, where x is [east_def; up_def]
     """
+    # TODO: make something to adjust 'params' file in case we moved it
     geo_path = os.path.realpath(geo_path)
     # Are we doing this in the .geo folder, or the igram folder?
     # rsc_data = sardem.loading.load_dem_rsc(os.path.join(geo_path, 'dem.rsc'), lower=True)
