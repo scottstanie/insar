@@ -76,6 +76,10 @@ def parse_steps(ctx, param, value):
 @click.option(
     "--rate", "-r", default=1, help="Rate at which to upsample DEM (default=1, no upsampling)")
 @click.option(
+    "--unzip/--no-unzip",
+    help="Pass to sentinel_stack whether to unzip Sentinel files",
+    default=True)
+@click.option(
     "--cleanup/--no-cleanup",
     help="Rename .geos and cleanup directory to `extra_files` after .geo processing",
     default=False)

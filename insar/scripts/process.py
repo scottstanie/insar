@@ -55,10 +55,11 @@ def create_dem(geojson=None,
     sardem.dem.main(left_lon, top_lat, dlon, dlat, data_source, rate, output_name)
 
 
-def run_sentinel_stack(sentinel_path="~/sentinel/", **kwargs):
+def run_sentinel_stack(sentinel_path="~/sentinel/", unzip=True, **kwargs):
     """3. Create geocoded slcs as .geo files for each .zip file"""
     script_path = os.path.join(sentinel_path, "sentinel_stack.py")
-    subprocess.check_call('/usr/bin/env python {}'.format(script_path), shell=True)
+    unzip_arg = "--no-unzip" if unzip is False else ''
+    subprocess.check_call('/usr/bin/env python {} {}'.format(script_path, unzip_arg), shell=True)
 
 
 def record_los_vectors(path=".", **kwargs):
