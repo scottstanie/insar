@@ -169,13 +169,14 @@ def make_blob_image(igram_path=".",
     geolist, deformation = timeseries.load_deformation(igram_path)
     rsc_data = sardem.loading.load_dem_rsc(os.path.join(igram_path, 'dem.rsc'))
     # TODO: Is mean/max better than just looking at last image? prob
-    img = deformation[-1, row_start:row_end, col_start:col_end]
-    # img = np.mean(deformation[-3:, row_start:row_end, col_start:col_end], axis=0)
+    # MAKE OPTION FOR THE COMMENTED PARTS
+    # img = deformation[-1, row_start:row_end, col_start:col_end]
+    img = np.mean(deformation[-3:, row_start:row_end, col_start:col_end], axis=0)
 
     title = "%s Deformation from %s to %s" % (title_prefix, geolist[0], geolist[-1])
-    # imagefig, axes_image = plotting.plot_image_shifted(
-    # img, img_data=rsc_data, title=title, xlabel='Longitude', ylabel='Latitude')
-    imagefig, axes_image = plotting.plot_image_shifted(img, title=title)
+    imagefig, axes_image = plotting.plot_image_shifted(
+        img, img_data=rsc_data, title=title, xlabel='Longitude', ylabel='Latitude')
+    # imagefig, axes_image = plotting.plot_image_shifted(img, title=title)
 
     blob_filename = 'blobs.npy'
     # TODO: handle extra args as ('--max-sigma', '30', '--threshold', '4')
@@ -199,5 +200,5 @@ def make_blob_image(igram_path=".",
     for lat, lon, r in blobs_ll:
         logger.info('({0:.4f}, {1:.4f}): radius: {2}'.format(lat, lon, r))
 
-    # plot_blobs(img, blobs=blobs_ll, cur_axes=imagefig.gca())
-    plot_blobs(img, blobs=blobs, cur_axes=imagefig.gca())
+    plot_blobs(img, blobs=blobs_ll, cur_axes=imagefig.gca())
+    # plot_blobs(img, blobs=blobs, cur_axes=imagefig.gca())
