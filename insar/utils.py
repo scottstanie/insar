@@ -512,7 +512,7 @@ def combine_complex(img1, img2, overlap='first'):
     return new_img
 
 
-def stitch_same_dates(geo_path):
+def stitch_same_dates(geo_path=".", output_path="."):
     """Combines .geo files of the same date in one directory
     """
 
@@ -551,6 +551,7 @@ def stitch_same_dates(geo_path):
             insar.sario.load(g2.filename),
         )
         new_name = "{}_{}.geo".format(g1.mission, g1.date.strftime("%Y%m%d"))
+        new_name = os.path.join(output_path, new_name)
         print("Saving stithced to %s" % new_name)
         insar.sario.save(new_name, stitched_img)
 
