@@ -23,9 +23,14 @@ MAX_PROCS = mp.cpu_count()
 BLOB_KWARG_DEFAULTS = {'threshold': 1, 'min_sigma': 3, 'max_sigma': 40}
 
 
+def _force_column(arr):
+    """Turns 1d numpy array into an (N, 1) shaped column"""
+    return arr.reshape((len(arr), 1))
+
+
 def find_blobs(image,
                blob_func='blob_log',
-               sort_by_value=True,
+               include_values=True,
                value_threshold=1.0,
                min_sigma=3,
                max_sigma=60,
@@ -41,14 +46,18 @@ def find_blobs(image,
         image (ndarray): image containing blobs
         blob_func (str): which of the functions to use to find blobs
             Options: 'blob_log', 'blob_dog', 'blob_doh'
+        include_values (bool): default True, flag to include the extreme value
+            from within the blob
         value_threshold (float): absolute value in the image that blob must surpass
         threshold (float): response threshold passed to the blob finding function
         min_sigma (int): minimum pixel size to check for blobs
         max_sigma (int): max pixel size to check for blobs
 
     Returns:
-        ndarray: list of blobs: [(r, c, s)], r = row num of center,
-        c is column, s is sigma (size of Gaussian that detected blob)
+        ndarray: list of blobs: [(r, c, s, value)], r = row num of center,
+        c is column, s is sigma (size of Gaussian that detected blob), and
+        value is the extreme value within the blob radius.
+        If include_values = False, list is just [(r, c, s)]
 
     Notes:
         kwargs are passed to the blob_func (such as overlap).
@@ -67,6 +76,9 @@ def find_blobs(image,
     blobs, values = sort_blobs_by_val(blobs, image)
     # Multiply each sigma by sqrt(2) to convert to a radius
     blobs = blobs * np.array([1, 1, np.sqrt(2)])
+
+    if include_values:
+        blobs = np.hstack((blobs, _force_column(values)))
 
     if value_threshold:
         blobs = [blob for blob, value in zip(blobs, values) if abs(value) >= value_threshold]
@@ -99,8 +111,8 @@ def plot_blobs(image, blobs=None, cur_fig=None, cur_axes=None, color='blue', **k
         blobs = find_blobs(image, **kwargs)
 
     for blob in blobs:
-        y, x, r = blob
-        c = plt.Circle((x, y), r, color=color, fill=False, linewidth=2, clip_on=False)
+        c = plt.Circle(
+            (blob[1], blob[0]), blob[2], color=color, fill=False, linewidth=2, clip_on=False)
         cur_axes.add_patch(c)
 
     plt.draw()
