@@ -512,6 +512,21 @@ def combine_complex(img1, img2, overlap='first'):
     return new_img
 
 
+def fullpath(path):
+    """Expands ~ and returns an absolute path"""
+    return os.path.abspath(os.path.expanduser(path))
+
+
+def force_symlink(src, dest):
+    """python equivalent to 'ln -f -s': force overwrite """
+    try:
+        os.symlink(fullpath(src), fullpath(dest))
+    except OSError as e:
+        if e.errno == errno.EEXIST:
+            os.remove(fullpath(dest))
+            os.symlink(fullpath(src), fullpath(dest))
+
+
 def rm_if_exists(filename):
     try:
         os.remove(filename)

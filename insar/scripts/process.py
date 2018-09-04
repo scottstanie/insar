@@ -26,7 +26,7 @@ import insar
 import sardem
 import eof
 from insar.log import get_log, log_runtime
-from insar.utils import mkdir_p
+from insar.utils import mkdir_p, force_symlink
 from insar.parsers import Sentinel
 
 logger = get_log()
@@ -71,14 +71,6 @@ def record_los_vectors(path=".", **kwargs):
 def _reorganize_files(new_dir="extra_files"):
     """Records current file names for Sentinel dir, renames to short names"""
 
-    def _force_symlink(src, dest):
-        try:
-            os.symlink(src, dest)
-        except OSError as e:
-            if e.errno == errno.EEXIST:
-                os.remove(dest)
-                os.symlink(src, dest)
-
     def _move_files(new_dir):
         # Save all sentinel_stack output to new_dir
         mkdir_p(new_dir)
@@ -90,10 +82,10 @@ def _reorganize_files(new_dir="extra_files"):
             # Use just mission and date: S1A_20170101.geo
             new_name = "{}_{}".format(s.mission, s.date.strftime("%Y%m%d"))
             logger.info("Renaming {} to {}".format(geofile, new_name))
-            _force_symlink(geofile, new_name + ".geo")
+            force_symlink(geofile, new_name + ".geo")
             # also move corresponding orb timing file
             orbtiming_file = geofile.replace('geo', 'orbtiming')
-            _force_symlink(orbtiming_file, new_name + ".orbtiming")
+            force_symlink(orbtiming_file, new_name + ".orbtiming")
 
     _move_files(new_dir)
     # Then bring back the useful ones to the cur dir as symlinks renamed
