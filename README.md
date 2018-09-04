@@ -5,6 +5,8 @@
 
 Utilities for Synthetic apeture radar (SAR) and Interferometric SAR (InSAR) processing
 
+Note that the upsampled DEM creator has moved to the [sardem](https://github.com/scottstanie/sardem) repo, and the Sentinel 1 EOF downloader has moved to the [sentineleof](https://github.com/scottstanie/sentineleof) repo, both pip installable.
+
 
 ## Setup and installation
 
