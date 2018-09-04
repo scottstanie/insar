@@ -1,7 +1,9 @@
 """blob.py: Functions for finding blobs in deformation maps
 """
 from __future__ import print_function
+import functools
 import os
+import multiprocessing as mp
 import numpy as np
 import matplotlib.pyplot as plt
 # Note: This is just a temp stopgap to not make skimage a hard requirement
@@ -53,9 +55,13 @@ def find_blobs(image,
     Reference:
     [1] http://scikit-image.org/docs/dev/auto_examples/features_detection/plot_blob.html
     """
+    image = image.astype('float64')  # skimage fails for float32 when unnormalized
     blob_func = getattr(skimage.feature, blob_func)
     blobs = blob_func(
         image, threshold=threshold, min_sigma=min_sigma, max_sigma=max_sigma, **kwargs)
+    if not blobs.size:
+        return np.array(blobs)
+
     blobs, values = sort_blobs_by_val(blobs, image)
     # Multiply each sigma by sqrt(2) to convert to a radius
     blobs = blobs * np.array([1, 1, np.sqrt(2)])
@@ -63,6 +69,15 @@ def find_blobs(image,
     if value_threshold:
         blobs = [blob for blob, value in zip(blobs, values) if abs(value) >= value_threshold]
     return np.array(blobs)
+
+
+def find_blobs_parallel(image_list, processes=10, **kwargs):
+    pool = mp.pool.Pool(processes=processes)
+    find_partial = functools.partial(find_blobs, **kwargs)
+    results = pool.map(find_partial, image_list)
+    pool.close()
+    pool.join()
+    return results
 
 
 def plot_blobs(image, blobs=None, cur_fig=None, cur_axes=None, color='blue', **kwargs):
