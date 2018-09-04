@@ -16,9 +16,11 @@ except ImportError:
     pass
 import sardem
 from insar.log import get_log
-from insar import latlon, plotting, timeseries
+from insar import latlon, plotting, timeseries, sario
 
 logger = get_log()
+MAX_PROCS = mp.cpu_count()
+BLOB_KWARG_DEFAULTS = {'threshold': 1, 'min_sigma': 3, 'max_sigma': 40}
 
 
 def find_blobs(image,
@@ -71,7 +73,7 @@ def find_blobs(image,
     return np.array(blobs)
 
 
-def find_blobs_parallel(image_list, processes=10, **kwargs):
+def find_blobs_parallel(image_list, processes=MAX_PROCS, **kwargs):
     pool = mp.pool.Pool(processes=processes)
     find_partial = functools.partial(find_blobs, **kwargs)
     results = pool.map(find_partial, image_list)
@@ -195,7 +197,6 @@ def make_blob_image(igram_path=".",
 
     blob_filename = 'blobs.npy'
     # TODO: handle extra args as ('--max-sigma', '30', '--threshold', '4')
-    blob_kwarg_defaults = {'threshold': 1, 'min_sigma': 3, 'max_sigma': 40}
 
     if load and os.path.exists(blob_filename):
         blobs = np.load(blob_filename)
@@ -217,3 +218,48 @@ def make_blob_image(igram_path=".",
 
     plot_blobs(img, blobs=blobs_ll, cur_axes=imagefig.gca())
     # plot_blobs(img, blobs=blobs, cur_axes=imagefig.gca())
+
+
+def stack_blob_bins(unw_file_list,
+                    num_row_bins=10,
+                    num_col_bins=10,
+                    save_file='all_blobs.npy',
+                    plot=True,
+                    **kwargs):
+    files_gen = (sario.load(f) * timeseries.PHASE_TO_CM for f in unw_file_list)
+    b = BLOB_KWARG_DEFAULTS.copy()
+    b.update(**kwargs)
+    results = find_blobs_parallel(files_gen, **b)
+    if save_file:
+        np.save(save_file, results)
+    nrows, ncols = sario.load(unw_file_list[0]).shape
+    hist, row_edges, col_edges = bin_blobs(results, nrows, ncols, num_row_bins, num_col_bins)
+    if plot is True:
+        plot_hist(hist, row_edges, col_edges)
+    return hist, row_edges, col_edges
+
+
+def bin_blobs(list_of_blobs, nrows, ncols, num_row_bins=10, num_col_bins=10):
+    """Make a 2D histogram of blob locations"""
+    # Make a histogram of occurrences of row, col locations for blobs
+    row_edges = np.linspace(0, nrows, num_row_bins + 1)  # one more edges than bins
+    col_edges = np.linspace(0, ncols, num_col_bins + 1)
+    cumulative_hist = np.zeros((num_row_bins, num_col_bins))
+
+    for blobs in list_of_blobs:
+        row_idxs = blobs[:, 0]
+        col_idxs = blobs[:, 1]
+        H, _, _ = np.histogram2d(row_idxs, col_idxs, bins=(row_edges, col_edges))
+        cumulative_hist += H
+    return cumulative_hist, row_edges, col_edges
+
+
+def plot_hist(H, row_edges, col_edges, ax=None):
+    if not ax:
+        fig, ax = plt.subplots(1, 1)
+    else:
+        fig = ax.get_figure()
+
+    axes_image = ax.imshow(H, extent=[col_edges[0], col_edges[-1], row_edges[-1], row_edges[0]])
+    fig.colorbar(axes_image)
+    return fig, ax
