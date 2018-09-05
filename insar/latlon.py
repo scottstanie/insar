@@ -41,10 +41,36 @@ class LatlonImage(object):
 
     @property
     def shape(self):
+        """Shape of Image ndarray"""
         return self.data.shape
+
+    @property
+    def ndim(self):
+        return self.data.ndim
+
+    @property
+    def dtype(self):
+        return self.data.dtype
 
     def __getitem__(self, item):
         return self.data[item]
+
+    def rowcol_to_latlon(self, row, col):
+        return rowcol_to_latlon(row, col, self.dem_rsc)
+
+    def distance(self, row_col1, row_col2):
+        """Find the distance in km between two points on the image
+
+        Args:
+            row_col1 (tuple[int, int]): starting (row, col)
+            row_col2 (tuple[int, int]): ending (row, col)
+
+        Returns:
+            float: distance in km between two points on LatlonImage
+        """
+        latlon1 = self.rowcol_to_latlon(*row_col1)
+        latlon2 = self.rowcol_to_latlon(*row_col2)
+        return latlon_to_dist(latlon1, latlon2)
 
     def crop(self, start_row, end_row, start_col, end_col):
         """Adjusts the old dem_rsc for a cropped data
@@ -80,6 +106,12 @@ class LatlonImage(object):
         rsc_copy['width'] = ncols
         rsc_copy['file_length'] = nrows
         self.dem_rsc = rsc_copy
+
+    def blob_size(self, radius):
+        """Finds the radius of a circle/blob on the LatlonImage in km"""
+        nrows, ncols = self.shape
+        midrow, midcol = nrows // 2, ncols // 2
+        return self.distance((midrow, midcol), (midrow + radius, midcol + radius))
 
 
 def LatlonStack(LatlonImage):
@@ -117,7 +149,7 @@ class DemTile(object):
             self.rsc_data = sario.load(rsc_file)
 
 
-def rowcol_to_latlon(row, col, rsc_data=None):
+def rowcol_to_latlon(row, col, rsc_data):
     """ Takes the row, col of a pixel and finds its lat/lon
 
     Can also pass numpy arrays of row, col.
