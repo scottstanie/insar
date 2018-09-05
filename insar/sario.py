@@ -325,5 +325,13 @@ def load_stack(directory, file_ext, **kwargs):
             1st dim is the index of the image: stack[0, :, :]
     """
     all_file_names = sorted(find_files(directory, "*" + file_ext))
-    all_files = [load(filename, **kwargs) for filename in all_file_names]
-    return np.stack(all_files, axis=0)
+    # Test load to get shape
+    nrows, ncols = load(all_file_names[0]).shape
+    out = np.empty((len(all_file_names), nrows, ncols))
+
+    # Now lazily load the files and store in pre-allocated 3D array
+    file_gen = (load(filename, **kwargs) for filename in all_file_names)
+    for idx, img in enumerate(file_gen):
+        out[idx] = img
+
+    return out
