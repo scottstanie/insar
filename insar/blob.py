@@ -23,14 +23,10 @@ MAX_PROCS = mp.cpu_count()
 BLOB_KWARG_DEFAULTS = {'threshold': 1, 'min_sigma': 3, 'max_sigma': 40}
 
 
-def _force_column(arr):
-    """Turns 1d numpy array into an (N, 1) shaped column"""
-    return arr.reshape((len(arr), 1))
-
-
 def find_blobs(image,
                blob_func='blob_log',
                include_values=True,
+               negative=False,
                value_threshold=1.0,
                min_sigma=3,
                max_sigma=60,
@@ -46,18 +42,18 @@ def find_blobs(image,
         image (ndarray): image containing blobs
         blob_func (str): which of the functions to use to find blobs
             Options: 'blob_log', 'blob_dog', 'blob_doh'
-        include_values (bool): default True, flag to include the extreme value
-            from within the blob
-        value_threshold (float): absolute value in the image that blob must surpass
+        negative (bool): default False: if True, multiplies image by -1 and
+            searches for negative blobs in the image
+        value_threshold (float): absolute value in the image blob must exceed
+            Should be positive number even if negative=True (since image is inverted)
         threshold (float): response threshold passed to the blob finding function
         min_sigma (int): minimum pixel size to check for blobs
         max_sigma (int): max pixel size to check for blobs
 
     Returns:
-        ndarray: list of blobs: [(r, c, s, value)], r = row num of center,
-        c is column, s is sigma (size of Gaussian that detected blob), and
-        value is the extreme value within the blob radius.
-        If include_values = False, list is just [(r, c, s)]
+        ndarray: rows are blobs with values: [(r, c, s, value)], where
+        r = row num of center, c is column, s is sigma (size of Gaussian
+        that detected blob), value is the extreme value within the blob radius.
 
     Notes:
         kwargs are passed to the blob_func (such as overlap).
@@ -66,23 +62,31 @@ def find_blobs(image,
     Reference:
     [1] http://scikit-image.org/docs/dev/auto_examples/features_detection/plot_blob.html
     """
+
+    image = -1 * image if negative else image
     image = image.astype('float64')  # skimage fails for float32 when unnormalized
+
     blob_func = getattr(skimage.feature, blob_func)
     blobs = blob_func(
         image, threshold=threshold, min_sigma=min_sigma, max_sigma=max_sigma, **kwargs)
-    if not blobs.size:
-        return np.array(blobs)
 
-    blobs, values = sort_blobs_by_val(blobs, image)
+    # if not blobs.size:  # Empty return: no blobs matched criteria
+    # return np.array(blobs)
+
     # Multiply each sigma by sqrt(2) to convert to a radius
     blobs = blobs * np.array([1, 1, np.sqrt(2)])
 
-    if include_values:
-        blobs = np.hstack((blobs, _force_column(values)))
+    # Append values as a column and sort by it
+    blobs_with_values = sort_blobs_by_val(blobs, image)
 
     if value_threshold:
-        blobs = [blob for blob, value in zip(blobs, values) if abs(value) >= value_threshold]
-    return np.array(blobs)
+        blobs_with_values = blobs_with_values[blobs_with_values[:, -1] >= value_threshold]
+
+    # If negative, flip back last col to get correct img values
+    if negative:
+        blobs_with_values = blobs_with_values * np.array([1, 1, 1, -1])
+
+    return blobs_with_values
 
 
 def find_blobs_parallel(image_list, processes=MAX_PROCS, **kwargs):
@@ -147,9 +151,14 @@ def get_blob_values(blobs, image, center_only=False):
         return image[coords[:, 0], coords[:, 1]]
 
     height, width = image.shape
-    masks = [indexes_within_circle(row, col, rad, height, width) for row, col, rad in blobs]
-    # TODO: max(x.min(), x.max(), key=abs) ? or is assuming pos fine
+    # blob: [row, col, radius, [possibly value]]
+    masks = map(lambda blob: indexes_within_circle(blob[0], blob[1], blob[2], height, width), blobs)
     return np.stack([np.max(image[mask]) for mask in masks])
+
+
+def _force_column(arr):
+    """Turns 1d numpy array into an (N, 1) shaped column"""
+    return arr.reshape((len(arr), 1))
 
 
 def sort_blobs_by_val(blobs, image):
@@ -161,10 +170,10 @@ def sort_blobs_by_val(blobs, image):
         tuple[tuple[ndarrays], tuple[floats]]: The pair of (blobs, values)
     """
     blob_vals = get_blob_values(blobs, image)
-    blob_val_tuples = sorted(zip(blobs, blob_vals), key=lambda tup: abs(tup[1]), reverse=True)
-    # Now return as separated into (tuple of blobs, tuple of values)
-    # zip is it's own inverse
-    return tuple(zip(*blob_val_tuples))
+    blobs_with_values = np.hstack((blobs, _force_column(blob_vals)))
+    # blob_val_tuples = sorted(zip(blobs, blob_vals), key=lambda tup: abs(tup[1]), reverse=True)
+    # Sort rows based on the 4th column, blob_value, and in reverse order
+    return blobs_with_values[blobs_with_values[:, 3].argsort()[::-1]]
 
 
 def blobs_latlon(blobs, blob_info):
@@ -236,6 +245,7 @@ def stack_blob_bins(unw_file_list,
                     num_row_bins=10,
                     num_col_bins=10,
                     save_file='all_blobs.npy',
+                    weight_by_value=True,
                     plot=True,
                     **kwargs):
     files_gen = (sario.load(f) * timeseries.PHASE_TO_CM for f in unw_file_list)
@@ -245,23 +255,30 @@ def stack_blob_bins(unw_file_list,
     if save_file:
         np.save(save_file, results)
     nrows, ncols = sario.load(unw_file_list[0]).shape
-    hist, row_edges, col_edges = bin_blobs(results, nrows, ncols, num_row_bins, num_col_bins)
+    hist, row_edges, col_edges = bin_blobs(
+        results, nrows, ncols, num_row_bins, num_col_bins, weight_by_value=weight_by_value)
     if plot is True:
         plot_hist(hist, row_edges, col_edges)
     return hist, row_edges, col_edges
 
 
-def bin_blobs(list_of_blobs, nrows, ncols, num_row_bins=10, num_col_bins=10):
-    """Make a 2D histogram of blob locations"""
-    # Make a histogram of occurrences of row, col locations for blobs
+def bin_blobs(list_of_blobs, nrows, ncols, num_row_bins=10, num_col_bins=10, weight_by_value=True):
+    """Make a 2D histogram of occurrences of row, col locations for blobs
+    """
     row_edges = np.linspace(0, nrows, num_row_bins + 1)  # one more edges than bins
     col_edges = np.linspace(0, ncols, num_col_bins + 1)
     cumulative_hist = np.zeros((num_row_bins, num_col_bins))
 
     for blobs in list_of_blobs:
+        if len(blobs) == 0:
+            continue
         row_idxs = blobs[:, 0]
         col_idxs = blobs[:, 1]
-        H, _, _ = np.histogram2d(row_idxs, col_idxs, bins=(row_edges, col_edges))
+        if weight_by_value:
+            weights = blobs[:, 3]
+        else:
+            weights = np.ones(blobs.shape[0])
+        H, _, _ = np.histogram2d(row_idxs, col_idxs, bins=(row_edges, col_edges), weights=weights)
         cumulative_hist += H
     return cumulative_hist, row_edges, col_edges
 

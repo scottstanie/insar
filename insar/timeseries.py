@@ -495,7 +495,6 @@ def load_deformation(igram_path, filename='deformation.npy'):
         geolist = np.load(os.path.join(igram_path, 'geolist.npy'), encoding='bytes')
     except (IOError, OSError):
         logger.error("%s or geolist.npy not found in path %s", filename, igram_path)
-        logger.error("Need ref_row, ref_col to run inversion and create files")
         return None, None
 
     return geolist, deformation
