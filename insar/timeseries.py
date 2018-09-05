@@ -16,15 +16,15 @@ import os
 import re
 import glob
 import datetime
-import itertools
 import numpy as np
 import pprint
 from shutil import copyfile
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import uniform_filter
 
+from sardem.loading import load_dem_rsc
 from insar.parsers import Sentinel
-from insar import sario, utils, plotting
+from insar import sario, utils, plotting, latlon
 from insar.log import get_log, log_runtime
 
 SENTINEL_WAVELENGTH = 5.5465763  # cm
@@ -433,7 +433,12 @@ def run_inversion(igram_path,
 
     unw_ext = ".unw"
     if deramp:
-        unw_stack = deramp_stack(igram_path, unw_ext)
+        # For larger areas, use quadratic ramp. Otherwise, linear
+        max_linear = 30
+        width, height = latlon.grid_size(**load_dem_rsc(os.path.join(igram_path, 'dem.rsc')))
+        order = 1 if (width < max_linear or height < max_linear) else 2
+        logger.info("Using order %s surface to deramp unw stack", order)
+        unw_stack = deramp_stack(igram_path, unw_ext, order=order)
     else:
         unw_stack = sario.load_stack(igram_path, unw_ext)
 
@@ -586,7 +591,7 @@ def remove_ramp(z, order=1):
         return z - z_fit
 
 
-def deramp_stack(path, unw_ext):
+def deramp_stack(path, unw_ext, order=1):
     """Handles removing linear ramps for all files in a stack
 
     Saves the files to a ".unwflat" version
@@ -602,11 +607,11 @@ def deramp_stack(path, unw_ext):
         nrows, ncols = sario.load(unw_file_names[0]).shape
         out_stack = np.empty((len(unw_file_names), nrows, ncols), dtype=sario.FLOAT_32_LE)
         # Shape of sario.load_stack with return_amp is (nlayers, 2, nrows, ncols)
-        for idx, (amp_data, height_data) in enumerate(
-                sario.load_stack(path, unw_ext, return_amp=True)):
+        for idx, (amp, height) in enumerate(
+                (sario.load(f, return_amp=True) for f in unw_file_names)):  # yapf: disable
             # return_amp gives a 3D ndarray, [amp, height]
-            r = remove_ramp(height_data)
-            new_unw = np.stack((amp_data, r), axis=0)
+            r = remove_ramp(height, order=order)
+            new_unw = np.stack((amp, r), axis=0)
             sario.save(flat_file_names[idx], new_unw)
             out_stack[idx] = r
         return out_stack
