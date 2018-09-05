@@ -545,6 +545,8 @@ def _estimate_ramp(z, order):
             For order = 2, it will be 6:
                 f + ax + by + cxy + dx^2 + ey^2
     """
+    if order > 2:
+        raise ValueError("Order only implemented for 1 and 2")
     # Note: rows == ys, cols are xs
     yidxs, xidxs = matrix_indices(z.shape, flatten=True)
     # c_ stacks 1D arrays as columns into a 2D array
@@ -582,8 +584,6 @@ def remove_ramp(z, order=1):
         idx_matrix = np.c_[np.ones(xx.shape), xx, yy, xx * yy, xx**2, yy**2]
         z_fit = np.dot(idx_matrix, coeffs).reshape(z.shape)
         return z - z_fit
-    else:
-        raise NotImplementedError("Order only implemented for 1 and 2")
 
 
 def deramp_stack(path, unw_ext):
