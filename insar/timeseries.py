@@ -437,7 +437,8 @@ def run_inversion(igram_path,
         max_linear = 30
         width, height = latlon.grid_size(**load_dem_rsc(os.path.join(igram_path, 'dem.rsc')))
         order = 1 if (width < max_linear or height < max_linear) else 2
-        logger.info("Using order %s surface to deramp unw stack", order)
+        logger.info("Dem size %.2f by %.2f km: using order %s surface to deramp", width, height,
+                    order)
         unw_stack = deramp_stack(igram_path, unw_ext, order=order)
     else:
         unw_stack = sario.load_stack(igram_path, unw_ext)

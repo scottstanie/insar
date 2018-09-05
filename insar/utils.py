@@ -482,7 +482,7 @@ def show_titles(products):
     return [p['title'] for p in products.values()]
 
 
-def combine_complex(img1, img2, overlap='first'):
+def combine_complex(img1, img2):
     """Combine two complex images which partially overlap
 
     Used for SLCs/.geos of adjacent Sentinel frames
@@ -490,24 +490,17 @@ def combine_complex(img1, img2, overlap='first'):
     Args:
         img1 (ndarray): complex image of first .geo
         img2 (ndarray): complex image of second .geo
-        overlap (str): Options: 'first' (default), 'avg'. How to handle
-            overlapping section of images.
-            'first': just uses values from img1
-            'avg': Takes the mean of img1 and img2 values
+    Returns:
+        ndarray: Same size as both, with pixels combined
     """
+    if img1.shape != img2.shape:
+        raise ValueError("img1 and img2 must be same shape to combine.")
     # Start with each one where the other is nonzero
     new_img = np.copy(img1)
     new_img += img2
-
-    # Now only on overlap, take the average of the two
+    # Now only on overlap, take the first's pixels
     overlap_idxs = (img1 != 0) & (img2 != 0)
-    if overlap == 'avg':
-        mean_img = 0.5 * (img1 + img2)
-        new_img[overlap_idxs] = mean_img[overlap_idxs]
-    elif overlap == 'first':
-        new_img[overlap_idxs] = img1[overlap_idxs]
-    else:
-        raise ValueError("overlap arg must be 'first' or 'avg'")
+    new_img[overlap_idxs] = img1[overlap_idxs]
 
     return new_img
 
@@ -562,7 +555,8 @@ def stitch_same_dates(geo_path=".", output_path="."):
     # Find the dates that have multiple frames/.geos
     date_counts = collections.Counter([g.date for g in geos])
     dates_duped = set([date for date, count in date_counts.items() if count > 1])
-    double_geo_files = sorted([g for g in geos if g.date in dates_duped], key=lambda g: g.date)
+    double_geo_files = sorted(
+        (g for g in geos if g.date in dates_duped), key=lambda g: g.start_time)
     grouped_geos = _group_geos_by_date(double_geo_files)
     for date, geolist in grouped_geos:
         print("Stitching geos for %s" % date)
