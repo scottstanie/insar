@@ -561,11 +561,13 @@ def _estimate_ramp(z, order):
 def _xy_powers(order):
     """Get powers of an x-y polynomial of certain order
 
+    Order = 2 will have (m, n) for x^m * y^n with m+n <= order
     Example:
         >>> _xy_powers(2)
-        [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2), (2, 0), (2, 1)]
+        [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (2, 0)]
     """
-    return list(itertools.product(range(order + 1), range(order + 1)))[:-1]
+    powers = itertools.product(range(order + 1), range(order + 1))
+    return [tup for tup in powers if sum(tup) <= order]
 
 
 def polyfit2d(x, y, z, order=3):
