@@ -39,6 +39,9 @@ class Base(object):
     def __repr__(self):
         return str(self)
 
+    def __lt__(self, other):
+        return self.filename < other.filename
+
     def full_parse(self):
         """Returns all parts of the data contained in filename
 
@@ -117,6 +120,14 @@ class Sentinel(Base):
     def __str__(self):
         return "{} {}, path {} from {}".format(self.__class__.__name__, self.mission, self.path,
                                                self.date)
+
+    def __lt__(self, other):
+        return self.start_time < other.start_time
+
+    def __eq__(self, other):
+        # TODO: Do we just want to compare product_uids?? or filenames?
+        return self.product_uid == other.product_uid
+        # return self.filename == other.filename
 
     @property
     def start_time(self):
@@ -212,6 +223,11 @@ class Sentinel(Base):
     def path(self):
         """Alias for relative orbit number"""
         return self.relative_orbit
+
+    @property
+    def product_uid(self):
+        """Unique identifier of product (last 4 of filename)"""
+        return self._get_field('product unique id')
 
     @property
     def date(self):
