@@ -16,6 +16,7 @@ import os
 import re
 import glob
 import datetime
+import itertools
 import numpy as np
 import pprint
 from shutil import copyfile
@@ -557,6 +558,35 @@ def _estimate_ramp(z, order):
     return coeffs
 
 
+def _xy_powers(order):
+    """Get powers of an x-y polynomial of certain order
+
+    Example:
+        >>> _xy_powers(2)
+        [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2), (2, 0), (2, 1)]
+    """
+    return list(itertools.product(range(order + 1), range(order + 1)))[:-1]
+
+
+def polyfit2d(x, y, z, order=3):
+    ncols = (order + 1)**2
+    G = np.zeros((x.size, ncols))
+    ij = _xy_powers(order)
+    for k, (i, j) in enumerate(ij):
+        G[:, k] = x**i * y**j
+    m, _, _, _ = np.linalg.lstsq(G, z, rcond=None)
+    return m
+
+
+def polyval2d(x, y, z, m):
+    order = int(np.sqrt(len(m))) - 1
+    z_out = np.zeros_like(z)
+    ij = _xy_powers(order)
+    for a, (i, j) in zip(m, ij):
+        z_out += a * x**i * y**j
+    return z_out
+
+
 def remove_ramp(z, order=1):
     """Estimates a linear plane through data and subtracts to flatten
 
@@ -570,6 +600,11 @@ def remove_ramp(z, order=1):
     Returns:
         ndarray: flattened 2D array with estimated surface removed
     """
+    yidxs, xidxs = matrix_indices(z.shape, flatten=True)
+    m = polyfit2d(xidxs, yidxs, z.flatten(), order=order)
+    y_block, x_block = matrix_indices(z.shape, flatten=False)
+    return z - polyval2d(x_block, y_block, z, m)
+
     coeffs = _estimate_ramp(z, order)
     if order == 1:
         # We want full blocks, as opposed to matrix_index flattened
