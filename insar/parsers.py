@@ -252,7 +252,7 @@ class Sentinel(Base):
 
     @property
     def swath_width_height(self):
-        """Width and height of the swath area"""
+        """Width and height of the swath area in degrees"""
         left, right, bot, top = self.swath_extent
         return right - left, top - bot
 

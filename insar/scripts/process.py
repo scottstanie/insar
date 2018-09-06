@@ -14,7 +14,6 @@
     10. Run an SBAS inversion to get the LOS deformation
 
 """
-import errno
 import math
 import subprocess
 import os
