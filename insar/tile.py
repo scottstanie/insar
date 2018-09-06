@@ -58,7 +58,40 @@ def tile_dims(swath_length_width, tile_size=0.5, overlap_size=0.1):
     """Given a swath (size_lon, width), find sizes of tiles
 
     Will try to divide into about 0.5 degree tiles, rounding up or down
+
+    Args:
+        swath_length_width (iterable[float, float]): sizes in degrees of swath
+        tile_size (float): default 0.5, degrees of tile size to aim for
+            Note: This will be adjusted to make even tiles
+        overlap_size (float): default 0.1, overlap size between adjacent blocks
+
+    Examples:
+    >>> test_lengths = np.linspace(1, 2, 11)
+    >>> print(tile_dims(test_lengths, tile_size=0.5, overlap_size=0.1))
+    [ 0.55        0.6         0.46666667  0.5         0.53333333  0.56666667
+      0.475       0.5         0.525       0.55        0.48      ]
+
     """
     swath_lw_arr = np.array(swath_length_width)
     num_tiles_arr = num_tiles(swath_lw_arr, tile_size, overlap_size)
-    return swath_lw_arr / num_tiles_arr
+
+    # how much length is covered if we spread out overlap
+    size_unoverlapped = swath_lw_arr + (num_tiles_arr - 1) * overlap_size
+    # Use this to get each tile's size
+    return size_unoverlapped / num_tiles_arr
+
+
+def make_tiles(extent, tile_size=0.5, overlap_size=0.1):
+    """Given a swath extent, divide into overlapping tiles
+
+    Args:
+        extent (tuple[float, float, float, float]): Sentinel.swath_extent
+            (lon_left,lon_right,lat_bottom,lat_top)
+        tile_size (float): default 0.5, degrees of tile size to aim for
+            Note: This will be adjusted to make even tiles
+        overlap_size (float): default 0.1, overlap size between adjacent blocks
+    Returns:
+        list[tuple[float]]: list of tiles in order
+
+    TODO: do I want geojson objects?
+    """
