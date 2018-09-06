@@ -275,6 +275,7 @@ def blob(context, load, title_prefix, blob_filename, row_start, row_end, col_sta
         row_end,
         col_start,
         col_end,
+        context['verbose'],
         blobfunc_args,
     )
 
@@ -305,10 +306,9 @@ def avg_stack(context, ref_row, ref_col):
 @click.pass_context
 def preproc(ctx):
     """Extra commands for preprocessing steps"""
-    return
 
 
 @preproc.command()
 @click.pass_context
 def unzip(context):
-    insar.scripts.preproc.unzip_sentinel_files(context['path'])
+    insar.scripts.preproc.unzip_sentinel_files(context.obj['path'])
