@@ -32,7 +32,7 @@ def bounding_box(geojson=None, top_corner=None, dlon=None, dlat=None):
     if not geojson:
         if not top_corner or not dlon or not dlat:
             raise ValueError("Must provide geojson, or top_corner, dlon, and dlat")
-        coordinates = corner_coords(top_corner, dlon, dlat)
+        coordinates = corner_coords(top_corner=top_corner, dlon=dlon, dlat=dlat)
     else:
         coordinates = coords(geojson)
 
@@ -44,9 +44,16 @@ def bounding_box(geojson=None, top_corner=None, dlon=None, dlat=None):
     return left, bottom, right, top
 
 
-def corner_coords(top_corner, dlon, dlat):
-    lon, lat = top_corner
+def corner_coords(top_corner=None, dlon=None, dlat=None, bot_corner=None):
     dlat = abs(dlat)
+    if top_corner is not None:
+        lon, lat = top_corner
+    elif bot_corner is not None:
+        # So that we can write the return function just one way
+        lon, lat = bot_corner[0], bot_corner[1] + dlat
+    else:
+        raise ValueError("Need top_corner or bot_corner")
+
     return [
         [lon, lat],
         [lon + dlon, lat],
@@ -54,6 +61,12 @@ def corner_coords(top_corner, dlon, dlat):
         [lon, lat - dlat],
         [lon, lat],
     ]
+
+
+def corners_to_geojson(corners):
+    """Takes in 5 points for the corners, returns geojson
+    """
+    return {"type": "Polygon", "coordinates": [corners]}
 
 
 def coords(geojson):

@@ -1,4 +1,5 @@
 import numpy as np
+import insar.geojson
 
 # import insar.parsers
 
@@ -98,7 +99,37 @@ def make_tiles(extent, tile_size=0.5, overlap=0.1):
     TODO: do I want geojson objects?
     """
     min_lon, max_lon, min_lat, max_lat = extent
-    width = max_lon - min_lon
-    height = max_lat - min_lat
-    lat_tile_size, lon_tile_size = tile_dims((height, width), tile_size=tile_size, overlap=overlap)
-    return lat_tile_size, lon_tile_size
+    height_width_arr = np.array([max_lon - min_lon, max_lat - min_lat])
+
+    num_lat_tiles, num_lon_tiles = num_tiles(height_width_arr, tile_size=tile_size, overlap=overlap)
+    print("Num lat tiles: %s" % num_lat_tiles)
+    print("Num lon tiles: %s" % num_lon_tiles)
+    lat_tile_size, lon_tile_size = tile_dims(height_width_arr, tile_size=tile_size, overlap=overlap)
+
+    tiles = []
+    cur_lat, cur_lon = min_lat, min_lon
+    # Iterate bot to top, left to right
+    for latidx in range(num_lat_tiles):
+        for lonidx in range(num_lon_tiles):
+            tiles.append((cur_lat, cur_lon))
+            cur_lon = cur_lon + lon_tile_size - overlap
+        cur_lon = min_lon  # Reset after each left-to-right
+        cur_lat = cur_lat + lat_tile_size - overlap
+
+    # TODO: maybe name these? Do I need a class?
+    return tiles
+
+
+def tile_to_geojson(tile, height, width):
+    """Converts a lat/lon Tile to a geojson object
+
+    Tiles have a (lat, lon) start point at the bottom left of the tile,
+    along with a height and width
+    """
+    lat, lon = tile
+    corners = insar.geojson.corner_coords(
+        bot_corner=(lon, lat),
+        dlon=width,
+        dlat=height,
+    )
+    return insar.geojson.corners_to_geojson(corners)
