@@ -3,7 +3,8 @@ get_ipython().run_line_magic('autoreload', '2')
 get_ipython().run_line_magic('matplotlib', 'tk')
 
 import insar
-from insar import sario, utils, geojson, timeseries, plotting, parsers, latlon, los, blob
+from insar import *
+from insar.scripts import *
 import sardem
 import eof
 import numpy as np

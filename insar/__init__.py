@@ -9,5 +9,6 @@ from . import los
 from . import parsers
 from . import plotting
 from . import sario
+from . import tile
 from . import timeseries
 from . import utils

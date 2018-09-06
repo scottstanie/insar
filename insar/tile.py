@@ -33,25 +33,32 @@ def total_swath_width_height(sentinel_list):
     return right - left, top - bot
 
 
-def num_tiles(length, tile_size=0.5):
-    """Given an edge length (of a swath), find how many tiles in a direction
+def num_tiles(length, tile_size=0.5, overlap_size=0.1):
+    """Given an edge length (of a swath), find number of tiles in a direction
+
+    Illustration: Dividing 1.3 total length into 3 overlap blocks
+    |     | |   | |    |
+    -----------------------
+      .4  .1 .3 .1  .4
 
     Examples:
-    >>> num_tiles(1, tile_size=0.5)
-    2
-    >>> num_tiles(3.2, tile_size=0.5)
-    6
-    >>> num_tiles(3.3, tile_size=0.5)
-    7
+    >>> num_tiles(1.3, tile_size=0.5, overlap_size=0.1)
+    3
+    >>> num_tiles(np.array([1.3, 1.3]), tile_size=0.5, overlap_size=0.1)
+    array([3, 3])
+    >>> num_tiles(np.array([1.4, 1.5, 1.6]), tile_size=0.5, overlap_size=0.1)
+    array([3, 3, 4])
     """
-    return np.round(length / tile_size)
+    covered_width = tile_size - overlap_size
+    length_to_divide = length - overlap_size
+    return np.round((length_to_divide) / covered_width).astype(int)
 
 
-def tile_dims(swath_length_width, tile_size=0.5):
+def tile_dims(swath_length_width, tile_size=0.5, overlap_size=0.1):
     """Given a swath (size_lon, width), find sizes of tiles
 
     Will try to divide into about 0.5 degree tiles, rounding up or down
     """
     swath_lw_arr = np.array(swath_length_width)
-    num_tiles_arr = num_tiles(swath_lw_arr, tile_size)
+    num_tiles_arr = num_tiles(swath_lw_arr, tile_size, overlap_size)
     return swath_lw_arr / num_tiles_arr

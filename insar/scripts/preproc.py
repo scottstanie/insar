@@ -1,7 +1,6 @@
 import os
 import glob
 import subprocess
-import numpy as np
 import insar.parsers
 from insar.log import get_log
 
