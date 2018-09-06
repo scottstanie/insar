@@ -296,3 +296,19 @@ def avg_stack(context, ref_row, ref_col):
         ref_row, ref_col = insar.timeseries.find_coherent_patch(cc_stack)
         click.echo("Using %s as .unw reference point", (ref_row, ref_col))
     insar.timeseries.avg_stack(context['path'], ref_row, ref_col)
+
+
+# ###################################
+# Preprocessing subgroup of commands:
+# ###################################
+@cli.group()
+@click.pass_context
+def preproc(ctx):
+    """Extra commands for preprocessing steps"""
+    return
+
+
+@preproc.command()
+@click.pass_context
+def unzip(context):
+    insar.scripts.preproc.unzip_sentinel_files(context['path'])
