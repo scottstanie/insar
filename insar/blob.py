@@ -171,13 +171,12 @@ def sort_blobs_by_val(blobs, image):
     """
     blob_vals = get_blob_values(blobs, image)
     blobs_with_values = np.hstack((blobs, _force_column(blob_vals)))
-    # blob_val_tuples = sorted(zip(blobs, blob_vals), key=lambda tup: abs(tup[1]), reverse=True)
     # Sort rows based on the 4th column, blob_value, and in reverse order
     return blobs_with_values[blobs_with_values[:, 3].argsort()[::-1]]
 
 
 def blobs_latlon(blobs, blob_info):
-    """Converts (y, x, sigma) format to (lat, lon, sigma_latlon)
+    """Converts (y, x, sigma, val) format to (lat, lon, sigma_latlon, val)
 
     Uses the dem x_step/y_step data to rescale blobs so that appear on an
     image using lat/lon as the `extent` argument of imshow.
@@ -185,10 +184,10 @@ def blobs_latlon(blobs, blob_info):
     blob_info = {k.lower(): v for k, v in blob_info.items()}
     blobs_latlon = []
     for blob in blobs:
-        row, col, r = blob
+        row, col, r, val = blob
         lat, lon = latlon.rowcol_to_latlon(row, col, blob_info)
         new_radius = r * blob_info['x_step']
-        blobs_latlon.append((lat, lon, new_radius))
+        blobs_latlon.append((lat, lon, new_radius, val))
 
     return np.array(blobs_latlon)
 
@@ -201,12 +200,14 @@ def make_blob_image(igram_path=".",
                     row_end=-1,
                     col_start=0,
                     col_end=-1,
+                    verbose=False,
                     blobfunc_args=None):
     """Find and view blobs in deformation"""
     logger.info("Searching %s for igram_path" % igram_path)
     geolist, deformation = timeseries.load_deformation(igram_path)
     rsc_data = sardem.loading.load_dem_rsc(os.path.join(igram_path, 'dem.rsc'))
-    # TODO: Is mean/max better than just looking at last image? prob
+
+    # TODO: Is mean/max better than just looking at last image? probably
     # MAKE OPTION FOR THE COMMENTED PARTS
     # img = deformation[-1, row_start:row_end, col_start:col_end]
     img = np.mean(deformation[-3:, row_start:row_end, col_start:col_end], axis=0)
@@ -222,11 +223,14 @@ def make_blob_image(igram_path=".",
     if load and os.path.exists(blob_filename):
         blobs = np.load(blob_filename)
     else:
+        blob_kwargs = BLOB_KWARG_DEFAULTS.copy()
+
         logger.info("Finding neg blobs")
-        blobs_neg = find_blobs(-img, threshold=1, min_sigma=3, max_sigma=40)
+        blobs_neg = find_blobs(img, negative=True, **blob_kwargs)
+
         logger.info("Finding pos blobs")
-        blob_kwarg_defaults['threshold'] = 0.7
-        blobs_pos = find_blobs(img, threshold=.7, min_sigma=3, max_sigma=40)
+        blob_kwargs['threshold'] = 0.7
+        blobs_pos = find_blobs(img, **blob_kwargs)
         logger.info("Blobs found:")
         logger.info(blobs_neg.astype(int))
         logger.info(blobs_pos.astype(int))
@@ -234,8 +238,9 @@ def make_blob_image(igram_path=".",
         np.save(blob_filename, blobs)
 
     blobs_ll = blobs_latlon(blobs, rsc_data)
-    for lat, lon, r in blobs_ll:
-        logger.info('({0:.4f}, {1:.4f}): radius: {2}'.format(lat, lon, r))
+    if verbose:
+        for lat, lon, r, val in blobs_ll:
+            logger.info('({0:.4f}, {1:.4f}): radius: {2}, val: {3}'.format(lat, lon, r, val))
 
     plot_blobs(img, blobs=blobs_ll, cur_axes=imagefig.gca())
     # plot_blobs(img, blobs=blobs, cur_axes=imagefig.gca())
