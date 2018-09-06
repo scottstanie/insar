@@ -116,6 +116,7 @@ class Sentinel(Base):
         self._safe_dir = self.filename.split('.')[0] + '.SAFE'
         self._annotation_folder = os.path.join(self._safe_dir, 'annotation')
         self.swath_xmls = glob.glob(os.path.join(self._annotation_folder, '*slc-vv*.xml'))
+        self._lat_lon_points = None  # For later parsing
 
     def __str__(self):
         return "{} {}, path {} from {}".format(self.__class__.__name__, self.mission, self.path,
@@ -128,6 +129,9 @@ class Sentinel(Base):
         # TODO: Do we just want to compare product_uids?? or filenames?
         return self.product_uid == other.product_uid
         # return self.filename == other.filename
+
+    def __hash__(self):
+        return hash(self.product_uid)
 
     @property
     def start_time(self):
@@ -253,15 +257,19 @@ class Sentinel(Base):
         return right - left, top - bot
 
     def _get_lat_lon_points(self, xml_file=None, etree=None):
-        if xml_file:
-            etree = ElementTree.parse(xml_file)
-        if not etree:
-            raise ValueError("Need xml_file or etree")
+        # Use the cache doesn't exist, parse xml and save it
+        if self._lat_lon_points is None:
+            if xml_file:
+                etree = ElementTree.parse(xml_file)
+            if not etree:
+                raise ValueError("Need xml_file or etree")
 
-        root = etree.getroot()
-        lats = [float(elem.text) for elem in root.iter('latitude')]
-        lons = [float(elem.text) for elem in root.iter('longitude')]
-        return lats, lons
+            root = etree.getroot()
+            lats = [float(elem.text) for elem in root.iter('latitude')]
+            lons = [float(elem.text) for elem in root.iter('longitude')]
+            self._lat_lon_points = (lats, lons)
+
+        return self._lat_lon_points
 
     def _all_lat_lon_points(self):
         all_lats, all_lons = [], []
