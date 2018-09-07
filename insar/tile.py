@@ -2,7 +2,10 @@
 """
 import numpy as np
 import insar.geojson
-from insar import parsers, latlon
+from insar import latlon
+from insar.log import get_log
+
+logger = get_log()
 
 
 class Tile(object):
@@ -88,6 +91,8 @@ class TileGrid(object):
 
     def __init__(self, sentinel_list, tile_size=0.5, overlap=0.1):
         self.sentinel_list = sentinel_list
+        if not sentinel_list:
+            raise ValueError("sentinel_list must be non-empty")
         self.tile_size = tile_size
         self.overlap = overlap
 
@@ -176,7 +181,7 @@ class TileGrid(object):
     def tile_dims(self):
         return self.calc_tile_dims(self.total_width_height, self.tile_size, self.overlap)
 
-    def make_tiles(self):
+    def make_tiles(self, verbose=False):
         """Divide the extent from the sentinel_list into Tiles
 
         Returns:
@@ -190,6 +195,8 @@ class TileGrid(object):
         # Iterate bot to top, left to right
         num_lat_tiles, num_lon_tiles = self.num_tiles
         lon_tile_size, lat_tile_size = self.tile_dims
+        if verbose:
+            self._log_tile_info()
         for latidx in range(num_lat_tiles):
             for lonidx in range(num_lon_tiles):
                 t = Tile(cur_lat, cur_lon, height=lat_tile_size, width=lon_tile_size)
@@ -199,3 +206,12 @@ class TileGrid(object):
             cur_lat = cur_lat + lat_tile_size - self.overlap
 
         return tiles_out
+
+    def _log_tile_info(self):
+        logger.info("Tiles in (lon, lat) directions: (%d, %d)", *self.num_tiles)
+        logger.info("Dimensions of tile in (lon, lat) directions: ({:.2f}, {:.2f})".format(
+            *self.tile_dims))
+        logger.info("Total number of tiles: %d", np.prod(self.num_tiles))
+        logger.info("Total area covered in (lon, lat): ({:.2f}, {:.2f})".format(
+            *self.total_width_height))
+        logger.info("Total extent covered: {:.2f} {:.2f} {:.2f} {:.2f} ".format(*self.extent))
