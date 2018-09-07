@@ -257,6 +257,11 @@ class Sentinel(Base):
         return min(lons), max(lons), min(lats), max(lats)
 
     @property
+    def extent(self):
+        """alias for swath_extent"""
+        return self.swath_extent
+
+    @property
     def swath_width_height(self):
         """Width and height of the swath area in degrees"""
         left, right, bot, top = self.swath_extent
