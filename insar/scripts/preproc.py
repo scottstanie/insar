@@ -41,8 +41,8 @@ def find_sentinels(data_path, path_num=None):
 def make_tile_geojsons(data_path, path_num=None, tile_size=0.5, overlap=0.1):
     sentinel_list = find_sentinels(data_path, path_num)
     total_extent = insar.tile.total_swath_extent(sentinel_list)
-    tiles, (height, width) = insar.tile.make_tiles(
+    tile_list, (height, width) = insar.tile.make_tiles(
         total_extent, tile_size=tile_size, overlap=overlap)
-    gj_list = [insar.tile.tile_to_geojson(t, height, width) for t in tiles]
-    tilename_list = [t.tilename for t in tiles]
+    gj_list = [t.to_geojson(height, width) for t in tile_list]
+    tilename_list = [t.tilename for t in tile_list]
     return list(zip(tilename_list, gj_list))

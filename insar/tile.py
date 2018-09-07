@@ -1,22 +1,54 @@
-from collections import namedtuple
+"""Tools for dividing large area into tiles to process
+"""
 import numpy as np
 import insar.geojson
 
 # import insar.parsers
 
-Tile = namedtuple('Tile', ['lat', 'lon', 'tilename'])
 
+class Tile(object):
+    """Class to represent an area for processing
 
-def _form_tilename(lat, lon):
-    hemi_ns = 'N' if lat >= 0 else 'S'
-    hemi_ew = 'E' if lon >= 0 else 'W'
-    # Format to one decimal
-    lat_str = '{}{:02.1f}'.format(hemi_ns, abs(lat))
-    lon_str = '{}{:03.1f}'.format(hemi_ew, abs(lon))
-    latlon_str = '{lat_str}{lon_str}'.format(lat_str=lat_str, lon_str=lon_str)
-    # Use underscores in the name instead of decimal
-    # return latlon_str.replace('.', '_')
-    return latlon_str
+    Attributes:
+        lat (float): bottom (southern) latitude
+        lon (float): leftmost (western) longitude
+        tilename (str): Representation of lat/lon to name
+            the directory holding processing results.
+            Example: N30.1W104.1
+    """
+
+    def __init__(self, lat, lon):
+        self.lat = lat
+        self.lon = lon
+        self.tilename = self._form_tilename(lat, lon)
+
+    def _form_tilename(self, lat, lon):
+        hemi_ns = 'N' if lat >= 0 else 'S'
+        hemi_ew = 'E' if lon >= 0 else 'W'
+        # Format to one decimal
+        lat_str = '{}{:02.1f}'.format(hemi_ns, abs(lat))
+        lon_str = '{}{:03.1f}'.format(hemi_ew, abs(lon))
+        latlon_str = '{lat_str}{lon_str}'.format(lat_str=lat_str, lon_str=lon_str)
+        # Use underscores in the name instead of decimal
+        # return latlon_str.replace('.', '_')
+        return latlon_str
+
+    def to_geojson(self, height, width):
+        """Converts a lat/lon Tile to a geojson object
+
+        Tiles have a (lat, lon) start point at the bottom left of the tile,
+        along with a height and width
+
+        Args:
+            height (float): height of the tile (size in lat)
+            width (float): width of the tile (lon size)
+        """
+        corners = insar.geojson.corner_coords(
+            bot_corner=(self.lon, self.lat),
+            dlon=width,
+            dlat=height,
+        )
+        return insar.geojson.corners_to_geojson(corners)
 
 
 def total_swath_extent(sentinel_list):
@@ -124,7 +156,7 @@ def make_tiles(extent, tile_size=0.5, overlap=0.1):
     # Iterate bot to top, left to right
     for latidx in range(num_lat_tiles):
         for lonidx in range(num_lon_tiles):
-            t = Tile(cur_lat, cur_lon, tilename=_form_tilename(cur_lat, cur_lon))
+            t = Tile(cur_lat, cur_lon)
             tiles.append(t)
             cur_lon = cur_lon + lon_tile_size - overlap
         cur_lon = min_lon  # Reset after each left-to-right
@@ -132,17 +164,3 @@ def make_tiles(extent, tile_size=0.5, overlap=0.1):
 
     # TODO: maybe name these? Do I need a class?
     return tiles, (lat_tile_size, lon_tile_size)
-
-
-def tile_to_geojson(tile, height, width):
-    """Converts a lat/lon Tile to a geojson object
-
-    Tiles have a (lat, lon) start point at the bottom left of the tile,
-    along with a height and width
-    """
-    corners = insar.geojson.corner_coords(
-        bot_corner=(tile.lon, tile.lat),
-        dlon=width,
-        dlat=height,
-    )
-    return insar.geojson.corners_to_geojson(corners)
