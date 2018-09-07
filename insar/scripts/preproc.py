@@ -2,6 +2,7 @@ import os
 import glob
 import subprocess
 import insar.parsers
+import insar.tile
 from insar.log import get_log
 
 logger = get_log()
@@ -35,3 +36,11 @@ def find_sentinels(data_path, path_num=None):
     if path_num:
         sents = [s for s in sents if s.path == path_num]
     return list(set(sents))
+
+
+def make_tile_geojsons(data_path, path_num=None, tile_size=0.5, overlap=0.1):
+    sentinel_list = find_sentinels(data_path, path_num)
+    total_extent = insar.tile.total_swath_extent(sentinel_list)
+    tiles, (height, width) = insar.tile.make_tiles(
+        total_extent, tile_size=tile_size, overlap=overlap)
+    return [insar.tile.tile_to_geojson(t, height, width) for t in tiles]
