@@ -117,7 +117,7 @@ def make_tiles(extent, tile_size=0.5, overlap=0.1):
         cur_lat = cur_lat + lat_tile_size - overlap
 
     # TODO: maybe name these? Do I need a class?
-    return tiles
+    return tiles, (lat_tile_size, lon_tile_size)
 
 
 def tile_to_geojson(tile, height, width):
