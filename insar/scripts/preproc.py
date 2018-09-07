@@ -29,7 +29,7 @@ def unzip_sentinel_files(path="."):
     os.chdir(cur_dir)
 
 
-def create_tile_directories(data_path, path_num=None, tile_size=0.5, overlap=0.1):
+def create_tile_directories(data_path, path_num=None, tile_size=0.5, overlap=0.1, verbose=False):
     """Use make_tiles to create a directory structure
 
     Populates the current directory with dirs and .geojson files (e.g.):
@@ -45,21 +45,28 @@ def create_tile_directories(data_path, path_num=None, tile_size=0.5, overlap=0.1
             json.dump(geojson, f)
 
     sentinel_list = insar.tile.find_sentinels(data_path, path_num)
-    tile_list = insar.tile.make_tiles(
-        sentinel_list=sentinel_list, tile_size=tile_size, overlap=overlap)
+    tile_grid = insar.tile.create_tiles(
+        sentinel_list=sentinel_list, tile_size=tile_size, overlap=overlap, verbose=verbose)
 
     # new_dirs = []
-    for tile in tile_list:
-        _write_geojson(tile.tilename, tile.geojson)
-        insar.utils.mkdir_p(tile.tilename)
-        # new_dirs.append(tile.tilename)
+    for tile in tile_grid:
+        _write_geojson(tile.name, tile.geojson)
+        insar.utils.mkdir_p(tile.name)
+        # new_dirs.append(tile.name)
         # Enter the new directory, link to sentinels, then back out
-        # os.chdir(tilename)
-        link_sentinels(tile, sentinel_list)
+        # os.chdir(name)
+        symlink_sentinels(tile, sentinel_list, verbose=verbose)
         # os.chdir('..')
 
+    return sentinel_list, tile_grid
 
-def link_sentinels(tile, sentinel_list):
+
+def symlink_sentinels(tile, sentinel_list, verbose=False):
+    """Create symlinks from Tile.name to the new directory tile.name"""
     for s in sentinel_list:
         if tile.overlaps_with(s):
-            insar.utils.force_symlink(s.filename, tile.filename)
+            _, fname = os.path.split(s.filename)
+            dest = os.path.join(tile.name, fname)
+            if verbose:
+                logger.info("symlinking %s to %s", s.filename, dest)
+            insar.utils.force_symlink(s.filename, dest)

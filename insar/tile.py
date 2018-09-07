@@ -18,7 +18,7 @@ class Tile(object):
     Attributes:
         lat (float): bottom (southern) latitude
         lon (float): leftmost (western) longitude
-        tilename (str): Representation of lat/lon to name
+        name (str): Representation of lat/lon to name
             the directory holding processing results.
             Example: N30.1W104.1
     """
@@ -28,10 +28,10 @@ class Tile(object):
         self.lon = lon
         self.height = height
         self.width = width
-        self.tilename = self._form_tilename(lat, lon)
+        self.name = self._form_tilename(lat, lon)
 
     def __str__(self):
-        return "<Tile %s>" % self.tilename
+        return "<Tile %s>" % self.name
 
     def __repr__(self):
         return str(self)
@@ -229,7 +229,12 @@ def find_sentinels(data_path, path_num=None):
     return list(set(sents))
 
 
-def make_tiles(data_path=None, path_num=None, sentinel_list=None, tile_size=0.5, overlap=0.1):
+def create_tiles(data_path=None,
+                 path_num=None,
+                 sentinel_list=None,
+                 tile_size=0.5,
+                 overlap=0.1,
+                 verbose=False):
     """Find tiles over a sentinel area, form the tiles/geojsons
 
     Args:
@@ -243,5 +248,5 @@ def make_tiles(data_path=None, path_num=None, sentinel_list=None, tile_size=0.5,
     """
     if not sentinel_list:
         sentinel_list = find_sentinels(data_path, path_num)
-    tile_list = TileGrid(sentinel_list, tile_size=tile_size, overlap=overlap)
-    return tile_list.make_tiles()
+    tile_grid = TileGrid(sentinel_list, tile_size=tile_size, overlap=overlap)
+    return tile_grid.make_tiles(verbose=verbose)
