@@ -1,8 +1,10 @@
 """Tools for dividing large area into tiles to process
 """
+import glob
+import os
 import numpy as np
 import insar.geojson
-from insar import latlon
+from insar import latlon, parsers
 from insar.log import get_log
 
 logger = get_log()
@@ -75,7 +77,7 @@ class Tile(object):
         """Returns True if Tile's area overlaps the sentinel extent
         """
         extent = sentinel.extent if sentinel else extent
-        return insar.latlon.intersects(self.extent, extent)
+        return latlon.intersects(self.extent, extent)
 
 
 class TileGrid(object):
@@ -215,3 +217,31 @@ class TileGrid(object):
         logger.info("Total area covered in (lon, lat): ({:.2f}, {:.2f})".format(
             *self.total_width_height))
         logger.info("Total extent covered: {:.2f} {:.2f} {:.2f} {:.2f} ".format(*self.extent))
+
+
+def find_sentinels(data_path, path_num=None):
+    sents = [
+        parsers.Sentinel(f) for f in glob.glob(os.path.join(data_path, "*"))
+        if f.endswith(".zip") or f.endswith(".SAFE")
+    ]
+    if path_num:
+        sents = [s for s in sents if s.path == path_num]
+    return list(set(sents))
+
+
+def make_tiles(data_path=None, path_num=None, sentinel_list=None, tile_size=0.5, overlap=0.1):
+    """Find tiles over a sentinel area, form the tiles/geojsons
+
+    Args:
+        data_path (str): path to .zips of .SAFEs of sentinel products
+        path_num (int): Optional- A relative orbit/ path number to filter products
+        sentinel_list (list[Sentinel]): Sentinel objects covering one area,
+            alternative to data_path + path_num args
+        tile_size (float): default 0.5, degrees of tile size to aim for
+            Note: This will be adjusted to make even tiles
+        overlap (float): default 0.1, overlap size between adjacent blocks
+    """
+    if not sentinel_list:
+        sentinel_list = find_sentinels(data_path, path_num)
+    tile_list = TileGrid(sentinel_list, tile_size=tile_size, overlap=overlap)
+    return tile_list.make_tiles()

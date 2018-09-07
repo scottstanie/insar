@@ -1,8 +1,9 @@
 import os
 import json
-import glob
 import subprocess
-from insar import parsers, tile, utils
+
+import insar.utils
+import insar.tile
 from insar.log import get_log
 
 logger = get_log()
@@ -28,25 +29,8 @@ def unzip_sentinel_files(path="."):
     os.chdir(cur_dir)
 
 
-def find_sentinels(data_path, path_num=None):
-    sents = [
-        parsers.Sentinel(f) for f in glob.glob(os.path.join(data_path, "*"))
-        if f.endswith(".zip") or f.endswith(".SAFE")
-    ]
-    if path_num:
-        sents = [s for s in sents if s.path == path_num]
-    return list(set(sents))
-
-
-def make_tile_geojsons(data_path, path_num=None, tile_size=0.5, overlap=0.1):
-    """Find tiles over a sentinel area, form the tiles/geojsons"""
-    sentinel_list = find_sentinels(data_path, path_num)
-    tile_list = tile.TileGrid(sentinel_list, tile_size=tile_size, overlap=overlap)
-    return tile_list.make_tiles()
-
-
 def create_tile_directories(data_path, path_num=None, tile_size=0.5, overlap=0.1):
-    """Use make_tile_geojsons to create a directory structure
+    """Use make_tiles to create a directory structure
 
     Populates the current directory with dirs and .geojson files (e.g.):
     N28.8W101.6
@@ -60,9 +44,22 @@ def create_tile_directories(data_path, path_num=None, tile_size=0.5, overlap=0.1
         with open('{}.geojson'.format(tilename), 'w') as f:
             json.dump(geojson, f)
 
-    tile_list = make_tile_geojsons(data_path, path_num, tile_size, overlap)
-    gj_list = (t.geojson for t in tile_list)
-    tilename_list = (t.tilename for t in tile_list)
-    for tilename, gj in zip(tilename_list, gj_list):
-        utils.mkdir_p(tilename)
-        _write_geojson(tilename, gj)
+    sentinel_list = insar.tile.find_sentinels(data_path, path_num)
+    tile_list = insar.tile.make_tiles(
+        sentinel_list=sentinel_list, tile_size=tile_size, overlap=overlap)
+
+    # new_dirs = []
+    for tile in tile_list:
+        _write_geojson(tile.tilename, tile.geojson)
+        insar.utils.mkdir_p(tile.tilename)
+        # new_dirs.append(tile.tilename)
+        # Enter the new directory, link to sentinels, then back out
+        # os.chdir(tilename)
+        link_sentinels(tile, sentinel_list)
+        # os.chdir('..')
+
+
+def link_sentinels(tile, sentinel_list):
+    for s in sentinel_list:
+        if tile.overlaps_with(s):
+            insar.utils.force_symlink(s.filename, tile.filename)
