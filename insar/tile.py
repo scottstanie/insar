@@ -68,10 +68,11 @@ class Tile(object):
         """Boundaries of tile: (lon_left,lon_right,lat_bottom,lat_top)"""
         return (self.lon, self.lon + self.width, self.lat, self.lat + self.height)
 
-    def overlaps_swath(self, sentinel=None, extent=None):
-        """Returns True if Tile's area overlaps the sentinel extent"""
-        extent = sentinel.swath_extent if sentinel else extent
-        return insar.latlon.intersects(self.extent, sentinel.swath_extent)
+    def overlaps_with(self, sentinel=None, extent=None):
+        """Returns True if Tile's area overlaps the sentinel extent
+        """
+        extent = sentinel.extent if sentinel else extent
+        return insar.latlon.intersects(self.extent, extent)
 
 
 def total_swath_extent(sentinel_list):
