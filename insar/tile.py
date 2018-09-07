@@ -219,14 +219,12 @@ class TileGrid(object):
         logger.info("Total extent covered: {:.2f} {:.2f} {:.2f} {:.2f} ".format(*self.extent))
 
 
-def find_sentinels(data_path, path_num=None):
-    sents = [
-        parsers.Sentinel(f) for f in glob.glob(os.path.join(data_path, "*"))
-        if f.endswith(".zip") or f.endswith(".SAFE")
-    ]
+def find_unzipped_sentinels(data_path, path_num=None):
+    search_results = glob.glob(os.path.join(data_path, "*"))
+    sents = [parsers.Sentinel(f) for f in search_results if f.endswith(".SAFE")]
     if path_num:
         sents = [s for s in sents if s.path == path_num]
-    return list(set(sents))
+    return sents
 
 
 def create_tiles(data_path=None,
@@ -247,6 +245,7 @@ def create_tiles(data_path=None,
         overlap (float): default 0.1, overlap size between adjacent blocks
     """
     if not sentinel_list:
-        sentinel_list = find_sentinels(data_path, path_num)
+        sentinel_list = find_unzipped_sentinels(data_path, path_num)
     tile_grid = TileGrid(sentinel_list, tile_size=tile_size, overlap=overlap)
+
     return tile_grid.make_tiles(verbose=verbose)

@@ -37,11 +37,11 @@ def download_eof(mission=None, date=None, **kwargs):
     eof.download.main(mission=mission, date=date)
 
 
-def create_dem(geojson=None,
-               left_lon=None,
+def create_dem(left_lon=None,
                top_lat=None,
                dlat=None,
                dlon=None,
+               geojson=None,
                rate=1,
                data_source='NASA',
                **kwargs):
@@ -51,7 +51,16 @@ def create_dem(geojson=None,
                              " for create_dem step.")
     output_name = 'elevation.dem'
     logger.info("Running: sardem.dem:main")
-    sardem.dem.main(left_lon, top_lat, dlon, dlat, data_source, rate, output_name)
+    sardem.dem.main(
+        left_lon=left_lon,
+        top_lat=top_lat,
+        dlon=dlon,
+        dlat=dlat,
+        geojson=geojson,
+        data_source=data_source,
+        rate=rate,
+        output_name=output_name,
+    )
 
 
 def run_sentinel_stack(sentinel_path="~/sentinel/", unzip=True, **kwargs):
