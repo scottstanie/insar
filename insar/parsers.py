@@ -129,7 +129,7 @@ class Sentinel(Base):
                                                self.date)
 
     def __lt__(self, other):
-        return self.start_time < other.start_time
+        return (self.start_time, self.filename) < (other.start_time, other.filename)
 
     def __eq__(self, other):
         # TODO: Do we just want to compare product_uids?? or filenames?

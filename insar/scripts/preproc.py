@@ -1,15 +1,19 @@
 import os
+import glob
 import json
 import subprocess
 
 import insar.utils
 import insar.tile
+import eof
+import sardem
 from insar.log import get_log
 
 logger = get_log()
 
 
 def unzip_sentinel_files(path="."):
+    """Function to find all .zips and unzip them, skipping overwrites"""
     logger.info("Changing to %s to unzip files", path)
     cur_dir = os.getcwd()  # To return to after
     os.chdir(path)
@@ -40,18 +44,25 @@ def create_tile_directories(data_path, path_num=None, tile_size=0.5, overlap=0.1
     ...
     """
 
-    def _write_geojson(tilename, geojson):
-        with open('{}.geojson'.format(tilename), 'w') as f:
-            json.dump(geojson, f)
+    data_path = os.path.abspath(data_path)
 
-    sentinel_list = insar.tile.find_sentinels(data_path, path_num)
+    def _write_geojson(filename, geojson):
+        with open(filename, 'w') as f:
+            json.dump(geojson, f, indent=2)
+
+    sentinel_list = insar.tile.find_unzipped_sentinels(data_path, path_num)
+    if not sentinel_list:
+        logger.error("No sentinel products found in %s for path_num %s", data_path, path_num)
+        return [], []
+
     tile_grid = insar.tile.create_tiles(
         sentinel_list=sentinel_list, tile_size=tile_size, overlap=overlap, verbose=verbose)
 
     # new_dirs = []
     for tile in tile_grid:
-        _write_geojson(tile.name, tile.geojson)
         insar.utils.mkdir_p(tile.name)
+        filename = os.path.join(tile.name, '{}.geojson'.format(tile.name))
+        _write_geojson(filename, tile.geojson)
         # new_dirs.append(tile.name)
         # Enter the new directory, link to sentinels, then back out
         # os.chdir(name)
@@ -70,3 +81,35 @@ def symlink_sentinels(tile, sentinel_list, verbose=False):
             if verbose:
                 logger.info("symlinking %s to %s", s.filename, dest)
             insar.utils.force_symlink(s.filename, dest)
+
+
+def _find_dirs(path):
+    return [f for f in glob.glob(os.path.join(path, '*')) if os.path.isdir(f)]
+
+
+def map_over_dirs(func, path, *args, **kwargs):
+    logger.info("Running %s over directories in %s", func.__name__, path)
+    for dir_ in _find_dirs(path):
+        logger.info("Changing to %s", dir_)
+        os.chdir(dir_)
+        func(*args, **kwargs)
+        os.chdir('..')
+        logger.info("Done with %s", dir_)
+
+
+def map_eof(path):
+    map_over_dirs(eof.download.main, path)
+
+
+def map_dem(path, rate=1):
+    logger.info("Running createdem over directories in %s", path)
+    for dir_ in _find_dirs(path):
+        logger.info("Changing to %s", dir_)
+        os.chdir(dir_)
+        geojson = glob.glob("./*.geojson")[0]
+        sardem.dem.main(
+            geojson=geojson,
+            rate=rate,
+        )
+        os.chdir('..')
+        logger.info("Done with %s", dir_)
