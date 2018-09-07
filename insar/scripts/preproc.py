@@ -41,8 +41,8 @@ def find_sentinels(data_path, path_num=None):
 def make_tile_geojsons(data_path, path_num=None, tile_size=0.5, overlap=0.1):
     """Find tiles over a sentinel area, form the tiles/geojsons"""
     sentinel_list = find_sentinels(data_path, path_num)
-    total_extent = tile.total_swath_extent(sentinel_list)
-    return tile.make_tiles(total_extent, tile_size=tile_size, overlap=overlap)
+    tile_list = tile.TileGrid(sentinel_list, tile_size=tile_size, overlap=overlap)
+    return tile_list.make_tiles()
 
 
 def create_tile_directories(data_path, path_num=None, tile_size=0.5, overlap=0.1):
@@ -61,7 +61,7 @@ def create_tile_directories(data_path, path_num=None, tile_size=0.5, overlap=0.1
             json.dump(geojson, f)
 
     tile_list = make_tile_geojsons(data_path, path_num, tile_size, overlap)
-    gj_list = (t.to_geojson() for t in tile_list)
+    gj_list = (t.geojson for t in tile_list)
     tilename_list = (t.tilename for t in tile_list)
     for tilename, gj in zip(tilename_list, gj_list):
         utils.mkdir_p(tilename)
