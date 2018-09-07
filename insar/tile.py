@@ -1,7 +1,22 @@
+from collections import namedtuple
 import numpy as np
 import insar.geojson
 
 # import insar.parsers
+
+Tile = namedtuple('Tile', ['lat', 'lon', 'tilename'])
+
+
+def _form_tilename(lat, lon):
+    hemi_ns = 'N' if lat >= 0 else 'S'
+    hemi_ew = 'E' if lon >= 0 else 'W'
+    # Format to one decimal
+    lat_str = '{}{:02.1f}'.format(hemi_ns, abs(lat))
+    lon_str = '{}{:03.1f}'.format(hemi_ew, abs(lon))
+    latlon_str = '{lat_str}{lon_str}'.format(lat_str=lat_str, lon_str=lon_str)
+    # Use underscores in the name instead of decimal
+    # return latlon_str.replace('.', '_')
+    return latlon_str
 
 
 def total_swath_extent(sentinel_list):
@@ -95,8 +110,6 @@ def make_tiles(extent, tile_size=0.5, overlap=0.1):
         overlap (float): default 0.1, overlap size between adjacent blocks
     Returns:
         list[tuple[float]]: list of tiles in order
-
-    TODO: do I want geojson objects?
     """
     min_lon, max_lon, min_lat, max_lat = extent
     height_width_arr = np.array([max_lon - min_lon, max_lat - min_lat])
@@ -111,7 +124,8 @@ def make_tiles(extent, tile_size=0.5, overlap=0.1):
     # Iterate bot to top, left to right
     for latidx in range(num_lat_tiles):
         for lonidx in range(num_lon_tiles):
-            tiles.append((cur_lat, cur_lon))
+            t = Tile(cur_lat, cur_lon, tilename=_form_tilename(cur_lat, cur_lon))
+            tiles.append(t)
             cur_lon = cur_lon + lon_tile_size - overlap
         cur_lon = min_lon  # Reset after each left-to-right
         cur_lat = cur_lat + lat_tile_size - overlap
@@ -126,9 +140,8 @@ def tile_to_geojson(tile, height, width):
     Tiles have a (lat, lon) start point at the bottom left of the tile,
     along with a height and width
     """
-    lat, lon = tile
     corners = insar.geojson.corner_coords(
-        bot_corner=(lon, lat),
+        bot_corner=(tile.lon, tile.lat),
         dlon=width,
         dlat=height,
     )

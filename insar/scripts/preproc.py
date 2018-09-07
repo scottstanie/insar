@@ -43,4 +43,6 @@ def make_tile_geojsons(data_path, path_num=None, tile_size=0.5, overlap=0.1):
     total_extent = insar.tile.total_swath_extent(sentinel_list)
     tiles, (height, width) = insar.tile.make_tiles(
         total_extent, tile_size=tile_size, overlap=overlap)
-    return [insar.tile.tile_to_geojson(t, height, width) for t in tiles]
+    gj_list = [insar.tile.tile_to_geojson(t, height, width) for t in tiles]
+    tilename_list = [t.tilename for t in tiles]
+    return list(zip(tilename_list, gj_list))
