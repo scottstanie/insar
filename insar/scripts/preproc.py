@@ -42,19 +42,27 @@ def make_tile_geojsons(data_path, path_num=None, tile_size=0.5, overlap=0.1):
     """Find tiles over a sentinel area, form the tiles/geojsons"""
     sentinel_list = find_sentinels(data_path, path_num)
     total_extent = tile.total_swath_extent(sentinel_list)
-    tile_list, (height, width) = tile.make_tiles(total_extent, tile_size=tile_size, overlap=overlap)
-    gj_list = [t.to_geojson(height, width) for t in tile_list]
-    tilename_list = [t.tilename for t in tile_list]
-    return list(zip(tilename_list, gj_list))
+    return tile.make_tiles(total_extent, tile_size=tile_size, overlap=overlap)
 
 
 def create_tile_directories(data_path, path_num=None, tile_size=0.5, overlap=0.1):
-    """Use make_tile_geojsons to create a directory structure"""
+    """Use make_tile_geojsons to create a directory structure
+
+    Populates the current directory with dirs and .geojson files (e.g.):
+    N28.8W101.6
+    N28.8W101.6.geojson
+    N28.8W102.0
+    N28.8W102.0.geojson
+    ...
+    """
 
     def _write_geojson(tilename, geojson):
         with open('{}.geojson'.format(tilename), 'w') as f:
             json.dump(geojson, f)
 
-    for tilename, gj in make_tile_geojsons(data_path, path_num, tile_size, overlap):
+    tile_list = make_tile_geojsons(data_path, path_num, tile_size, overlap)
+    gj_list = (t.to_geojson() for t in tile_list)
+    tilename_list = (t.tilename for t in tile_list)
+    for tilename, gj in zip(tilename_list, gj_list):
         utils.mkdir_p(tilename)
         _write_geojson(tilename, gj)

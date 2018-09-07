@@ -2,15 +2,13 @@
 """
 import numpy as np
 import insar.geojson
-
-# import insar.parsers
+from insar import parsers, latlon
 
 
 class Tile(object):
     """Class holding one lat/lon area to process
 
-    Note: height and width aren't yet determined, as they
-    depend on the total area size
+    Note: height and width depend on the total area size, so are optional
 
     Attributes:
         lat (float): bottom (southern) latitude
@@ -20,10 +18,18 @@ class Tile(object):
             Example: N30.1W104.1
     """
 
-    def __init__(self, lat, lon):
+    def __init__(self, lat, lon, height=None, width=None):
         self.lat = lat
         self.lon = lon
+        self.height = height
+        self.width = width
         self.tilename = self._form_tilename(lat, lon)
+
+    def __str__(self):
+        return "<Tile %s>" % self.tilename
+
+    def __repr__(self):
+        return str(self)
 
     def _form_tilename(self, lat, lon):
         hemi_ns = 'N' if lat >= 0 else 'S'
@@ -36,7 +42,7 @@ class Tile(object):
         # return latlon_str.replace('.', '_')
         return latlon_str
 
-    def to_geojson(self, height, width):
+    def to_geojson(self):
         """Converts a lat/lon Tile to a geojson object
 
         Tiles have a (lat, lon) start point at the bottom left of the tile,
@@ -48,10 +54,24 @@ class Tile(object):
         """
         corners = insar.geojson.corner_coords(
             bot_corner=(self.lon, self.lat),
-            dlon=width,
-            dlat=height,
+            dlon=self.width,
+            dlat=self.height,
         )
         return insar.geojson.corners_to_geojson(corners)
+
+    @property
+    def geojson(self):
+        return self.to_geojson()
+
+    @property
+    def extent(self):
+        """Boundaries of tile: (lon_left,lon_right,lat_bottom,lat_top)"""
+        return (self.lon, self.lon + self.width, self.lat, self.lat + self.height)
+
+    def overlaps_swath(self, sentinel=None, extent=None):
+        """Returns True if Tile's area overlaps the sentinel extent"""
+        extent = sentinel.swath_extent if sentinel else extent
+        return insar.latlon.intersects(self.extent, sentinel.swath_extent)
 
 
 def total_swath_extent(sentinel_list):
@@ -159,11 +179,10 @@ def make_tiles(extent, tile_size=0.5, overlap=0.1):
     # Iterate bot to top, left to right
     for latidx in range(num_lat_tiles):
         for lonidx in range(num_lon_tiles):
-            t = Tile(cur_lat, cur_lon)
+            t = Tile(cur_lat, cur_lon, height=lat_tile_size, width=lon_tile_size)
             tiles.append(t)
             cur_lon = cur_lon + lon_tile_size - overlap
         cur_lon = min_lon  # Reset after each left-to-right
         cur_lat = cur_lat + lat_tile_size - overlap
 
-    # TODO: maybe name these? Do I need a class?
-    return tiles, (lat_tile_size, lon_tile_size)
+    return tiles
