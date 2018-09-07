@@ -7,7 +7,10 @@ import insar.geojson
 
 
 class Tile(object):
-    """Class to represent an area for processing
+    """Class holding one lat/lon area to process
+
+    Note: height and width aren't yet determined, as they
+    depend on the total area size
 
     Attributes:
         lat (float): bottom (southern) latitude
