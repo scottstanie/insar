@@ -130,11 +130,11 @@ class TileGrid(object):
           .4  .1 .3 .1  .4
 
         Examples:
-        >>> Sentinel.num_tiles(1.3, tile_size=0.5, overlap=0.1)
+        >>> TileGrid.calc_num_tiles(1.3, tile_size=0.5, overlap=0.1)
         3
-        >>> Sentinel.num_tiles(np.array([1.3, 1.3]), tile_size=0.5, overlap=0.1)
+        >>> TileGrid.calc_num_tiles(np.array([1.3, 1.3]), tile_size=0.5, overlap=0.1)
         array([3, 3])
-        >>> Sentinel.num_tiles(np.array([1.4, 1.5, 1.6]), tile_size=0.5, overlap=0.1)
+        >>> TileGrid.calc_num_tiles(np.array([1.4, 1.5, 1.6]), tile_size=0.5, overlap=0.1)
         array([3, 3, 4])
         """
         covered_width = tile_size - overlap
@@ -159,14 +159,14 @@ class TileGrid(object):
             overlap (float): overlap size between adjacent blocks
 
         Examples:
-        >>> print(Sentinel.calc_tile_dims(1.3, 0.5, 0.1))
+        >>> print(TileGrid.calc_tile_dims(1.3, 0.5, 0.1))
         0.5
         >>> test_lengths = np.linspace(1, 2, 11)
-        >>> print(Sentinel.calc_tile_dims(test_lengths, 0.5, 0.1))
+        >>> print(TileGrid.calc_tile_dims(test_lengths, 0.5, 0.1))
         [ 0.55        0.6         0.46666667  0.5         0.53333333  0.56666667
           0.475       0.5         0.525       0.55        0.48      ]
         """
-        num_tiles_arr = TileGrid.num_tiles(length_arr, tile_size, overlap)
+        num_tiles_arr = TileGrid.calc_num_tiles(length_arr, tile_size, overlap)
         # how much length is covered if we spread out overlap
         size_unoverlapped = length_arr + (num_tiles_arr - 1) * overlap
         # Use this to get each tile's size
@@ -178,10 +178,6 @@ class TileGrid(object):
 
     def make_tiles(self):
         """Divide the extent from the sentinel_list into Tiles
-
-        Args:
-            extent (tuple[float, float, float, float]): Sentinel.swath_extent
-                (lon_left,lon_right,lat_bottom,lat_top)
 
         Returns:
             list[Tile]: list of tiles in ordered bot to top, left to right
