@@ -14,16 +14,10 @@ FULL_CMD="insar process $COMMAND"
 echo $FULL_CMD
 echo "Will append --geojson with current directory's file"
 
-geojson_file=$(eval "ls *.geojson | head -1")
-	CUR_CMD="$FULL_CMD --geojson $geojson_file"
-	echo $CUR_CMD
-	eval $CUR_CMD
-	exit 1
 for dirname in $(find -maxdepth 1 -type d ! -name "." | head -5); do
 	echo "Moving to $dirname"
 	geojson_file=$(eval "ls *.geojson | head -1")
 	CUR_CMD="$FULL_CMD --geojson $geojson_file"
 	echo $CUR_CMD
 	eval $CUR_CMD
-	echo "gj: $geojson_file"
 done
