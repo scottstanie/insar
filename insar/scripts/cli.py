@@ -2,6 +2,7 @@
 Main command line entry point to manage all other sub commands
 """
 import os
+import json
 import click
 import insar
 import sardem
@@ -63,11 +64,7 @@ def parse_steps(ctx, param, value):
 @click.argument("top_lat", type=float, required=False)
 @click.argument("dlon", type=float, required=False)
 @click.argument("dlat", type=float, required=False)
-@click.option(
-    '--geojson',
-    '-g',
-    help="File containing the geojson object for DEM bounds",
-    type=click.Path(resolve_path=True))
+@click.option('--geojson', '-g', help="Filename containing the geojson object for DEM bounds")
 @click.option(
     "--sentinel-path",
     envvar="SENTINEL_PATH",
@@ -135,6 +132,10 @@ def process(context, **kwargs):
     if kwargs['left_lon'] and kwargs['geojson']:
         raise click.BadOptionUsage("Can't use both positional arguments "
                                    "(left_lon top_lat dlon dlat) and --geojson")
+    elif kwargs['geojson']:
+        with open(kwargs['geojson']) as f:
+            geojson = json.load(f)
+        kwargs['geojson'] = geojson
 
     insar.scripts.process.main(context['path'], kwargs)
 
