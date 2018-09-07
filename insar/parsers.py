@@ -113,10 +113,16 @@ class Sentinel(Base):
     def __init__(self, filename, **kwargs):
         super(Sentinel, self).__init__(filename, **kwargs)
         # The name of the unzipped .SAFE directory (with .zip stripped)
-        self._safe_dir = self.filename.split('.')[0] + '.SAFE'
+        self._safe_dir = self._form_safe_dir(filename)
         self._annotation_folder = os.path.join(self._safe_dir, 'annotation')
         self.swath_xmls = glob.glob(os.path.join(self._annotation_folder, '*slc-vv*.xml'))
         self._lat_lon_points = None  # For later parsing
+
+    def _form_safe_dir(self, filename):
+        """Get just the Sentinel product name without extensions, then add .SAFE"""
+        fname = filename.replace('.zip', '').replace('.geo', '')
+        root, ext = os.path.splitext(fname)
+        return root + '.SAFE'
 
     def __str__(self):
         return "{} {}, path {} from {}".format(self.__class__.__name__, self.mission, self.path,
