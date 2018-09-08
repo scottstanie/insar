@@ -15,7 +15,7 @@ FULL_CMD="insar process --no-unzip $COMMAND "
 echo $FULL_CMD
 echo "Will append --geojson with current directory's file"
 
-for dirname in $(find -maxdepth 1 -type d ! -name "." | head -5); do
+for dirname in $(find -maxdepth 1 -type d ! -name "."); do
 	# Skip if no sentinel files to run on
 	SENT_FILES=$(find $dirname -maxdepth 1 -name "S1[AB]*.SAFE" )
 	if [ -z "$SENT_FILES" ]; then
