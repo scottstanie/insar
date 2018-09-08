@@ -16,8 +16,16 @@ echo $FULL_CMD
 echo "Will append --geojson with current directory's file"
 
 for dirname in $(find -maxdepth 1 -type d ! -name "." | head -5); do
+	# Skip if no sentinel files to run on
+	SENT_FILES=$(find $dirname -name "S1[AB]*.SAFE" )
+	if [ -z $SENT_FILES ]; then
+		echo "Skipping $dirname, no sentinel files"
+		continue
+	fi
+
 	echo "Moving to $dirname"
 	cd "$dirname"
+
 	geojson_file=$(eval "ls *.geojson | head -1")
 	CUR_CMD="$FULL_CMD --geojson $geojson_file"
 	echo $CUR_CMD
