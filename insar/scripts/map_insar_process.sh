@@ -17,8 +17,8 @@ echo "Will append --geojson with current directory's file"
 
 for dirname in $(find -maxdepth 1 -type d ! -name "." | head -5); do
 	# Skip if no sentinel files to run on
-	SENT_FILES=$(find $dirname -name "S1[AB]*.SAFE" )
-	if [ -z $SENT_FILES ]; then
+	SENT_FILES=$(find $dirname -maxdepth 1 -name "S1[AB]*.SAFE" )
+	if [ -z "$SENT_FILES" ]; then
 		echo "Skipping $dirname, no sentinel files"
 		continue
 	fi
