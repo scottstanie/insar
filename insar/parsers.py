@@ -114,9 +114,9 @@ class Sentinel(Base):
         super(Sentinel, self).__init__(filename, **kwargs)
         # The name of the unzipped .SAFE directory (with .zip stripped)
         self._safe_dir = self._form_safe_dir(filename)
-        self._annotation_folder = os.path.join(self._safe_dir, 'annotation')
-        self.swath_xmls = glob.glob(os.path.join(self._annotation_folder, '*slc-vv*.xml'))
-        self._lat_lon_points = None  # For later parsing
+        self._preview_folder = os.path.join(self._safe_dir, 'preview')
+        self.map_overlay_kml = os.path.join(self._preview_folder, 'map-overlay.kml')
+        self._lon_lat_overlay_coords = self._map_overlay_coords(self.map_overlay_kml)
 
     def _form_safe_dir(self, filename):
         """Get just the Sentinel product name without extensions, then add .SAFE"""
@@ -251,9 +251,9 @@ class Sentinel(Base):
         Matches latlon.grid_extent(**dem_rsc_data)
         (lon_left,lon_right,lat_bottom,lat_top)
         """
-        if not self.swath_xmls:
-            raise ValueError("No annotation xmls found in %s" % self._annotation_folder)
-        lats, lons = self._all_lat_lon_points()
+        if not os.path.exists(self.map_overlay_kml):
+            raise ValueError("No map-overlay.kml file found in %s" % self._preview_folder)
+        lons, lats = list(zip(*self._lon_lat_overlay_coords))
         return min(lons), max(lons), min(lats), max(lats)
 
     @property
@@ -267,28 +267,20 @@ class Sentinel(Base):
         left, right, bot, top = self.swath_extent
         return right - left, top - bot
 
-    def _get_lat_lon_points(self, xml_file=None, etree=None):
+    def _map_overlay_coords(self, kml_file=None, etree=None):
+        if not os.path.exists(kml_file):
+            return None
         # Use the cache doesn't exist, parse xml and save it
-        if self._lat_lon_points is None:
-            if xml_file:
-                etree = ElementTree.parse(xml_file)
-            if not etree:
-                raise ValueError("Need xml_file or etree")
+        if kml_file:
+            etree = ElementTree.parse(kml_file)
+        if not etree:
+            raise ValueError("Need xml_file or etree")
 
-            root = etree.getroot()
-            lats = [float(elem.text) for elem in root.iter('latitude')]
-            lons = [float(elem.text) for elem in root.iter('longitude')]
-            self._lat_lon_points = (lats, lons)
-
-        return self._lat_lon_points
-
-    def _all_lat_lon_points(self):
-        all_lats, all_lons = [], []
-        for xml in self.swath_xmls:
-            lats, lons = self._get_lat_lon_points(xml)
-            all_lats.extend(lats)
-            all_lons.extend(lons)
-        return all_lats, all_lons
+        root = etree.getroot()
+        # point_str looks like:
+        # <coordinates>-102.552971,31.482372 -105.191353,31.887299...
+        point_str = list(elem.text for elem in root.iter('coordinates'))[0]
+        return [(float(lon), float(lat)) for lon, lat in [p.split(',') for p in point_str.split()]]
 
     def overlaps_dem(self, dem_rsc_data):
         """Swath is contained in DEM from rsc data"""
