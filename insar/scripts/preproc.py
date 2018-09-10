@@ -18,15 +18,15 @@ def unzip_sentinel_files(path="."):
     cur_dir = os.getcwd()  # To return to after
     os.chdir(path)
 
-    logger.info("Unzipping sentinel annotation/xml and VV .tiffs")
+    logger.info("Unzipping sentinel preview/map-overlay.kml and VV .tiffs")
 
     # Unzip all .zip files by piping to xargs, using 10 processes
-    # IMPORTANT: Only unzipping the VV .tiff files and annotation/*.xml !
+    # IMPORTANT: Only unzipping the VV .tiff files and preview/map-overlay.kml !
 
     # Note: -n means "never overwrite existing files", so you can rerun this
     subprocess.check_call(
         "find . -maxdepth 1 -name '*.zip' -print0 | "
-        'xargs -0 -I {} --max-procs 10 unzip -n {} "*/annotation/*.xml" "*/measurement/*slc-vv-*.tiff" ',
+        'xargs -0 -I {} --max-procs 10 unzip -n {} "*/preview/map-overlay.kml" "*/measurement/*slc-vv-*.tiff" ',
         shell=True)
 
     logger.info("Done unzipping, returning to %s", cur_dir)
