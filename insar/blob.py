@@ -70,8 +70,8 @@ def find_blobs(image,
     blobs = blob_func(
         image, threshold=threshold, min_sigma=min_sigma, max_sigma=max_sigma, **kwargs)
 
-    # if not blobs.size:  # Empty return: no blobs matched criteria
-    # return np.array(blobs)
+    if not blobs.size:  # Empty return: no blobs matched criteria
+        return None
 
     # Multiply each sigma by sqrt(2) to convert to a radius
     blobs = blobs * np.array([1, 1, np.sqrt(2)])
@@ -203,6 +203,17 @@ def make_blob_image(igram_path=".",
                     verbose=False,
                     blobfunc_args=None):
     """Find and view blobs in deformation"""
+
+    def _handle_args(extra_args):
+        keys = [arg.lstrip('--').replace('-', '_') for arg in list(extra_args)[::2]]
+        vals = []
+        for val in list(extra_args)[1::2]:
+            try:
+                vals.append(float(val))
+            except ValueError:
+                vals.append(val)
+        return dict(zip(keys, vals))
+
     logger.info("Searching %s for igram_path" % igram_path)
     geolist, deformation = timeseries.load_deformation(igram_path)
     rsc_data = sardem.loading.load_dem_rsc(os.path.join(igram_path, 'dem.rsc'))
@@ -218,23 +229,27 @@ def make_blob_image(igram_path=".",
     # imagefig, axes_image = plotting.plot_image_shifted(img, title=title)
 
     blob_filename = 'blobs.npy'
-    # TODO: handle extra args as ('--max-sigma', '30', '--threshold', '4')
 
     if load and os.path.exists(blob_filename):
         blobs = np.load(blob_filename)
     else:
+        extra_args = _handle_args(blobfunc_args)
         blob_kwargs = BLOB_KWARG_DEFAULTS.copy()
+        blob_kwargs.update(extra_args)
+        logger.info("Using the following blob function settings:")
+        logger.info(blob_kwargs)
 
         logger.info("Finding neg blobs")
         blobs_neg = find_blobs(img, negative=True, **blob_kwargs)
 
         logger.info("Finding pos blobs")
-        blob_kwargs['threshold'] = 0.7
         blobs_pos = find_blobs(img, **blob_kwargs)
+
         logger.info("Blobs found:")
-        logger.info(blobs_neg.astype(int))
-        logger.info(blobs_pos.astype(int))
-        blobs = np.vstack((blobs_neg, blobs_pos))
+        logger.info(blobs_neg)
+        logger.info(blobs_pos)
+        blobs = np.vstack((b for b in (blobs_neg, blobs_pos) if b is not None))  # Skip empties
+
         np.save(blob_filename, blobs)
 
     blobs_ll = blobs_latlon(blobs, rsc_data)
