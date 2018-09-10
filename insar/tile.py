@@ -1,5 +1,6 @@
 """Tools for dividing large area into tiles to process
 """
+from __future__ import division
 import glob
 import os
 import numpy as np

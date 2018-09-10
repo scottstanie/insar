@@ -313,3 +313,32 @@ def preproc(ctx):
 @click.pass_context
 def unzip(context):
     insar.scripts.preproc.unzip_sentinel_files(context.obj['path'])
+
+
+@preproc.command('tiles')
+@click.argument('data-path')
+@click.option(
+    '--path-num', type=int, help="Relative orbit/path to use (None uses all within data-path)")
+@click.option('--tile-size', default=0.5, help="degrees of tile size to aim for")
+@click.option('--overlap', default=0.1, help="Overlap of adjacent tiles (in deg)")
+@click.pass_context
+def tiles(context, data_path, path_num, tile_size, overlap):
+    """Use make_tiles to create a directory structure
+
+    Uses the current directory to make new folders.
+
+    data_path is where the unzipped .SAFE folders are located.
+
+    Populates the current directory with dirs and .geojson files (e.g.):
+    N28.8W101.6
+    N28.8W101.6.geojson
+    N28.8W102.0
+    N28.8W102.0.geojson
+    ...
+    """
+    insar.scripts.preproc.create_tile_directories(
+        data_path,
+        path_num=path_num,
+        tile_size=tile_size,
+        overlap=overlap,
+        verbose=context.obj['verbose'])

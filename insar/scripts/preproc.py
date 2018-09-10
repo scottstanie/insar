@@ -74,10 +74,14 @@ def create_tile_directories(data_path, path_num=None, tile_size=0.5, overlap=0.1
 
 def symlink_sentinels(tile, sentinel_list, verbose=False):
     """Create symlinks from Tile.name to the new directory tile.name"""
+    num_links = 0
     for s in sentinel_list:
         if tile.overlaps_with(s):
+            num_links += 1
             _, fname = os.path.split(s.filename)
             dest = os.path.join(tile.name, fname)
-            if verbose:
-                logger.info("symlinking %s to %s", s.filename, dest)
+            # probably too verbose
+            # logger.info("symlinking %s to %s", s.filename, dest)
             insar.utils.force_symlink(s.filename, dest)
+    if verbose:
+        logger.info("%s symlinks created for %s", num_links, tile)
