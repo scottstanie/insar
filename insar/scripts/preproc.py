@@ -81,35 +81,3 @@ def symlink_sentinels(tile, sentinel_list, verbose=False):
             if verbose:
                 logger.info("symlinking %s to %s", s.filename, dest)
             insar.utils.force_symlink(s.filename, dest)
-
-
-def _find_dirs(path):
-    return [f for f in glob.glob(os.path.join(path, '*')) if os.path.isdir(f)]
-
-
-def map_over_dirs(func, path, *args, **kwargs):
-    logger.info("Running %s over directories in %s", func.__name__, path)
-    for dir_ in _find_dirs(path):
-        logger.info("Changing to %s", dir_)
-        os.chdir(dir_)
-        func(*args, **kwargs)
-        os.chdir('..')
-        logger.info("Done with %s", dir_)
-
-
-def map_eof(path):
-    map_over_dirs(eof.download.main, path)
-
-
-def map_dem(path, rate=1):
-    logger.info("Running createdem over directories in %s", path)
-    for dir_ in _find_dirs(path):
-        logger.info("Changing to %s", dir_)
-        os.chdir(dir_)
-        geojson = glob.glob("./*.geojson")[0]
-        sardem.dem.main(
-            geojson=geojson,
-            rate=rate,
-        )
-        os.chdir('..')
-        logger.info("Done with %s", dir_)
