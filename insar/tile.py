@@ -220,9 +220,21 @@ class TileGrid(object):
         logger.info("Total extent covered: {:.2f} {:.2f} {:.2f} {:.2f} ".format(*self.extent))
 
 
-def find_unzipped_sentinels(data_path, path_num=None):
+def find_sentinels(data_path, path_num=None, ending='.SAFE'):
+    """Find sentinel products in data_path
+
+    Optionally filter by ending (.SAFE for directory, .zip for zipped product)
+    or by a path_number (relative orbit)
+
+    Args:
+        data_path (str): location to look for products
+        path_num (int): path number/ relative orbit to filter products by
+        ending (str): ending of filename to looks for. Default = '.SAFE', unzipped dirs
+    Returns:
+        list[Sentinel]: list of the parsed Sentinel instances
+    """
     search_results = glob.glob(os.path.join(data_path, "*"))
-    sents = [parsers.Sentinel(f) for f in search_results if f.endswith(".SAFE")]
+    sents = [parsers.Sentinel(f) for f in search_results if f.endswith(ending)]
     if path_num:
         sents = [s for s in sents if s.path == path_num]
     return sents
@@ -245,8 +257,9 @@ def create_tiles(data_path=None,
             Note: This will be adjusted to make even tiles
         overlap (float): default 0.1, overlap size between adjacent blocks
     """
+    # TODO: figure out how to find/ symlink .EOFS if they are there
     if not sentinel_list:
-        sentinel_list = find_unzipped_sentinels(data_path, path_num)
+        sentinel_list = find_sentinels(data_path, path_num)
     tile_grid = TileGrid(sentinel_list, tile_size=tile_size, overlap=overlap)
 
     return tile_grid.make_tiles(verbose=verbose)

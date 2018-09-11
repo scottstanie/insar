@@ -1,12 +1,9 @@
 import os
-import glob
 import json
 import subprocess
 
 import insar.utils
 import insar.tile
-import eof
-import sardem
 from insar.log import get_log
 
 logger = get_log()
@@ -26,7 +23,7 @@ def unzip_sentinel_files(path="."):
     # Note: -n means "never overwrite existing files", so you can rerun this
     subprocess.check_call(
         "find . -maxdepth 1 -name '*.zip' -print0 | "
-        'xargs -0 -I {} --max-procs 10 unzip -n {} "*/preview/map-overlay.kml" "*/measurement/*slc-vv-*.tiff" ',
+        'xargs -0 -I {} --max-procs 10 unzip -n {} "*/preview/map-overlay.kml" "*/annotation/*.xml" "*/measurement/*slc-vv-*.tiff" ',
         shell=True)
 
     logger.info("Done unzipping, returning to %s", cur_dir)
@@ -43,14 +40,13 @@ def create_tile_directories(data_path, path_num=None, tile_size=0.5, overlap=0.1
     N28.8W102.0.geojson
     ...
     """
-
     data_path = os.path.abspath(data_path)
 
     def _write_geojson(filename, geojson):
         with open(filename, 'w') as f:
             json.dump(geojson, f, indent=2)
 
-    sentinel_list = insar.tile.find_unzipped_sentinels(data_path, path_num)
+    sentinel_list = insar.tile.find_sentinels(data_path, path_num)
     if not sentinel_list:
         logger.error("No sentinel products found in %s for path_num %s", data_path, path_num)
         return [], []
