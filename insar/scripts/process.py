@@ -108,6 +108,9 @@ def _reorganize_files(new_dir="extra_files"):
 def prep_igrams_dir(cleanup=False, **kwargs):
     """5. Reorganize and rename .geo files, stitches .geos, prepare for igrams"""
 
+    def _find_num_geos():
+        return len(glob.glob('./*.geo'))
+
     if cleanup:
         logger.info("Renaming .geo files, creating symlinks")
         new_dir = 'extra_files'
@@ -117,6 +120,11 @@ def prep_igrams_dir(cleanup=False, **kwargs):
 
         # Now stitch together duplicate dates of .geos
         insar.utils.stitch_same_dates(geo_path="extra_files/", output_path=".")
+
+    num_geos = _find_num_geos()
+    if num_geos < 2:  # Can't make igrams
+        logger.error("%s .geo file in current folder, can't form igram: exiting", num_geos)
+        return 1
 
     mkdir_p('igrams')
     os.chdir('igrams')
@@ -248,4 +256,6 @@ def main(working_dir, kwargs):
     for stepnum in step_list:
         curfunc = STEPS[stepnum]
         logger.info("Starting step %d: %s", stepnum + 1, curfunc.__name__)
-        curfunc(**kwargs)
+        ret = curfunc(**kwargs)
+        if ret:  # Option to have step give non-zero return to halt things
+            return ret
