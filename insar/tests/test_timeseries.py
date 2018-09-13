@@ -124,12 +124,17 @@ class TestInvertSbas(unittest.TestCase):
     def test_run_inverison(self):
         # Fake pixel phases from unwrapped igrams
         # See insar/tests/data/sbas_test/write_unw.py for source of these
-        actual_phases = np.array([[[0., 0.], [0., 0.], [0., 0.]], [[2., 2.], [4., 4.], [0., 0.]],
-                                  [[14., 14.], [28., 28.], [0., 0.]], [[16., 16.], [32., 32.],
-                                                                       [0., 0.]]])
-        actual_velocity_array = np.array([[[1., 1.], [2., 2.], [0., 0.]],
-                                          [[2., 2.], [4., 4.], [0., 0.]], [[0.5, 0.5], [1., 1.],
-                                                                           [0., 0.]]])
+        actual_phases = np.array([
+            [[0., 0.], [0., 0.], [0., 0.]],
+            [[2., 2.], [4., 4.], [0., 0.]],
+            [[14., 14.], [28., 28.], [0., 0.]],
+            [[16., 16.], [32., 32.], [0., 0.]]
+        ])  # yapf: disable
+        actual_velocity_array = np.array([
+            [[1., 1.], [2., 2.], [0., 0.]],
+            [[2., 2.], [4., 4.], [0., 0.]],
+            [[0.5, 0.5], [1., 1.],[0., 0.]]
+        ])  # yapf: disable
 
         # Check that a bad reference throws exception
         self.assertRaises(
@@ -139,7 +144,7 @@ class TestInvertSbas(unittest.TestCase):
             reference=(100, 100),
             verbose=True)
 
-        _, phases, deformation, velocity_array, _ = timeseries.run_inversion(
+        _, phases, deformation, _ = timeseries.run_inversion(
             self.igram_path,
             reference=(2, 0),
             deramp=False  # For this, dont remove the linear ramp

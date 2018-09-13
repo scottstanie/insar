@@ -276,7 +276,6 @@ def invert_sbas(delta_phis, timediffs, B, constant_vel=False, alpha=0, differenc
             See https://en.wikipedia.org/wiki/Tikhonov_regularization
         difference (bool): for regularization, penalize differences in velocity
             Used to make a smoother final solution
-            TODO: difference giving wonky results
 
     Returns:
         tuple[ndarray, ndarray]: solution velocity array, and integrated phase array
@@ -318,6 +317,10 @@ def invert_sbas(delta_phis, timediffs, B, constant_vel=False, alpha=0, differenc
     if velocity_array.ndim == 1:
         velocity_array = np.expand_dims(velocity_array, axis=-1)
 
+    return velocity_array
+
+
+def integrate_velocities(velocity_array, timediffs):
     # Now integrate to get back to phases
     # multiply each column of vel array: each col is a separate solution
     phi_diffs = timediffs.reshape((-1, 1)) * velocity_array
@@ -327,7 +330,7 @@ def invert_sbas(delta_phis, timediffs, B, constant_vel=False, alpha=0, differenc
     # Add 0 as first entry of phase array to match geolist length on each col
     phi_arr = np.insert(phi_arr, 0, 0, axis=0)
 
-    return velocity_array, phi_arr
+    return phi_arr
 
 
 def stack_to_cols(stacked):
@@ -466,7 +469,7 @@ def run_inversion(igram_path,
     num_ints, rows, cols = unw_stack.shape
     phi_columns = stack_to_cols(unw_stack)
 
-    varr, phi_arr = invert_sbas(
+    phi_arr = invert_sbas(
         phi_columns, timediffs, B, constant_vel=constant_vel, alpha=alpha, difference=difference)
     # Multiple by wavelength ratio to go from phase to cm
     deformation = PHASE_TO_CM * phi_arr
@@ -474,8 +477,7 @@ def run_inversion(igram_path,
     # Now reshape all outputs that should be in stack form
     phi_arr = cols_to_stack(phi_arr, rows, cols)
     deformation = cols_to_stack(deformation, rows, cols)
-    varr = cols_to_stack(varr, rows, cols)
-    return (geolist, phi_arr, deformation, varr, unw_stack)
+    return (geolist, phi_arr, deformation, unw_stack)
 
 
 def save_deformation(igram_path, deformation, geolist):

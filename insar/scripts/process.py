@@ -211,7 +211,7 @@ def run_sbas_inversion(ref_row=None,
 
     Assumes we are in the directory with all .unw files"""
     igram_path = os.path.realpath(os.getcwd())
-    geolist, phi_arr, deformation, varr, unw_stack = insar.timeseries.run_inversion(
+    geolist, phi_arr, deformation, unw_stack = insar.timeseries.run_inversion(
         igram_path,
         reference=(ref_row, ref_col),
         window=window,
@@ -219,9 +219,8 @@ def run_sbas_inversion(ref_row=None,
         constant_vel=constant_vel,
         difference=difference,
         verbose=kwargs['verbose'])
-    logger.info("Saving deformation.npy, velocity_array.npy, and geolist.npy")
+    logger.info("Saving deformation.npy and geolist.npy")
     np.save('deformation.npy', deformation)
-    np.save('velocity_array.npy', varr)
     np.save('geolist.npy', geolist)
 
 
