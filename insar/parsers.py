@@ -5,11 +5,12 @@ Utilities for parsing file names of SAR products for relevant info.
 import os
 import re
 import pprint
-import glob
 from xml.etree import ElementTree
 from datetime import datetime
 
-import insar
+import insar.utils
+import insar.parsers
+import newsar
 from insar.log import get_log
 logger = get_log()
 
@@ -284,8 +285,8 @@ class Sentinel(Base):
 
     def overlaps_dem(self, dem_rsc_data):
         """Swath is contained in DEM from rsc data"""
-        dem_extent = insar.latlon.grid_extent(**dem_rsc_data)
-        return insar.latlon.intersects(self.swath_extent, dem_extent)
+        dem_extent = newsar.latlon.grid_extent(**dem_rsc_data)
+        return newsar.latlon.intersects(self.swath_extent, dem_extent)
 
 
 class Uavsar(Base):

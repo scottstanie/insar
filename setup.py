@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="insar",
-    version="1.2.0",
+    version="1.3.0",
     author="Scott Staniewicz",
     author_email="scott.stanie@utexas.com",
     description="Tools for gathering and preprocessing InSAR data",
@@ -27,9 +27,4 @@ setuptools.setup(
         "Intended Audience :: Science/Research",
     ),
     install_requires=["numpy", "scipy", "requests", "matplotlib", "click", "sardem", "sentineleof"],
-    entry_points={
-        "console_scripts": [
-            "insar=insar.scripts.cli:cli",
-        ],
-    },
     zip_safe=False)
