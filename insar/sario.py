@@ -326,8 +326,10 @@ def load_stack(directory, file_ext, **kwargs):
     """
     all_file_names = sorted(find_files(directory, "*" + file_ext))
     # Test load to get shape
-    nrows, ncols = load(all_file_names[0]).shape
-    out = np.empty((len(all_file_names), nrows, ncols))
+    test = load(all_file_names[0])
+    nrows, ncols = test.shape
+    dtype = test.dtype
+    out = np.empty((len(all_file_names), nrows, ncols), dtype=dtype)
 
     # Now lazily load the files and store in pre-allocated 3D array
     file_gen = (load(filename, **kwargs) for filename in all_file_names)

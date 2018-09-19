@@ -86,13 +86,15 @@ class TestInvertSbas(unittest.TestCase):
 
     def test_invert_sbas_errors(self):
         B = np.arange(12).reshape((4, 3))
-        timediffs = np.arange(4)
         dphis = np.arange(4)
-        self.assertRaises(ValueError, timeseries.invert_sbas, dphis, timediffs, B)
+        timediffs = np.arange(4)
+        vs = timeseries.invert_sbas(dphis, B)
+        self.assertRaises(ValueError, timeseries.integrate_velocities, vs, timediffs)
 
         # Should work without error
         timediffs = np.arange(3)
-        timeseries.invert_sbas(dphis, timediffs, B)
+        vs = timeseries.invert_sbas(dphis, B)
+        timeseries.integrate_velocities(vs, timediffs)
 
     def test_invert_sbas(self):
         # Fake pixel phases from unwrapped igrams
@@ -106,9 +108,11 @@ class TestInvertSbas(unittest.TestCase):
 
         timediffs = timeseries.find_time_diffs(geolist)
         B = timeseries.build_B_matrix(geolist, intlist)
-        velocity_array, phases = timeseries.invert_sbas(delta_phis, timediffs, B)
 
+        velocity_array = timeseries.invert_sbas(delta_phis, B)
         assert_array_almost_equal(velocity_array, actual_velocity_array)
+
+        phases = timeseries.integrate_velocities(velocity_array, timediffs)
         assert_array_almost_equal(phases, actual_phases)
 
         # Now test multiple phase time series as columns
@@ -117,8 +121,10 @@ class TestInvertSbas(unittest.TestCase):
         actual_velocity_array = np.hstack((actual_velocity_array, 2 * actual_velocity_array))
         delta_phis = np.hstack((delta_phis, 2 * delta_phis))
 
-        velocity_array, phases = timeseries.invert_sbas(delta_phis, timediffs, B)
+        velocity_array = timeseries.invert_sbas(delta_phis, B)
         assert_array_almost_equal(velocity_array, actual_velocity_array)
+
+        phases = timeseries.integrate_velocities(velocity_array, timediffs)
         assert_array_almost_equal(phases, actual_phases)
 
     def test_run_inverison(self):
@@ -129,11 +135,6 @@ class TestInvertSbas(unittest.TestCase):
             [[2., 2.], [4., 4.], [0., 0.]],
             [[14., 14.], [28., 28.], [0., 0.]],
             [[16., 16.], [32., 32.], [0., 0.]]
-        ])  # yapf: disable
-        actual_velocity_array = np.array([
-            [[1., 1.], [2., 2.], [0., 0.]],
-            [[2., 2.], [4., 4.], [0., 0.]],
-            [[0.5, 0.5], [1., 1.],[0., 0.]]
         ])  # yapf: disable
 
         # Check that a bad reference throws exception
@@ -150,15 +151,15 @@ class TestInvertSbas(unittest.TestCase):
             deramp=False  # For this, dont remove the linear ramp
         )
 
-        assert_array_almost_equal(velocity_array, actual_velocity_array)
         assert_array_almost_equal(phases, actual_phases)
 
     def test_invert_regularize(self):
         B = np.arange(15).reshape((5, 3))
         dphis = np.arange(10).reshape((5, 2))  # Two fake pixels to invert
-        timediffs = np.arange(3)
         # Checks for no errors in shape (todo: get good expected output)
-        timeseries.invert_sbas(dphis, timediffs, B, alpha=1)
+        vs = timeseries.invert_sbas(dphis, B, alpha=1)
+        timediffs = np.arange(3)
+        timeseries.integrate_velocities(vs, timediffs)
 
     def test_remove_ramp(self):
         z = np.arange(1, 9, 2).reshape((4, 1)) + np.arange(4)  # (1-4)*(1-7)

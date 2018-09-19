@@ -204,8 +204,8 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
     if not isinstance(window, int) or window < 1:
         raise ValueError("Invalid window %s: must be odd positive int" % window)
     elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
-        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col,
-                                                                                 stack.shape))
+        raise ValueError(
+            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
 
     if window % 2 == 0:
         window -= 1
@@ -257,7 +257,7 @@ def _create_diff_matrix(n, order=1):
     return diff_matrix
 
 
-def invert_sbas(delta_phis, timediffs, B, constant_vel=False, alpha=0, difference=False):
+def invert_sbas(delta_phis, B, constant_vel=False, alpha=0, difference=False):
     """Performs and SBAS inversion on each pixel of unw_stack to find deformation
 
     Solves the least squares equation Bv = dphi
@@ -266,8 +266,6 @@ def invert_sbas(delta_phis, timediffs, B, constant_vel=False, alpha=0, differenc
         delta_phis (ndarray): 1D array of unwrapped phases (delta phis)
             comes from 1 pixel of load_stack along 3rd axis
         B (ndarray): output of build_B_matrix for current set of igrams
-        timediffs (np.array): dtype=int, days between each SAR acquisitions
-            length will be equal to B.shape[1], 1 less than num SAR acquisitions
         constant_vel (bool): force solution to have constant velocity
             mutually exclusive with `alpha` option
         alpha (float): nonnegative Tikhonov regularization parameter.
@@ -278,8 +276,7 @@ def invert_sbas(delta_phis, timediffs, B, constant_vel=False, alpha=0, differenc
             Used to make a smoother final solution
 
     Returns:
-        tuple[ndarray, ndarray]: solution velocity array, and integrated phase array
-
+        ndarray: solution velocity arrary
     """
 
     def _augment_matrices(B, delta_phis, alpha):
@@ -290,10 +287,7 @@ def invert_sbas(delta_phis, timediffs, B, constant_vel=False, alpha=0, differenc
         delta_phis = np.vstack((delta_phis, np.zeros(zeros_shape)))
         return B, delta_phis
 
-    if B.shape[1] != len(timediffs):
-        raise ValueError("Shapes of B {} and timediffs {} not compatible".format(
-            B.shape, timediffs.shape))
-    elif B.shape[0] != delta_phis.shape[0]:
+    if B.shape[0] != delta_phis.shape[0]:
         raise ValueError("Shapes of B {} and delta_phis {} not compatible".format(
             B.shape, delta_phis.shape))
     elif alpha < 0:
@@ -321,7 +315,18 @@ def invert_sbas(delta_phis, timediffs, B, constant_vel=False, alpha=0, differenc
 
 
 def integrate_velocities(velocity_array, timediffs):
-    # Now integrate to get back to phases
+    """Takes SBAS velocity output and finds phases
+
+    Args:
+        velocity_array (ndarray): output of invert_sbas, velocities at
+            each point in time
+        timediffs (np.array): dtype=int, days between each SAR acquisitions
+            length will be 1 less than num SAR acquisitions
+
+    Returns:
+        ndarray: integrated phase array
+
+    """
     # multiply each column of vel array: each col is a separate solution
     phi_diffs = timediffs.reshape((-1, 1)) * velocity_array
 
@@ -432,6 +437,13 @@ def run_inversion(igram_path,
     intlist = read_intlist(filepath=igram_path)
     geolist = read_geolist(filepath=igram_path)
 
+    # Prepare B matrix and timediffs used for each pixel inversion
+    B = build_B_matrix(geolist, intlist)
+    timediffs = find_time_diffs(geolist)
+    if B.shape[1] != len(timediffs):
+        raise ValueError("Shapes of B {} and timediffs {} not compatible".format(
+            B.shape, timediffs.shape))
+
     logger.debug("Reading unw stack")
 
     unw_ext = ".unw"
@@ -461,16 +473,13 @@ def run_inversion(igram_path,
     unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
     logger.debug("Shifting stack complete")
 
-    # Prepare B matrix and timediffs used for each pixel inversion
-    B = build_B_matrix(geolist, intlist)
-    timediffs = find_time_diffs(geolist)
-
     # Save shape for end
     num_ints, rows, cols = unw_stack.shape
     phi_columns = stack_to_cols(unw_stack)
 
-    phi_arr = invert_sbas(
-        phi_columns, timediffs, B, constant_vel=constant_vel, alpha=alpha, difference=difference)
+    varr = invert_sbas(
+        phi_columns, B, constant_vel=constant_vel, alpha=alpha, difference=difference)
+    phi_arr = integrate_velocities(varr, timediffs)
     # Multiple by wavelength ratio to go from phase to cm
     deformation = PHASE_TO_CM * phi_arr
 
@@ -746,5 +755,6 @@ def avg_stack(igram_path, row, col):
     print(total_days * (np.max(unw_normed_shifted.reshape(
         (num_igrams, -1)), axis=1) - np.min(unw_normed_shifted.reshape((num_igrams, -1)), axis=1)))
     print("Converted to CM:")
-    print(total_days * (np.max(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1) -
-                        np.min(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
+    print(total_days * (np.max(unw_normed_shifted.reshape(
+        (num_igrams, -1)) * PHASE_TO_CM, axis=1) - np.min(
+            unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
