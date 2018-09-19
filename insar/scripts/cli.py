@@ -156,13 +156,17 @@ def process(context, **kwargs):
     help="Pop up matplotlib figure to view (instead of just saving)",
     default=True)
 @click.option("--cmap", default='seismic', help="Colormap for image display.")
+@click.option("--shifted/--no-shifted", default=True, help="Shift colormap to be 0 centered.")
 @click.option("--file-ext", help="If not loading deformation.npy, the extension of files to load")
 @click.option(
     "--intlist/--no-intlist",
     default=False,
     help="If loading other file type, also load `intlist` file  for titles")
+@click.option("--db/--no-db", help="Use dB scale for images (default false)", default=False)
+@click.option("--vmax", type=float, help="Maximum value for imshow")
+@click.option("--vmin", type=float, help="Minimum value for imshow")
 @click.pass_obj
-def animate(context, pause, save, display, cmap, file_ext, intlist):
+def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db, vmin, vmax):
     """Creates animation for 3D image stack.
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
@@ -182,11 +186,14 @@ def animate(context, pause, save, display, cmap, file_ext, intlist):
                 "%s - %s" % (d1.strftime("%Y-%m-%d"), d2.strftime("%Y-%m-%d")) for d1, d2 in intlist
             ]
         else:
-            titles = None
+            titles = sorted(insar.sario.find_files(context['path'], "*" + file_ext))
     else:
         geolist, deformation = insar.timeseries.load_deformation(context['path'])
         stack = deformation
         titles = [d.strftime("%Y-%m-%d") for d in geolist]
+
+    if db:
+        stack = insar.utils.db(stack)
 
     insar.plotting.animate_stack(
         stack,
@@ -195,6 +202,9 @@ def animate(context, pause, save, display, cmap, file_ext, intlist):
         titles=titles,
         save_title=save,
         cmap_name=cmap,
+        shifted=shifted,
+        vmin=vmin,
+        vmax=vmax,
     )
 
 
