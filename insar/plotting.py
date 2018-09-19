@@ -123,6 +123,9 @@ def animate_stack(stack,
                   label=None,
                   save_title=None,
                   cmap_name='seismic',
+                  shifted='True',
+                  vmin=None,
+                  vmax=None,
                   **savekwargs):
     """Runs a matplotlib loop to show each image in a 3D stack
 
@@ -137,6 +140,10 @@ def animate_stack(stack,
         label (str): Optional- Label for the colorbar
         save_title (str): Optional- if provided, will save the animation to a file
             extension must be a valid extension for a animation writer:
+        cmap_name (str): Name of matplotlib colormap
+        shifted (bool): default true: shift the colormap to be 0 centered
+        vmin (float): min value passed to imshow
+        vmax (float): max value passed to imshow
         savekwargs: extra keyword args passed to animation.save
             See https://matplotlib.org/api/_as_gen/matplotlib.animation.Animation.html
             and https://matplotlib.org/api/animation_api.html#writer-classes
@@ -149,13 +156,17 @@ def animate_stack(stack,
         assert len(titles) == num_images, "len(titles) must equal stack.shape[0]"
     else:
         titles = ['' for _ in range(num_images)]  # blank titles, same length
+    if np.iscomplexobj(stack):
+        stack = np.abs(stack)
 
-    # Use the same stack min and stack max for all colorbars/ color ranges
-    minval, maxval = np.min(stack), np.max(stack)
-    shifted_cmap = make_shifted_cmap(minval=minval, maxval=maxval, cmap_name='seismic')
+    # Use the same stack min and stack max (or vmin/vmax) for all colorbars/ color ranges
+    minval = vmin or np.min(stack)
+    maxval = vmax or np.max(stack)
+    cmap = cmap_name if not shifted else make_shifted_cmap(
+        minval=minval, maxval=maxval, cmap_name=cmap_name)
+
     fig, ax = plt.subplots()
-    axes_image = plt.imshow(
-        stack[0, :, :], vmin=minval, vmax=maxval, cmap=shifted_cmap)  # Type: AxesImage
+    axes_image = plt.imshow(stack[0, :, :], vmin=minval, vmax=maxval, cmap=cmap)
 
     cbar = fig.colorbar(axes_image)
     cbar_ticks = np.linspace(minval, maxval, num=6, endpoint=True)
