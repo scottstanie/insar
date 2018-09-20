@@ -23,9 +23,8 @@ import matplotlib.pyplot as plt
 from scipy.ndimage.filters import uniform_filter
 
 from sardem.loading import load_dem_rsc
-import insar.parsers
-from insar import sario, utils
-from newsar import plotting, latlon
+from insar.parsers import Sentinel
+from insar import sario, utils, plotting, latlon
 from insar.log import get_log, log_runtime
 
 SENTINEL_WAVELENGTH = 5.5465763  # cm
@@ -62,7 +61,7 @@ def read_geolist(filepath="./geolist"):
     if re.match(r'S1[AB]_\d{8}\.geo', geolist[0]):  # S1A_YYYYmmdd.geo
         return sorted([_parse(_strip_geoname(geo)) for geo in geolist])
     else:  # Full sentinel product name
-        return sorted([insar.parsers.Sentinel(geo).start_time.date() for geo in geolist])
+        return sorted([Sentinel(geo).start_time.date() for geo in geolist])
 
 
 def read_intlist(filepath="./intlist", parse=True):
@@ -205,8 +204,8 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
     if not isinstance(window, int) or window < 1:
         raise ValueError("Invalid window %s: must be odd positive int" % window)
     elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
-        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col,
-                                                                                 stack.shape))
+        raise ValueError(
+            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
 
     if window % 2 == 0:
         window -= 1
@@ -756,5 +755,6 @@ def avg_stack(igram_path, row, col):
     print(total_days * (np.max(unw_normed_shifted.reshape(
         (num_igrams, -1)), axis=1) - np.min(unw_normed_shifted.reshape((num_igrams, -1)), axis=1)))
     print("Converted to CM:")
-    print(total_days * (np.max(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1) -
-                        np.min(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
+    print(total_days * (np.max(unw_normed_shifted.reshape(
+        (num_igrams, -1)) * PHASE_TO_CM, axis=1) - np.min(
+            unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))

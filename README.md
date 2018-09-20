@@ -14,7 +14,53 @@ Note that the upsampled DEM creator has moved to the [sardem](https://github.com
 pip install insar
 ```
 
-### Some module example usage
+This will put the executable `insar` on your path with several commands available to use:
+
+
+Or for development use (to change code and have it be reflected in what is installed):
+
+```bash
+# Optional for using virtualenv
+virtualenv ~/envs/insar && source ~/envs/insar/bin/activate  # Or wherever you store your virtual envs
+# Or if you have virtualenv wrapper: mkvirtualenv insar
+
+git clone https://github.com/scottstanie/insar.git
+cd insar
+make build     # which runs python setup.py build_ext --inplace for the cython extension
+pip install -r requirements.txt
+pip install --editable .
+```
+and to also install the necessary extras for running unit tests:
+```bash
+pip install -r requirements-dev.txt
+```
+
+virtualenv is optional but recommended.
+
+## Command Line Interface Reference
+
+The command line tool in `insar/scripts/cli.py` was made using the [click](https://pocco-click.readthedocs.io/en/latest/) library.
+
+```
+$ insar --help
+Usage: insar [OPTIONS] COMMAND [ARGS]...
+
+  Command line tools for processing insar.
+
+Options:
+  --verbose
+  --path DIRECTORY  Path of interest for command. Will search for files path
+                    or change directory, depending on command.
+  --help            Show this message and exit.
+
+Commands:
+  animate     Creates animation for 3D image stack.
+  process     Process stack of Sentinel interferograms.
+  view-stack  Explore timeseries on deformation image.
+```
+
+
+### More on subcommands and some module example usage
 
 #### sario.py
 
