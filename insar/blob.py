@@ -221,11 +221,14 @@ def make_blob_image(igram_path=".",
     # TODO: Is mean/max better than just looking at last image? probably
     # MAKE OPTION FOR THE COMMENTED PARTS
     # img = deformation[-1, row_start:row_end, col_start:col_end]
-    img = np.mean(deformation[-3:, row_start:row_end, col_start:col_end], axis=0)
+    # img = np.mean(deformation[-3:, row_start:row_end, col_start:col_end], axis=0)
+    img = latlon.LatlonImage(data=np.mean(deformation[-3:], axis=0), dem_rsc=rsc_data)
+    img.crop(row_start, row_end, col_start, col_end)
+    # Note: now we use img.dem_rsc after cropping to keep track of new latlon bounds
 
     title = "%s Deformation from %s to %s" % (title_prefix, geolist[0], geolist[-1])
     imagefig, axes_image = plotting.plot_image_shifted(
-        img, img_data=rsc_data, title=title, xlabel='Longitude', ylabel='Latitude')
+        img.data, img_data=img.dem_rsc, title=title, xlabel='Longitude', ylabel='Latitude')
     # imagefig, axes_image = plotting.plot_image_shifted(img, title=title)
 
     blob_filename = 'blobs.npy'
@@ -240,10 +243,10 @@ def make_blob_image(igram_path=".",
         logger.info(blob_kwargs)
 
         logger.info("Finding neg blobs")
-        blobs_neg = find_blobs(img, negative=True, **blob_kwargs)
+        blobs_neg = find_blobs(img.data, negative=True, **blob_kwargs)
 
         logger.info("Finding pos blobs")
-        blobs_pos = find_blobs(img, **blob_kwargs)
+        blobs_pos = find_blobs(img.data, **blob_kwargs)
 
         logger.info("Blobs found:")
         logger.info(blobs_neg)
@@ -252,12 +255,12 @@ def make_blob_image(igram_path=".",
 
         np.save(blob_filename, blobs)
 
-    blobs_ll = blobs_latlon(blobs, rsc_data)
+    blobs_ll = blobs_latlon(blobs, img.dem_rsc)
     if verbose:
         for lat, lon, r, val in blobs_ll:
             logger.info('({0:.4f}, {1:.4f}): radius: {2}, val: {3}'.format(lat, lon, r, val))
 
-    plot_blobs(img, blobs=blobs_ll, cur_axes=imagefig.gca())
+    plot_blobs(img.data, blobs=blobs_ll, cur_axes=imagefig.gca())
     # plot_blobs(img, blobs=blobs, cur_axes=imagefig.gca())
 
 
@@ -280,6 +283,13 @@ def stack_blob_bins(unw_file_list,
     if plot is True:
         plot_hist(hist, row_edges, col_edges)
     return hist, row_edges, col_edges
+
+
+# In [1]: amp_data = sario.load('20171218_20171230.amp')
+#
+# In [2]: img = np.load('blob_img.npy')
+#
+# In [3]: sario.save_hgt('height_test.unw', np.abs(amp_data), img)
 
 
 def bin_blobs(list_of_blobs, nrows, ncols, num_row_bins=10, num_col_bins=10, weight_by_value=True):

@@ -313,6 +313,10 @@ def save(filename, array):
         raise NotImplementedError("{} saving not implemented.".format(ext))
 
 
+def save_hgt(filename, amp_data, height_data):
+    save(filename, np.stack((amp_data, height_data), axis=0))
+
+
 def load_stack(directory, file_ext, **kwargs):
     """Reads a set of images into a 3D ndarray
 

@@ -73,7 +73,7 @@ class LatlonImage(object):
         return latlon_to_dist(latlon1, latlon2)
 
     def crop(self, start_row, end_row, start_col, end_col):
-        """Adjusts the old dem_rsc for a cropped data
+        """Adjusts (in place) the old dem_rsc for a cropped data
 
         Takes the 'file_length' and 'width' keys for a cropped data
         and adjusts for the smaller size with a new dict
