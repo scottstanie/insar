@@ -218,7 +218,8 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
 @click.option('--row-end', default=-1)
 @click.option('--col-start', default=0)
 @click.option('--col-end', default=-1)
-@click.option("--rowcol", help="Use row,col for legened entries (instead of default lat,lon)")
+@click.option(
+    "--rowcol", help="Use row,col for legened entries (instead of default lat,lon)", is_flag=True)
 @click.pass_obj
 def view_stack(context, filename, cmap, label, title, row_start, row_end, col_start, col_end,
                rowcol):

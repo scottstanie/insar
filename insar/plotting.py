@@ -79,15 +79,27 @@ def make_shifted_cmap(img=None, maxval=None, minval=None, cmap_name='seismic', n
     return shifted_color_map(cmap_name, midpoint=midpoint, num_levels=num_levels)
 
 
-def discrete_seismic_colors():
-    return list(
-        np.array([
-            (202, 0, 32),
-            (244, 165, 130),
-            (247, 247, 247),
-            (146, 197, 222),
-            (5, 113, 176),
-        ]) / 256)
+def discrete_seismic_colors(n=5):
+    if n == 5:
+        return list(
+            np.array([
+                (5, 113, 176),
+                (146, 197, 222),
+                (247, 247, 247),
+                (244, 165, 130),
+                (202, 0, 32),
+            ]) / 256)
+    elif n == 7:
+        return list(
+            np.array([
+                (33, 102, 172),
+                (103, 169, 207),
+                (209, 229, 240),
+                (247, 247, 247),
+                (253, 219, 199),
+                (239, 138, 98),
+                (178, 24, 43),
+            ]) / 256)
 
 
 DISCRETE_SEISMIC = matplotlib.colors.LinearSegmentedColormap.from_list(
@@ -128,7 +140,8 @@ def plot_image_shifted(img,
         fig = plt.figure()
     ax = fig.gca()
     shifted_cmap = make_shifted_cmap(img, cmap_name=cmap) if perform_shift else cmap
-    axes_image = ax.imshow(img, cmap=shifted_cmap, extent=extent)  # Type: AxesImage
+    maxval = max((np.abs(np.max(img)), np.abs(np.min(img))))
+    axes_image = ax.imshow(img, cmap=shifted_cmap, extent=extent, vmax=maxval, vmin=-maxval)
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
@@ -219,7 +232,7 @@ def view_stack(
         label="Centimeters",
         cmap='seismic',
         title='',
-        lat_lon=True,
+        lat_lon=False,
         rsc_data=None,
         row_start=0,
         row_end=-1,
@@ -240,9 +253,8 @@ def view_stack(
             Default = Centimeters
         cmap (str): Optional- colormap to display stack image (default='seismic')
         title (str): Optional- Title for plot
-        lat_lon (bool): Optional- Use latitude and longitude in legend
-            If False, displays row/col of pixel
         rsc_data (dict): Optional- if lat_lon=True, data to calc the lat/lon
+            Uses latitude and longitude in legend instead of row/col
 
     Returns:
         None
@@ -256,9 +268,6 @@ def view_stack(
     if geolist is None:
         geolist = np.arange(stack.shape[0])
 
-    if lat_lon and not rsc_data:
-        raise ValueError("rsc_data is required for lat_lon=True")
-
     def get_timeseries(row, col):
         return stack[:, row, col]
 
@@ -271,9 +280,12 @@ def view_stack(
     else:
         raise ValueError("display_img must be an int or 'mean'")
 
+    # TEMP: pull this blob func separate
+    img = np.mean(stack[-3:], axis=0)
+
     title = title or "Deformation Time Series"  # Default title
     plot_image_shifted(
-        img, fig=imagefig, title=title, cmap=DISCRETE_SEISMIC, label=label, perform_shift=False)
+        img, fig=imagefig, title=title, cmap='seismic', label=label, perform_shift=False)
 
     timefig = plt.figure()
 
@@ -291,7 +303,7 @@ def view_stack(
         except IndexError:  # Somehow clicked outside image, but in axis
             return
 
-        if lat_lon:
+        if rsc_data:
             lat, lon = latlon.rowcol_to_latlon(row, col, rsc_data)
             legend_entries.append('Lat {:.3f}, Lon {:.3f}'.format(lat, lon))
         else:
