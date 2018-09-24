@@ -11,7 +11,7 @@ from insar import utils, latlon
 logger = get_log()
 
 
-def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, name='shiftedcmap', num_levels=None):
+def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, num_levels=None):
     """Function to offset the "center" of a colormap. Useful for
     data with a negative min and positive max and you want the
     middle of the colormap's dynamic range to be at zero
@@ -33,6 +33,7 @@ def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, name='shiftedcmap',
       stop (float): Offset from highest point in the colormap's range.
           Defaults to 1.0 (no upper ofset). Should be between
           `midpoint` and 1.0.
+      num_levels (int): form fewer discrete levels in the colormap
 
     Returns:
         matplotlib.cmap
@@ -61,7 +62,7 @@ def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, name='shiftedcmap',
         cdict['blue'].append((si, b, b))
         cdict['alpha'].append((si, a, a))
 
-    newcmap = matplotlib.colors.LinearSegmentedColormap(name, cdict, N=num_levels or N)
+    newcmap = matplotlib.colors.LinearSegmentedColormap('shiftedcmap', cdict, N=num_levels or N)
     plt.register_cmap(cmap=newcmap)
 
     return newcmap
