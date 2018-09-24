@@ -75,6 +75,7 @@ def make_shifted_cmap(img=None, maxval=None, minval=None, cmap_name='seismic', n
     if maxval is None or minval is None:
         raise ValueError("Required args: img, or maxval and minval")
     midpoint = 1 - maxval / (abs(minval) + maxval)
+    print(cmap_name)
     return shifted_color_map(cmap_name, midpoint=midpoint, num_levels=num_levels)
 
 
@@ -89,8 +90,9 @@ def discrete_seismic_colors():
         ]) / 256)
 
 
-DISCRETE_SEISMIC = matplotlib.colors.LinearSegmentedColormap(
+DISCRETE_SEISMIC = matplotlib.colors.LinearSegmentedColormap.from_list(
     'discrete_seismic', discrete_seismic_colors(), N=len(discrete_seismic_colors()))
+plt.register_cmap(cmap=DISCRETE_SEISMIC)
 
 
 def plot_image_shifted(img,
@@ -100,7 +102,8 @@ def plot_image_shifted(img,
                        title='',
                        label='',
                        xlabel='',
-                       ylabel=''):
+                       ylabel='',
+                       perform_shift=True):
     """Plot an image with a zero-shifted colorbar
 
     Args:
@@ -113,6 +116,7 @@ def plot_image_shifted(img,
             data about image, used to make axes into lat/lon instead of row/col
         title (str): Title for image
         label (str): label for colorbar
+        perform_shift (bool): default True. If false, skip cmap shifting step
     """
     if img_data:
         extent = latlon.grid_extent(**img_data)
@@ -123,7 +127,7 @@ def plot_image_shifted(img,
     if not fig:
         fig = plt.figure()
     ax = fig.gca()
-    shifted_cmap = make_shifted_cmap(img, cmap)
+    shifted_cmap = make_shifted_cmap(img, cmap_name=cmap) if perform_shift else cmap
     axes_image = ax.imshow(img, cmap=shifted_cmap, extent=extent)  # Type: AxesImage
     ax.set_title(title)
     ax.set_xlabel(xlabel)
@@ -268,7 +272,8 @@ def view_stack(
         raise ValueError("display_img must be an int or 'mean'")
 
     title = title or "Deformation Time Series"  # Default title
-    plot_image_shifted(img, fig=imagefig, title=title, cmap=cmap, label=label)
+    plot_image_shifted(
+        img, fig=imagefig, title=title, cmap=DISCRETE_SEISMIC, label=label, perform_shift=False)
 
     timefig = plt.figure()
 
