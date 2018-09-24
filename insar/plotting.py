@@ -11,7 +11,7 @@ from insar import utils, latlon
 logger = get_log()
 
 
-def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, name='shiftedcmap'):
+def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, name='shiftedcmap', num_levels=None):
     """Function to offset the "center" of a colormap. Useful for
     data with a negative min and positive max and you want the
     middle of the colormap's dynamic range to be at zero
@@ -38,7 +38,7 @@ def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, name='shiftedcmap')
         matplotlib.cmap
     """
     if isinstance(cmap, str):
-        cmap = matplotlib.cm.get_cmap(cmap)
+        cmap = matplotlib.cm.get_cmap(cmap, num_levels)
 
     cdict = {'red': [], 'green': [], 'blue': [], 'alpha': []}
 
@@ -250,7 +250,7 @@ def view_stack(
         raise ValueError("display_img must be an int or 'mean'")
 
     title = title or "Deformation Time Series"  # Default title
-    plot_image_shifted(img, fig=imagefig, title=title, cmap='seismic', label=label)
+    plot_image_shifted(img, fig=imagefig, title=title, cmap=cmap, label=label)
 
     timefig = plt.figure()
 

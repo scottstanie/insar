@@ -204,8 +204,8 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
     if not isinstance(window, int) or window < 1:
         raise ValueError("Invalid window %s: must be odd positive int" % window)
     elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
-        raise ValueError(
-            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
+        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col,
+                                                                                 stack.shape))
 
     if window % 2 == 0:
         window -= 1
@@ -449,7 +449,7 @@ def run_inversion(igram_path,
     unw_ext = ".unw"
     if deramp:
         # For larger areas, use quadratic ramp. Otherwise, linear
-        max_linear = 30
+        max_linear = 20
         width, height = latlon.grid_size(**load_dem_rsc(os.path.join(igram_path, 'dem.rsc')))
         order = 1 if (width < max_linear or height < max_linear) else 2
         logger.info("Dem size %.2f by %.2f km: using order %s surface to deramp", width, height,
@@ -755,6 +755,5 @@ def avg_stack(igram_path, row, col):
     print(total_days * (np.max(unw_normed_shifted.reshape(
         (num_igrams, -1)), axis=1) - np.min(unw_normed_shifted.reshape((num_igrams, -1)), axis=1)))
     print("Converted to CM:")
-    print(total_days * (np.max(unw_normed_shifted.reshape(
-        (num_igrams, -1)) * PHASE_TO_CM, axis=1) - np.min(
-            unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
+    print(total_days * (np.max(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1) -
+                        np.min(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
