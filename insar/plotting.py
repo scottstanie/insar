@@ -43,12 +43,14 @@ def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, name='shiftedcmap',
     cdict = {'red': [], 'green': [], 'blue': [], 'alpha': []}
 
     # regular index to compute the colors
-    reg_index = np.linspace(start, stop, 257)
+    # N = num_levels
+    N = 256
+    reg_index = np.linspace(start, stop, N + 1)
 
     # shifted index to match the data
     shift_index = np.hstack([
-        np.linspace(0.0, midpoint, 128, endpoint=False),
-        np.linspace(midpoint, 1.0, 129, endpoint=True)
+        np.linspace(0.0, midpoint, N // 2, endpoint=False),
+        np.linspace(midpoint, 1.0, N // 2 + 1, endpoint=True)
     ])
 
     for ri, si in zip(reg_index, shift_index):
@@ -59,20 +61,35 @@ def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, name='shiftedcmap',
         cdict['blue'].append((si, b, b))
         cdict['alpha'].append((si, a, a))
 
-    newcmap = matplotlib.colors.LinearSegmentedColormap(name, cdict)
+    newcmap = matplotlib.colors.LinearSegmentedColormap(name, cdict, N=num_levels or N)
     plt.register_cmap(cmap=newcmap)
 
     return newcmap
 
 
-def make_shifted_cmap(img=None, maxval=None, minval=None, cmap_name='seismic'):
+def make_shifted_cmap(img=None, maxval=None, minval=None, cmap_name='seismic', num_levels=None):
     """Scales the colorbar so that 0 is always centered (white)"""
     if img is not None:
         maxval, minval = np.max(img), np.min(img)
     if maxval is None or minval is None:
         raise ValueError("Required args: img, or maxval and minval")
     midpoint = 1 - maxval / (abs(minval) + maxval)
-    return shifted_color_map(cmap_name, midpoint=midpoint)
+    return shifted_color_map(cmap_name, midpoint=midpoint, num_levels=num_levels)
+
+
+def discrete_seismic_colors():
+    return list(
+        np.array([
+            (202, 0, 32),
+            (244, 165, 130),
+            (247, 247, 247),
+            (146, 197, 222),
+            (5, 113, 176),
+        ]) / 256)
+
+
+DISCRETE_SEISMIC = matplotlib.colors.LinearSegmentedColormap(
+    'discrete_seismic', discrete_seismic_colors(), N=len(discrete_seismic_colors()))
 
 
 def plot_image_shifted(img,
