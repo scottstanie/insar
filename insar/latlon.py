@@ -36,9 +36,13 @@ class LatlonImage(np.ndarray):
         else:
             obj.dem_rsc = None
 
+        if obj.dem_rsc is not None:
+            if (obj.dem_rsc['file_length'], obj.dem_rsc['width']) != obj.shape:
+                raise ValueError("Shape %s does not equal dem_rsc data (%s, %s)" %
+                                 (obj.shape, obj.dem_rsc['file_length'], obj.dem_rsc['width']))
         return obj
 
-    def __array_finalize(self, obj):
+    def __array_finalize__(self, obj):
         if obj is None:
             return
         self.filename = getattr(obj, 'filename', None)
@@ -62,21 +66,35 @@ class LatlonImage(np.ndarray):
         latlon2 = self.rowcol_to_latlon(*row_col2)
         return latlon_to_dist(latlon1, latlon2)
 
-    def __array_wrap__(self, out_arr, context=None):
-        print('In __array_wrap__:')
-        print('   self is %s' % repr(self))
-        print('   arr is %s' % repr(out_arr))
-        # then just call the parent
-        return super(LatlonImage, self).__array_wrap__(self, out_arr, context)
+    def __getitem__(self, items):
+        """Runs on access/slicing: we want to adjust the dem_rsc
 
-    # def __getitem__(self, items):
-    #     """Runs on access/slicing: we want to adjust the dem_rsc
-    #     f[1, 1:3, 2:3]: items = (1, slice(1, 3, None), slice(2, 3, None))
-    #     """
+        Will get the right starts and steps to pass to `crop_rsc_data`
+        """
+        print('__getitem__ called')
+        sliced = super(LatlonImage, self).__getitem__(items)
+        # __getitem__ called multiple times: only do extra on first
+        if not isinstance(sliced, LatlonImage):
+            return sliced
 
-    #     self._crop_rsc_data(start_row, start_col, nrows, ncols)
+        try:
+            row_slice, col_slice = items
+        except TypeError:
+            # Note: this means they did A[100] or A[2:4], not A[2:4,:]
+            # We need this to stay 2D!
+            raise ValueError("Can only do 2D slices on %s" % self.__class__.__name__)
 
-    def crop_rsc_data(self, start_row, start_col, nrows, ncols):
+        # print(sliced.shape)
+        nrows, ncols = sliced.shape
+
+        row_start, row_step = row_slice.start, row_slice.step
+        col_start, col_step = col_slice.start, col_slice.step
+        new_rsc_data = self.crop_rsc_data(row_start, col_start, nrows, ncols, row_step, col_step)
+
+        sliced.dem_rsc = new_rsc_data
+        return sliced
+
+    def crop_rsc_data(self, row_start, col_start, nrows, ncols, row_step=1, col_step=1):
         """Adjusts the old dem_rsc for a cropped data
 
         Takes the 'file_length' and 'width' keys for a cropped data
@@ -86,29 +104,42 @@ class LatlonImage(np.ndarray):
             dict: copy of original rsc dict with items modified for crop
 
         Example:
-        >>> im_test = np.arange(20).reshape((4, 5))
-        >>> rsc_info = {'x_first': 1.0, 'y_first': 2.0, 'x_step': 0.1, 'y_step': 0.2, 'file_length': 1325,'width': 1000}
+        >>> im_test = np.arange(30).reshape((6, 5))
+        >>> rsc_info = {'x_first': 1.0, 'y_first': 2.0, 'x_step': 0.1, 'y_step': 0.2, 'file_length': 6,'width': 5}
         >>> im = LatlonImage(data=im_test, dem_rsc=rsc_info)
-        >>> print(sorted(im.crop_rsc_data(0, 3, 0, 2).items()))
-        [('file_length', 3), ('width', 2), ('x_first', 1.0), ('x_step', 0.1), ('y_first', 2.0), ('y_step', 0.2)]
-        [('file_length', 0), ('width', 2), ('x_first', 1.0), ('x_step', 0.1), ('y_first', 2.6), ('y_step', 0.2)]
-        >>> im2 = LatlonImage(data=im_test, dem_rsc=rsc_info)
-        >>> print(sorted(im2.crop_rsc_data(1, 4, 2, 5).items()))
-        [('file_length', 3), ('width', 3), ('x_first', 1.1), ('x_step', 0.1), ('y_first', 2.4), ('y_step', 0.2)]
-        [('file_length', 2), ('width', 5), ('x_first', 1.1), ('x_step', 0.1), ('y_first', 2.8), ('y_step', 0.2)]
-        >>> im3 = LatlonImage(data=im_test, dem_rsc=None)
-        >>> print(im3.crop_rsc_data(1, 4, 2, 5))
+        >>> out = im.crop_rsc_data(None, None, 2, 2)
+        >>> print(out['width'], out['file_length'])
+        2 2
+        >>> out = im.crop_rsc_data(1, 1, 2, 2)
+        >>> print(out['x_first'], out['y_first'])
+        1.1 2.2
+        >>> out = im.crop_rsc_data(None, None, 2, 2, 2, 2)
+        >>> print(out['x_step'], out['y_step'])
+        0.2 0.4
+        >>> im2 = LatlonImage(data=im_test, dem_rsc=None)
+        >>> print(im2.crop_rsc_data(1, 4, 2, 5))
         None
         """
+
         if self.dem_rsc is None:
             return None
+
+        # Adjust and Nones from the slice object
+        row_start = row_start or 0
+        col_start = col_start or 0
+        row_step = row_step or 1
+        col_step = col_step or 1
+
         rsc_copy = copy.copy(self.dem_rsc)
         # Move forward the starting row/col from where it used to be
-        rsc_copy['x_first'] = rsc_copy['x_first'] + rsc_copy['x_step'] * start_row
-        rsc_copy['y_first'] = rsc_copy['y_first'] + rsc_copy['y_step'] * start_col
+        rsc_copy['x_first'] = rsc_copy['x_first'] + rsc_copy['x_step'] * col_start
+        rsc_copy['y_first'] = rsc_copy['y_first'] + rsc_copy['y_step'] * row_start
 
         rsc_copy['width'] = ncols
         rsc_copy['file_length'] = nrows
+        # After moving start, now adjust step sizes
+        rsc_copy['x_step'] *= col_step
+        rsc_copy['y_step'] *= row_step
         return rsc_copy
 
     def blob_size(self, radius):
