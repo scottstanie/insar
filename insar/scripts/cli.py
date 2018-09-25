@@ -240,6 +240,7 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
     else:
         rsc_data = sardem.loading.load_dem_rsc(os.path.join(context['path'], 'dem.rsc'))
 
+    stack = deformation[:, row_start:row_end, col_start:col_end]
     insar.plotting.view_stack(
         deformation,
         geolist,

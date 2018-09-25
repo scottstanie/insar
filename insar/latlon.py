@@ -3,57 +3,47 @@ import copy
 from math import sin, cos, sqrt, atan2, radians
 import os
 import numpy as np
-from insar import sario
+from insar import sario, utils
 from insar.log import get_log
 
 logger = get_log()
 
 
-class LatlonImage(object):
-    def __init__(self, filename=None, data=None, dem_rsc_file=None, dem_rsc=None):
-        """Can pass in either filenames to load, or 2D arrays/dem_rsc dicts"""
+class LatlonImage(np.ndarray):
+    def __new__(cls, data=None, filename=None, dem_rsc_file=None, dem_rsc=None):
+        """Can pass in either filenames to load, or 2D arrays/dem_rsc dicts
+
+        https://docs.scipy.org/doc/numpy/user/basics.subclassing.html
+        """
         # TODO: do we need to check that the rsc info matches the data?
-        self.filename = filename
-        if data is not None:
-            self.data = data
-        elif filename:
-            self.data = sario.load(filename)
-        else:
+        if data is None and filename is None:
             raise ValueError("Need data or filename")
+        elif data is None and filename is not None:
+            data = sario.load(filename)
+
+        obj = np.asarray(data).view(cls)
+        obj.filename = filename
 
         if dem_rsc_file:
-            self.dem_rsc_file = dem_rsc_file
+            obj.dem_rsc_file = utils.fullpath(dem_rsc_file)
         else:
-            self.dem_rsc_file = sario.find_rsc_file(filename) if filename else None
+            obj.dem_rsc_file = sario.find_rsc_file(filename) if filename else None
 
         if dem_rsc:
-            self.dem_rsc = dem_rsc
-        elif self.dem_rsc_file:
-            self.dem_rsc = sario.load(self.dem_rsc_file)
+            obj.dem_rsc = dem_rsc
+        elif obj.dem_rsc_file:
+            obj.dem_rsc = sario.load(obj.dem_rsc_file)
         else:
-            self.dem_rsc = None
+            obj.dem_rsc = None
 
-    def __str__(self):
-        return "<LatlonImage %s>" % (self.filename or str(self.data.shape))
+        return obj
 
-    def __repr__(self):
-        return str(self)
-
-    @property
-    def shape(self):
-        """Shape of Image ndarray"""
-        return self.data.shape
-
-    @property
-    def ndim(self):
-        return self.data.ndim
-
-    @property
-    def dtype(self):
-        return self.data.dtype
-
-    def __getitem__(self, item):
-        return self.data[item]
+    def __array_finalize(self, obj):
+        if obj is None:
+            return
+        self.filename = getattr(obj, 'filename', None)
+        self.dem_rsc_file = getattr(obj, 'dem_rsc_file', None)
+        self.dem_rsc = getattr(obj, 'dem_rsc', None)
 
     def rowcol_to_latlon(self, row, col):
         return rowcol_to_latlon(row, col, self.dem_rsc)
@@ -72,40 +62,54 @@ class LatlonImage(object):
         latlon2 = self.rowcol_to_latlon(*row_col2)
         return latlon_to_dist(latlon1, latlon2)
 
-    def crop(self, start_row, end_row, start_col, end_col):
-        """Adjusts (in place) the old dem_rsc for a cropped data
+    def __array_wrap__(self, out_arr, context=None):
+        print('In __array_wrap__:')
+        print('   self is %s' % repr(self))
+        print('   arr is %s' % repr(out_arr))
+        # then just call the parent
+        return super(LatlonImage, self).__array_wrap__(self, out_arr, context)
+
+    # def __getitem__(self, items):
+    #     """Runs on access/slicing: we want to adjust the dem_rsc
+    #     f[1, 1:3, 2:3]: items = (1, slice(1, 3, None), slice(2, 3, None))
+    #     """
+
+    #     self._crop_rsc_data(start_row, start_col, nrows, ncols)
+
+    def crop_rsc_data(self, start_row, start_col, nrows, ncols):
+        """Adjusts the old dem_rsc for a cropped data
 
         Takes the 'file_length' and 'width' keys for a cropped data
         and adjusts for the smaller size with a new dict
+
+        Returns:
+            dict: copy of original rsc dict with items modified for crop
 
         Example:
         >>> im_test = np.arange(20).reshape((4, 5))
         >>> rsc_info = {'x_first': 1.0, 'y_first': 2.0, 'x_step': 0.1, 'y_step': 0.2, 'file_length': 1325,'width': 1000}
         >>> im = LatlonImage(data=im_test, dem_rsc=rsc_info)
-        >>> im.crop(0, 3, 0, 2)
-        >>> print(sorted(im.dem_rsc.items()))
+        >>> print(sorted(im.crop_rsc_data(0, 3, 0, 2).items()))
         [('file_length', 3), ('width', 2), ('x_first', 1.0), ('x_step', 0.1), ('y_first', 2.0), ('y_step', 0.2)]
+        [('file_length', 0), ('width', 2), ('x_first', 1.0), ('x_step', 0.1), ('y_first', 2.6), ('y_step', 0.2)]
         >>> im2 = LatlonImage(data=im_test, dem_rsc=rsc_info)
-        >>> im2.crop(1, 4, 2, 5)
-        >>> print(sorted(im2.dem_rsc.items()))
+        >>> print(sorted(im2.crop_rsc_data(1, 4, 2, 5).items()))
         [('file_length', 3), ('width', 3), ('x_first', 1.1), ('x_step', 0.1), ('y_first', 2.4), ('y_step', 0.2)]
-
+        [('file_length', 2), ('width', 5), ('x_first', 1.1), ('x_step', 0.1), ('y_first', 2.8), ('y_step', 0.2)]
+        >>> im3 = LatlonImage(data=im_test, dem_rsc=None)
+        >>> print(im3.crop_rsc_data(1, 4, 2, 5))
+        None
         """
-        # Note: this will overwrite the old self.data
-        # Do we want some copy version option?
+        if self.dem_rsc is None:
+            return None
         rsc_copy = copy.copy(self.dem_rsc)
-        self.data = self.data[..., start_row:end_row, start_col:end_col]
-        if self.data.ndim > 2:
-            nlayers, nrows, ncols = self.data.shape
-        else:
-            nrows, ncols = self.data.shape
-
+        # Move forward the starting row/col from where it used to be
         rsc_copy['x_first'] = rsc_copy['x_first'] + rsc_copy['x_step'] * start_row
         rsc_copy['y_first'] = rsc_copy['y_first'] + rsc_copy['y_step'] * start_col
 
         rsc_copy['width'] = ncols
         rsc_copy['file_length'] = nrows
-        self.dem_rsc = rsc_copy
+        return rsc_copy
 
     def blob_size(self, radius):
         """Finds the radius of a circle/blob on the LatlonImage in km"""

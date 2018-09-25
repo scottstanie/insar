@@ -68,7 +68,7 @@ def find_rsc_file(filename, verbose=False):
     elif len(possible_rscs) > 1:
         raise ValueError("{} has multiple .rsc files in its directory: {}".format(
             filename, possible_rscs))
-    return possible_rscs[0]
+    return insar.utils.fullpath(possible_rscs[0])
 
 
 def load_file(filename, downsample=None, rsc_file=None, ann_info=None, verbose=False, **kwargs):

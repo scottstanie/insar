@@ -11,6 +11,35 @@ from insar import utils, latlon
 logger = get_log()
 
 
+def discrete_seismic_colors(n=5):
+    """From http://colorbrewer2.org/#type=diverging&scheme=RdBu&n=7"""
+    if n == 5:
+        return list(
+            np.array([
+                (5, 113, 176),
+                (146, 197, 222),
+                (247, 247, 247),
+                (244, 165, 130),
+                (202, 0, 32),
+            ]) / 256)
+    elif n == 7:
+        return list(
+            np.array([
+                (33, 102, 172),
+                (103, 169, 207),
+                (209, 229, 240),
+                (247, 247, 247),
+                (253, 219, 199),
+                (239, 138, 98),
+                (178, 24, 43),
+            ]) / 256)
+
+
+DISCRETE_SEISMIC = matplotlib.colors.LinearSegmentedColormap.from_list(
+    'discrete_seismic', discrete_seismic_colors(), N=len(discrete_seismic_colors()))
+plt.register_cmap(cmap=DISCRETE_SEISMIC)
+
+
 def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, num_levels=None):
     """Function to offset the "center" of a colormap. Useful for
     data with a negative min and positive max and you want the
@@ -75,36 +104,7 @@ def make_shifted_cmap(img=None, maxval=None, minval=None, cmap_name='seismic', n
     if maxval is None or minval is None:
         raise ValueError("Required args: img, or maxval and minval")
     midpoint = 1 - maxval / (abs(minval) + maxval)
-    print(cmap_name)
     return shifted_color_map(cmap_name, midpoint=midpoint, num_levels=num_levels)
-
-
-def discrete_seismic_colors(n=5):
-    if n == 5:
-        return list(
-            np.array([
-                (5, 113, 176),
-                (146, 197, 222),
-                (247, 247, 247),
-                (244, 165, 130),
-                (202, 0, 32),
-            ]) / 256)
-    elif n == 7:
-        return list(
-            np.array([
-                (33, 102, 172),
-                (103, 169, 207),
-                (209, 229, 240),
-                (247, 247, 247),
-                (253, 219, 199),
-                (239, 138, 98),
-                (178, 24, 43),
-            ]) / 256)
-
-
-DISCRETE_SEISMIC = matplotlib.colors.LinearSegmentedColormap.from_list(
-    'discrete_seismic', discrete_seismic_colors(), N=len(discrete_seismic_colors()))
-plt.register_cmap(cmap=DISCRETE_SEISMIC)
 
 
 def plot_image_shifted(img,
@@ -234,10 +234,6 @@ def view_stack(
         title='',
         lat_lon=False,
         rsc_data=None,
-        row_start=0,
-        row_end=-1,
-        col_start=0,
-        col_end=-1,
 ):
     """Displays an image from a stack, allows you to click for timeseries
 
@@ -263,13 +259,9 @@ def view_stack(
         ValueError: if display_img is not an int or the string 'mean'
 
     """
-    stack = stack[:, row_start:row_end, col_start:col_end]
     # If we don't have dates, use indices as the x-axis
     if geolist is None:
         geolist = np.arange(stack.shape[0])
-
-    def get_timeseries(row, col):
-        return stack[:, row, col]
 
     imagefig = plt.figure()
 
@@ -299,7 +291,7 @@ def view_stack(
         plt.figure(timefig.number)
         row, col = int(event.ydata), int(event.xdata)
         try:
-            timeline = get_timeseries(row, col)
+            timeline = stack[:, row, col]
         except IndexError:  # Somehow clicked outside image, but in axis
             return
 
