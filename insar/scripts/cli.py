@@ -6,6 +6,7 @@ import json
 import click
 import insar
 import sardem
+import numpy as np
 
 
 # Main entry point:
@@ -241,18 +242,24 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
         rsc_data = sardem.loading.load_dem_rsc(os.path.join(context['path'], 'dem.rsc'))
 
     stack = deformation[:, row_start:row_end, col_start:col_end]
+    _, nrows, ncols = stack.shape
+    new_rsc_data = insar.latlon.LatlonImage.crop_rsc_data(
+        rsc_data,
+        row_start,
+        col_start,
+        nrows,
+        ncols,
+    )
+    img = insar.latlon.LatlonImage(data=np.mean(stack[-3:], axis=0), dem_rsc=new_rsc_data)
+    img = img[row_start:row_end, col_start:col_end]
+
     insar.plotting.view_stack(
-        deformation,
-        geolist,
-        display_img=-1,
+        stack,
+        img,
+        geolist=geolist,
         title=title,
         label=label,
         cmap=cmap,
-        rsc_data=rsc_data,
-        row_start=row_start,
-        row_end=row_end,
-        col_start=col_start,
-        col_end=col_end,
     )
 
 

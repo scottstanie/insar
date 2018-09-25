@@ -223,12 +223,12 @@ def make_blob_image(igram_path=".",
     # img = deformation[-1, row_start:row_end, col_start:col_end]
     # img = np.mean(deformation[-3:, row_start:row_end, col_start:col_end], axis=0)
     img = latlon.LatlonImage(data=np.mean(deformation[-3:], axis=0), dem_rsc=rsc_data)
-    img.crop(row_start, row_end, col_start, col_end)
+    img = img[row_start:row_end, col_start:col_end]
     # Note: now we use img.dem_rsc after cropping to keep track of new latlon bounds
 
     title = "%s Deformation from %s to %s" % (title_prefix, geolist[0], geolist[-1])
     imagefig, axes_image = plotting.plot_image_shifted(
-        img.data, img_data=img.dem_rsc, title=title, xlabel='Longitude', ylabel='Latitude')
+        img, img_data=img.dem_rsc, title=title, xlabel='Longitude', ylabel='Latitude')
     # imagefig, axes_image = plotting.plot_image_shifted(img, title=title)
 
     blob_filename = 'blobs.npy'
@@ -243,10 +243,10 @@ def make_blob_image(igram_path=".",
         logger.info(blob_kwargs)
 
         logger.info("Finding neg blobs")
-        blobs_neg = find_blobs(img.data, negative=True, **blob_kwargs)
+        blobs_neg = find_blobs(img, negative=True, **blob_kwargs)
 
         logger.info("Finding pos blobs")
-        blobs_pos = find_blobs(img.data, **blob_kwargs)
+        blobs_pos = find_blobs(img, **blob_kwargs)
 
         logger.info("Blobs found:")
         logger.info(blobs_neg)
@@ -260,7 +260,7 @@ def make_blob_image(igram_path=".",
         for lat, lon, r, val in blobs_ll:
             logger.info('({0:.4f}, {1:.4f}): radius: {2}, val: {3}'.format(lat, lon, r, val))
 
-    plot_blobs(img.data, blobs=blobs_ll, cur_axes=imagefig.gca())
+    plot_blobs(img, blobs=blobs_ll, cur_axes=imagefig.gca())
     # plot_blobs(img, blobs=blobs, cur_axes=imagefig.gca())
 
 

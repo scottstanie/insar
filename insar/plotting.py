@@ -35,9 +35,12 @@ def discrete_seismic_colors(n=5):
             ]) / 256)
 
 
-DISCRETE_SEISMIC = matplotlib.colors.LinearSegmentedColormap.from_list(
-    'discrete_seismic', discrete_seismic_colors(), N=len(discrete_seismic_colors()))
-plt.register_cmap(cmap=DISCRETE_SEISMIC)
+DISCRETE_SEISMIC5 = matplotlib.colors.LinearSegmentedColormap.from_list(
+    'discrete_seismic5', discrete_seismic_colors(5), N=5)
+plt.register_cmap(cmap=DISCRETE_SEISMIC5)
+DISCRETE_SEISMIC7 = matplotlib.colors.LinearSegmentedColormap.from_list(
+    'discrete_seismic7', discrete_seismic_colors(7), N=7)
+plt.register_cmap(cmap=DISCRETE_SEISMIC7)
 
 
 def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, num_levels=None):
@@ -115,7 +118,8 @@ def plot_image_shifted(img,
                        label='',
                        xlabel='',
                        ylabel='',
-                       perform_shift=True):
+                       perform_shift=True,
+                       colorbar=True):
     """Plot an image with a zero-shifted colorbar
 
     Args:
@@ -129,6 +133,7 @@ def plot_image_shifted(img,
         title (str): Title for image
         label (str): label for colorbar
         perform_shift (bool): default True. If false, skip cmap shifting step
+        colorbar (bool): display colorbar in figure
     """
     if img_data:
         extent = latlon.grid_extent(**img_data)
@@ -139,16 +144,108 @@ def plot_image_shifted(img,
     if not fig:
         fig = plt.figure()
     ax = fig.gca()
-    shifted_cmap = make_shifted_cmap(img, cmap_name=cmap) if perform_shift else cmap
-    maxval = max((np.abs(np.max(img)), np.abs(np.min(img))))
-    axes_image = ax.imshow(img, cmap=shifted_cmap, extent=extent, vmax=maxval, vmin=-maxval)
+    if perform_shift:
+        shifted_cmap = make_shifted_cmap(img, cmap_name=cmap)
+        axes_image = ax.imshow(img, cmap=shifted_cmap, extent=extent)
+    else:
+        maxval = max((np.abs(np.max(img)), np.abs(np.min(img))))
+        axes_image = ax.imshow(img, cmap=cmap, extent=extent, vmax=maxval, vmin=-maxval)
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
 
-    cbar = fig.colorbar(axes_image)
-    cbar.set_label(label)
+    if colorbar:
+        cbar = fig.colorbar(axes_image)
+        cbar.set_label(label)
     return fig, axes_image
+
+
+def view_stack(
+        stack,
+        display_img,
+        geolist=None,
+        label="Centimeters",
+        cmap='seismic',
+        title='',
+        lat_lon=False,
+):
+    """Displays an image from a stack, allows you to click for timeseries
+
+    Args:
+        stack (ndarray): 3D np.ndarray, 1st index is image number
+            i.e. the idx image is stack[idx, :, :]
+        geolist (list[datetime]): Optional: times of acquisition for
+            each stack layer. Used as xaxis if provided
+        display_img (LatlonImage): Give which image in the stack you want as the display
+        label (str): Optional- Label on colorbar/yaxis for plot
+            Default = Centimeters
+        cmap (str): Optional- colormap to display stack image (default='seismic')
+        title (str): Optional- Title for plot
+        lat_lon (dict): Optional- Uses latitude and longitude in legend 
+            instead of row/col
+
+    Raises:
+        ValueError: if display_img is not an int or the string 'mean'
+
+    """
+    # If we don't have dates, use indices as the x-axis
+    if geolist is None:
+        geolist = np.arange(stack.shape[0])
+
+    imagefig = plt.figure()
+
+    if isinstance(display_img, int):
+        img = stack[display_img, :, :]
+    elif hasattr(display_img, '__array_finalize__'):
+        # TODO: figure out best way to check ndarray or Latlonimage
+        img = display_img
+    else:
+        raise ValueError("display_img must be an int or ndarray-like obj")
+
+    title = title or "Deformation Time Series"  # Default title
+    plot_image_shifted(
+        img, fig=imagefig, title=title, cmap='seismic', label=label, perform_shift=False)
+
+    timefig = plt.figure()
+
+    plt.title(title)
+    legend_entries = []
+
+    def onclick(event):
+        # Ignore right/middle click, clicks off image
+        if event.button != 1 or not event.inaxes:
+            return
+        plt.figure(timefig.number)
+        row, col = int(event.ydata), int(event.xdata)
+        # Somehow clicked outside image, but in axis
+        if row >= img.shape[0] or col >= img.shape[1]:
+            return
+        timeline = stack[:, row, col]
+
+        if lat_lon:
+            lat, lon = img.rowcol_to_latlon(row, col)
+            legend_entries.append('Lat {:.3f}, Lon {:.3f}'.format(lat, lon))
+        else:
+            legend_entries.append('Row %s, Col %s' % (row, col))
+
+        plt.plot(geolist, timeline, marker='o', linestyle='dashed', linewidth=1, markersize=4)
+        plt.legend(legend_entries, loc='upper left')
+        x_axis_str = "SAR image date" if geolist is not None else "Image number"
+        plt.xlabel(x_axis_str)
+        plt.ylabel(label)
+        plt.show()
+
+    imagefig.canvas.mpl_connect('button_press_event', onclick)
+    plt.show(block=True)
+
+
+def equalize_and_mask(image, low=1e-6, high=2, fill_value=np.inf, db=True):
+    """Clips an image to increase contrast"""
+    # Mask the invalids, then mask zeros, then clip rest
+    im = np.clip(utils.mask_zeros(np.ma.masked_invalid(image)), low, high)
+    if fill_value:
+        im.set_fill_value(fill_value)
+    return utils.db(im) if db else im
 
 
 def animate_stack(stack,
@@ -223,99 +320,3 @@ def animate_stack(stack,
 
     if display:
         plt.show()
-
-
-def view_stack(
-        stack,
-        geolist=None,
-        display_img=-1,
-        label="Centimeters",
-        cmap='seismic',
-        title='',
-        lat_lon=False,
-        rsc_data=None,
-):
-    """Displays an image from a stack, allows you to click for timeseries
-
-    Args:
-        stack (ndarray): 3D np.ndarray, 1st index is image number
-            i.e. the idx image is stack[idx, :, :]
-        geolist (list[datetime]): Optional: times of acquisition for
-            each stack layer. Used as xaxis if provided
-        display_img (int, str): Optional- default = -1, the last image.
-            Chooses which image in the stack you want as the display
-            display_img = 'avg' will take the average across all images
-        label (str): Optional- Label on colorbar/yaxis for plot
-            Default = Centimeters
-        cmap (str): Optional- colormap to display stack image (default='seismic')
-        title (str): Optional- Title for plot
-        rsc_data (dict): Optional- if lat_lon=True, data to calc the lat/lon
-            Uses latitude and longitude in legend instead of row/col
-
-    Returns:
-        None
-
-    Raises:
-        ValueError: if display_img is not an int or the string 'mean'
-
-    """
-    # If we don't have dates, use indices as the x-axis
-    if geolist is None:
-        geolist = np.arange(stack.shape[0])
-
-    imagefig = plt.figure()
-
-    if isinstance(display_img, int):
-        img = stack[display_img, :, :]
-    elif display_img == 'mean':
-        img = np.mean(stack, axis=0)
-    else:
-        raise ValueError("display_img must be an int or 'mean'")
-
-    # TEMP: pull this blob func separate
-    img = np.mean(stack[-3:], axis=0)
-
-    title = title or "Deformation Time Series"  # Default title
-    plot_image_shifted(
-        img, fig=imagefig, title=title, cmap='seismic', label=label, perform_shift=False)
-
-    timefig = plt.figure()
-
-    plt.title(title)
-    legend_entries = []
-
-    def onclick(event):
-        # Ignore right/middle click, clicks off image
-        if event.button != 1 or not event.inaxes:
-            return
-        plt.figure(timefig.number)
-        row, col = int(event.ydata), int(event.xdata)
-        try:
-            timeline = stack[:, row, col]
-        except IndexError:  # Somehow clicked outside image, but in axis
-            return
-
-        if rsc_data:
-            lat, lon = latlon.rowcol_to_latlon(row, col, rsc_data)
-            legend_entries.append('Lat {:.3f}, Lon {:.3f}'.format(lat, lon))
-        else:
-            legend_entries.append('Row %s, Col %s' % (row, col))
-
-        plt.plot(geolist, timeline, marker='o', linestyle='dashed', linewidth=1, markersize=4)
-        plt.legend(legend_entries, loc='upper left')
-        x_axis_str = "SAR image date" if geolist is not None else "Image number"
-        plt.xlabel(x_axis_str)
-        plt.ylabel(label)
-        plt.show()
-
-    imagefig.canvas.mpl_connect('button_press_event', onclick)
-    plt.show(block=True)
-
-
-def equalize_and_mask(image, low=1e-6, high=2, fill_value=np.inf, db=True):
-    """Clips an image to increase contrast"""
-    # Mask the invalids, then mask zeros, then clip rest
-    im = np.clip(utils.mask_zeros(np.ma.masked_invalid(image)), low, high)
-    if fill_value:
-        im.set_fill_value(fill_value)
-    return utils.db(im) if db else im

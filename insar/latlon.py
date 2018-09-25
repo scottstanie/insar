@@ -1,7 +1,7 @@
 from __future__ import division
 import copy
 from math import sin, cos, sqrt, atan2, radians
-import os
+# import os
 import numpy as np
 from insar import sario, utils
 from insar.log import get_log
@@ -49,8 +49,95 @@ class LatlonImage(np.ndarray):
         self.dem_rsc_file = getattr(obj, 'dem_rsc_file', None)
         self.dem_rsc = getattr(obj, 'dem_rsc', None)
 
+    def __getitem__(self, items):
+        """Runs on access/slicing: we want to adjust the dem_rsc
+
+        Will get the right starts and steps to pass to `crop_rsc_data`
+        """
+        sliced_out = super(LatlonImage, self).__getitem__(items)
+        # __getitem__ called multiple times: only do extra on first
+        if not isinstance(sliced_out, LatlonImage):
+            return sliced_out
+
+        try:
+            row_slice, col_slice = items
+        except TypeError:
+            # Note: this means they did A[100] or A[2:4], not A[2:4,:]
+            # We need this to stay 2D!
+            raise ValueError("Can only do 2D slices on %s" % self.__class__.__name__)
+        except ValueError:
+            # Here they passed, for instance, an ndarray to index
+            # We'll assume that this indexing will destroy the dem_rsc data
+            # Since mask will destroy the shape to 1D
+            sliced_out.dem_rsc = None
+            return sliced_out
+
+        # print(sliced_out.shape)
+        nrows, ncols = sliced_out.shape
+
+        row_start, row_step = row_slice.start, row_slice.step
+        col_start, col_step = col_slice.start, col_slice.step
+        new_rsc_data = self.crop_rsc_data(self.dem_rsc, row_start, col_start, nrows, ncols,
+                                          row_step, col_step)
+
+        sliced_out.dem_rsc = new_rsc_data
+        return sliced_out
+
+    @staticmethod
+    def crop_rsc_data(dem_rsc, row_start, col_start, nrows, ncols, row_step=1, col_step=1):
+        """Adjusts the old dem_rsc for a cropped data
+
+        Takes the 'file_length' and 'width' keys for a cropped data
+        and adjusts for the smaller size with a new dict
+
+        Returns:
+            dict: copy of original rsc dict with items modified for crop
+
+        Example:
+        >>> im_test = np.arange(30).reshape((6, 5))
+        >>> rsc_info = {'x_first': 1.0, 'y_first': 2.0, 'x_step': 0.1, 'y_step': 0.2, 'file_length': 6,'width': 5}
+        >>> im = LatlonImage(data=im_test, dem_rsc=rsc_info)
+        >>> out = im.crop_rsc_data(rsc_info, None, None, 2, 2)
+        >>> print(out['width'], out['file_length'])
+        2 2
+        >>> out = im.crop_rsc_data(rsc_info, 1, 1, 2, 2)
+        >>> print(out['x_first'], out['y_first'])
+        1.1 2.2
+        >>> out = im.crop_rsc_data(rsc_info, None, None, 2, 2, 2, 2)
+        >>> print(out['x_step'], out['y_step'])
+        0.2 0.4
+        >>> im2 = LatlonImage(data=im_test, dem_rsc=None)
+        >>> print(im.crop_rsc_data(None, 1, 4, 2, 5))
+        None
+        """
+        if dem_rsc is None:
+            return None
+
+        # Adjust and Nones from the slice object
+        row_start = row_start or 0
+        col_start = col_start or 0
+        row_step = row_step or 1
+        col_step = col_step or 1
+
+        rsc_copy = copy.copy(dem_rsc)
+        # Move forward the starting row/col from where it used to be
+        rsc_copy['x_first'] = rsc_copy['x_first'] + rsc_copy['x_step'] * col_start
+        rsc_copy['y_first'] = rsc_copy['y_first'] + rsc_copy['y_step'] * row_start
+
+        rsc_copy['width'] = ncols
+        rsc_copy['file_length'] = nrows
+        # After moving start, now adjust step sizes
+        rsc_copy['x_step'] *= col_step
+        rsc_copy['y_step'] *= row_step
+        return rsc_copy
+
     def rowcol_to_latlon(self, row, col):
         return rowcol_to_latlon(row, col, self.dem_rsc)
+
+    @property
+    def extent(self):
+        if self.dem_rsc:
+            return grid_extent(**dem_rsc)
 
     def distance(self, row_col1, row_col2):
         """Find the distance in km between two points on the image
@@ -66,82 +153,6 @@ class LatlonImage(np.ndarray):
         latlon2 = self.rowcol_to_latlon(*row_col2)
         return latlon_to_dist(latlon1, latlon2)
 
-    def __getitem__(self, items):
-        """Runs on access/slicing: we want to adjust the dem_rsc
-
-        Will get the right starts and steps to pass to `crop_rsc_data`
-        """
-        print('__getitem__ called')
-        sliced = super(LatlonImage, self).__getitem__(items)
-        # __getitem__ called multiple times: only do extra on first
-        if not isinstance(sliced, LatlonImage):
-            return sliced
-
-        try:
-            row_slice, col_slice = items
-        except TypeError:
-            # Note: this means they did A[100] or A[2:4], not A[2:4,:]
-            # We need this to stay 2D!
-            raise ValueError("Can only do 2D slices on %s" % self.__class__.__name__)
-
-        # print(sliced.shape)
-        nrows, ncols = sliced.shape
-
-        row_start, row_step = row_slice.start, row_slice.step
-        col_start, col_step = col_slice.start, col_slice.step
-        new_rsc_data = self.crop_rsc_data(row_start, col_start, nrows, ncols, row_step, col_step)
-
-        sliced.dem_rsc = new_rsc_data
-        return sliced
-
-    def crop_rsc_data(self, row_start, col_start, nrows, ncols, row_step=1, col_step=1):
-        """Adjusts the old dem_rsc for a cropped data
-
-        Takes the 'file_length' and 'width' keys for a cropped data
-        and adjusts for the smaller size with a new dict
-
-        Returns:
-            dict: copy of original rsc dict with items modified for crop
-
-        Example:
-        >>> im_test = np.arange(30).reshape((6, 5))
-        >>> rsc_info = {'x_first': 1.0, 'y_first': 2.0, 'x_step': 0.1, 'y_step': 0.2, 'file_length': 6,'width': 5}
-        >>> im = LatlonImage(data=im_test, dem_rsc=rsc_info)
-        >>> out = im.crop_rsc_data(None, None, 2, 2)
-        >>> print(out['width'], out['file_length'])
-        2 2
-        >>> out = im.crop_rsc_data(1, 1, 2, 2)
-        >>> print(out['x_first'], out['y_first'])
-        1.1 2.2
-        >>> out = im.crop_rsc_data(None, None, 2, 2, 2, 2)
-        >>> print(out['x_step'], out['y_step'])
-        0.2 0.4
-        >>> im2 = LatlonImage(data=im_test, dem_rsc=None)
-        >>> print(im2.crop_rsc_data(1, 4, 2, 5))
-        None
-        """
-
-        if self.dem_rsc is None:
-            return None
-
-        # Adjust and Nones from the slice object
-        row_start = row_start or 0
-        col_start = col_start or 0
-        row_step = row_step or 1
-        col_step = col_step or 1
-
-        rsc_copy = copy.copy(self.dem_rsc)
-        # Move forward the starting row/col from where it used to be
-        rsc_copy['x_first'] = rsc_copy['x_first'] + rsc_copy['x_step'] * col_start
-        rsc_copy['y_first'] = rsc_copy['y_first'] + rsc_copy['y_step'] * row_start
-
-        rsc_copy['width'] = ncols
-        rsc_copy['file_length'] = nrows
-        # After moving start, now adjust step sizes
-        rsc_copy['x_step'] *= col_step
-        rsc_copy['y_step'] *= row_step
-        return rsc_copy
-
     def blob_size(self, radius):
         """Finds the radius of a circle/blob on the LatlonImage in km"""
         nrows, ncols = self.shape
@@ -151,29 +162,8 @@ class LatlonImage(np.ndarray):
 
 def LatlonStack(LatlonImage):
     """3D stack version of LatlonImage"""
-
-    def __init__(self, stack_path=None, ext=None, data=None, dem_rsc_file=None, dem_rsc=None):
-        """Can pass in either filenames to load, or 2D arrays/dem_rsc dicts"""
-        # TODO: extract common stuff from this and Latlon Image
-        self.stack_path = stack_path
-        if data:
-            self.data = data
-        elif stack_path and ext:
-            self.data = sario.load_stack(stack_path, ext)
-        else:
-            raise ValueError("Need `data` or `stack_path` and `ext`")
-
-        if dem_rsc_file:
-            self.dem_rsc_file = dem_rsc_file
-        else:
-            self.dem_rsc_file = os.path.join(stack_path, 'dem.rsc') if stack_path else None
-
-        if dem_rsc:
-            self.dem_rsc = dem_rsc
-        elif self.dem_rsc_file:
-            self.dem_rsc = sario.load(self.dem_rsc_file)
-        else:
-            self.dem_rsc = None
+    # TODO: data = sario.load_stack(stack_path, ext)
+    pass
 
 
 class DemTile(object):
