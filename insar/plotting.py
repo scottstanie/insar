@@ -1,6 +1,6 @@
 """plotting.py: functions for visualizing insar products
 """
-from __future__ import print_function
+from __future__ import division, print_function
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
@@ -25,13 +25,13 @@ def discrete_seismic_colors(n=5):
     elif n == 7:
         return list(
             np.array([
-                (33, 102, 172),
-                (103, 169, 207),
-                (209, 229, 240),
-                (247, 247, 247),
-                (253, 219, 199),
-                (239, 138, 98),
-                (178, 24, 43),
+                (33, 102, 172, 256),
+                (103, 169, 207, 250),
+                (209, 229, 240, 250),
+                (247, 247, 247, 200),
+                (253, 219, 199, 250),
+                (239, 138, 98, 250),
+                (178, 24, 43, 256),
             ]) / 256)
 
 
@@ -100,13 +100,17 @@ def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, num_levels=None):
     return newcmap
 
 
-def make_shifted_cmap(img=None, maxval=None, minval=None, cmap_name='seismic', num_levels=None):
+def make_shifted_cmap(img=None, vmax=None, vmin=None, cmap_name='seismic', num_levels=None):
     """Scales the colorbar so that 0 is always centered (white)"""
     if img is not None:
-        maxval, minval = np.max(img), np.min(img)
-    if maxval is None or minval is None:
-        raise ValueError("Required args: img, or maxval and minval")
-    midpoint = 1 - maxval / (abs(minval) + maxval)
+        if vmin is None:
+            vmin = np.min(img)
+        if vmax is None:
+            vmax = np.max(img)
+
+    if vmax is None or vmin is None:
+        raise ValueError("Required args: img, or vmax and vmin")
+    midpoint = 1 - vmax / (abs(vmin) + vmax)
     return shifted_color_map(cmap_name, midpoint=midpoint, num_levels=num_levels)
 
 
@@ -118,6 +122,9 @@ def plot_image_shifted(img,
                        label='',
                        xlabel='',
                        ylabel='',
+                       vmin=None,
+                       vmax=None,
+                       aspect='auto',
                        perform_shift=True,
                        colorbar=True):
     """Plot an image with a zero-shifted colorbar
@@ -132,24 +139,28 @@ def plot_image_shifted(img,
             data about image, used to make axes into lat/lon instead of row/col
         title (str): Title for image
         label (str): label for colorbar
+        aspect (str): passed to imshow aspect
+            see https://matplotlib.org/api/_as_gen/matplotlib.pyplot.imshow.html
         perform_shift (bool): default True. If false, skip cmap shifting step
         colorbar (bool): display colorbar in figure
     """
+    nrows, ncols = img.shape
     if img_data:
         extent = latlon.grid_extent(**img_data)
     else:
-        nrows, ncols = img.shape
         extent = (0, ncols, nrows, 0)
 
     if not fig:
         fig = plt.figure()
+
     ax = fig.gca()
     if perform_shift:
-        shifted_cmap = make_shifted_cmap(img, cmap_name=cmap)
-        axes_image = ax.imshow(img, cmap=shifted_cmap, extent=extent)
+        shifted_cmap = make_shifted_cmap(img, cmap_name=cmap, vmin=vmin, vmax=vmax)
+        axes_image = ax.imshow(
+            img, cmap=shifted_cmap, extent=extent, vmin=vmin, vmax=vmax, aspect=aspect)
     else:
-        maxval = max((np.abs(np.max(img)), np.abs(np.min(img))))
-        axes_image = ax.imshow(img, cmap=cmap, extent=extent, vmax=maxval, vmin=-maxval)
+        vmax = max((np.abs(np.max(img)), np.abs(np.min(img))))
+        axes_image = ax.imshow(img, cmap=cmap, extent=extent, vmax=vmax, vmin=-vmax, aspect=aspect)
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
@@ -181,7 +192,7 @@ def view_stack(
             Default = Centimeters
         cmap (str): Optional- colormap to display stack image (default='seismic')
         title (str): Optional- Title for plot
-        lat_lon (dict): Optional- Uses latitude and longitude in legend 
+        lat_lon (dict): Optional- Uses latitude and longitude in legend
             instead of row/col
 
     Raises:
@@ -292,16 +303,16 @@ def animate_stack(stack,
         stack = np.abs(stack)
 
     # Use the same stack min and stack max (or vmin/vmax) for all colorbars/ color ranges
-    minval = vmin or np.min(stack)
-    maxval = vmax or np.max(stack)
+    vmin = np.min(stack) if vmin is None else vmin
+    vmax = np.max(stack) if vmax is None else vmax
     cmap = cmap_name if not shifted else make_shifted_cmap(
-        minval=minval, maxval=maxval, cmap_name=cmap_name)
+        vmin=vmin, vmax=vmax, cmap_name=cmap_name)
 
     fig, ax = plt.subplots()
-    axes_image = plt.imshow(stack[0, :, :], vmin=minval, vmax=maxval, cmap=cmap)
+    axes_image = plt.imshow(stack[0, :, :], vmin=vmin, vmax=vmax, cmap=cmap)
 
     cbar = fig.colorbar(axes_image)
-    cbar_ticks = np.linspace(minval, maxval, num=6, endpoint=True)
+    cbar_ticks = np.linspace(vmin, vmax, num=6, endpoint=True)
     cbar.set_ticks(cbar_ticks)
     if label:
         cbar.set_label(label)
@@ -320,3 +331,24 @@ def animate_stack(stack,
 
     if display:
         plt.show()
+
+
+def make_figure_noborder():
+    fig = plt.figure(frameon=False)
+
+    # To make the content fill the whole figure
+    ax = plt.Axes(fig, [0., 0., 1., 1.])
+    ax.set_axis_off()
+    fig.add_axes(ax)
+    return fig, ax
+
+
+def set_aspect_image(fig, img, height=4):
+    """Adjusts sizes to match image data ratio
+    
+    Can pick a height (default 4), and keeps data rows/col ratio
+    """
+    nrows, ncols = img.shape
+    width = ncols / nrows * height
+    print('width', width, 'height', height)
+    fig.set_size_inches(width, height)

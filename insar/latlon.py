@@ -3,7 +3,7 @@ import copy
 from math import sin, cos, sqrt, atan2, radians
 # import os
 import numpy as np
-from insar import sario, utils
+from insar import sario, utils, kml
 from insar.log import get_log
 
 logger = get_log()
@@ -77,8 +77,15 @@ class LatlonImage(np.ndarray):
 
         row_start, row_step = row_slice.start, row_slice.step
         col_start, col_step = col_slice.start, col_slice.step
-        new_rsc_data = self.crop_rsc_data(self.dem_rsc, row_start, col_start, nrows, ncols,
-                                          row_step, col_step)
+        new_rsc_data = self.crop_rsc_data(
+            self.dem_rsc,
+            row_start,
+            col_start,
+            nrows,
+            ncols,
+            row_step,
+            col_step,
+        )
 
         sliced_out.dem_rsc = new_rsc_data
         return sliced_out
@@ -137,7 +144,10 @@ class LatlonImage(np.ndarray):
     @property
     def extent(self):
         if self.dem_rsc:
-            return grid_extent(**dem_rsc)
+            return grid_extent(**self.dem_rsc)
+
+    def to_kml(self, tif_filename, title=None, desc="Description", kml_out=None):
+        return kml.create_kml(self.dem_rsc, tif_filename, title=title, desc=desc, kml_out=kml_out)
 
     def distance(self, row_col1, row_col2):
         """Find the distance in km between two points on the image
