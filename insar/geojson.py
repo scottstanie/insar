@@ -113,6 +113,13 @@ def format_coords(geojson_dict, decimals=4):
     return ','.join(fmt_str.format(coord) for coord in itertools.chain.from_iterable(c))
 
 
+def kml_string_fmt(gj_dict):
+    # Example coord_string:
+    # -102.2,29.5 -101.4,29.5 -101.4,28.8 -102.2,28.8 -102.2,29.5
+    coord_list = coords(gj_dict)
+    return ' '.join(map(lambda tup: ','.join((str(s) for s in tup)), coord_list))
+
+
 if __name__ == '__main__':
     import sys
     import json
