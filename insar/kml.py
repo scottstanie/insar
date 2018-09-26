@@ -7,8 +7,20 @@ def rsc_bounds(rsc_data):
     return {'north': north, 'south': south, 'east': east, 'west': west}
 
 
-def create_kml(rsc_data, tif_filename, title="Title", desc="Description"):
-    """Make a simply kml file to display a tif in Google Earth from rsc_data"""
+def create_kml(rsc_data, img_filename, title=None, desc="Description", kml_out=None):
+    """Make a kml file to display a image (tif/png) in Google Earth
+
+    Args:
+        rsc_data (dict): dem rsc data
+        img_filename (str): name of the image file
+        title (str): Title for kml metadata
+        desc (str): Description kml metadata
+
+        kml_out (str): filename of kml to write
+    """
+    if title is None:
+        title = img_filename
+
     template = """\
 <?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://earth.google.com/kml/2.2">
@@ -16,7 +28,7 @@ def create_kml(rsc_data, tif_filename, title="Title", desc="Description"):
     <name> {title} </name>
     <description> {description} </description>
     <Icon>
-          <href> {tif_filename} </href>
+          <href> {img_filename} </href>
     </Icon>
     <LatLonBox>
         <north> {north} </north>
@@ -28,6 +40,11 @@ def create_kml(rsc_data, tif_filename, title="Title", desc="Description"):
 </kml>
 """
     output = template.format(
-        title=title, description=desc, tif_filename=tif_filename, **rsc_bounds(rsc_data))
+        title=title, description=desc, img_filename=img_filename, **rsc_bounds(rsc_data))
+
+    if kml_out:
+        print("Saving kml to %s" % kml_out)
+        with open(kml_out, 'w') as f:
+            f.write(output)
 
     return output
