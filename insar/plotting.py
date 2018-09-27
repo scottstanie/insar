@@ -23,16 +23,29 @@ def discrete_seismic_colors(n=5):
                 (202, 0, 32),
             ]) / 256)
     elif n == 7:
+        # Really this is red-yellow-blue
+        # http://colorbrewer2.org/#type=diverging&scheme=RdYlBu&n=7
         return list(
             np.array([
-                (33, 102, 172, 256),
-                (103, 169, 207, 250),
-                (209, 229, 240, 250),
-                (247, 247, 247, 200),
-                (253, 219, 199, 250),
-                (239, 138, 98, 250),
-                (178, 24, 43, 256),
+                (69, 117, 180, 256),
+                (145, 191, 219, 256),
+                (224, 243, 248, 256),
+                (255, 255, 191, 245),  # small alpha drop
+                (254, 224, 144, 256),
+                (252, 141, 89, 256),
+                (215, 48, 39, 256),
             ]) / 256)
+        # Using the Red-white-blue
+        # return list(
+        #     np.array([
+        #         (33, 102, 172, 256),
+        #         (103, 169, 207, 256),
+        #         (209, 229, 240, 256),
+        #         (247, 247, 247, 250),
+        #         (253, 219, 199, 256),
+        #         (239, 138, 98, 256),
+        #         (178, 24, 43, 256),
+        #     ]) / 256)
 
 
 DISCRETE_SEISMIC5 = matplotlib.colors.LinearSegmentedColormap.from_list(
