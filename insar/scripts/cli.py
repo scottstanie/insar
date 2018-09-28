@@ -308,7 +308,8 @@ def blob(context, load, title_prefix, blob_filename, row_start, row_end, col_sta
 @click.option("--title", "-t", help="Title of the KML object once loaded.")
 @click.option("--desc", "-d", help="Description for google Earth.")
 @click.option("--output", "-o", help="File to save kml output to")
-def kml(imgfile, rsc, geojson, title, desc, output):
+@click.pass_obj
+def kml(context, imgfile, rsc, geojson, title, desc, output):
     """Creates .kml file for some image
     IMGFILE is the image to load into Google Earth
 
@@ -331,6 +332,20 @@ def kml(imgfile, rsc, geojson, title, desc, output):
         desc=desc,
         kml_out=output)
     print(kml_string)
+
+
+# COMMAND: mask
+@cli.command()
+@click.option("--imagefile", "-i", help="file containing image to mask")
+@click.option("--dem", default="elevation.dem", help=".rsc file containing lat/lon start and steps")
+@click.option("--output", "-o", required=True, help="File to save output to")
+@click.pass_obj
+def mask(context, imagefile, dem, output):
+    """Mask an image where some elevation.dem is zero
+    """
+    image = insar.sario.load(imagefile)
+    out_image = insar.utils.mask_int(image, dem_file=dem, dem=None)
+    insar.sario.save(output, out_image)
 
 
 # COMMAND: avg-stack

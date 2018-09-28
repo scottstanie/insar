@@ -145,8 +145,10 @@ def find_east_up_coeffs(geo_path):
     # The path to each orbit's .db files assumed in same directory as elevation.dem.rsc
 
     los_file = os.path.realpath(os.path.join(geo_path, 'los_vectors.txt'))
+    db_path = os.path.join(geo_path, 'extra_files') if os.path.exists(
+        os.path.join(geo_path, 'extra_files')) else geo_path
 
-    max_corner_difference, enu_coeffs = check_corner_differences(rsc_data, geo_path, los_file)
+    max_corner_difference, enu_coeffs = check_corner_differences(rsc_data, db_path, los_file)
     logger.info(
         "Max difference in ENU LOS vectors for area corners: {:2f}".format(max_corner_difference))
     if max_corner_difference > 0.05:
@@ -156,7 +158,7 @@ def find_east_up_coeffs(geo_path):
     logger.info("Using midpoint of area for line of sight vectors")
 
     print("Finding LOS vector for midpoint", midpoint)
-    record_xyz_los_vector(*midpoint, db_path=geo_path, outfile=los_file, clear=True)
+    record_xyz_los_vector(*midpoint, db_path=db_path, outfile=los_file, clear=True)
 
     enu_coeffs = los_to_enu(los_file)
 
@@ -193,6 +195,8 @@ def find_vertical_def(asc_path, desc_path):
     asc_geolist, asc_deform = timeseries.load_deformation(asc_igram_path)
     desc_geolist, desc_deform = timeseries.load_deformation(desc_igram_path)
 
+    print(asc_igram_path, asc_deform.shape)
+    print(desc_igram_path, desc_deform.shape)
     assert asc_deform.shape == desc_deform.shape, 'Asc and desc def images not same size'
     nlayers, nrows, ncols = asc_deform.shape
     # Stack and solve for the East and Up deformation
@@ -201,6 +205,20 @@ def find_vertical_def(asc_path, desc_path):
     def_east = dd[0, :].reshape((nlayers, nrows, ncols))
     def_vertical = dd[1, :].reshape((nlayers, nrows, ncols))
     return def_east, def_vertical
+
+
+def merge_geolists(geolist1, geolist2):
+    """Task asc and desc geolists, makes one merged
+
+    Gives the overlap indices of the merged list for each smaller
+
+    """
+    merged_geolist = np.concatenate((geolist1, geolist2))
+    merged_geolist.sort()
+
+    _, indices1, _ = np.intersect1d(merged_geolist, geolist1, return_indices=True)
+    _, indices2, _ = np.intersect1d(merged_geolist, geolist2, return_indices=True)
+    return merged_geolist, indices1, indices2
 
 
 # def interpolate_coeffs(rsc_data, nrows, ncols, east_up):

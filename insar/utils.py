@@ -582,7 +582,7 @@ def stitch_same_dates(geo_path=".", output_path="."):
 def mask_int(image, dem_file=None, dem=None):
     """Masks image from the zeros of a dem"""
     if dem_file:
-        dem = insar.sario.load('../elevation.dem')
+        dem = insar.sario.load(dem_file)
 
     mask = imresize((dem == 0).astype(float), image.shape)
     intmask = np.ma.array(image, mask=mask)
