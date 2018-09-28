@@ -12,6 +12,7 @@ import os
 import shutil
 import numpy as np
 from scipy.ndimage.interpolation import shift
+from scipy.misc import imresize
 import multiprocessing as mp
 
 import insar.sario
@@ -172,7 +173,7 @@ def offset(img_info1, img_info2, axis=None):
     Finds offset FROM img_info2 TO img_info1
 
     If image2 is 3 pixels down and 2 left of image1, the returns would
-    be offset(im1, im2) = (3, 2), offset(im1, im2, axis=1) = 2
+    be offset(im1, image) = (3, 2), offset(im1, image, axis=1) = 2
 
     To align image2 with image1, you can do:
     offsets = offset(img_info1, img_info2)
@@ -576,3 +577,13 @@ def stitch_same_dates(geo_path=".", output_path="."):
         insar.sario.save(new_name, stitched_img)
 
     return grouped_geos
+
+
+def mask_int(image, dem_file=None, dem=None):
+    """Masks image from the zeros of a dem"""
+    if dem_file:
+        dem = insar.sario.load('../elevation.dem')
+
+    mask = imresize((dem == 0).astype(float), image.shape)
+    intmask = np.ma.array(image, mask=mask)
+    return intmask.filled(0)
