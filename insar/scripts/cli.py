@@ -300,6 +300,39 @@ def blob(context, load, title_prefix, blob_filename, row_start, row_end, col_sta
     )
 
 
+# COMMAND: kml
+@cli.command()
+@click.argument("imgfile", required=True)
+@click.option("--rsc", default="dem.rsc", help=".rsc file containing lat/lon start and steps")
+@click.option("--geojson", help="Optional: if making shape from .geojson, file to specify")
+@click.option("--title", "-t", help="Title of the KML object once loaded.")
+@click.option("--desc", "-d", help="Description for google Earth.")
+@click.option("--output", "-o", help="File to save kml output to")
+def kml(imgfile, rsc, geojson, title, desc, output):
+    """Creates .kml file for some image
+    IMGFILE is the image to load into Google Earth
+
+    Example:
+
+        insar kml 20180420_20180502.tif --rsc dem.rsc -t "My igram" -d "Kiluea eruption" -o out.kml
+
+    """
+    if geojson:
+        with open(geojson) as f:
+            gj_dict = json.load(f)
+    else:
+        gj_dict = None
+    rsc_data = insar.sario.load(rsc)
+    kml_string = insar.kml.create_kml(
+        rsc_data=rsc_data,
+        img_filename=imgfile,
+        gj_dict=gj_dict,
+        title=title,
+        desc=desc,
+        kml_out=output)
+    print(kml_string)
+
+
 # COMMAND: avg-stack
 @cli.command('avg-stack')
 def avg_stack(context, ref_row, ref_col):
