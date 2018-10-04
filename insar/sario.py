@@ -71,7 +71,13 @@ def find_rsc_file(filename, verbose=False):
     return insar.utils.fullpath(possible_rscs[0])
 
 
-def load_file(filename, downsample=None, rsc_file=None, ann_info=None, verbose=False, **kwargs):
+def load_file(filename,
+              downsample=None,
+              looks=None,
+              rsc_file=None,
+              ann_info=None,
+              verbose=False,
+              **kwargs):
     """Examines file type for real/complex and runs appropriate load
 
     Args:
@@ -80,6 +86,8 @@ def load_file(filename, downsample=None, rsc_file=None, ann_info=None, verbose=F
         ann_info (dict): data parsed from annotation file (UAVSAR)
         downsample (int): rate at which to downsample the file
             None is equivalent to 1, no downsampling.
+        looks (tuple[int, int]): downsample by taking looks
+            None is equivalent to (1, 1), no downsampling.
         verbose (bool): print extra logging info while loading files
 
     Returns:
@@ -93,11 +101,15 @@ def load_file(filename, downsample=None, rsc_file=None, ann_info=None, verbose=F
         raise ValueError("downsample must be a positive integer")
     else:
         downsample = downsample or 1
+    if looks and any((r < 1 or not isinstance(r, int)) for r in looks):
+        raise ValueError("looks values must be a positive integers")
+    else:
+        looks = (1, 1)
 
     ext = insar.utils.get_file_ext(filename)
     # Elevation and rsc files can be immediately loaded without extra data
     if ext in ELEVATION_EXTS:
-        return sardem.loading.load_elevation(filename)[::downsample, ::downsample]
+        return insar.utils.take_looks(sardem.loading.load_elevation(filename), *looks)
     elif ext == '.rsc':
         return sardem.loading.load_dem_rsc(filename, **kwargs)
 
@@ -122,10 +134,11 @@ def load_file(filename, downsample=None, rsc_file=None, ann_info=None, verbose=F
         return stacked[..., ::downsample, ::downsample]
     # having rsc_data implies that this is not a UAVSAR file, so is complex
     elif rsc_data or is_complex(filename):
-        return load_complex(
-            filename, ann_info=ann_info, rsc_data=rsc_data)[::downsample, ::downsample]
+        return insar.utils.take_looks(
+            load_complex(filename, ann_info=ann_info, rsc_data=rsc_data), *looks)
     else:
-        return load_real(filename, ann_info=ann_info, rsc_data=rsc_data)[::downsample, ::downsample]
+        return insar.utils.take_looks(
+            load_real(filename, ann_info=ann_info, rsc_data=rsc_data), *looks)
 
 
 # Make a shorter alias for load_file

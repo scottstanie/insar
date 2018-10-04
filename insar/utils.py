@@ -69,6 +69,29 @@ def which(program):
     return None
 
 
+def take_looks(arr, row_looks, col_looks):
+    """Downsample a numpy matrix by summing blocks of (row_looks, col_looks)
+
+    Args:
+        arr (ndarray) 2D array of an image
+        row_looks (int) the reduction rate in row direction
+        col_looks (int) the reduction rate in col direction
+    """
+    if row_looks == 1 and col_looks == 1:
+        return arr
+    nrows, ncols = arr.shape
+    endpad = ((row_looks - nrows % row_looks) % row_looks,
+              (col_looks - ncols % col_looks) % col_looks)
+    dt = arr.dtype
+    if arr.dtype == 'int':
+        arr = arr.astype('float')
+    padded = np.pad(arr, ((0, 0), endpad), mode='constant', constant_values=np.NaN)
+
+    col_looked = np.nansum(padded.reshape(nrows, -1, col_looks), axis=2)
+    double_looked = np.nansum(col_looked.reshape(-1, col_looked.shape[1], row_looks), axis=2)
+    return (double_looked / (row_looks * col_looks)).astype(dt)
+
+
 def downsample_im(image, rate=10):
     """Takes a numpy matrix of an image and returns a smaller version
 
