@@ -99,9 +99,9 @@ def load_file(filename,
     """
     if downsample and (downsample < 1 or not isinstance(downsample, int)):
         raise ValueError("downsample must be a positive integer")
-    else:
-        downsample = downsample or 1
-    if looks and any((r < 1 or not isinstance(r, int)) for r in looks):
+    elif downsample:
+        looks = (downsample, downsample)
+    elif looks and any((r < 1 or not isinstance(r, int)) for r in looks):
         raise ValueError("looks values must be a positive integers")
     else:
         looks = (1, 1)
@@ -109,6 +109,7 @@ def load_file(filename,
     ext = insar.utils.get_file_ext(filename)
     # Elevation and rsc files can be immediately loaded without extra data
     if ext in ELEVATION_EXTS:
+        print(looks)
         return insar.utils.take_looks(sardem.loading.load_elevation(filename), *looks)
     elif ext == '.rsc':
         return sardem.loading.load_dem_rsc(filename, **kwargs)
