@@ -97,19 +97,20 @@ def load_file(filename,
         ValueError: if sentinel files loaded without a .rsc file in same path
             to give the file width
     """
-    if downsample and (downsample < 1 or not isinstance(downsample, int)):
-        raise ValueError("downsample must be a positive integer")
-    elif downsample:
+    print(looks, downsample)
+    if downsample:
+        if (downsample < 1 or not isinstance(downsample, int)):
+            raise ValueError("downsample must be a positive integer")
         looks = (downsample, downsample)
-    elif looks and any((r < 1 or not isinstance(r, int)) for r in looks):
-        raise ValueError("looks values must be a positive integers")
+    elif looks:
+        if any((r < 1 or not isinstance(r, int)) for r in looks):
+            raise ValueError("looks values must be a positive integers")
     else:
         looks = (1, 1)
 
     ext = insar.utils.get_file_ext(filename)
     # Elevation and rsc files can be immediately loaded without extra data
     if ext in ELEVATION_EXTS:
-        print(looks)
         return insar.utils.take_looks(sardem.loading.load_elevation(filename), *looks)
     elif ext == '.rsc':
         return sardem.loading.load_dem_rsc(filename, **kwargs)

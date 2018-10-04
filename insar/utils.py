@@ -80,16 +80,16 @@ def take_looks(arr, row_looks, col_looks):
     if row_looks == 1 and col_looks == 1:
         return arr
     nrows, ncols = arr.shape
-    endpad = ((row_looks - nrows % row_looks) % row_looks,
-              (col_looks - ncols % col_looks) % col_looks)
-    dt = arr.dtype
-    if arr.dtype == 'int':
+    rowpad = (0, 0 if nrows % row_looks == 0 else row_looks - nrows % row_looks)
+    colpad = (0, 0 if ncols % col_looks == 0 else col_looks - ncols % col_looks)
+    if np.issubdtype(arr.dtype, np.integer):
         arr = arr.astype('float')
-    padded = np.pad(arr, ((0, 0), endpad), mode='constant', constant_values=np.NaN)
+    padded = np.pad(arr, (rowpad, colpad), mode='constant', constant_values=np.NaN)
 
-    col_looked = np.nansum(padded.reshape(nrows, -1, col_looks), axis=2)
-    double_looked = np.nansum(col_looked.reshape(-1, col_looked.shape[1], row_looks), axis=2)
-    return (double_looked / (row_looks * col_looks)).astype(dt)
+    col_looked = np.nanmean(padded.reshape(padded.shape[0], -1, col_looks), axis=2)
+    double_looked = np.nanmean(col_looked.reshape(-1, col_looked.shape[1], row_looks), axis=2)
+    # Now return back to int if needed
+    return double_looked
 
 
 def downsample_im(image, rate=10):
