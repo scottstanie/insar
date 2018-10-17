@@ -76,6 +76,9 @@ def take_looks(arr, row_looks, col_looks):
         arr (ndarray) 2D array of an image
         row_looks (int) the reduction rate in row direction
         col_looks (int) the reduction rate in col direction
+
+    Returns:
+        ndarray, size = ceil(rows / row_looks, cols / col_looks)
     """
     if row_looks == 1 and col_looks == 1:
         return arr
@@ -85,21 +88,10 @@ def take_looks(arr, row_looks, col_looks):
     if np.issubdtype(arr.dtype, np.integer):
         arr = arr.astype('float')
     padded = np.pad(arr, (rowpad, colpad), mode='constant', constant_values=np.NaN)
-
-    col_looked = np.nanmean(padded.reshape(padded.shape[0], -1, col_looks), axis=2)
-    double_looked = np.nanmean(col_looked.reshape(-1, col_looked.shape[1], row_looks), axis=2)
-    # Now return back to int if needed
-    return double_looked
-
-
-def downsample_im(image, rate=10):
-    """Takes a numpy matrix of an image and returns a smaller version
-
-    Args:
-        image (ndarray) 2D array of an image
-        rate (int) the reduction rate to downsample
-    """
-    return image[::rate, ::rate]
+    new_rows = padded.shape[0] // row_looks
+    new_cols = padded.shape[1] // col_looks
+    return np.nanmean(
+        np.nanmean(padded.reshape(new_rows, row_looks, new_cols, col_looks), axis=3), axis=1)
 
 
 def clip(image):

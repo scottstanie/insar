@@ -19,9 +19,11 @@ class TestHelpers(unittest.TestCase):
         out = np.array([[-20., -40, 6.020599], [9.542425, 12.041199, 3.010299]])
         self.assertTrue(np.allclose(out, utils.log(np.abs(self.im))))
 
-    def test_downsample_im(self):
-        downsampled = utils.downsample_im(self.im)
-        self.assertTrue(downsampled, np.array([[.1], [3]]))
+    def test_looks(self):
+        downsampled = utils.take_looks(self.im, 2, 1)
+        assert_array_equal(downsampled, np.array([[1.55, 2.005, 1.5 + 0.5j]]))
+        downsampled = utils.take_looks(self.im, 1, 2)
+        assert_array_equal(downsampled, np.array([[0.055, 2], [3.5, 1 + 1j]]))
 
     def test_split_array_into_blocks(self):
         # Even shape test
