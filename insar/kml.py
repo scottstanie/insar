@@ -1,5 +1,6 @@
 from insar import geojson
 
+# Square image in a box
 box_template = """\
 <?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://earth.google.com/kml/2.2">
@@ -19,10 +20,11 @@ box_template = """\
 </kml>
 """
 
+# One point as a push pin
 point_template = """\
 <?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://earth.google.com/kml/2.2">
-<Placemark id="mountainpin1">
+<Placemark>
     <name>{title}</name>
     <description>{description}</description>
     <styleUrl>#pushpin</styleUrl>
@@ -31,6 +33,28 @@ point_template = """\
     </Point>
 </Placemark>
 </kml>
+"""
+
+# Generic polygon, from a geojson
+polygon_template = """\
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://earth.google.com/kml/2.2">
+<Placemark id="mountainpin1">
+    <name>{title}</name>
+    <description>{description}</description>
+    <styleUrl>#transRedPoly</styleUrl>
+    <Polygon>
+      <extrude>1</extrude>
+      <altitudeMode>relativeToGround</altitudeMode>
+      <outerBoundaryIs>
+        <LinearRing>
+        <coordinates>{coord_string}</coordinates>
+        </LinearRing>
+      </outerBoundaryIs>
+    </Polygon>
+</Placemark>
+</kml>
+
 """
 # This example from the Sentinel quick-look.png preview with map-overlay.kml
 # Example coord_string:
@@ -83,7 +107,7 @@ def create_kml(rsc_data=None,
     if title is None:
         title = img_filename
 
-    valid_shapes = ('box', 'quad', 'point')
+    valid_shapes = ('box', 'quad', 'point', 'polygon')
     if shape not in valid_shapes:
         raise ValueError("shape must be %s" % ', '.join(valid_shapes))
 
@@ -101,7 +125,18 @@ def create_kml(rsc_data=None,
             # TODO: do we want to accept geojson? or overkill?
             raise ValueError("point must include lon_lat tuple")
         output = point_template.format(
-            title=title, description=desc, coord_string='{},{}'.format(*lon_lat))
+            title=title,
+            description=desc,
+            coord_string='{},{}'.format(*lon_lat),
+        )
+    elif shape == 'polygon':
+        if gj_dict is None:
+            raise ValueError("polygon must include gj_dict tuple")
+        output = polygon_template.format(
+            title=title,
+            description=desc,
+            coord_string=geojson.kml_string_fmt(gj_dict),
+        )
 
     if kml_out:
         print("Saving kml to %s" % kml_out)

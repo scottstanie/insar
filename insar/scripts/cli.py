@@ -307,14 +307,18 @@ def blob(context, load, title_prefix, blob_filename, row_start, row_end, col_sta
 
 # COMMAND: kml
 @cli.command()
-@click.argument("imgfile", required=True)
-@click.option("--rsc", default="dem.rsc", help=".rsc file containing lat/lon start and steps")
-@click.option("--geojson", help="Optional: if making shape from .geojson, file to specify")
+@click.argument("imgfile", required=False)
+@click.option(
+    "--shape",
+    default="box",
+    help="kml shape: use 'box' for image overlay, 'polygon' for geojson square")
+@click.option("--rsc", help=".rsc file containing lat/lon start and steps")
+@click.option("--geojson", "-g", help="Optional: if making shape from .geojson, file to specify")
 @click.option("--title", "-t", help="Title of the KML object once loaded.")
 @click.option("--desc", "-d", help="Description for google Earth.")
 @click.option("--output", "-o", help="File to save kml output to")
 @click.pass_obj
-def kml(context, imgfile, rsc, geojson, title, desc, output):
+def kml(context, imgfile, shape, rsc, geojson, title, desc, output):
     """Creates .kml file for some image
     IMGFILE is the image to load into Google Earth
 
@@ -328,14 +332,16 @@ def kml(context, imgfile, rsc, geojson, title, desc, output):
             gj_dict = json.load(f)
     else:
         gj_dict = None
-    rsc_data = insar.sario.load(rsc)
+    rsc_data = insar.sario.load(rsc) if rsc else None
     kml_string = insar.kml.create_kml(
         rsc_data=rsc_data,
         img_filename=imgfile,
         gj_dict=gj_dict,
         title=title,
         desc=desc,
-        kml_out=output)
+        kml_out=output,
+        shape=shape,
+    )
     print(kml_string)
 
 
