@@ -19,6 +19,19 @@ box_template = """\
 </kml>
 """
 
+point_template = """\
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://earth.google.com/kml/2.2">
+<Placemark id="mountainpin1">
+    <name>{title}</name>
+    <description>{description}</description>
+    <styleUrl>#pushpin</styleUrl>
+    <Point>
+        <coordinates>{coord_string}</coordinates>
+    </Point>
+</Placemark>
+</kml>
+"""
 # This example from the Sentinel quick-look.png preview with map-overlay.kml
 # Example coord_string:
 # -102.2,29.5 -101.4,29.5 -101.4,28.8 -102.2,28.8 -102.2,29.5
@@ -54,7 +67,8 @@ def create_kml(rsc_data=None,
                title=None,
                desc="Description",
                shape='box',
-               kml_out=None):
+               kml_out=None,
+               lon_lat=None):
     """Make a kml file to display a image (tif/png) in Google Earth
 
     Args:
@@ -64,9 +78,14 @@ def create_kml(rsc_data=None,
         desc (str): Description kml metadata
         shape (str): Options = ('box', 'quad'). Box is square, quad is arbitrary 4 sides
         kml_out (str): filename of kml to write
+        lon_lat (tuple[float]): if shape == 'point', the lon and lat of the point
     """
     if title is None:
         title = img_filename
+
+    valid_shapes = ('box', 'quad', 'point')
+    if shape not in valid_shapes:
+        raise ValueError("shape must be %s" % ', '.join(valid_shapes))
 
     if shape == 'box':
         output = box_template.format(
@@ -77,8 +96,12 @@ def create_kml(rsc_data=None,
             description=desc,
             img_filename=img_filename,
             coord_string=geojson.kml_string_fmt(gj_dict))
-    else:
-        raise ValueError("shape must be 'quad' or 'box")
+    elif shape == 'point':
+        if lon_lat is None:
+            # TODO: do we want to accept geojson? or overkill?
+            raise ValueError("point must include lon_lat tuple")
+        output = point_template.format(
+            title=title, description=desc, coord_string='{},{}'.format(*lon_lat))
 
     if kml_out:
         print("Saving kml to %s" % kml_out)

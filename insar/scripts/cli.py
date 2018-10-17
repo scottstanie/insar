@@ -220,7 +220,10 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
 @click.option('--col-start', default=0)
 @click.option('--col-end', default=-1)
 @click.option(
-    "--rowcol", help="Use row,col for legened entries (instead of default lat,lon)", is_flag=True)
+    "--rowcol",
+    help="Use row,col for legened entries (instead of default lat,lon)",
+    is_flag=True,
+    default=False)
 @click.pass_obj
 def view_stack(context, filename, cmap, label, title, row_start, row_end, col_start, col_end,
                rowcol):
@@ -239,6 +242,7 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
     if rowcol:
         rsc_data = None
     else:
+        print('ok')
         rsc_data = sardem.loading.load_dem_rsc(os.path.join(context['path'], 'dem.rsc'))
 
     stack = deformation[:, row_start:row_end, col_start:col_end]
@@ -260,6 +264,7 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
         title=title,
         label=label,
         cmap=cmap,
+        lat_lon=not rowcol,
     )
 
 

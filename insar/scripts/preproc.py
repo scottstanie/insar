@@ -18,12 +18,12 @@ def unzip_sentinel_files(path="."):
     logger.info("Unzipping sentinel preview/map-overlay.kml and VV .tiffs")
 
     # Unzip all .zip files by piping to xargs, using 10 processes
-    # IMPORTANT: Only unzipping the VV .tiff files and preview/map-overlay.kml !
+    # IMPORTANT: Only unzipping the VV .tiff files, annotation/xmls and preview/ for map-overlay.kml
 
     # Note: -n means "never overwrite existing files", so you can rerun this
     subprocess.check_call(
         "find . -maxdepth 1 -name '*.zip' -print0 | "
-        'xargs -0 -I {} --max-procs 10 unzip -n {} "*/preview/map-overlay.kml" "*/annotation/*.xml" "*/measurement/*slc-vv-*.tiff" ',
+        'xargs -0 -I {} --max-procs 10 unzip -n {} "*/preview/*" "*/annotation/*.xml" "*/measurement/*slc-vv-*.tiff" ',
         shell=True)
 
     logger.info("Done unzipping, returning to %s", cur_dir)
