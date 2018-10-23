@@ -97,7 +97,6 @@ def load_file(filename,
         ValueError: if sentinel files loaded without a .rsc file in same path
             to give the file width
     """
-    print(looks, downsample)
     if downsample:
         if (downsample < 1 or not isinstance(downsample, int)):
             raise ValueError("downsample must be a positive integer")
