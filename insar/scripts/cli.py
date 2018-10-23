@@ -242,7 +242,6 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
     if rowcol:
         rsc_data = None
     else:
-        print('ok')
         rsc_data = sardem.loading.load_dem_rsc(os.path.join(context['path'], 'dem.rsc'))
 
     stack = deformation[:, row_start:row_end, col_start:col_end]
