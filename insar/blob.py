@@ -192,6 +192,36 @@ def blobs_latlon(blobs, blob_info):
     return np.array(blobs_latlon)
 
 
+def _handle_args(extra_args):
+    keys = [arg.lstrip('--').replace('-', '_') for arg in list(extra_args)[::2]]
+    vals = []
+    for val in list(extra_args)[1::2]:
+        try:
+            vals.append(float(val))
+        except ValueError:
+            vals.append(val)
+    return dict(zip(keys, vals))
+
+
+def _make_blobs(img, extra_args):
+    blob_kwargs = BLOB_KWARG_DEFAULTS.copy()
+    blob_kwargs.update(extra_args)
+    logger.info("Using the following blob function settings:")
+    logger.info(blob_kwargs)
+
+    logger.info("Finding neg blobs")
+    blobs_neg = find_blobs(img, negative=True, **blob_kwargs)
+
+    logger.info("Finding pos blobs")
+    blobs_pos = find_blobs(img, **blob_kwargs)
+
+    logger.info("Blobs found:")
+    logger.info(blobs_neg)
+    logger.info(blobs_pos)
+    # Skip empties
+    return np.vstack((b for b in (blobs_neg, blobs_pos) if b is not None))
+
+
 def make_blob_image(igram_path=".",
                     load=True,
                     title_prefix='',
@@ -203,16 +233,6 @@ def make_blob_image(igram_path=".",
                     verbose=False,
                     blobfunc_args=None):
     """Find and view blobs in deformation"""
-
-    def _handle_args(extra_args):
-        keys = [arg.lstrip('--').replace('-', '_') for arg in list(extra_args)[::2]]
-        vals = []
-        for val in list(extra_args)[1::2]:
-            try:
-                vals.append(float(val))
-            except ValueError:
-                vals.append(val)
-        return dict(zip(keys, vals))
 
     logger.info("Searching %s for igram_path" % igram_path)
     geolist, deformation = timeseries.load_deformation(igram_path)
@@ -237,22 +257,7 @@ def make_blob_image(igram_path=".",
         blobs = np.load(blob_filename)
     else:
         extra_args = _handle_args(blobfunc_args)
-        blob_kwargs = BLOB_KWARG_DEFAULTS.copy()
-        blob_kwargs.update(extra_args)
-        logger.info("Using the following blob function settings:")
-        logger.info(blob_kwargs)
-
-        logger.info("Finding neg blobs")
-        blobs_neg = find_blobs(img, negative=True, **blob_kwargs)
-
-        logger.info("Finding pos blobs")
-        blobs_pos = find_blobs(img, **blob_kwargs)
-
-        logger.info("Blobs found:")
-        logger.info(blobs_neg)
-        logger.info(blobs_pos)
-        blobs = np.vstack((b for b in (blobs_neg, blobs_pos) if b is not None))  # Skip empties
-
+        blobs = _make_blobs(img, extra_args)
         np.save(blob_filename, blobs)
 
     blobs_ll = blobs_latlon(blobs, img.dem_rsc)
