@@ -213,6 +213,7 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
 
     win_size = window // 2
     shifted = np.empty_like(stack)
+    # TODO: vectorize this
     for idx in range(stack.shape[0]):
         cur_layer = stack[idx, :, :]
         ref_group = cur_layer[ref_row - win_size:ref_row + win_size + 1,
