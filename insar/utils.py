@@ -544,8 +544,12 @@ def rm_if_exists(filename):
             raise  # re-raise if different error
 
 
-def stitch_same_dates(geo_path=".", output_path="."):
+def stitch_same_dates(geo_path=".", output_path=".", reverse=True):
     """Combines .geo files of the same date in one directory
+
+    The reverse argument is to specify which order the geos get sorted.
+    If reverse=True, then the later geo is used in the overlapping strip.
+    This seems to work better for some descending path examples.
     """
 
     def _group_geos_by_date(geolist):
@@ -567,18 +571,22 @@ def stitch_same_dates(geo_path=".", output_path="."):
         """
         return [(date, list(g)) for date, g in itertools.groupby(geolist, key=lambda x: x.date)]
 
-    geos = [insar.parsers.Sentinel(g) for g in glob.glob(os.path.join(geo_path, "*.geo"))]
+    geos = [insar.parsers.Sentinel(g) for g in glob.glob(os.path.join(geo_path, "S1*SLC*.geo"))]
     # Find the dates that have multiple frames/.geos
     date_counts = collections.Counter([g.date for g in geos])
     dates_duped = set([date for date, count in date_counts.items() if count > 1])
+
     double_geo_files = sorted(
-        (g for g in geos if g.date in dates_duped), key=lambda g: g.start_time)
+        (g for g in geos if g.date in dates_duped), key=lambda g: g.start_time, reverse=reverse)
     grouped_geos = _group_geos_by_date(double_geo_files)
     for date, geolist in grouped_geos:
         print("Stitching geos for %s" % date)
         # TODO: Make combine handle more than 2!
         g1, g2 = geolist[:2]
 
+        print('reverse=', reverse)
+        print('image 1:', g1.filename, g1.start_time)
+        print('image 2:', g2.filename, g2.start_time)
         stitched_img = combine_complex(
             insar.sario.load(g1.filename),
             insar.sario.load(g2.filename),
