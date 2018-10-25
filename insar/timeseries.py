@@ -459,9 +459,15 @@ def run_inversion(igram_path,
     num_ints, rows, cols = unw_stack.shape
     phi_columns = stack_to_cols(unw_stack)
 
-    varr = invert_sbas(
-        phi_columns, B, constant_vel=constant_vel, alpha=alpha, difference=difference)
-    phi_arr = integrate_velocities(varr, timediffs)
+    phi_arr_list = []
+    for idx, columns in enumerate(np.array_split(phi_columns, 4, axis=1)):
+        logger.info("Inverting patch %s" % idx)
+        varr = invert_sbas(
+            columns, B, constant_vel=constant_vel, alpha=alpha, difference=difference)
+        phi_arr_list.append(integrate_velocities(varr, timediffs))
+
+    phi_arr = np.hstack(phi_arr_list)
+
     # Multiple by wavelength ratio to go from phase to cm
     deformation = PHASE_TO_CM * phi_arr
 
