@@ -150,6 +150,7 @@ def build_B_matrix(geolist, intlist):
             value will be t_k+1 - t_k for columns after the -1 in A,
             up to and including the +1 entry
     """
+    # TODO: get rid of A matrix building first
     timediffs = find_time_diffs(geolist)
 
     A = build_A_matrix(geolist, intlist)
@@ -166,22 +167,6 @@ def build_B_matrix(geolist, intlist):
         B[j][start_idx:end_idx] = timediffs[start_idx:end_idx]
 
     return B
-
-
-''' TODO: may not need this after all
-def find_stack_max(stack):
-    """Gets the row, col of the max value for the mean of the stack
-
-    Args:
-        stack (ndarray): 3D array of images, stacked along axis=0
-
-    Returns:
-        tuple[int, int]: row, col of the mean for the stack_mean
-    """
-    stack_mean = np.mean(stack, axis=0)
-    # Argmax gives the flattened indices, so we need to convert back to row, col
-    max_row, max_col = np.unravel_index(np.argmax(stack_mean), stack_mean.shape)
-'''
 
 
 def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
@@ -212,19 +197,16 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
         logger.warning("Making window an odd number (%s) to get square window", window)
 
     win_size = window // 2
-    shifted = np.empty_like(stack)
-    for idx in range(stack.shape[0]):
-        cur_layer = stack[idx, :, :]
-        ref_group = cur_layer[ref_row - win_size:ref_row + win_size + 1,
-                              ref_col - win_size:ref_col + win_size + 1]  # yapf: disable
-        if window_func == 'mean':
-            shifted[idx, :, :] = cur_layer - np.mean(ref_group)
-        elif window_func == 'max':
-            shifted[idx, :, :] = cur_layer - np.max(ref_group)
-        elif window_func == 'min':
-            shifted[idx, :, :] = cur_layer - np.min(ref_group)
-
-    return shifted
+    if window_func == 'mean':
+        func = np.mean
+    elif window_func == 'max':
+        func = np.min
+    elif window_func == 'min':
+        func = np.min
+    means = func(stack[:,
+                       ref_row - win_size:ref_row + win_size + 1,
+                       ref_col - win_size:ref_col + win_size + 1], axis=(1, 2))  # yapf: disable
+    return stack - means[:, np.newaxis, np.newaxis]  # pad with axes to broadcast
 
 
 def _create_diff_matrix(n, order=1):
@@ -429,7 +411,6 @@ def run_inversion(igram_path,
         phi_arr (ndarray): absolute phases of every pixel at each time
         deformation (ndarray): matrix of deformations at each pixel and time
         varr (ndarray): array of volocities solved for from SBAS inversion
-        unw_stack (ndarray): output of read_unw_stack (if desired for checking)
     """
     if verbose:
         logger.setLevel(10)  # DEBUG
@@ -467,6 +448,7 @@ def run_inversion(igram_path,
         cc_stack = sario.load_stack(igram_path, ".cc")
         ref_row, ref_col = find_coherent_patch(cc_stack)
         logger.info("Using %s as .unw reference point", (ref_row, ref_col))
+        del cc_stack  # In case of big memory
     else:
         ref_row, ref_col = reference
 
@@ -486,7 +468,7 @@ def run_inversion(igram_path,
     # Now reshape all outputs that should be in stack form
     phi_arr = cols_to_stack(phi_arr, rows, cols)
     deformation = cols_to_stack(deformation, rows, cols)
-    return (geolist, phi_arr, deformation, unw_stack)
+    return (geolist, phi_arr, deformation)
 
 
 def save_deformation(igram_path, deformation, geolist):

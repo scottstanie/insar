@@ -145,7 +145,7 @@ class TestInvertSbas(unittest.TestCase):
             reference=(100, 100),
             verbose=True)
 
-        _, phases, deformation, _ = timeseries.run_inversion(
+        _, phases, deformation = timeseries.run_inversion(
             self.igram_path,
             reference=(2, 0),
             deramp=False  # For this, dont remove the linear ramp
