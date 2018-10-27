@@ -189,8 +189,8 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
     if not isinstance(window, int) or window < 1:
         raise ValueError("Invalid window %s: must be odd positive int" % window)
     elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
-        raise ValueError(
-            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
+        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col,
+                                                                                 stack.shape))
 
     if window % 2 == 0:
         window -= 1
@@ -237,6 +237,70 @@ def _create_diff_matrix(n, order=1):
         diff_matrix[0, 0] = 1
 
     return diff_matrix
+
+
+def masked_lstsq(A, b, rcond=None, *args, **kwargs):
+    """Performs least squares on masked numpy arrays
+
+    Handles the mask by deleting the row of A corresponding
+    to a masked b element.
+
+    Inputs same as numpy.linalg.lstsq, where b_masked can be
+    a (n x k) matrix and each n-length column inverted.
+    """
+    b_masked = b.view(np.ma.MaskedArray)
+    print(b_masked.shape, b_masked.ndim)
+    if b_masked.ndim == 1:
+        b_masked = utils.force_column(b_masked)
+
+    # First check if no masks exist (run normally if so)
+    if b_masked.mask is np.ma.nomask or not b_masked.mask.any():
+        return np.linalg.lstsq(A, b, rcond=rcond, *args, **kwargs)[0]
+
+    # Otherwise, run first in bulk on all b's with no masks
+    # Only iterate over ones with some mask
+    out_final = np.ma.empty((A.shape[1], b_masked.shape[1]))
+
+    good_col_idxs = (~b_masked.mask).any(axis=0)
+    good_cols = b_masked[:, good_col_idxs]
+    good_sol = np.linalg.lstsq(A, good_cols, rcond=rcond, *args, **kwargs)[0]
+    out_final[:, good_col_idxs] = good_sol
+    bad_sol_list = []
+
+    bad_col_idxs = np.where((b_masked.mask).any(axis=0))[0]
+    for idx in bad_col_idxs:
+        # import pdb
+        # pdb.set_trace()
+        col_masked = b_masked[:, idx]
+
+        missing = col_masked.mask
+        # Add squeeze for empty mask case, since it adds
+        # a singleton dimension to beginning (?? why)
+        A_deleted = np.squeeze(A[~missing])
+        col_deleted = np.squeeze(col_masked[~missing])
+        # print(A_deleted)
+        sol, residuals, rank, _ = np.linalg.lstsq(
+            A_deleted, col_deleted, rcond=rcond, *args, **kwargs)
+
+        # If underdetermined, fill with NaNs
+        if not residuals:
+            # TODO: do I want to try to find which are the
+            # good values/columns?
+            # For now, just NaN out pixel
+            # all_zero_cols = np.where(~A_deleted.astype(bool).any(axis=0))[0]
+            # print('zero cols', all_zero_cols)
+
+            # print('rank:', rank, 'A shape:', A.shape)
+            # print('residuals', residuals)
+            # print('sol', sol)
+            # print('A:', A_deleted)
+            # sol[all_zero_cols] = np.NaN
+            sol[...] = np.NaN
+
+        bad_sol_list.append(sol)
+
+    out_final[:, bad_col_idxs] = np.ma.stack(bad_sol_list, axis=1)
+    return out_final
 
 
 def invert_sbas(delta_phis, B, constant_vel=False, alpha=0, difference=False):
@@ -287,7 +351,8 @@ def invert_sbas(delta_phis, B, constant_vel=False, alpha=0, difference=False):
         B, delta_phis = _augment_matrices(B, delta_phis, alpha)
 
     # Velocity will be result of the inversion
-    velocity_array, _, rank_B, sing_vals_B = np.linalg.lstsq(B, delta_phis, rcond=None)
+    # velocity_array, _, rank_B, sing_vals_B = np.linalg.lstsq(B, delta_phis, rcond=None)
+    velocity_array = masked_lstsq(B, delta_phis)
 
     # velocity array entries: v_j = (phi_j - phi_j-1)/(t_j - t_j-1)
     if velocity_array.ndim == 1:
@@ -439,6 +504,10 @@ def run_inversion(igram_path,
     else:
         unw_stack = sario.load_stack(igram_path, unw_ext)
 
+    # unw_stack = unw_stack.view(np.ma.MaskedArray)
+    unw_stack = np.ma.masked_where(np.abs(unw_stack) < 1e-2, unw_stack)
+    # import pdb
+    # pdb.set_trace()
     # Process the correlation, mask bad corr pixels in the igrams
     # TODO
 
@@ -473,7 +542,7 @@ def run_inversion(igram_path,
 
     # Now reshape all outputs that should be in stack form
     phi_arr = cols_to_stack(phi_arr, rows, cols)
-    deformation = cols_to_stack(deformation, rows, cols)
+    deformation = cols_to_stack(deformation, rows, cols).filled(np.NaN)
     return (geolist, phi_arr, deformation)
 
 
@@ -743,6 +812,5 @@ def avg_stack(igram_path, row, col):
     print(total_days * (np.max(unw_normed_shifted.reshape(
         (num_igrams, -1)), axis=1) - np.min(unw_normed_shifted.reshape((num_igrams, -1)), axis=1)))
     print("Converted to CM:")
-    print(total_days * (np.max(unw_normed_shifted.reshape(
-        (num_igrams, -1)) * PHASE_TO_CM, axis=1) - np.min(
-            unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
+    print(total_days * (np.max(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1) -
+                        np.min(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))

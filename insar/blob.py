@@ -16,7 +16,7 @@ except ImportError:
     pass
 import sardem
 from insar.log import get_log
-from insar import latlon, plotting, timeseries, sario
+from insar import latlon, plotting, timeseries, sario, utils
 
 logger = get_log()
 MAX_PROCS = mp.cpu_count()
@@ -156,11 +156,6 @@ def get_blob_values(blobs, image, center_only=False):
     return np.stack([np.max(image[mask]) for mask in masks])
 
 
-def _force_column(arr):
-    """Turns 1d numpy array into an (N, 1) shaped column"""
-    return arr.reshape((len(arr), 1))
-
-
 def sort_blobs_by_val(blobs, image):
     """Sort the blobs by their absolute value in the image
 
@@ -170,7 +165,7 @@ def sort_blobs_by_val(blobs, image):
         tuple[tuple[ndarrays], tuple[floats]]: The pair of (blobs, values)
     """
     blob_vals = get_blob_values(blobs, image)
-    blobs_with_values = np.hstack((blobs, _force_column(blob_vals)))
+    blobs_with_values = np.hstack((blobs, utils.force_column(blob_vals)))
     # Sort rows based on the 4th column, blob_value, and in reverse order
     return blobs_with_values[blobs_with_values[:, 3].argsort()[::-1]]
 

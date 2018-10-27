@@ -120,6 +120,11 @@ def mask_zeros(image):
     return np.ma.masked_equal(image, 0)
 
 
+def force_column(arr):
+    """Turns 1d numpy array into an (N, 1) shaped column"""
+    return arr.reshape((len(arr), 1))
+
+
 def percent_zero(filepath=None, arr=None):
     """Function to give the percentage of a file that is exactly zero
 
