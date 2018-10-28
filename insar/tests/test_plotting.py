@@ -12,7 +12,7 @@ class TestPlotting(unittest.TestCase):
         self.datapath = join(dirname(__file__), 'data')
         igram_path = join(self.datapath, 'sbas_test')
         self.igram_path = igram_path
-        self.stack = sario.load_stack(igram_path, ".unw")
+        self.stack = sario.load_stack(directory=igram_path, file_ext=".unw")
 
     def test_animate_stack(self):
         try:

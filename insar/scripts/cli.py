@@ -180,7 +180,7 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
     Otherwise, use --file-ext "unw", for example
     """
     if file_ext:
-        stack = insar.sario.load_stack(context['path'], file_ext)
+        stack = insar.sario.load_stack(directory=context['path'], file_ext=file_ext)
         if intlist:
             intlist = insar.timeseries.read_intlist(context['path'])
             titles = [
@@ -371,7 +371,7 @@ def avg_stack(context, ref_row, ref_col):
     """
     if not ref_row or ref_col:
         click.echo("Finding most coherent patch in stack.")
-        cc_stack = insar.sario.load_stack(context['path'], ".cc")
+        cc_stack = insar.sario.load_stack(directory=context['path'], file_ext=".cc")
         ref_row, ref_col = insar.timeseries.find_coherent_patch(cc_stack)
         click.echo("Using %s as .unw reference point", (ref_row, ref_col))
     insar.timeseries.avg_stack(context['path'], ref_row, ref_col)

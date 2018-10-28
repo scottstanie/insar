@@ -172,7 +172,7 @@ class LatlonImage(np.ndarray):
 
 def LatlonStack(LatlonImage):
     """3D stack version of LatlonImage"""
-    # TODO: data = sario.load_stack(stack_path, ext)
+    # TODO: data = sario.load_stack(directory=stack_path, file_ext=ext)
     pass
 
 
