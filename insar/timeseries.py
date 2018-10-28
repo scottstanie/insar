@@ -249,7 +249,6 @@ def masked_lstsq(A, b, rcond=None, *args, **kwargs):
     a (n x k) matrix and each n-length column inverted.
     """
     b_masked = b.view(np.ma.MaskedArray)
-    print(b_masked.shape, b_masked.ndim)
     if b_masked.ndim == 1:
         b_masked = utils.force_column(b_masked)
 
@@ -278,9 +277,13 @@ def masked_lstsq(A, b, rcond=None, *args, **kwargs):
         # a singleton dimension to beginning (?? why)
         A_deleted = np.squeeze(A[~missing])
         col_deleted = np.squeeze(col_masked[~missing])
-        # print(A_deleted)
-        sol, residuals, rank, _ = np.linalg.lstsq(
-            A_deleted, col_deleted, rcond=rcond, *args, **kwargs)
+        # If all deleted, just use NaNs as the solution
+        if A_deleted.size == 0:
+            sol, residuals = np.full((out_final.shape[0], 1), np.NaN), []
+        else:
+            # print(A_deleted)
+            sol, residuals, rank, _ = np.linalg.lstsq(
+                A_deleted, col_deleted, rcond=rcond, *args, **kwargs)
 
         # If underdetermined, fill with NaNs
         if not residuals:
@@ -299,7 +302,8 @@ def masked_lstsq(A, b, rcond=None, *args, **kwargs):
 
         bad_sol_list.append(sol)
 
-    out_final[:, bad_col_idxs] = np.ma.stack(bad_sol_list, axis=1)
+    # Squeeze added because sometimes extra singleton dim added
+    out_final[:, bad_col_idxs] = np.squeeze(np.ma.stack(bad_sol_list, axis=1))
     return out_final
 
 
@@ -504,7 +508,9 @@ def run_inversion(igram_path,
     else:
         unw_stack = sario.load_stack(igram_path, unw_ext)
 
-    # unw_stack = unw_stack.view(np.ma.MaskedArray)
+    unw_stack = unw_stack.view(np.ma.MaskedArray)
+    mask_stack = sario.load_stack('.', '.int.mask.npy')
+    unw_stack.mask = mask_stack
     # unw_stack = np.ma.masked_where(np.abs(unw_stack) < 1e-2, unw_stack)
     # import pdb
     # pdb.set_trace()
@@ -723,6 +729,38 @@ def find_coherent_patch(correlations, window=11):
     conv = uniform_filter(mean_stack, size=window, mode='constant')
     max_idx = conv.argmax()
     return np.unravel_index(max_idx, mean_stack.shape)
+
+
+def save_geo_masks(filepath, row_looks=1, col_looks=1):
+    """Creates .mask files for geos where zeros occur"""
+    for fname in sario.find_files(filepath, "*.geo"):
+        mask_fname = fname + '.mask.npy'
+        g = sario.load(fname, looks=(row_looks, col_looks))
+        g = np.ma.masked_where(g == 0, g)
+        print('Saving %s' % mask_fname)
+        np.save(mask_fname, g.mask)
+
+
+def save_int_masks(filepath, geo_path="../"):
+    """Assumes save_geo_masks already run"""
+    geolist = read_geolist(filepath)
+    geomask_list = []
+    for geo_date in geolist:
+        geoname = os.path.join(geo_path, '*{}*.geo.mask.npy'.format(geolist[0].strftime('%Y%m%d')))
+        geomask_name = glob.glob(geoname)[0]
+        geomask_list.append(sario.load(geomask_name))
+
+    igram_fnames = read_intlist(filepath, parse=False)
+    for idx, (early, late) in enumerate(read_intlist(filepath)):
+        early_idx = geolist.index(early)
+        late_idx = geolist.index(late)
+        early_mask = geomask_list[early_idx]
+        late_mask = geomask_list[late_idx]
+
+        igram_mask = np.logical_or(early_mask, late_mask)
+        igram_mask_name = igram_fnames[idx] + '.mask.npy'
+        print("Saving %s" % igram_mask_name)
+        np.save(igram_mask_name, igram_mask)
 
 
 def avg_stack(igram_path, row, col):

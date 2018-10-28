@@ -108,6 +108,10 @@ def load_file(filename,
         looks = (1, 1)
 
     ext = insar.utils.get_file_ext(filename)
+    # Pass through numpy files to np.load
+    if ext == '.npy':
+        return insar.utils.take_looks(np.load(filename), *looks)
+
     # Elevation and rsc files can be immediately loaded without extra data
     if ext in ELEVATION_EXTS:
         return insar.utils.take_looks(sardem.loading.load_elevation(filename), *looks)
