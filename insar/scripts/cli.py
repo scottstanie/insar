@@ -419,3 +419,20 @@ def tiles(context, data_path, path_num, tile_size, overlap):
         tile_size=tile_size,
         overlap=overlap,
         verbose=context.obj['verbose'])
+
+
+@preproc.command('intmask')
+@click.pass_context
+def intmask(context):
+    """Create masks for .int files where invalid
+
+    This step is run in `process.ps_sbas_igrams`, but can be
+    run separately to inspect
+    """
+    igram_path = context.obj['path']
+    row_looks, col_looks = insar.utils.find_looks_taken(igram_path)
+    insar.scripts.preproc.create_igram_masks(
+        igram_path,
+        row_looks=row_looks,
+        col_looks=col_looks,
+    )
