@@ -42,11 +42,12 @@ def _strip_geoname(name):
     return name.replace('S1A_', '').replace('S1B_', '').replace('.geo', '')
 
 
-def read_geolist(filepath="./geolist"):
+def read_geolist(filepath="./geolist", fnames_only=False):
     """Reads in the list of .geo files used, in time order
 
     Args:
         filepath (str): path to the geolist file or directory
+        fnames_only (bool): default False. if true, return list of filenames
 
     Returns:
         list[date]: the parse dates of each .geo used, in date order
@@ -56,7 +57,11 @@ def read_geolist(filepath="./geolist"):
         filepath = os.path.join(filepath, 'geolist')
 
     with open(filepath) as f:
-        geolist = [os.path.split(geoname)[1] for geoname in f.read().splitlines()]
+        if fnames_only:
+            return [fname for fname in f.read().splitlines()]
+        else:
+            # Stripped of path for parser
+            geolist = [os.path.split(geoname)[1] for geoname in f.read().splitlines()]
 
     if re.match(r'S1[AB]_\d{8}\.geo', geolist[0]):  # S1A_YYYYmmdd.geo
         return sorted([_parse(_strip_geoname(geo)) for geo in geolist])
@@ -198,11 +203,11 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
 
     win_size = window // 2
     if window_func == 'mean':
-        func = np.mean
+        func = np.nanmean
     elif window_func == 'max':
-        func = np.min
+        func = np.nanmin
     elif window_func == 'min':
-        func = np.min
+        func = np.nanmin
     means = func(stack[:,
                        ref_row - win_size:ref_row + win_size + 1,
                        ref_col - win_size:ref_col + win_size + 1], axis=(1, 2))  # yapf: disable
@@ -239,7 +244,8 @@ def _create_diff_matrix(n, order=1):
     return diff_matrix
 
 
-def invert_sbas(delta_phis, B, constant_vel=False, alpha=0, difference=False):
+def invert_sbas(delta_phis, B, geo_mask_columns=None, constant_vel=False, alpha=0,
+                difference=False):
     """Performs and SBAS inversion on each pixel of unw_stack to find deformation
 
     Solves the least squares equation Bv = dphi
@@ -248,6 +254,7 @@ def invert_sbas(delta_phis, B, constant_vel=False, alpha=0, difference=False):
         delta_phis (ndarray): columns of unwrapped phases (delta phis)
             Each col is 1 pixel of load_stack along 3rd axis
         B (ndarray): output of build_B_matrix for current set of igrams
+        geo_mask_columns (ndarray[bool])
         constant_vel (bool): force solution to have constant velocity
             mutually exclusive with `alpha` option
         alpha (float): nonnegative Tikhonov regularization parameter.
@@ -288,7 +295,7 @@ def invert_sbas(delta_phis, B, constant_vel=False, alpha=0, difference=False):
 
     # Velocity will be result of the inversion
     # velocity_array, _, rank_B, sing_vals_B = np.linalg.lstsq(B, delta_phis, rcond=None)
-    velocity_array = masking.masked_lstsq(B, delta_phis)
+    velocity_array = masking.masked_lstsq(B, delta_phis, geo_mask_columns)
 
     # velocity array entries: v_j = (phi_j - phi_j-1)/(t_j - t_j-1)
     if velocity_array.ndim == 1:
@@ -441,7 +448,7 @@ def run_inversion(igram_path,
                     order)
         unw_stack = deramp_stack(int_file_names, unw_ext, order=order)
     else:
-        unw_file_names = [f.replace('.int', unw_ext) for f in int_file_list]
+        unw_file_names = [f.replace('.int', unw_ext) for f in int_file_names]
         unw_stack = sario.load_stack(file_list=unw_file_names)
 
     unw_stack = unw_stack.view(np.ma.MaskedArray)
@@ -451,13 +458,18 @@ def run_inversion(igram_path,
         print("Creating and saving igram masks")
         masking.save_int_masks(int_file_names, intlist, geolist)
 
+    geo_file_names = read_geolist(filepath=igram_path, fnames_only=True)
+    geo_mask_file_names = [n + '.mask.npy' for n in geo_file_names]
+    geo_masks = np.ma.array(sario.load_stack(file_list=geo_mask_file_names))
+    geo_mask_columns = stack_to_cols(geo_masks)
+    # import pdb
+    # pdb.set_trace()
+
     if masking:
         # Can't use load_stack or the order is different from read_intlist
         mask_stack = sario.load_stack(file_list=int_mask_file_names)
         unw_stack.mask = mask_stack
     # unw_stack = np.ma.masked_where(np.abs(unw_stack) < 1e-2, unw_stack)
-    # import pdb
-    # pdb.set_trace()
 
     # Process the correlation, mask bad corr pixels in the igrams
     # TODO
@@ -466,6 +478,7 @@ def run_inversion(igram_path,
     if any(r is None for r in reference):
         logger.info("Finding most coherent patch in stack.")
         cc_stack = sario.load_stack(directory=igram_path, file_ext=".cc")
+        cc_stack = np.ma.array(cc_stack, mask=mask_stack)
         ref_row, ref_col = find_coherent_patch(cc_stack)
         logger.info("Using %s as .unw reference point", (ref_row, ref_col))
         del cc_stack  # In case of big memory
@@ -475,23 +488,33 @@ def run_inversion(igram_path,
     unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
     logger.debug("Shifting stack complete")
 
+    # unw_stack = unw_stack[:, -10:, -10:]  # TEST
+
     # Save shape for end
     num_ints, rows, cols = unw_stack.shape
-    phi_columns = stack_to_cols(unw_stack)
+    dphi_columns = stack_to_cols(unw_stack)
 
     phi_arr_list = []
-    for idx, columns in enumerate(np.array_split(phi_columns, 4, axis=1)):
+    for idx, columns in enumerate(np.array_split(dphi_columns, 4, axis=1)):
         logger.info("Inverting patch %s" % idx)
         varr = invert_sbas(
-            columns, B, constant_vel=constant_vel, alpha=alpha, difference=difference)
+            columns,
+            B,
+            geo_mask_columns=geo_mask_columns,
+            constant_vel=constant_vel,
+            alpha=alpha,
+            difference=difference,
+        )
         phi_arr_list.append(integrate_velocities(varr, timediffs))
 
-    phi_arr = np.hstack(phi_arr_list)
+    phi_arr = np.ma.hstack(phi_arr_list)
 
     # Multiple by wavelength ratio to go from phase to cm
     deformation = PHASE_TO_CM * phi_arr
 
     # Now reshape all outputs that should be in stack form
+    # import pdb
+    # pdb.set_trace()
     phi_arr = cols_to_stack(phi_arr, rows, cols)
     deformation = cols_to_stack(deformation, rows, cols).filled(np.NaN)
     # deformation = cols_to_stack(deformation, rows, cols).filled(0)
@@ -649,7 +672,7 @@ def find_coherent_patch(correlations, window=11):
     Uses a window of size (window x window), finds the largest average patch
 
     Args:
-        correlations (ndarray): 3D array of correlations:
+        correlations (ndarray, possibly masked): 3D array of correlations:
             correlations = sario.load_stack('path/to/correlations', '.cc')
 
         window (int): size of the patch to consider
@@ -666,13 +689,14 @@ def find_coherent_patch(correlations, window=11):
         (3, 3)
     """
     if correlations.ndim == 2:
-        mean_stack = correlations
+        mean_stack = correlations.view(np.ma.MaskedArray)
     elif correlations.ndim == 3:
-        mean_stack = np.mean(correlations, axis=0)
+        mean_stack = np.ma.mean(correlations, axis=0)
     else:
         raise ValueError("correlations must be a 2D mean array, or 3D correlations")
 
     conv = uniform_filter(mean_stack, size=window, mode='constant')
+    conv = np.ma.array(conv, mask=correlations.mask.any(axis=0))
     max_idx = conv.argmax()
     return np.unravel_index(max_idx, mean_stack.shape)
 
