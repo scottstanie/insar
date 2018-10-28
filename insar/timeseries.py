@@ -321,9 +321,9 @@ def integrate_velocities(velocity_array, timediffs):
     phi_diffs = timediffs.reshape((-1, 1)) * velocity_array
 
     # Now the final phase results are the cumulative sum of delta phis
-    phi_arr = np.cumsum(phi_diffs, axis=0)
+    phi_arr = np.ma.cumsum(phi_diffs, axis=0)
     # Add 0 as first entry of phase array to match geolist length on each col
-    phi_arr = np.insert(phi_arr, 0, 0, axis=0)
+    phi_arr = np.ma.vstack((np.zeros(phi_arr.shape[1]), phi_arr))
 
     return phi_arr
 
@@ -488,7 +488,7 @@ def run_inversion(igram_path,
     unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
     logger.debug("Shifting stack complete")
 
-    # unw_stack = unw_stack[:, -10:, -10:]  # TEST
+    # unw_stack = unw_stack[:, :100, :100]  # TEST
 
     # Save shape for end
     num_ints, rows, cols = unw_stack.shape
@@ -505,6 +505,8 @@ def run_inversion(igram_path,
             alpha=alpha,
             difference=difference,
         )
+        # import pdb
+        # pdb.set_trace()
         phi_arr_list.append(integrate_velocities(varr, timediffs))
 
     phi_arr = np.ma.hstack(phi_arr_list)
