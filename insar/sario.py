@@ -335,26 +335,34 @@ def save_hgt(filename, amp_data, height_data):
     save(filename, np.stack((amp_data, height_data), axis=0))
 
 
-def load_stack(directory, file_ext, **kwargs):
+def load_stack(file_list=None, directory=None, file_ext=None, **kwargs):
     """Reads a set of images into a 3D ndarray
 
     Args:
-        directory (str): path to a dir containing all files
-        file_ext (str): ending type of files to read (e.g. '.unw')
+        file_list (list[str]): list of file names to stack
+        directory (str): alternative to file_name: path to a dir containing all files
+            This will be loaded in ls-sorted order
+        file_ext (str): If using `directory`, the ending type
+            of files to read (e.g. '.unw')
 
     Returns:
         ndarray: 3D array of each file stacked
             1st dim is the index of the image: stack[0, :, :]
     """
-    all_file_names = sorted(find_files(directory, "*" + file_ext))
+    if file_list is None:
+        if file_ext is None:
+            raise ValueError("need file_ext if using `directory`")
+        else:
+            file_list = sorted(find_files(directory, "*" + file_ext))
+
     # Test load to get shape
-    test = load(all_file_names[0])
+    test = load(file_list[0])
     nrows, ncols = test.shape
     dtype = test.dtype
-    out = np.empty((len(all_file_names), nrows, ncols), dtype=dtype)
+    out = np.empty((len(file_list), nrows, ncols), dtype=dtype)
 
     # Now lazily load the files and store in pre-allocated 3D array
-    file_gen = (load(filename, **kwargs) for filename in all_file_names)
+    file_gen = (load(filename, **kwargs) for filename in file_list)
     for idx, img in enumerate(file_gen):
         out[idx] = img
 

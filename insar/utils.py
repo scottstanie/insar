@@ -15,6 +15,7 @@ from scipy.ndimage.interpolation import shift
 from scipy.misc import imresize
 import multiprocessing as mp
 
+import sardem
 import insar.sario
 import insar.parsers
 from insar.log import get_log, log_runtime
@@ -128,6 +129,17 @@ def mask_zeros(image):
 def force_column(arr):
     """Turns 1d numpy array into an (N, 1) shaped column"""
     return arr.reshape((len(arr), 1))
+
+
+def find_looks_taken(igram_path):
+    """Calculates how many looks from .geo files to .int files"""
+    igram_dem_rsc = sardem.loading.load_dem_rsc(os.path.join(igram_path, 'dem.rsc'))
+    geo_path = os.path.dirname(os.path.abspath(igram_path))
+    geo_dem_rsc = sardem.loading.load_dem_rsc(os.path.join(geo_path, 'elevation.dem.rsc'))
+
+    row_looks = geo_dem_rsc['file_length'] // igram_dem_rsc['file_length']
+    col_looks = geo_dem_rsc['width'] // igram_dem_rsc['width']
+    return row_looks, col_looks
 
 
 def percent_zero(filepath=None, arr=None):

@@ -24,7 +24,7 @@ from scipy.ndimage.filters import uniform_filter
 
 from sardem.loading import load_dem_rsc
 from insar.parsers import Sentinel
-from insar import sario, utils, plotting, latlon
+from insar import sario, utils, plotting, latlon, masking
 from insar.log import get_log, log_runtime
 
 SENTINEL_WAVELENGTH = 5.5465763  # cm
@@ -189,8 +189,8 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
     if not isinstance(window, int) or window < 1:
         raise ValueError("Invalid window %s: must be odd positive int" % window)
     elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
-        raise ValueError(
-            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
+        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col,
+                                                                                 stack.shape))
 
     if window % 2 == 0:
         window -= 1
@@ -239,82 +239,14 @@ def _create_diff_matrix(n, order=1):
     return diff_matrix
 
 
-def masked_lstsq(A, b, rcond=None, *args, **kwargs):
-    """Performs least squares on masked numpy arrays
-
-    Handles the mask by deleting the row of A corresponding
-    to a masked b element.
-
-    Inputs same as numpy.linalg.lstsq, where b_masked can be
-    a (n x k) matrix and each n-length column inverted.
-    """
-    b_masked = b.view(np.ma.MaskedArray)
-    if b_masked.ndim == 1:
-        b_masked = utils.force_column(b_masked)
-
-    # First check if no masks exist (run normally if so)
-    if b_masked.mask is np.ma.nomask or not b_masked.mask.any():
-        return np.linalg.lstsq(A, b, rcond=rcond, *args, **kwargs)[0]
-
-    # Otherwise, run first in bulk on all b's with no masks
-    # Only iterate over ones with some mask
-    out_final = np.ma.empty((A.shape[1], b_masked.shape[1]))
-
-    good_col_idxs = (~b_masked.mask).any(axis=0)
-    good_cols = b_masked[:, good_col_idxs]
-    good_sol = np.linalg.lstsq(A, good_cols, rcond=rcond, *args, **kwargs)[0]
-    out_final[:, good_col_idxs] = good_sol
-    bad_sol_list = []
-
-    bad_col_idxs = np.where((b_masked.mask).any(axis=0))[0]
-    for idx in bad_col_idxs:
-        # import pdb
-        # pdb.set_trace()
-        col_masked = b_masked[:, idx]
-
-        missing = col_masked.mask
-        # Add squeeze for empty mask case, since it adds
-        # a singleton dimension to beginning (?? why)
-        A_deleted = np.squeeze(A[~missing])
-        col_deleted = np.squeeze(col_masked[~missing])
-        # If all deleted, just use NaNs as the solution
-        if A_deleted.size == 0:
-            sol, residuals = np.full((out_final.shape[0], 1), np.NaN), []
-        else:
-            # print(A_deleted)
-            sol, residuals, rank, _ = np.linalg.lstsq(
-                A_deleted, col_deleted, rcond=rcond, *args, **kwargs)
-
-        # If underdetermined, fill with NaNs
-        if not residuals:
-            # TODO: do I want to try to find which are the
-            # good values/columns?
-            # For now, just NaN out pixel
-            # all_zero_cols = np.where(~A_deleted.astype(bool).any(axis=0))[0]
-            # print('zero cols', all_zero_cols)
-
-            # print('rank:', rank, 'A shape:', A.shape)
-            # print('residuals', residuals)
-            # print('sol', sol)
-            # print('A:', A_deleted)
-            # sol[all_zero_cols] = np.NaN
-            sol[...] = np.NaN
-
-        bad_sol_list.append(sol)
-
-    # Squeeze added because sometimes extra singleton dim added
-    out_final[:, bad_col_idxs] = np.squeeze(np.ma.stack(bad_sol_list, axis=1))
-    return out_final
-
-
 def invert_sbas(delta_phis, B, constant_vel=False, alpha=0, difference=False):
     """Performs and SBAS inversion on each pixel of unw_stack to find deformation
 
     Solves the least squares equation Bv = dphi
 
     Args:
-        delta_phis (ndarray): 1D array of unwrapped phases (delta phis)
-            comes from 1 pixel of load_stack along 3rd axis
+        delta_phis (ndarray): columns of unwrapped phases (delta phis)
+            Each col is 1 pixel of load_stack along 3rd axis
         B (ndarray): output of build_B_matrix for current set of igrams
         constant_vel (bool): force solution to have constant velocity
             mutually exclusive with `alpha` option
@@ -356,7 +288,7 @@ def invert_sbas(delta_phis, B, constant_vel=False, alpha=0, difference=False):
 
     # Velocity will be result of the inversion
     # velocity_array, _, rank_B, sing_vals_B = np.linalg.lstsq(B, delta_phis, rcond=None)
-    velocity_array = masked_lstsq(B, delta_phis)
+    velocity_array = masking.masked_lstsq(B, delta_phis)
 
     # velocity array entries: v_j = (phi_j - phi_j-1)/(t_j - t_j-1)
     if velocity_array.ndim == 1:
@@ -457,6 +389,7 @@ def run_inversion(igram_path,
                   constant_vel=False,
                   alpha=0,
                   difference=False,
+                  masking=True,
                   verbose=False):
     """Runs SBAS inversion on all unwrapped igrams
 
@@ -473,6 +406,7 @@ def run_inversion(igram_path,
             See https://en.wikipedia.org/wiki/Tikhonov_regularization
         difference (bool): for regularization, penalize differences in velocity
             Used to make a smoother final solution
+        masking (bool): flag to load stack og .int.mask files to mask invalid areas
         verbose (bool): print extra timing and debug info
 
     Returns:
@@ -495,6 +429,7 @@ def run_inversion(igram_path,
             B.shape, timediffs.shape))
 
     logger.debug("Reading unw stack")
+    int_file_names = read_intlist(igram_path, parse=False)
 
     unw_ext = ".unw"
     if deramp:
@@ -504,13 +439,22 @@ def run_inversion(igram_path,
         order = 1 if (width < max_linear or height < max_linear) else 2
         logger.info("Dem size %.2f by %.2f km: using order %s surface to deramp", width, height,
                     order)
-        unw_stack = deramp_stack(igram_path, unw_ext, order=order)
+        unw_stack = deramp_stack(int_file_names, unw_ext, order=order)
     else:
-        unw_stack = sario.load_stack(igram_path, unw_ext)
+        unw_file_names = [f.replace('.int', unw_ext) for f in int_file_list]
+        unw_stack = sario.load_stack(file_list=unw_file_names)
 
     unw_stack = unw_stack.view(np.ma.MaskedArray)
-    mask_stack = sario.load_stack('.', '.int.mask.npy')
-    unw_stack.mask = mask_stack
+
+    int_mask_file_names = [n + '.mask.npy' for n in int_file_names]
+    if not all(os.path.exists(f) for f in int_mask_file_names):
+        print("Creating and saving igram masks")
+        masking.save_int_masks(int_file_names, intlist, geolist)
+
+    if masking:
+        # Can't use load_stack or the order is different from read_intlist
+        mask_stack = sario.load_stack(file_list=int_mask_file_names)
+        unw_stack.mask = mask_stack
     # unw_stack = np.ma.masked_where(np.abs(unw_stack) < 1e-2, unw_stack)
     # import pdb
     # pdb.set_trace()
@@ -521,7 +465,7 @@ def run_inversion(igram_path,
     # Use the given reference, or find one on based on max correlation
     if any(r is None for r in reference):
         logger.info("Finding most coherent patch in stack.")
-        cc_stack = sario.load_stack(igram_path, ".cc")
+        cc_stack = sario.load_stack(directory=igram_path, file_ext=".cc")
         ref_row, ref_col = find_coherent_patch(cc_stack)
         logger.info("Using %s as .unw reference point", (ref_row, ref_col))
         del cc_stack  # In case of big memory
@@ -668,7 +612,7 @@ def remove_ramp(z, order=1):
         return z - z_fit
 
 
-def deramp_stack(path, unw_ext, order=1):
+def deramp_stack(int_file_list, unw_ext, order=1):
     """Handles removing linear ramps for all files in a stack
 
     Saves the files to a ".unwflat" version
@@ -676,9 +620,11 @@ def deramp_stack(path, unw_ext, order=1):
     logger.info("Removing any ramp from each stack layer")
     # Get file names to save results/ check if we deramped already
     flat_ext = unw_ext + 'flat'
-    unw_file_names = sorted(sario.find_files(path, "*" + unw_ext))
+
+    unw_file_names = [f.replace('.int', unw_ext) for f in int_file_list]
     unw_file_names = [f for f in unw_file_names if flat_ext not in f]
     flat_file_names = [filename.replace(unw_ext, flat_ext) for filename in unw_file_names]
+
     if not all(os.path.exists(f) for f in flat_file_names):
         logger.info("Removing and saving files.")
         nrows, ncols = sario.load(unw_file_names[0]).shape
@@ -693,7 +639,7 @@ def deramp_stack(path, unw_ext, order=1):
             out_stack[idx] = r
         return out_stack
     else:
-        return sario.load_stack(path, flat_ext)
+        return sario.load_stack(file_list=flat_file_names)
 
 
 def find_coherent_patch(correlations, window=11):
@@ -729,38 +675,6 @@ def find_coherent_patch(correlations, window=11):
     conv = uniform_filter(mean_stack, size=window, mode='constant')
     max_idx = conv.argmax()
     return np.unravel_index(max_idx, mean_stack.shape)
-
-
-def save_geo_masks(filepath, row_looks=1, col_looks=1):
-    """Creates .mask files for geos where zeros occur"""
-    for fname in sario.find_files(filepath, "*.geo"):
-        mask_fname = fname + '.mask.npy'
-        g = sario.load(fname, looks=(row_looks, col_looks))
-        g = np.ma.masked_where(g == 0, g)
-        print('Saving %s' % mask_fname)
-        np.save(mask_fname, g.mask)
-
-
-def save_int_masks(filepath, geo_path="../"):
-    """Assumes save_geo_masks already run"""
-    geolist = read_geolist(filepath)
-    geomask_list = []
-    for geo_date in geolist:
-        geoname = os.path.join(geo_path, '*{}*.geo.mask.npy'.format(geolist[0].strftime('%Y%m%d')))
-        geomask_name = glob.glob(geoname)[0]
-        geomask_list.append(sario.load(geomask_name))
-
-    igram_fnames = read_intlist(filepath, parse=False)
-    for idx, (early, late) in enumerate(read_intlist(filepath)):
-        early_idx = geolist.index(early)
-        late_idx = geolist.index(late)
-        early_mask = geomask_list[early_idx]
-        late_mask = geomask_list[late_idx]
-
-        igram_mask = np.logical_or(early_mask, late_mask)
-        igram_mask_name = igram_fnames[idx] + '.mask.npy'
-        print("Saving %s" % igram_mask_name)
-        np.save(igram_mask_name, igram_mask)
 
 
 def avg_stack(igram_path, row, col):
@@ -808,7 +722,7 @@ def avg_stack(igram_path, row, col):
         dest = os.path.join(subset_dir, n)
         copyfile(src, dest)
 
-    unw_stack = sario.load_stack(subset_dir, '.unw')
+    unw_stack = sario.load_stack(directory=subset_dir, file_ext='.unw')
     unw_stack = np.stack(remove_ramp(layer) for layer in unw_stack)
 
     # Pick reference point and shift
@@ -852,6 +766,5 @@ def avg_stack(igram_path, row, col):
     print(total_days * (np.max(unw_normed_shifted.reshape(
         (num_igrams, -1)), axis=1) - np.min(unw_normed_shifted.reshape((num_igrams, -1)), axis=1)))
     print("Converted to CM:")
-    print(total_days * (np.max(unw_normed_shifted.reshape(
-        (num_igrams, -1)) * PHASE_TO_CM, axis=1) - np.min(
-            unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
+    print(total_days * (np.max(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1) -
+                        np.min(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
