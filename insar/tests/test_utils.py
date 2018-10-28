@@ -23,7 +23,7 @@ class TestHelpers(unittest.TestCase):
         downsampled = utils.take_looks(self.im, 2, 1)
         assert_array_equal(downsampled, np.array([[1.55, 2.005, 1.5 + 0.5j]]))
         downsampled = utils.take_looks(self.im, 1, 2)
-        assert_array_equal(downsampled, np.array([[0.055, 2], [3.5, 1 + 1j]]))
+        assert_array_equal(downsampled, np.array([[0.055], [3.5]]))
 
     def test_split_array_into_blocks(self):
         # Even shape test

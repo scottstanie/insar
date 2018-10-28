@@ -189,8 +189,8 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
     if not isinstance(window, int) or window < 1:
         raise ValueError("Invalid window %s: must be odd positive int" % window)
     elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
-        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col,
-                                                                                 stack.shape))
+        raise ValueError(
+            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
 
     if window % 2 == 0:
         window -= 1
@@ -505,9 +505,10 @@ def run_inversion(igram_path,
         unw_stack = sario.load_stack(igram_path, unw_ext)
 
     # unw_stack = unw_stack.view(np.ma.MaskedArray)
-    unw_stack = np.ma.masked_where(np.abs(unw_stack) < 1e-2, unw_stack)
+    # unw_stack = np.ma.masked_where(np.abs(unw_stack) < 1e-2, unw_stack)
     # import pdb
     # pdb.set_trace()
+
     # Process the correlation, mask bad corr pixels in the igrams
     # TODO
 
@@ -543,6 +544,7 @@ def run_inversion(igram_path,
     # Now reshape all outputs that should be in stack form
     phi_arr = cols_to_stack(phi_arr, rows, cols)
     deformation = cols_to_stack(deformation, rows, cols).filled(np.NaN)
+    # deformation = cols_to_stack(deformation, rows, cols).filled(0)
     return (geolist, phi_arr, deformation)
 
 
@@ -812,5 +814,6 @@ def avg_stack(igram_path, row, col):
     print(total_days * (np.max(unw_normed_shifted.reshape(
         (num_igrams, -1)), axis=1) - np.min(unw_normed_shifted.reshape((num_igrams, -1)), axis=1)))
     print("Converted to CM:")
-    print(total_days * (np.max(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1) -
-                        np.min(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
+    print(total_days * (np.max(unw_normed_shifted.reshape(
+        (num_igrams, -1)) * PHASE_TO_CM, axis=1) - np.min(
+            unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))

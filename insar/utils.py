@@ -72,6 +72,8 @@ def which(program):
 def take_looks(arr, row_looks, col_looks):
     """Downsample a numpy matrix by summing blocks of (row_looks, col_looks)
 
+    Cuts off values if the size isn't divisible by num looks
+
     Args:
         arr (ndarray) 2D array of an image
         row_looks (int) the reduction rate in row direction
@@ -83,15 +85,18 @@ def take_looks(arr, row_looks, col_looks):
     if row_looks == 1 and col_looks == 1:
         return arr
     nrows, ncols = arr.shape
-    rowpad = (0, 0 if nrows % row_looks == 0 else row_looks - nrows % row_looks)
-    colpad = (0, 0 if ncols % col_looks == 0 else col_looks - ncols % col_looks)
+    row_cutoff = nrows % row_looks
+    col_cutoff = ncols % col_looks
+    if row_cutoff != 0:
+        arr = arr[:-row_cutoff, :]
+    if col_cutoff != 0:
+        arr = arr[:, :-col_cutoff]
+
+    new_rows, new_cols = arr.shape[0] // row_looks, arr.shape[1] // col_looks
     if np.issubdtype(arr.dtype, np.integer):
         arr = arr.astype('float')
-    padded = np.pad(arr, (rowpad, colpad), mode='constant', constant_values=np.NaN)
-    new_rows = padded.shape[0] // row_looks
-    new_cols = padded.shape[1] // col_looks
-    return np.nanmean(
-        np.nanmean(padded.reshape(new_rows, row_looks, new_cols, col_looks), axis=3), axis=1)
+
+    return np.mean(arr.reshape(new_rows, row_looks, new_cols, col_looks), axis=(3, 1))
 
 
 def clip(image):
