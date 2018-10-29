@@ -4,7 +4,7 @@ import subprocess
 
 import insar.utils
 import insar.tile
-import insar.masking
+import insar.mask
 import insar.timeseries
 from insar.log import get_log
 
@@ -90,7 +90,7 @@ def create_igram_masks(igram_path, row_looks=1, col_looks=1):
     int_file_names = insar.timeseries.read_intlist(filepath=igram_path, parse=False)
     geolist = insar.timeseries.read_geolist(filepath=igram_path)
     print("Creating and saving igram masks")
-    insar.masking.save_int_masks(
+    insar.mask.save_int_masks(
         int_file_names,
         intlist,
         geolist,
