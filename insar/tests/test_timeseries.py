@@ -143,12 +143,14 @@ class TestInvertSbas(unittest.TestCase):
             timeseries.run_inversion,
             self.igram_path,
             reference=(100, 100),
+            masking=False,
             verbose=True)
 
         _, phases, deformation = timeseries.run_inversion(
             self.igram_path,
             reference=(2, 0),
-            deramp=False  # For this, dont remove the linear ramp
+            deramp=False,  # For this, dont remove the linear ramp
+            masking=False,
         )
 
         assert_array_almost_equal(phases, actual_phases)
