@@ -117,9 +117,9 @@ def make_shifted_cmap(img=None, vmax=None, vmin=None, cmap_name='seismic', num_l
     """Scales the colorbar so that 0 is always centered (white)"""
     if img is not None:
         if vmin is None:
-            vmin = np.min(img)
+            vmin = np.nanmin(img)
         if vmax is None:
-            vmax = np.max(img)
+            vmax = np.nanmax(img)
 
     if vmax is None or vmin is None:
         raise ValueError("Required args: img, or vmax and vmin")
@@ -172,7 +172,7 @@ def plot_image_shifted(img,
         axes_image = ax.imshow(
             img, cmap=shifted_cmap, extent=extent, vmin=vmin, vmax=vmax, aspect=aspect)
     else:
-        vmax = max((np.abs(np.max(img)), np.abs(np.min(img))))
+        vmax = max((np.abs(np.nanmax(img)), np.abs(np.nanmin(img))))
         axes_image = ax.imshow(img, cmap=cmap, extent=extent, vmax=vmax, vmin=-vmax, aspect=aspect)
     ax.set_title(title)
     ax.set_xlabel(xlabel)
