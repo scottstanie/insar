@@ -97,29 +97,20 @@ def masked_lstsq(A, b, geo_mask_columns=None, rcond=None, *args, **kwargs):
         # Add squeeze for empty mask case, since it adds
         # a singleton dimension to beginning (?? why)
         A_deleted = np.squeeze(A[~missing])
+        if A_deleted.ndim == 1:
+            A_deleted = A_deleted[:, np.newaxis]
+
         col_deleted = np.squeeze(col_masked[~missing])
         # If all deleted, just use NaNs as the solution
         if A_deleted.size == 0:
             sol = np.full((out_final.shape[0], 1), np.NaN)
             residuals = []
         else:
-            # print(A_deleted)
             sol, residuals, rank, _ = np.linalg.lstsq(
                 A_deleted, col_deleted, rcond=rcond, *args, **kwargs)
 
-        # If underdetermined, fill with NaNs
+        # If underdetermined, fill appropriate places with NaNs
         if not residuals:
-            # TODO: do I want to try to find which are the
-            # good values/columns?
-            # For now, just NaN out pixel
-            # all_zero_cols = np.where(~A_deleted.astype(bool).any(axis=0))[0]
-            # print('zero cols', all_zero_cols)
-
-            # print('rank:', rank, 'A shape:', A.shape)
-            # print('residuals', residuals)
-            # print('sol', sol)
-            # print('A:', A_deleted)
-            # sol[all_zero_cols] = np.NaN
             if geo_mask_columns is None:
                 sol[...] = np.NaN
             else:
@@ -129,8 +120,6 @@ def masked_lstsq(A, b, geo_mask_columns=None, rcond=None, *args, **kwargs):
                 masked_idxs = np.concatenate((masked_idxs, masked_idxs - 1))
                 sol[masked_idxs] = np.NaN
                 sol = np.ma.masked_invalid(sol)
-                # import pdb
-                # pdb.set_trace()
 
         bad_sol_list.append(sol)
 
@@ -138,5 +127,12 @@ def masked_lstsq(A, b, geo_mask_columns=None, rcond=None, *args, **kwargs):
     out = np.squeeze(np.ma.stack(bad_sol_list, axis=1))
     if out.ndim == 1:
         out = utils.force_column(out)
-    out_final[:, bad_col_idxs] = out
+    try:
+        out_final[:, bad_col_idxs] = out
+    except ValueError:
+        # kinda hacky :\
+        # https://github.com/numpy/numpy/issues/5710
+        # out sometimes ends up transposed in 1-dim cases, like the
+        # constant velocity case
+        out_final[:, bad_col_idxs] = out.T
     return out_final

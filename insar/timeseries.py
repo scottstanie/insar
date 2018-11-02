@@ -194,8 +194,8 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
     if not isinstance(window, int) or window < 1:
         raise ValueError("Invalid window %s: must be odd positive int" % window)
     elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
-        raise ValueError(
-            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
+        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col,
+                                                                                 stack.shape))
 
     if window % 2 == 0:
         window -= 1
@@ -461,21 +461,24 @@ def run_inversion(igram_path,
     if masking:
         int_mask_file_names = [n + '.mask.npy' for n in int_file_names]
         if not all(os.path.exists(f) for f in int_mask_file_names):
-            print("Creating and saving igram masks")
-            mask.save_int_masks(int_file_names, intlist, geolist)
+            logger.info("Creating and saving igram masks")
+            row_looks, col_looks = utils.find_looks_taken(igram_path)
+            create_igram_masks(igram_path, row_looks=row_looks, col_looks=col_looks)
 
+        logger.info("Reading geoload masks into columns")
         geo_file_names = read_geolist(filepath=igram_path, fnames_only=True)
         geo_mask_file_names = [n + '.mask.npy' for n in geo_file_names]
         geo_masks = np.ma.array(sario.load_stack(file_list=geo_mask_file_names))
         geo_mask_columns = stack_to_cols(geo_masks)
+        del geo_masks
 
-        # Can't use load_stack or the order is different from read_intlist
+        # need to specify file_list or the order is different from read_intlist
+        logger.info("Reading igram masks")
         mask_stack = sario.load_stack(file_list=int_mask_file_names)
         unw_stack.mask = mask_stack
     else:
         mask_stack = np.full_like(unw_stack, False, dtype=bool)
         geo_mask_columns = np.full((len(timediffs), rows * cols), False)
-    # unw_stack = np.ma.masked_where(np.abs(unw_stack) < 1e-2, unw_stack)
 
     # Process the correlation, mask bad corr pixels in the igrams
     # TODO
@@ -668,6 +671,7 @@ def deramp_stack(int_file_list, unw_ext, order=1):
             out_stack[idx] = r
         return out_stack
     else:
+        logger.info("Loading previous deramped files.")
         return sario.load_stack(file_list=flat_file_names)
 
 
@@ -706,6 +710,23 @@ def find_coherent_patch(correlations, window=11):
     conv = np.ma.array(conv, mask=correlations.mask.any(axis=0))
     max_idx = conv.argmax()
     return np.unravel_index(max_idx, mean_stack.shape)
+
+
+def create_igram_masks(igram_path, row_looks=1, col_looks=1):
+    intlist = read_intlist(filepath=igram_path)
+    int_file_names = read_intlist(filepath=igram_path, parse=False)
+    geolist = read_geolist(filepath=igram_path)
+
+    geo_path = os.path.dirname(os.path.abspath(igram_path))
+    logger.info("Creating and saving igram masks")
+    mask.save_int_masks(
+        int_file_names,
+        intlist,
+        geolist,
+        geo_path=geo_path,
+        row_looks=row_looks,
+        col_looks=col_looks,
+    )
 
 
 def avg_stack(igram_path, row, col):
@@ -797,6 +818,5 @@ def avg_stack(igram_path, row, col):
     print(total_days * (np.max(unw_normed_shifted.reshape(
         (num_igrams, -1)), axis=1) - np.min(unw_normed_shifted.reshape((num_igrams, -1)), axis=1)))
     print("Converted to CM:")
-    print(total_days * (np.max(unw_normed_shifted.reshape(
-        (num_igrams, -1)) * PHASE_TO_CM, axis=1) - np.min(
-            unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
+    print(total_days * (np.max(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1) -
+                        np.min(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
