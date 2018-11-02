@@ -94,13 +94,25 @@ def masked_lstsq(A, b, geo_mask_columns=None, rcond=None, *args, **kwargs):
         col_masked = b_masked[:, idx]
 
         missing = col_masked.mask
+        if np.all(missing):
+            # Here the entire column is masked, so skip with nans
+            nan_solution = np.full(out_final.shape[0], np.nan)
+            bad_sol_list.append(nan_solution)
+            continue
+
         # Add squeeze for empty mask case, since it adds
         # a singleton dimension to beginning (?? why)
         A_deleted = np.squeeze(A[~missing])
         if A_deleted.ndim == 1:
             A_deleted = A_deleted[:, np.newaxis]
+        elif A_deleted.ndim == 0:
+            # Edge case: only 1 true "missing" entry
+            A_deleted = np.atleast_2d(A_deleted)
 
         col_deleted = np.squeeze(col_masked[~missing])
+        if col_deleted.ndim == 0:
+            col_deleted = np.atleast_1d(col_deleted)
+
         # If all deleted, just use NaNs as the solution
         if A_deleted.size == 0:
             sol = np.full((out_final.shape[0], 1), np.NaN)
@@ -111,13 +123,13 @@ def masked_lstsq(A, b, geo_mask_columns=None, rcond=None, *args, **kwargs):
 
         # If underdetermined, fill appropriate places with NaNs
         if not residuals:
-            if geo_mask_columns is None:
+            if geo_mask_columns is None or A.shape[1] != geo_mask_columns.shape[0]:
                 sol[...] = np.NaN
             else:
                 mask_col = geo_mask_columns[:, idx]
                 masked_idxs = np.where(mask_col)[0]
                 # In min velocity LS, a 0 affects before and on index
-                masked_idxs = np.concatenate((masked_idxs, masked_idxs - 1))
+                masked_idxs = np.unique(np.concatenate((masked_idxs, masked_idxs - 1)))
                 sol[masked_idxs] = np.NaN
                 sol = np.ma.masked_invalid(sol)
 
@@ -125,6 +137,7 @@ def masked_lstsq(A, b, geo_mask_columns=None, rcond=None, *args, **kwargs):
 
     # Squeeze added because sometimes extra singleton dim added
     out = np.squeeze(np.ma.stack(bad_sol_list, axis=1))
+
     if out.ndim == 1:
         out = utils.force_column(out)
     try:

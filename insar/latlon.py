@@ -40,6 +40,9 @@ class LatlonImage(np.ndarray):
             if (obj.dem_rsc['file_length'], obj.dem_rsc['width']) != obj.shape:
                 raise ValueError("Shape %s does not equal dem_rsc data (%s, %s)" %
                                  (obj.shape, obj.dem_rsc['file_length'], obj.dem_rsc['width']))
+        if not hasattr(obj, 'points'):
+            obj.points = []
+
         return obj
 
     def __array_finalize__(self, obj):
@@ -48,6 +51,7 @@ class LatlonImage(np.ndarray):
         self.filename = getattr(obj, 'filename', None)
         self.dem_rsc_file = getattr(obj, 'dem_rsc_file', None)
         self.dem_rsc = getattr(obj, 'dem_rsc', None)
+        self.points = getattr(obj, 'points', None)
 
     def __getitem__(self, items):
         """Runs on access/slicing: we want to adjust the dem_rsc
