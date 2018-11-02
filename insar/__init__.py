@@ -3,7 +3,7 @@ warnings.filterwarnings("ignore", message="numpy.dtype size changed")
 warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 from . import blob
 from . import geojson
-from . import masking
+from . import mask
 from . import latlon
 from . import log
 from . import los

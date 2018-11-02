@@ -1,6 +1,6 @@
 import numpy as np
 import itertools
-from insar import timeseries, masking, sario
+from insar import timeseries, mask, sario
 from datetime import datetime
 
 # 5 geos made so that the most igrams any date can make is
@@ -31,7 +31,7 @@ geo_tuple = [geo1, geo2, geo3, geo4, geo5, geo6]
 # mask4[3, 3] = 1
 # mask4[0, 0] = 1
 
-# Method 2: make some pixels 0, and run masking functions
+# Method 2: make some pixels 0, and run mask functions
 geo_tuple[1][3, 3] = 0
 geo_tuple[3][3, 3] = 0
 
@@ -73,7 +73,7 @@ for early_idx, late_idx in itertools.combinations(range(len(truth_geos)), 2):
     igram_fname_list.append(fname)
     igram_list.append(igram)
 
-masking.save_int_masks(igram_fname_list, igram_date_list, geo_date_list, geo_path='.')
+mask.save_int_masks(igram_fname_list, igram_date_list, geo_date_list, geo_path='.')
 
 geo_masks = sario.load_stack(directory='.', file_ext='.geo.mask.npy')
 geo_mask_columns = timeseries.stack_to_cols(geo_masks)

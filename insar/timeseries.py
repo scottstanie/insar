@@ -24,7 +24,7 @@ from scipy.ndimage.filters import uniform_filter
 
 from sardem.loading import load_dem_rsc
 from insar.parsers import Sentinel
-from insar import sario, utils, plotting, latlon, masking
+from insar import sario, utils, plotting, latlon, mask
 from insar.log import get_log, log_runtime
 
 SENTINEL_WAVELENGTH = 5.5465763  # cm
@@ -194,8 +194,8 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
     if not isinstance(window, int) or window < 1:
         raise ValueError("Invalid window %s: must be odd positive int" % window)
     elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
-        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col,
-                                                                                 stack.shape))
+        raise ValueError(
+            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
 
     if window % 2 == 0:
         window -= 1
@@ -295,7 +295,7 @@ def invert_sbas(delta_phis, B, geo_mask_columns=None, constant_vel=False, alpha=
 
     # Velocity will be result of the inversion
     # velocity_array, _, rank_B, sing_vals_B = np.linalg.lstsq(B, delta_phis, rcond=None)
-    velocity_array = masking.masked_lstsq(B, delta_phis, geo_mask_columns)
+    velocity_array = mask.masked_lstsq(B, delta_phis, geo_mask_columns)
 
     # velocity array entries: v_j = (phi_j - phi_j-1)/(t_j - t_j-1)
     if velocity_array.ndim == 1:
@@ -452,23 +452,29 @@ def run_inversion(igram_path,
         unw_stack = sario.load_stack(file_list=unw_file_names)
 
     unw_stack = unw_stack.view(np.ma.MaskedArray)
+    # Save shape for end
+    num_ints, rows, cols = unw_stack.shape
 
-    int_mask_file_names = [n + '.mask.npy' for n in int_file_names]
-    if not all(os.path.exists(f) for f in int_mask_file_names):
-        print("Creating and saving igram masks")
-        masking.save_int_masks(int_file_names, intlist, geolist)
-
-    geo_file_names = read_geolist(filepath=igram_path, fnames_only=True)
-    geo_mask_file_names = [n + '.mask.npy' for n in geo_file_names]
-    geo_masks = np.ma.array(sario.load_stack(file_list=geo_mask_file_names))
-    geo_mask_columns = stack_to_cols(geo_masks)
     # import pdb
     # pdb.set_trace()
 
     if masking:
+        int_mask_file_names = [n + '.mask.npy' for n in int_file_names]
+        if not all(os.path.exists(f) for f in int_mask_file_names):
+            print("Creating and saving igram masks")
+            mask.save_int_masks(int_file_names, intlist, geolist)
+
+        geo_file_names = read_geolist(filepath=igram_path, fnames_only=True)
+        geo_mask_file_names = [n + '.mask.npy' for n in geo_file_names]
+        geo_masks = np.ma.array(sario.load_stack(file_list=geo_mask_file_names))
+        geo_mask_columns = stack_to_cols(geo_masks)
+
         # Can't use load_stack or the order is different from read_intlist
         mask_stack = sario.load_stack(file_list=int_mask_file_names)
         unw_stack.mask = mask_stack
+    else:
+        mask_stack = np.full_like(unw_stack, False, dtype=bool)
+        geo_mask_columns = np.full((len(timediffs), rows * cols), False)
     # unw_stack = np.ma.masked_where(np.abs(unw_stack) < 1e-2, unw_stack)
 
     # Process the correlation, mask bad corr pixels in the igrams
@@ -490,8 +496,6 @@ def run_inversion(igram_path,
 
     # unw_stack = unw_stack[:, :100, :100]  # TEST
 
-    # Save shape for end
-    num_ints, rows, cols = unw_stack.shape
     dphi_columns = stack_to_cols(unw_stack)
 
     phi_arr_list = []
@@ -690,8 +694,9 @@ def find_coherent_patch(correlations, window=11):
         >>> print(find_coherent_patch(corrs, window=3))
         (3, 3)
     """
+    correlations = correlations.view(np.ma.MaskedArray)  # Force to ma
     if correlations.ndim == 2:
-        mean_stack = correlations.view(np.ma.MaskedArray)
+        mean_stack = correlations
     elif correlations.ndim == 3:
         mean_stack = np.ma.mean(correlations, axis=0)
     else:
@@ -792,5 +797,6 @@ def avg_stack(igram_path, row, col):
     print(total_days * (np.max(unw_normed_shifted.reshape(
         (num_igrams, -1)), axis=1) - np.min(unw_normed_shifted.reshape((num_igrams, -1)), axis=1)))
     print("Converted to CM:")
-    print(total_days * (np.max(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1) -
-                        np.min(unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
+    print(total_days * (np.max(unw_normed_shifted.reshape(
+        (num_igrams, -1)) * PHASE_TO_CM, axis=1) - np.min(
+            unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
