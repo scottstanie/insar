@@ -246,13 +246,15 @@ def make_blob_image(igram_path=".",
         img, img_data=img.dem_rsc, title=title, xlabel='Longitude', ylabel='Latitude')
     # imagefig, axes_image = plotting.plot_image_shifted(img, title=title)
 
-    blob_filename = 'blobs.npy'
+    # blob_filename = 'blobs.npy'
 
     if load and os.path.exists(blob_filename):
+        print("Loading %s" % blob_filename)
         blobs = np.load(blob_filename)
     else:
         extra_args = _handle_args(blobfunc_args)
         blobs = _make_blobs(img, extra_args)
+        print("Saving %s" % blob_filename)
         np.save(blob_filename, blobs)
 
     blobs_ll = blobs_latlon(blobs, img.dem_rsc)

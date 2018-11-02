@@ -83,17 +83,3 @@ def symlink_sentinels(tile, sentinel_list, verbose=False):
             insar.utils.force_symlink(s.filename, dest)
     if verbose:
         logger.info("%s symlinks created for %s", num_links, tile)
-
-
-def create_igram_masks(igram_path, row_looks=1, col_looks=1):
-    intlist = insar.timeseries.read_intlist(filepath=igram_path)
-    int_file_names = insar.timeseries.read_intlist(filepath=igram_path, parse=False)
-    geolist = insar.timeseries.read_geolist(filepath=igram_path)
-    print("Creating and saving igram masks")
-    insar.mask.save_int_masks(
-        int_file_names,
-        intlist,
-        geolist,
-        row_looks=row_looks,
-        col_looks=col_looks,
-    )

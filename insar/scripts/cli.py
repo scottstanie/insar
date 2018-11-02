@@ -431,7 +431,7 @@ def intmask(context):
     """
     igram_path = context.obj['path']
     row_looks, col_looks = insar.utils.find_looks_taken(igram_path)
-    insar.scripts.preproc.create_igram_masks(
+    insar.timeseries.create_igram_masks(
         igram_path,
         row_looks=row_looks,
         col_looks=col_looks,

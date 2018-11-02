@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import os
 import glob
 from collections import defaultdict, Counter
@@ -10,7 +11,7 @@ import sardem
 
 
 def run_blob(thresh, val_thresh, fname):
-    extra_args = {'threshold': thresh, 'value_threshold': val_thresh}
+    extra_args = {'threshold': thresh, 'value_threshold': val_thresh, 'max_sigma': 100}
     blobs = blob._make_blobs(img, extra_args)
 
     print("saving", fname, "size:", len(blobs))
@@ -18,13 +19,15 @@ def run_blob(thresh, val_thresh, fname):
 
 
 if __name__ == '__main__':
+    igram_path = '.'
+    print("Loading deformation image")
+    geolist, deformation = timeseries.load_deformation(igram_path)
+    rsc_data = sardem.loading.load_dem_rsc(os.path.join(igram_path, 'dem.rsc'))
+
+    img = latlon.LatlonImage(data=np.mean(deformation[-3:], axis=0), dem_rsc=rsc_data)
+
     blob_name_list = glob.glob("./blobs_*.npy")
     if len(blob_name_list) == 0:
-        igram_path = '.'
-        geolist, deformation = timeseries.load_deformation(igram_path)
-        rsc_data = sardem.loading.load_dem_rsc(os.path.join(igram_path, 'dem.rsc'))
-
-        img = latlon.LatlonImage(data=np.mean(deformation[-3:], axis=0), dem_rsc=rsc_data)
 
         threshold_list = [0.3, 0.5, 0.8, 1]  # For filter response
         value_threshold_list = np.linspace(0.2, 2, 20)  # Blob magnitude
@@ -42,10 +45,13 @@ if __name__ == '__main__':
         [p.join() for p in procs]
 
     # Now load and manipulate for stats
+
+    print("Loading blobs")
     blobs_list = [np.load(features_vs_size) for features_vs_size in blob_name_list]
 
     features_thresh_raw = defaultdict(dict)
     features_vs_size = {}
+    print("Parsing blobs")
     for blobs, b_name in zip(blobs_list, blob_name_list):
         _, thresh, val_thresh = b_name.strip('.npy').split('_')
         thresh = float(thresh)
@@ -77,10 +83,17 @@ if __name__ == '__main__':
     legends = []
     for thresh, data in sorted(features_vs_size.items()):
         legends.append('thresh: %s' % thresh)
-        axes[1].scatter(data[:, 0], data[:, 1])
+        # import pdb
+        # pdb.set_trace()
+        # TODO: fix blob size
+        sizes_km = [img.distance((0, 0), (0, d)) for d in data[:, 0]]
+        # axes[1].scatter(img.blob_size(data[:, 0]), data[:, 1])
+        axes[1].scatter(sizes_km, data[:, 1])
     axes[1].set_title('Features vs size (thresh=0.5)')
-    axes[1].set_xlabel('Size, $\sigma$')
+    # axes[1].set_xlabel('Size, $\sigma$')
+    axes[1].set_xlabel('Size, km')
     axes[1].set_ylabel('number of blobs found')
     axes[1].legend(legends)
 
-    plt.show()
+    print("Showing")
+    plt.show(block=True)

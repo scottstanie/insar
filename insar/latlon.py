@@ -139,6 +139,7 @@ class LatlonImage(np.ndarray):
         return rsc_copy
 
     def rowcol_to_latlon(self, row, col):
+        print('rowcol to latlon img', row, col)
         return rowcol_to_latlon(row, col, self.dem_rsc)
 
     @property
@@ -159,12 +160,18 @@ class LatlonImage(np.ndarray):
         Returns:
             float: distance in km between two points on LatlonImage
         """
+        print('distance')
+        print('rowcol 1', row_col1)
+        print('rowcol 2', row_col2)
         latlon1 = self.rowcol_to_latlon(*row_col1)
         latlon2 = self.rowcol_to_latlon(*row_col2)
+        print('latlon', latlon1, latlon2)
         return latlon_to_dist(latlon1, latlon2)
 
     def blob_size(self, radius):
         """Finds the radius of a circle/blob on the LatlonImage in km"""
+        # Use the center of the image as dummy center for circle
+        # (really only sigma/radius matters)
         nrows, ncols = self.shape
         midrow, midcol = nrows // 2, ncols // 2
         return self.distance((midrow, midcol), (midrow + radius, midcol + radius))
@@ -204,6 +211,7 @@ def rowcol_to_latlon(row, col, rsc_data):
         (1.4, 1.4)
     """
     # Force keys to lowercase
+    print('row', row, 'col', col)
     rsc_data = {k.lower(): v for k, v in rsc_data.items()}
     start_lon = rsc_data["x_first"]
     start_lat = rsc_data["y_first"]
