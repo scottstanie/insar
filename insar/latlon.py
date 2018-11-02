@@ -1,6 +1,6 @@
 from __future__ import division
 import copy
-from math import sin, cos, sqrt, atan2, radians
+from numpy import sin, cos, sqrt, arctan2, radians
 # import os
 import numpy as np
 from insar import sario, utils, kml
@@ -139,7 +139,6 @@ class LatlonImage(np.ndarray):
         return rsc_copy
 
     def rowcol_to_latlon(self, row, col):
-        print('rowcol to latlon img', row, col)
         return rowcol_to_latlon(row, col, self.dem_rsc)
 
     @property
@@ -160,16 +159,16 @@ class LatlonImage(np.ndarray):
         Returns:
             float: distance in km between two points on LatlonImage
         """
-        print('distance')
-        print('rowcol 1', row_col1)
-        print('rowcol 2', row_col2)
         latlon1 = self.rowcol_to_latlon(*row_col1)
         latlon2 = self.rowcol_to_latlon(*row_col2)
-        print('latlon', latlon1, latlon2)
         return latlon_to_dist(latlon1, latlon2)
 
     def blob_size(self, radius):
-        """Finds the radius of a circle/blob on the LatlonImage in km"""
+        """Finds the radius of a circles/blobs on the LatlonImage in km
+
+        Can also pass array of radii to get multiple distances
+        """
+        radius = np.array(radius)
         # Use the center of the image as dummy center for circle
         # (really only sigma/radius matters)
         nrows, ncols = self.shape
@@ -211,7 +210,6 @@ def rowcol_to_latlon(row, col, rsc_data):
         (1.4, 1.4)
     """
     # Force keys to lowercase
-    print('row', row, 'col', col)
     rsc_data = {k.lower(): v for k, v in rsc_data.items()}
     start_lon = rsc_data["x_first"]
     start_lat = rsc_data["y_first"]
@@ -253,7 +251,7 @@ def latlon_to_dist(lat_lon_start, lat_lon_end, R=6378):
     lat1 = radians(lat1)
     lat2 = radians(lat2)
     a = (sin(dlat / 2)**2) + (cos(lat1) * cos(lat2) * sin(dlon / 2)**2)
-    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    c = 2 * arctan2(sqrt(a), sqrt(1 - a))
     return R * c
 
 
