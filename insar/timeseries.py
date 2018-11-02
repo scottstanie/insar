@@ -455,9 +455,6 @@ def run_inversion(igram_path,
     # Save shape for end
     num_ints, rows, cols = unw_stack.shape
 
-    # import pdb
-    # pdb.set_trace()
-
     if masking:
         int_mask_file_names = [n + '.mask.npy' for n in int_file_names]
         if not all(os.path.exists(f) for f in int_mask_file_names):
@@ -497,8 +494,6 @@ def run_inversion(igram_path,
     unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
     logger.debug("Shifting stack complete")
 
-    # unw_stack = unw_stack[:, :100, :100]  # TEST
-
     dphi_columns = stack_to_cols(unw_stack)
 
     phi_arr_list = []
@@ -512,8 +507,6 @@ def run_inversion(igram_path,
             alpha=alpha,
             difference=difference,
         )
-        # import pdb
-        # pdb.set_trace()
         phi_arr_list.append(integrate_velocities(varr, timediffs))
 
     phi_arr = np.ma.hstack(phi_arr_list)
@@ -522,11 +515,8 @@ def run_inversion(igram_path,
     deformation = PHASE_TO_CM * phi_arr
 
     # Now reshape all outputs that should be in stack form
-    # import pdb
-    # pdb.set_trace()
     phi_arr = cols_to_stack(phi_arr, rows, cols)
     deformation = cols_to_stack(deformation, rows, cols).filled(np.NaN)
-    # deformation = cols_to_stack(deformation, rows, cols).filled(0)
     return (geolist, phi_arr, deformation)
 
 

@@ -83,12 +83,7 @@ if __name__ == '__main__':
     legends = []
     for thresh, data in sorted(features_vs_size.items()):
         legends.append('thresh: %s' % thresh)
-        # import pdb
-        # pdb.set_trace()
-        # TODO: fix blob size
-        sizes_km = [img.distance((0, 0), (0, d)) for d in data[:, 0]]
-        # axes[1].scatter(img.blob_size(data[:, 0]), data[:, 1])
-        axes[1].scatter(sizes_km, data[:, 1])
+        axes[1].scatter(img.blob_size(data[:, 0]), data[:, 1])
     axes[1].set_title('Features vs size (thresh=0.5)')
     # axes[1].set_xlabel('Size, $\sigma$')
     axes[1].set_xlabel('Size, km')
