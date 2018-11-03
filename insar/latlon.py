@@ -259,6 +259,18 @@ def latlon_to_dist(lat_lon_start, lat_lon_end, R=6378):
     return R * c
 
 
+def km_to_deg(km, R=6378):
+    """Find the degrees separation for distance km
+
+    Assumes distance along great circle arc
+    """
+    return 360 * km / (2 * np.pi * R)
+
+
+# Alias to match latlon_to_dist
+dist_to_deg = km_to_deg
+
+
 def grid(rows=None,
          cols=None,
          y_step=None,
