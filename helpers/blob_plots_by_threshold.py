@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import argparse
 import os
 import glob
 from collections import defaultdict, Counter
@@ -11,7 +12,12 @@ import sardem
 
 
 def run_blob(thresh, val_thresh, fname):
-    extra_args = {'threshold': thresh, 'value_threshold': val_thresh, 'max_sigma': 100}
+    extra_args = {
+        'threshold': thresh,
+        'value_threshold': val_thresh,
+        'max_sigma': 100,
+        'min_sigma': 10,
+    }
     blobs = blob._make_blobs(img, extra_args)
 
     print("saving", fname, "size:", len(blobs))
@@ -19,6 +25,10 @@ def run_blob(thresh, val_thresh, fname):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-o", "--overwrite", action="store_true", default=False)
+    args = parser.parse_args()
+
     igram_path = '.'
     print("Loading deformation image")
     geolist, deformation = timeseries.load_deformation(igram_path)
@@ -27,7 +37,7 @@ if __name__ == '__main__':
     img = latlon.LatlonImage(data=np.mean(deformation[-3:], axis=0), dem_rsc=rsc_data)
 
     blob_name_list = glob.glob("./blobs_*.npy")
-    if len(blob_name_list) == 0:
+    if len(blob_name_list) == 0 or args.overwrite:
 
         threshold_list = [0.3, 0.5, 0.8, 1]  # For filter response
         value_threshold_list = np.linspace(0.2, 2, 20)  # Blob magnitude
@@ -58,7 +68,7 @@ if __name__ == '__main__':
         val_thresh = float(val_thresh)
         features_thresh_raw[thresh][val_thresh] = len(blobs)
 
-        if thresh == 0.5:
+        if thresh == 0.3:
             c = Counter(blobs.astype(int)[:, 2])
             features_vs_size[val_thresh] = np.array(list(c.items()))
 
