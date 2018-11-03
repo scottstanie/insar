@@ -120,6 +120,7 @@ def masked_lstsq(A, b, geo_mask_columns=None, rcond=None, *args, **kwargs):
                 # Also update the mask for these NaNs
                 sol = np.ma.masked_invalid(sol)
 
-        out_final[:, idx] = sol
+        # Use tuple around out_final[:, [idx]] to make shape (N,1)
+        out_final[:, [idx]] = utils.atleast_2d(sol)
 
     return out_final
