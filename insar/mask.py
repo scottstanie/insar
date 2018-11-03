@@ -78,8 +78,8 @@ def masked_lstsq(A, b, geo_mask_columns=None, rcond=None, *args, **kwargs):
     if b_masked.mask is np.ma.nomask or not b_masked.mask.any():
         return np.linalg.lstsq(A, b, rcond=rcond, *args, **kwargs)[0]
 
-    # Otherwise, run first in bulk on all b's with no masks
-    # Only iterate over ones with some mask
+    # Otherwise, run first in bulk on all b's with no masks and
+    # only loop over ones with some mask
     out_final = np.ma.empty((A.shape[1], b_masked.shape[1]))
 
     good_col_idxs = ~(b_masked.mask).any(axis=0)
@@ -88,7 +88,6 @@ def masked_lstsq(A, b, geo_mask_columns=None, rcond=None, *args, **kwargs):
         good_sol = np.linalg.lstsq(A, good_cols, rcond=rcond, *args, **kwargs)[0]
         out_final[:, good_col_idxs] = good_sol
 
-    bad_sol_list = []
     bad_col_idxs = np.where((b_masked.mask).any(axis=0))[0]
     for idx in bad_col_idxs:
         col_masked = b_masked[:, idx]
@@ -96,30 +95,17 @@ def masked_lstsq(A, b, geo_mask_columns=None, rcond=None, *args, **kwargs):
         missing = col_masked.mask
         if np.all(missing):
             # Here the entire column is masked, so skip with nans
-            nan_solution = np.full(out_final.shape[0], np.nan)
-            bad_sol_list.append(nan_solution)
+            out_final[:, idx] = np.full((out_final.shape[0], 1), np.nan)
             continue
 
         # Add squeeze for empty mask case, since it adds
         # a singleton dimension to beginning (?? why)
-        A_deleted = np.squeeze(A[~missing])
-        if A_deleted.ndim == 1:
-            A_deleted = A_deleted[:, np.newaxis]
-        elif A_deleted.ndim == 0:
-            # Edge case: only 1 true "missing" entry
-            A_deleted = np.atleast_2d(A_deleted)
+        A_deleted = utils.atleast_2d(np.squeeze(A[~missing]))
 
-        col_deleted = np.squeeze(col_masked[~missing])
-        if col_deleted.ndim == 0:
-            col_deleted = np.atleast_1d(col_deleted)
+        col_deleted = utils.atleast_2d(np.squeeze(col_masked[~missing]))
 
-        # If all deleted, just use NaNs as the solution
-        if A_deleted.size == 0:
-            sol = np.full((out_final.shape[0], 1), np.NaN)
-            residuals = []
-        else:
-            sol, residuals, rank, _ = np.linalg.lstsq(
-                A_deleted, col_deleted, rcond=rcond, *args, **kwargs)
+        sol, residuals, rank, _ = np.linalg.lstsq(
+            A_deleted, col_deleted, rcond=rcond, *args, **kwargs)
 
         # If underdetermined, fill appropriate places with NaNs
         if not residuals:
@@ -128,24 +114,12 @@ def masked_lstsq(A, b, geo_mask_columns=None, rcond=None, *args, **kwargs):
             else:
                 mask_col = geo_mask_columns[:, idx]
                 masked_idxs = np.where(mask_col)[0]
-                # In min velocity LS, a 0 affects before and on index
-                masked_idxs = np.unique(np.concatenate((masked_idxs, masked_idxs - 1)))
+                # In min velocity LS, a 0 affects before and on cur index
+                masked_idxs = np.concatenate((masked_idxs, np.clip(masked_idxs - 1, 0, None)))
                 sol[masked_idxs] = np.NaN
+                # Also update the mask for these NaNs
                 sol = np.ma.masked_invalid(sol)
 
-        bad_sol_list.append(sol)
+        out_final[:, idx] = sol
 
-    # Squeeze added because sometimes extra singleton dim added
-    out = np.squeeze(np.ma.stack(bad_sol_list, axis=1))
-
-    if out.ndim == 1:
-        out = utils.force_column(out)
-    try:
-        out_final[:, bad_col_idxs] = out
-    except ValueError:
-        # kinda hacky :\
-        # https://github.com/numpy/numpy/issues/5710
-        # out sometimes ends up transposed in 1-dim cases, like the
-        # constant velocity case
-        out_final[:, bad_col_idxs] = out.T
     return out_final

@@ -131,6 +131,27 @@ def force_column(arr):
     return arr.reshape((len(arr), 1))
 
 
+def atleast_2d(*arys):
+    """column version of numpy's atleast_2d
+
+    Reshapes to be (N, 1) if 1d
+    """
+    res = []
+    for ary in arys:
+        ary = np.asanyarray(ary)
+        if ary.ndim == 0:
+            result = ary.reshape(1, 1)
+        elif ary.ndim == 1:
+            result = ary[:, np.newaxis]
+        else:
+            result = ary
+        res.append(result)
+    if len(res) == 1:
+        return res[0]
+    else:
+        return res
+
+
 def find_looks_taken(igram_path):
     """Calculates how many looks from .geo files to .int files"""
     igram_dem_rsc = sardem.loading.load_dem_rsc(os.path.join(igram_path, 'dem.rsc'))
