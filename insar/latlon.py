@@ -179,6 +179,11 @@ class LatlonImage(np.ndarray):
         midrow, midcol = nrows // 2, ncols // 2
         return self.distance((midrow, midcol), (midrow + radius, midcol + radius))
 
+    def km_to_pixels(self, km):
+        """Convert a km distance into number of pixels across"""
+        deg_per_pixel = self.dem_rsc['x_step']  # assume x_step = y_step
+        return km_to_pixels(km, deg_per_pixel)
+
 
 def LatlonStack(LatlonImage):
     """3D stack version of LatlonImage"""
@@ -263,12 +268,41 @@ def km_to_deg(km, R=6378):
     """Find the degrees separation for distance km
 
     Assumes distance along great circle arc
+
+    Args:
+        km (float): distance in degrees
+        R (float): default 6378, Radius of Earth in km
+
+    Returns:
+        float: distance in degrees
     """
     return 360 * km / (2 * np.pi * R)
 
 
 # Alias to match latlon_to_dist
 dist_to_deg = km_to_deg
+
+
+def km_to_pixels(km, step, R=6378):
+    """Convert km distance to pixel size
+
+    Note: This assumes x_step, y_step are equal, and
+    calculates the distance in a vertical direction
+    (which is more pixels than in the diagonal direction)
+
+    Args:
+        km (float): distance in degrees
+        step (float): number of degrees per pixel step
+        R (float): default 6378, Radius of Earth in km
+
+    Returns:
+        float: distance in number of pixels
+    """
+    degrees = km_to_deg(km, R)
+    return degrees / step
+
+
+dist_to_pixel = km_to_pixels
 
 
 def grid(rows=None,
@@ -401,7 +435,7 @@ def grid_width_height(**kwargs):
     return (right - left, top - bot)
 
 
-def rot(angle, axis):
+def rot(angle, axis, in_degrees=True):
     """
     Find a 3x3 euler rotation matrix given an angle and axis.
 
@@ -410,10 +444,14 @@ def rot(angle, axis):
     Args:
         angle (float): angle in degrees to rotate
         axis (int): 1, 2 or 3
+        in_degrees (bool): specify the angle in degrees. if false, using
+            radians for `angle`
     """
     R = np.eye(3)
-    cang = cos(np.deg2rad(angle))
-    sang = sin(np.deg2rad(angle))
+    if in_degrees:
+        angle = np.deg2rad(angle)
+    cang = cos(angle)
+    sang = sin(angle)
     if (axis == 1):
         R[1, 1] = cang
         R[2, 2] = cang
