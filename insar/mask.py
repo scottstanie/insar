@@ -109,7 +109,9 @@ def masked_lstsq(A, b, geo_mask_columns=None, rcond=None, *args, **kwargs):
 
         # If underdetermined, fill appropriate places with NaNs
         if not residuals:
-            if geo_mask_columns is None or A.shape[1] != geo_mask_columns.shape[0]:
+            # If we aren't maksing specific geo dates, or doing a constant vel solution
+            # TODO: Are there other cases we want to mask all?
+            if geo_mask_columns is None or A.shape[1] == 1:
                 sol[...] = np.NaN
             else:
                 mask_col = geo_mask_columns[:, idx]
