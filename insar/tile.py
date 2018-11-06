@@ -293,7 +293,7 @@ def create_tiles(data_path=None,
     return tile_grid.make_tiles(verbose=verbose)
 
 
-def plot_tiles(dirlist):
+def plot_tiles(dirlist, gps_station_list=None):
     """Takes a list of tile directories and plots the deformation result
 
     Args:
@@ -339,7 +339,12 @@ def plot_tiles(dirlist):
         defo_img_list.append(defo_img)
         img_data_list.append(img_data)
 
-    # vmax = np.nanmax(np.array([np.abs(img) for img in defo_img_list]))
+    # Now also get gps station list
+    gps_dir = '/data1/scott/pecos/gps_station_data'
+    all_station_data = read_station_dict(os.path.join(gps_dir, 'texas_stations.csv'))
+    station_data_list = find_station_data(gps_dir)
+    stations_with_data = [tup for tup in all_station_data if tup[0] in station_data_list]
+
     vmax = np.nanmax(np.stack(defo_img_list, axis=0))
     vmin = np.nanmin(np.stack(defo_img_list, axis=0))
     print('vmin, vmax', vmin, vmax)
@@ -358,7 +363,14 @@ def plot_tiles(dirlist):
         #     perform_shift=True,
         # )
 
-        extent = latlon.grid_extent(**img_data_list[idx])
+        cur_data = img_data_list[idx]
+        extent = latlon.grid_extent(**cur_data)
+        points = []
+        legends = []
+        for name, lon, lat in stations_with_data:
+            if latlon.grid_contains((lon, lat), **cur_data):
+                points.append((lon, lat))
+                legends.append(name)
 
         shifted_cmap = plotting.make_shifted_cmap(
             cmap_name=cmap_name,
@@ -374,5 +386,29 @@ def plot_tiles(dirlist):
 
         cbar = fig.colorbar(im, ax=cur_ax, boundaries=np.arange(vmin, vmax + 1).astype(int))
         cbar.set_clim(vmin, vmax)
+        for lon, lat in points:
+            cur_ax.plot(lon, lat, 'X', markersize=15)
+        cur_ax.legend(legends)
 
-    return fig, axes
+    return fig, axes, defo_img_list, img_data_list
+
+
+def read_station_dict(filename):
+    """Reads in GPS station data"""
+    with open(filename) as f:
+        station_strings = [row for row in f.read().splitlines()]
+
+    all_station_data = []
+    for row in station_strings:
+        name, lat, lon, _ = row.split(',')  # Ignore altitude
+        all_station_data.append((name, float(lon), float(lat)))
+    return all_station_data
+
+
+def find_station_data(gps_dir):
+    station_files = glob.glob(os.path.join(gps_dir, '*.tenv3'))
+    station_list = []
+    for filename in station_files:
+        _, name = os.path.split(filename)
+        station_list.append(name.split('.')[0])
+    return station_list

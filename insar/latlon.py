@@ -435,6 +435,13 @@ def grid_width_height(**kwargs):
     return (right - left, top - bot)
 
 
+def grid_contains(point, **kwargs):
+    """Returns true if point (x, y) or (lon, lat) is within the grid"""
+    point_x, point_y = point
+    left, right, bot, top = grid_extent(**kwargs)
+    return (left < point_x < right) and (bot < point_y < top)
+
+
 def rot(angle, axis, in_degrees=True):
     """
     Find a 3x3 euler rotation matrix given an angle and axis.

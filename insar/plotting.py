@@ -121,7 +121,6 @@ def make_shifted_cmap(img=None, vmax=None, vmin=None, cmap_name='seismic', num_l
         if vmax is None:
             vmax = np.nanmax(img)
 
-    print(vmin, vmax)
     if vmax is None or vmin is None:
         raise ValueError("Required args: img, or vmax and vmin")
     midpoint = 1 - vmax / (abs(vmin) + vmax)
@@ -167,6 +166,8 @@ def plot_image_shifted(img,
 
     if not fig:
         fig = plt.figure()
+        ax = fig.gca()
+    elif fig and not ax:
         ax = fig.gca()
 
     if perform_shift:

@@ -1,18 +1,12 @@
 import json
 from shapely.geometry import shape, Point
 from collections import defaultdict
-from insar import kml
+from insar import kml, tile
 
 geolist_files = open('geojson_list.txt').read().splitlines()
 gjs = {num: json.load(open(gjf)) for num, gjf in enumerate(geolist_files)}
 
-station_strings = [row for row in open('texas_stations.csv').read().splitlines()]
-station_strings[:4]
-gps_list = []
-for row in station_strings:
-    name, lat, lon, _ = row.split(',')
-    gps_list.append((name, float(lat), float(lon)))
-
+gps_list = tile.read_stations('texas_stations.csv')
 ps = [tup[1:] for tup in gps_list]
 points = [Point(*p) for p in ps]
 
