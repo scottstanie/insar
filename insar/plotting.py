@@ -121,6 +121,7 @@ def make_shifted_cmap(img=None, vmax=None, vmin=None, cmap_name='seismic', num_l
         if vmax is None:
             vmax = np.nanmax(img)
 
+    print(vmin, vmax)
     if vmax is None or vmin is None:
         raise ValueError("Required args: img, or vmax and vmin")
     midpoint = 1 - vmax / (abs(vmin) + vmax)
@@ -129,6 +130,7 @@ def make_shifted_cmap(img=None, vmax=None, vmin=None, cmap_name='seismic', num_l
 
 def plot_image_shifted(img,
                        fig=None,
+                       ax=None,
                        cmap='seismic',
                        img_data=None,
                        title='',
@@ -146,7 +148,7 @@ def plot_image_shifted(img,
         img (ndarray): 2D numpy array to imshow
         fig (matplotlib.Figure): Figure to plot image onto
         ax (matplotlib.AxesSubplot): Axes to plot image onto
-            mutually exclusive with fig option
+            Need to pass `fig` if passing `ax`
         cmap (str): name of colormap to shift
         img_data (dict): rsc_data from load_dem_rsc containing lat/lon
             data about image, used to make axes into lat/lon instead of row/col
@@ -165,23 +167,28 @@ def plot_image_shifted(img,
 
     if not fig:
         fig = plt.figure()
+        ax = fig.gca()
 
-    ax = fig.gca()
     if perform_shift:
         shifted_cmap = make_shifted_cmap(img, cmap_name=cmap, vmin=vmin, vmax=vmax)
         axes_image = ax.imshow(
             img, cmap=shifted_cmap, extent=extent, vmin=vmin, vmax=vmax, aspect=aspect)
     else:
-        vmax = max((np.abs(np.nanmax(img)), np.abs(np.nanmin(img))))
+        vmax = _abs_max(img)
         axes_image = ax.imshow(img, cmap=cmap, extent=extent, vmax=vmax, vmin=-vmax, aspect=aspect)
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
 
     if colorbar:
-        cbar = fig.colorbar(axes_image)
+        cbar = fig.colorbar(axes_image, ax=ax)
         cbar.set_label(label)
     return fig, axes_image
+
+
+def _abs_max(img):
+    """Find largest absolute value ignoring nans"""
+    return np.nanmax(np.abs(img))
 
 
 def view_stack(

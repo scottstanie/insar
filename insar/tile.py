@@ -3,9 +3,11 @@
 from __future__ import division
 import glob
 import os
+import re
 import numpy as np
+import matplotlib.pyplot as plt
 import insar.geojson
-from insar import latlon, parsers
+from insar import latlon, parsers, sario, plotting
 from insar.log import get_log
 
 logger = get_log()
@@ -47,6 +49,32 @@ class Tile(object):
         # Use underscores in the name instead of decimal
         # return latlon_str.replace('.', '_')
         return latlon_str
+
+    @staticmethod
+    def parse_tilename(tilename):
+        """Parses the lat/lon info from a tilename into (lon, lat)
+
+        Returns:
+            tuple[float, float]: (longitude, latitude)
+                lon is negative in west, lat negative in south
+
+        Examples:
+            >>> Tile.parse_tilename('./N30.8W103.7')
+            (-103.7, 30.8)
+            >>> Tile.parse_tilename('/home/scott/N30.8W103.7/')
+            (-103.7, 30.8)
+
+        """
+        name_regex = r'([NS])([0-9\.]{1,5})([EW])([0-9\.]{1,5})'
+        # Now strip path dependencies and parse
+        _, name_clean = os.path.split(os.path.abspath(tilename))
+        re_match = re.match(name_regex, name_clean.strip('./'))
+        if re_match is None:
+            raise ValueError("%s is not a valid tile name" % tilename)
+        hemi_ns, lat_str, hemi_ew, lon_str = re_match.groups()
+        lon_out = float(lon_str) if hemi_ew == 'E' else -1 * float(lon_str)
+        lat_out = float(lat_str) if hemi_ns == 'N' else -1 * float(lat_str)
+        return lon_out, lat_out
 
     def to_geojson(self):
         """Converts a lat/lon Tile to a geojson object
@@ -263,3 +291,88 @@ def create_tiles(data_path=None,
     tile_grid = TileGrid(sentinel_list, tile_size=tile_size, overlap=overlap)
 
     return tile_grid.make_tiles(verbose=verbose)
+
+
+def plot_tiles(dirlist):
+    """Takes a list of tile directories and plots the deformation result
+
+    Args:
+        dirlist (str): file containing the list of tile directories
+
+    Examples dirlist:
+        $ cat dirlist.txt
+        ./N31.4W103.7
+        ./N30.8W103.7
+    """
+
+    def count_row_col(lon_lat_list):
+        """Returns num_rows, num_cols in the lon_lat_list"""
+        # Count uniqe lons, lats by unpacking
+        lons, lats = zip(*lon_lat_list)
+        return len(set(lats)), len(set(lons))
+
+    def _read_dirname(dirname):
+        igram_dir = os.path.join(dirname, 'igrams')
+        defo_file = os.path.join(igram_dir, 'deformation.npy')
+        img_data_file = os.path.join(igram_dir, 'dem.rsc')
+
+        print('reading in %s' % defo_file)
+        defo_img = np.mean(np.load(defo_file)[-3:], axis=0)
+        img_data = sario.load(img_data_file)
+        return defo_img, img_data
+
+    with open(dirlist) as f:
+        directory_names = f.read().splitlines()
+
+    lon_lat_list = [Tile.parse_tilename(d) for d in directory_names]
+
+    num_rows, num_cols = count_row_col(lon_lat_list)
+
+    # Sort these in a lat/lon grid from top left to bottom right, row order
+    sorted_dirs = sorted(
+        zip(directory_names, lon_lat_list), key=lambda tup: (-tup[1][1], tup[1][0]))
+
+    defo_img_list = []
+    img_data_list = []
+    for dirname, lon_lat_tup in sorted_dirs:
+        defo_img, img_data = _read_dirname(dirname)
+        defo_img_list.append(defo_img)
+        img_data_list.append(img_data)
+
+    # vmax = np.nanmax(np.array([np.abs(img) for img in defo_img_list]))
+    vmax = np.nanmax(np.stack(defo_img_list, axis=0))
+    vmin = np.nanmin(np.stack(defo_img_list, axis=0))
+    print('vmin, vmax', vmin, vmax)
+    cmap_name = 'seismic'
+
+    fig, axes = plt.subplots(num_rows, num_cols)
+    for idx, (dirname, lon_lat_tup) in enumerate(sorted_dirs):
+        cur_ax = axes.flat[idx]
+        defo_img = defo_img_list[idx]
+        # plotting.plot_image_shifted(
+        #     defo_img,
+        #     fig=fig,
+        #     ax=cur_ax,
+        #     img_data=img_data,
+        #     title=dirname,
+        #     perform_shift=True,
+        # )
+
+        extent = latlon.grid_extent(**img_data_list[idx])
+
+        shifted_cmap = plotting.make_shifted_cmap(
+            cmap_name=cmap_name,
+            vmax=vmax,
+            vmin=vmin,
+        )
+        im = cur_ax.imshow(
+            defo_img,
+            cmap=shifted_cmap,
+            extent=extent,
+        )
+        cur_ax.set_title(dirname)
+
+        cbar = fig.colorbar(im, ax=cur_ax, boundaries=np.arange(vmin, vmax + 1).astype(int))
+        cbar.set_clim(vmin, vmax)
+
+    return fig, axes
