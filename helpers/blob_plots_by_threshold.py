@@ -11,11 +11,11 @@ from insar import blob, timeseries, latlon
 import sardem
 
 
-def run_blob(thresh, val_thresh, fname, min_sigma=10):
+def run_blob(thresh, val_thresh, fname, min_sigma=10, max_sigma=100):
     extra_args = {
         'threshold': thresh,
         'value_threshold': val_thresh,
-        'max_sigma': 100,
+        'max_sigma': max_sigma,
         'min_sigma': min_sigma,
     }
     blobs = blob._make_blobs(img, extra_args)
@@ -45,14 +45,15 @@ if __name__ == '__main__':
         print("Minimum blob size: %.4f pixels, %.4f km" % (min_sigma, args.min_km))
         print("Maximum blob size: %.4f pixels, %.4f km" % (max_sigma, args.max_km))
 
-        threshold_list = [0.3, 0.5, 0.8, 1]  # For filter response
+        # threshold_list = [0.3, 0.5, 0.8, 1]  # For filter response
+        threshold_list = [0.5]  # For filter response
         value_threshold_list = np.linspace(0.2, 2, 20)  # Blob magnitude
 
         procs = []
         blob_name_list = []
         for thresh in threshold_list:
             for val_thresh in value_threshold_list:
-                blobs_name = 'blobs_{0}_{1:.1f}.npy'.format(thresh, val_thresh)
+                blobs_name = 'blobs_{0:.1f}_{1:.1f}.npy'.format(thresh, val_thresh)
                 blob_name_list.append(blobs_name)
                 p = mp.Process(
                     target=run_blob,

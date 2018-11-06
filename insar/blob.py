@@ -27,7 +27,7 @@ def find_blobs(image,
                blob_func='blob_log',
                include_values=True,
                negative=False,
-               value_threshold=1.0,
+               mag_threshold=1.0,
                min_sigma=3,
                max_sigma=60,
                threshold=0.5,
@@ -44,16 +44,16 @@ def find_blobs(image,
             Options: 'blob_log', 'blob_dog', 'blob_doh'
         negative (bool): default False: if True, multiplies image by -1 and
             searches for negative blobs in the image
-        value_threshold (float): absolute value in the image blob must exceed
+        mag_threshold (float): absolute value in the image blob must exceed
             Should be positive number even if negative=True (since image is inverted)
         threshold (float): response threshold passed to the blob finding function
         min_sigma (int): minimum pixel size to check for blobs
         max_sigma (int): max pixel size to check for blobs
 
     Returns:
-        ndarray: rows are blobs with values: [(r, c, s, value)], where
+        ndarray: rows are blobs with values: [(r, c, s, mag)], where
         r = row num of center, c is column, s is sigma (size of Gaussian
-        that detected blob), value is the extreme value within the blob radius.
+        that detected blob), mag is the extreme value within the blob radius.
 
     Notes:
         kwargs are passed to the blob_func (such as overlap).
@@ -76,17 +76,17 @@ def find_blobs(image,
     # Multiply each sigma by sqrt(2) to convert to a radius
     blobs = blobs * np.array([1, 1, np.sqrt(2)])
 
-    # Append values as a column and sort by it
-    blobs_with_values = sort_blobs_by_val(blobs, image)
+    # Append mags as a column and sort by it
+    blobs_with_mags = sort_blobs_by_val(blobs, image)
 
-    if value_threshold:
-        blobs_with_values = blobs_with_values[blobs_with_values[:, -1] >= value_threshold]
+    if mag_threshold:
+        blobs_with_mags = blobs_with_mags[blobs_with_mags[:, -1] >= mag_threshold]
 
     # If negative, flip back last col to get correct img values
     if negative:
-        blobs_with_values = blobs_with_values * np.array([1, 1, 1, -1])
+        blobs_with_mags = blobs_with_mags * np.array([1, 1, 1, -1])
 
-    return blobs_with_values
+    return blobs_with_mags
 
 
 def find_blobs_parallel(image_list, processes=MAX_PROCS, **kwargs):
@@ -131,7 +131,7 @@ def indexes_within_circle(cx, cy, radius, height, width):
     return dist_from_center <= radius
 
 
-def get_blob_values(blobs, image, center_only=False):
+def get_blob_mags(blobs, image, center_only=False):
     """Finds most extreme image value within each blob
 
     Checks all pixels within the radius of the blob
@@ -151,7 +151,7 @@ def get_blob_values(blobs, image, center_only=False):
         return image[coords[:, 0], coords[:, 1]]
 
     height, width = image.shape
-    # blob: [row, col, radius, [possibly value]]
+    # blob: [row, col, radius, [possibly mag]]
     masks = map(lambda blob: indexes_within_circle(blob[0], blob[1], blob[2], height, width), blobs)
     return np.stack([np.max(image[mask]) for mask in masks])
 
@@ -162,12 +162,12 @@ def sort_blobs_by_val(blobs, image):
     Note: blobs must be in (row, col, sigma) form, not (lat, lon, sigma_ll)
 
     Returns:
-        tuple[tuple[ndarrays], tuple[floats]]: The pair of (blobs, values)
+        tuple[tuple[ndarrays], tuple[floats]]: The pair of (blobs, mags)
     """
-    blob_vals = get_blob_values(blobs, image)
-    blobs_with_values = np.hstack((blobs, utils.force_column(blob_vals)))
-    # Sort rows based on the 4th column, blob_value, and in reverse order
-    return blobs_with_values[blobs_with_values[:, 3].argsort()[::-1]]
+    blob_vals = get_blob_mags(blobs, image)
+    blobs_with_mags = np.hstack((blobs, utils.force_column(blob_vals)))
+    # Sort rows based on the 4th column, blob_mag, and in reverse order
+    return blobs_with_mags[blobs_with_mags[:, 3].argsort()[::-1]]
 
 
 def blobs_latlon(blobs, blob_info):
@@ -270,7 +270,7 @@ def stack_blob_bins(unw_file_list,
                     num_row_bins=10,
                     num_col_bins=10,
                     save_file='all_blobs.npy',
-                    weight_by_value=True,
+                    weight_by_mag=True,
                     plot=True,
                     **kwargs):
     files_gen = (sario.load(f) * timeseries.PHASE_TO_CM for f in unw_file_list)
@@ -281,7 +281,7 @@ def stack_blob_bins(unw_file_list,
         np.save(save_file, results)
     nrows, ncols = sario.load(unw_file_list[0]).shape
     hist, row_edges, col_edges = bin_blobs(
-        results, nrows, ncols, num_row_bins, num_col_bins, weight_by_value=weight_by_value)
+        results, nrows, ncols, num_row_bins, num_col_bins, weight_by_mag=weight_by_mag)
     if plot is True:
         plot_hist(hist, row_edges, col_edges)
     return hist, row_edges, col_edges
@@ -294,7 +294,7 @@ def stack_blob_bins(unw_file_list,
 # In [3]: sario.save_hgt('height_test.unw', np.abs(amp_data), img)
 
 
-def bin_blobs(list_of_blobs, nrows, ncols, num_row_bins=10, num_col_bins=10, weight_by_value=True):
+def bin_blobs(list_of_blobs, nrows, ncols, num_row_bins=10, num_col_bins=10, weight_by_mag=True):
     """Make a 2D histogram of occurrences of row, col locations for blobs
     """
     row_edges = np.linspace(0, nrows, num_row_bins + 1)  # one more edges than bins
@@ -306,7 +306,7 @@ def bin_blobs(list_of_blobs, nrows, ncols, num_row_bins=10, num_col_bins=10, wei
             continue
         row_idxs = blobs[:, 0]
         col_idxs = blobs[:, 1]
-        if weight_by_value:
+        if weight_by_mag:
             weights = blobs[:, 3]
         else:
             weights = np.ones(blobs.shape[0])
