@@ -4,7 +4,6 @@ import subprocess
 
 import insar.utils
 import insar.tile
-import insar.mask
 import insar.timeseries
 from insar.log import get_log
 

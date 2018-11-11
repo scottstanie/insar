@@ -61,7 +61,7 @@ def save_int_masks(igram_fnames,
         np.save(igram_mask_name, igram_mask)
 
 
-def masked_lstsq(A, b, geo_mask_columns=None, rcond=None, *args, **kwargs):
+def masked_lstsq(A, b, geo_mask_columns=None):
     """Performs least squares on masked numpy arrays
 
     Handles the mask by deleting the row of A corresponding
@@ -69,6 +69,12 @@ def masked_lstsq(A, b, geo_mask_columns=None, rcond=None, *args, **kwargs):
 
     Inputs same as numpy.linalg.lstsq, where b_masked can be
     a (n x k) matrix and each n-length column inverted.
+
+    Inputs:
+      A (np.ndarray) 2D array of Ax = b
+      b (np.ndarray) an (m x k) array, the right hand side
+      geo_mask_columns (np.ndarray): 2D array where each column is
+        a boolean mask of geo dates that should be masked
     """
     b_masked = b.view(np.ma.MaskedArray)
     if b_masked.ndim == 1:
@@ -76,19 +82,28 @@ def masked_lstsq(A, b, geo_mask_columns=None, rcond=None, *args, **kwargs):
 
     # First check if no masks exist (run normally if so)
     if b_masked.mask is np.ma.nomask or not b_masked.mask.any():
-        return np.linalg.lstsq(A, b, rcond=rcond, *args, **kwargs)[0]
+        return np.linalg.lstsq(A, b, rcond=None)[0]
 
     # Otherwise, run first in bulk on all b's with no masks and
     # only loop over ones with some mask
     out_final = np.ma.empty((A.shape[1], b_masked.shape[1]))
 
     good_col_idxs = ~(b_masked.mask).any(axis=0)
-    if np.any(good_col_idxs):
-        good_cols = b_masked[:, good_col_idxs]
-        good_sol = np.linalg.lstsq(A, good_cols, rcond=rcond, *args, **kwargs)[0]
-        out_final[:, good_col_idxs] = good_sol
-
     bad_col_idxs = np.where((b_masked.mask).any(axis=0))[0]
+
+    if np.any(good_col_idxs):
+        out_final[:, good_col_idxs] = solve_good_columns(A, good_col_idxs, b_masked)
+
+    out_final = solve_bad_columns(bad_col_idxs, b_masked, out_final)
+    return out_final
+
+
+def solve_good_columns(A, good_col_idxs, b_masked):
+    good_cols = b_masked[:, good_col_idxs]
+    return np.linalg.lstsq(A, good_cols, rcond=None)[0]
+
+
+def solve_bad_columns(A, bad_col_idxs, b_masked, geo_mask_columns, out_final):
     for idx in bad_col_idxs:
         col_masked = b_masked[:, idx]
 
@@ -104,8 +119,7 @@ def masked_lstsq(A, b, geo_mask_columns=None, rcond=None, *args, **kwargs):
 
         col_deleted = utils.atleast_2d(np.squeeze(col_masked[~missing]))
 
-        sol, residuals, rank, _ = np.linalg.lstsq(
-            A_deleted, col_deleted, rcond=rcond, *args, **kwargs)
+        sol, residuals, rank, _ = np.linalg.lstsq(A_deleted, col_deleted, rcond=None)
 
         # If underdetermined, fill appropriate places with NaNs
         if not residuals:
