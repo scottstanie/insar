@@ -11,10 +11,10 @@ from insar import blob, timeseries, latlon
 import sardem
 
 
-def run_blob(thresh, val_thresh, fname, min_sigma=10, max_sigma=100):
+def run_blob(thresh, mag_thresh, fname, min_sigma=10, max_sigma=100):
     extra_args = {
         'threshold': thresh,
-        'value_threshold': val_thresh,
+        'mag_threshold': mag_thresh,
         'max_sigma': max_sigma,
         'min_sigma': min_sigma,
     }
@@ -47,17 +47,17 @@ if __name__ == '__main__':
 
         # threshold_list = [0.3, 0.5, 0.8, 1]  # For filter response
         threshold_list = [0.5]  # For filter response
-        value_threshold_list = np.linspace(0.2, 2, 20)  # Blob magnitude
+        mag_threshold_list = np.linspace(0.2, 2, 20)  # Blob magnitude
 
         procs = []
         blob_name_list = []
         for thresh in threshold_list:
-            for val_thresh in value_threshold_list:
-                blobs_name = 'blobs_{0:.1f}_{1:.1f}.npy'.format(thresh, val_thresh)
+            for mag_thresh in mag_threshold_list:
+                blobs_name = 'blobs_{0:.1f}_{1:.1f}.npy'.format(thresh, mag_thresh)
                 blob_name_list.append(blobs_name)
                 p = mp.Process(
                     target=run_blob,
-                    args=(thresh, val_thresh, blobs_name),
+                    args=(thresh, mag_thresh, blobs_name),
                     kwargs={
                         'min_sigma': min_sigma,
                         'max_sigma': max_sigma,
@@ -76,14 +76,14 @@ if __name__ == '__main__':
     features_vs_size = {}
     print("Parsing blobs")
     for blobs, b_name in zip(blobs_list, blob_name_list):
-        _, thresh, val_thresh = b_name.strip('.npy').split('_')
+        _, thresh, mag_thresh = b_name.strip('.npy').split('_')
         thresh = float(thresh)
-        val_thresh = float(val_thresh)
-        features_thresh_raw[thresh][val_thresh] = len(blobs)
+        mag_thresh = float(mag_thresh)
+        features_thresh_raw[thresh][mag_thresh] = len(blobs)
 
         if thresh == 0.3:
             c = Counter(blobs.astype(int)[:, 2])
-            features_vs_size[val_thresh] = np.array(list(c.items()))
+            features_vs_size[mag_thresh] = np.array(list(c.items()))
 
     features_vs_thresh = {}
     for thresh, dic in features_thresh_raw.items():
@@ -98,7 +98,7 @@ if __name__ == '__main__':
         axes[0].scatter(data[:, 0], data[:, 1])
 
     axes[0].set_title('Features vs thresh')
-    axes[0].set_xlabel('value threshold')
+    axes[0].set_xlabel('mag threshold')
     axes[0].set_ylabel('number of blobs found')
     axes[0].set_yscale('log')
     axes[0].legend(legends)
