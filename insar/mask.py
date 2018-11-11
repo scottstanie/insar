@@ -94,7 +94,7 @@ def masked_lstsq(A, b, geo_mask_columns=None):
     if np.any(good_col_idxs):
         out_final[:, good_col_idxs] = solve_good_columns(A, good_col_idxs, b_masked)
 
-    out_final = solve_bad_columns(bad_col_idxs, b_masked, out_final)
+    out_final = solve_bad_columns(A, bad_col_idxs, b_masked, geo_mask_columns, out_final)
     return out_final
 
 
