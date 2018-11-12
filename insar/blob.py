@@ -131,15 +131,16 @@ def indexes_within_circle(cx, cy, radius, height, width):
     return dist_from_center <= radius
 
 
-def get_blob_mags(blobs, image, center_only=False, accum_func=np.max):
-    """Finds most extreme image value within each blob
+def get_blob_stats(blobs, image, center_only=False, accum_func=np.max):
+    """Find statistics about image values within each blob
 
-    Checks all pixels within the radius of the blob
+    Checks all pixels within the radius of the blob, and runs some
+    numpy function `accum_func` on these values
 
     Args:
-        blobs (ndarray): 2D, entries [row, col, radius], from find_blobs
+        blobs (ndarray): 2D, entries [row, col, radius, ...], from find_blobs
         image (ndarray): 2D image where blobs were found
-        center_only (bool): (default False) Only look at the center pixel of the blob.
+        center_only (bool): (default False) Only get the value of the center pixel of the blob
         accum_func (bool): (default np.max) Function to run on all pixels within blob to accumulate to one value
 
     Returns:
@@ -157,6 +158,22 @@ def get_blob_mags(blobs, image, center_only=False, accum_func=np.max):
     return np.stack([accum_func(image[mask]) for mask in masks])
 
 
+def append_stats(blobs, image, stat_funcs=[np.var, np.ptp]):
+    """Append columns based on the statistic functions in stats
+    
+    Default: adds the variance and peak-to-peak within blob"""
+    new_blobs = blobs.copy()
+    for func in stat_funcs:
+        blob_stat = get_blob_stats(new_blobs, image, accum_func=func)
+        new_blobs = np.hstack((new_blobs, blob_stat.reshape((-1, 1))))
+    return new_blobs
+
+
+def _sort_by_col(arr, col, reverse=False):
+    sorted_arr = arr[arr[:, col].argsort()]
+    return sorted_arr[::-1] if reverse else sorted_arr
+
+
 def sort_blobs_by_val(blobs, image):
     """Sort the blobs by their absolute value in the image
 
@@ -165,10 +182,10 @@ def sort_blobs_by_val(blobs, image):
     Returns:
         tuple[tuple[ndarrays], tuple[floats]]: The pair of (blobs, mags)
     """
-    blob_vals = get_blob_mags(blobs, image)
+    blob_vals = get_blob_stats(blobs, image, np.max)
     blobs_with_mags = np.hstack((blobs, utils.force_column(blob_vals)))
     # Sort rows based on the 4th column, blob_mag, and in reverse order
-    return blobs_with_mags[blobs_with_mags[:, 3].argsort()[::-1]]
+    return _sort_by_col(blobs_with_mags, 3, reverse=True)
 
 
 def blobs_to_latlon(blobs, blob_info):
@@ -196,7 +213,8 @@ def blobs_to_rowcol(blobs, blob_info):
     for blob in blobs:
         lat, lon, r, val = blob
         lat, lon = latlon.latlon_to_rowcol(lat, lon, blob_info)
-        blobs_rowcol.append((lat, lon, r, val))
+        old_radius = r / blob_info['x_step']
+        blobs_rowcol.append((lat, lon, old_radius, val))
 
     return np.array(blobs_rowcol)
 
