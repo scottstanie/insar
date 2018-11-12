@@ -131,7 +131,7 @@ def indexes_within_circle(cx, cy, radius, height, width):
     return dist_from_center <= radius
 
 
-def get_blob_mags(blobs, image, center_only=False):
+def get_blob_mags(blobs, image, center_only=False, accum_func=np.max):
     """Finds most extreme image value within each blob
 
     Checks all pixels within the radius of the blob
@@ -140,11 +140,12 @@ def get_blob_mags(blobs, image, center_only=False):
         blobs (ndarray): 2D, entries [row, col, radius], from find_blobs
         image (ndarray): 2D image where blobs were found
         center_only (bool): (default False) Only look at the center pixel of the blob.
-            False means searching all pixels within the blob radius on the image
+        accum_func (bool): (default np.max) Function to run on all pixels within blob to accumulate to one value
 
     Returns:
-        ndarray: length = number of blobs, each value is the max of the image
-        within the blob radius
+        ndarray: length = N, number of blobs, each value is the max of the image
+        within the blob radius.
+        If all_pixels = True, each entry is a list of pixel values
     """
     if center_only:
         coords = blobs[:, :2].astype(int)
@@ -153,7 +154,7 @@ def get_blob_mags(blobs, image, center_only=False):
     height, width = image.shape
     # blob: [row, col, radius, [possibly mag]]
     masks = map(lambda blob: indexes_within_circle(blob[0], blob[1], blob[2], height, width), blobs)
-    return np.stack([np.max(image[mask]) for mask in masks])
+    return np.stack([accum_func(image[mask]) for mask in masks])
 
 
 def sort_blobs_by_val(blobs, image):
@@ -170,13 +171,12 @@ def sort_blobs_by_val(blobs, image):
     return blobs_with_mags[blobs_with_mags[:, 3].argsort()[::-1]]
 
 
-def blobs_latlon(blobs, blob_info):
+def blobs_to_latlon(blobs, blob_info):
     """Converts (y, x, sigma, val) format to (lat, lon, sigma_latlon, val)
 
     Uses the dem x_step/y_step data to rescale blobs so that appear on an
     image using lat/lon as the `extent` argument of imshow.
     """
-    blob_info = {k.lower(): v for k, v in blob_info.items()}
     blobs_latlon = []
     for blob in blobs:
         row, col, r, val = blob
@@ -185,6 +185,20 @@ def blobs_latlon(blobs, blob_info):
         blobs_latlon.append((lat, lon, new_radius, val))
 
     return np.array(blobs_latlon)
+
+
+def blobs_to_rowcol(blobs, blob_info):
+    """Converts (lat, lon, sigma, val) format to (row, col, sigma_latlon, val)
+
+    Inverse of blobs_to_latlon function
+    """
+    blobs_rowcol = []
+    for blob in blobs:
+        lat, lon, r, val = blob
+        lat, lon = latlon.latlon_to_rowcol(lat, lon, blob_info)
+        blobs_rowcol.append((lat, lon, r, val))
+
+    return np.array(blobs_rowcol)
 
 
 def _handle_args(extra_args):
@@ -257,7 +271,7 @@ def make_blob_image(igram_path=".",
         print("Saving %s" % blob_filename)
         np.save(blob_filename, blobs)
 
-    blobs_ll = blobs_latlon(blobs, img.dem_rsc)
+    blobs_ll = blobs_to_latlon(blobs, img.dem_rsc)
     if verbose:
         for lat, lon, r, val in blobs_ll:
             logger.info('({0:.4f}, {1:.4f}): radius: {2}, val: {3}'.format(lat, lon, r, val))

@@ -218,8 +218,6 @@ def rowcol_to_latlon(row, col, rsc_data):
         >>> rowcol_to_latlon(7, 3, rsc_data)
         (1.4, 1.4)
     """
-    # Force keys to lowercase
-    rsc_data = {k.lower(): v for k, v in rsc_data.items()}
     start_lon = rsc_data["x_first"]
     start_lat = rsc_data["y_first"]
     lon_step, lat_step = rsc_data["x_step"], rsc_data["y_step"]
@@ -227,6 +225,32 @@ def rowcol_to_latlon(row, col, rsc_data):
     lon = start_lon + (col - 1) * lon_step
 
     return lat, lon
+
+
+def latlon_to_rowcol(lat, lon, rsc_data):
+    """Takes latitude, longitude and finds pixel location.
+
+    Inverse of rowcol_to_latlon function
+
+    Args:
+        lat (float): latitude
+        lon (float): longitude
+        rsc_data (dict): data output from load_dem_rsc
+
+    Returns:
+        tuple[int, int]: row, col for the pixel
+
+    Example:
+        >>> rsc_data = {"x_first": 1.0, "y_first": 2.0, "x_step": 0.2, "y_step": -0.1}
+        >>> latlon_to_rowcol(1.4, 1.4, rsc_data)
+        (7, 3)
+    """
+    start_lon = rsc_data["x_first"]
+    start_lat = rsc_data["y_first"]
+    lon_step, lat_step = rsc_data["x_step"], rsc_data["y_step"]
+    row = 1 + (lat - start_lat) / lat_step
+    col = 1 + (lon - start_lon) / lon_step
+    return int(round(row)), int(round(col))
 
 
 def latlon_to_dist(lat_lon_start, lat_lon_end, R=6378):
