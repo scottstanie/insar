@@ -150,7 +150,50 @@ class LatlonImage(np.ndarray):
         if self.dem_rsc:
             return grid_extent(**self.dem_rsc)
 
+    @property
+    def first_lat(self):
+        """The latitude of the first row of the image"""
+        if self.dem_rsc:
+            return self.dem_rsc['y_first']
+
+    @property
+    def first_lon(self):
+        """The longitude of the first column of the image"""
+        if self.dem_rsc:
+            return self.dem_rsc['x_first']
+
+    @property
+    def last_lat(self):
+        """The latitude of the last row of the image"""
+        if self.dem_rsc:
+            return self.dem_rsc['y_first'] + self.dem_rsc['y_step'] * (self.shape[0] - 1)
+
+    @property
+    def last_lon(self):
+        """The longitude of the last column of the image"""
+        if self.dem_rsc:
+            return self.dem_rsc['x_first'] + self.dem_rsc['x_step'] * (self.shape[1] - 1)
+
+    def nearest_pixel(self, lat=None, lon=None):
+        """Find the nearest row or col number to a given lat or lon
+
+        Returns (tuple[int, int]): If both given, a pixel (row, col) is returned
+            Otherwise if only one, it is (None, col) or (row, None)
+        """
+        out_row_col = [None, None]
+        if lat:
+            row_num = (lat - self.dem_rsc['y_first']) / self.dem_rsc['y_step']
+            if row_num >= 0 and row_num < self.shape[0]:
+                out_row_col[0] = row_num
+        if lon:
+            col_num = (lon - self.dem_rsc['x_first']) / self.dem_rsc['x_step']
+            if col_num >= 0 and col_num < self.shape[1]:
+                out_row_col[1] = col_num
+
+        return tuple(out_row_col)
+
     def to_kml(self, tif_filename, title=None, desc="Description", kml_out=None):
+        """Convert the dem.rsc data into a kml string"""
         return kml.create_kml(self.dem_rsc, tif_filename, title=title, desc=desc, kml_out=kml_out)
 
     def distance(self, row_col1, row_col2):
@@ -183,20 +226,6 @@ class LatlonImage(np.ndarray):
         """Convert a km distance into number of pixels across"""
         deg_per_pixel = self.dem_rsc['x_step']  # assume x_step = y_step
         return km_to_pixels(km, deg_per_pixel)
-
-
-def LatlonStack(LatlonImage):
-    """3D stack version of LatlonImage"""
-    # TODO: data = sario.load_stack(directory=stack_path, file_ext=ext)
-    pass
-
-
-class DemTile(object):
-    def __init__(self, rsc_file=None, rsc_data=None):
-        if rsc_data:
-            self.rsc_data = rsc_data
-        elif rsc_file:
-            self.rsc_data = sario.load(rsc_file)
 
 
 def rowcol_to_latlon(row, col, rsc_data):
@@ -559,3 +588,30 @@ def intersects(box1, box2):
     left1, right1, bot1, top1 = box1
     left2, right2, bot2, top2 = box2
     return (intersects1d(left1, right1, left2, right2) and intersects1d(bot1, top1, bot2, top2))
+
+
+def sort_by_lat(latlon_img_list):
+    """Sorts a list of LatlonImages by latitude, north to south"""
+    return sorted(latlon_img_list, key=lambda img: img.dem_rsc['x_first'], reverse=True)
+
+
+def sort_by_lon(latlon_img_list):
+    """Sorts a list of LatlonImages by longitude, west to east"""
+    return sorted(latlon_img_list, key=lambda img: img.dem_rsc['y_first'])
+
+
+def find_img_intersections(image1, image2):
+    """Takes two LatlonImages, finds which pixels mark their intersection
+    """
+    if not intersects(image1.extent, image2.extent):
+        return None
+
+    lat_sorted_imgs = sort_by_lat([image1, image2])
+    im1, im2 = lat_sorted_imgs
+    i1 = im1.nearest_pixel(lat=im2.first_lat)
+    print(i1)
+
+    lon_sorted_imgs = sort_by_lon([image1, image2])
+    im1, im2 = lon_sorted_imgs
+    i2 = im1.nearest_pixel(lon=im2.first_lon)
+    print(i2)
