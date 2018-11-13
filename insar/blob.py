@@ -356,3 +356,32 @@ def plot_hist(H, row_edges, col_edges, ax=None):
     axes_image = ax.imshow(H, extent=[col_edges[0], col_edges[-1], row_edges[-1], row_edges[0]])
     fig.colorbar(axes_image)
     return fig, ax
+
+
+def scatter_blobs(blobs, axes=None, color='b', label=None):
+    if axes is None:
+        fig, axes = plt.subplots(1, 3)
+    else:
+        fig = axes[0].get_figure()
+
+    # Size vs amplitude
+    sizes = blobs[:, 2]
+    mags = blobs[:, 3]
+    vars_ = blobs[:, 4]
+    ptps = blobs[:, 5]
+
+    axes[0].scatter(sizes, mags, c=color, label=label)
+    axes[0].set_xlabel("Size")
+    axes[0].set_ylabel("Magnitude")
+    if label:
+        axes[0].legend()
+
+    axes[1].scatter(sizes, vars_, c=color, label=label)
+    axes[1].set_xlabel("Size")
+    axes[1].set_ylabel("variance")
+
+    axes[2].scatter(sizes, ptps, c=color, label=label)
+    axes[2].set_xlabel("Size")
+    axes[2].set_ylabel("peak-to-peak")
+
+    return fig, axes

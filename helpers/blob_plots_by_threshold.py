@@ -25,15 +25,6 @@ def run_blob(thresh, mag_thresh, fname, min_sigma=10, max_sigma=100):
     np.save(fname, blobs)
 
 
-def append_stats(blobs, image, stat_funcs=[np.var, np.ptp]):
-    """Append columns based on the statistic functions in stats"""
-    new_blobs = blobs.copy()
-    for func in stat_funcs:
-        blob_stat = blob.get_blob_stats(new_blobs, image, accum_func=np.ptp)
-        new_blobs = np.hstack((new_blobs, blob_stat.reshape((-1, 1))))
-    return new_blobs
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-o", "--overwrite", action="store_true", default=False)
