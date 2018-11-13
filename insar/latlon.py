@@ -184,11 +184,11 @@ class LatlonImage(np.ndarray):
         if lat:
             row_num = (lat - self.dem_rsc['y_first']) / self.dem_rsc['y_step']
             if row_num >= 0 and row_num < self.shape[0]:
-                out_row_col[0] = row_num
+                out_row_col[0] = int(round(row_num))
         if lon:
             col_num = (lon - self.dem_rsc['x_first']) / self.dem_rsc['x_step']
             if col_num >= 0 and col_num < self.shape[1]:
-                out_row_col[1] = col_num
+                out_row_col[1] = int(round(col_num))
 
         return tuple(out_row_col)
 
@@ -592,26 +592,48 @@ def intersects(box1, box2):
 
 def sort_by_lat(latlon_img_list):
     """Sorts a list of LatlonImages by latitude, north to south"""
-    return sorted(latlon_img_list, key=lambda img: img.dem_rsc['x_first'], reverse=True)
+    return sorted(latlon_img_list, key=lambda img: img.dem_rsc['y_first'], reverse=True)
 
 
 def sort_by_lon(latlon_img_list):
     """Sorts a list of LatlonImages by longitude, west to east"""
-    return sorted(latlon_img_list, key=lambda img: img.dem_rsc['y_first'])
+    return sorted(latlon_img_list, key=lambda img: img.dem_rsc['x_first'])
 
 
 def find_img_intersections(image1, image2):
     """Takes two LatlonImages, finds which pixels mark their intersection
     """
     if not intersects(image1.extent, image2.extent):
-        return None
+        return (None, None)
 
-    lat_sorted_imgs = sort_by_lat([image1, image2])
-    im1, im2 = lat_sorted_imgs
-    i1 = im1.nearest_pixel(lat=im2.first_lat)
-    print(i1)
+    # TODO: i'm messing up the order between bottom right/ left overlap, e.g.
+    im1_lat, im2_lat = sort_by_lat([image1, image2])
+    im1_lon, im2_lon = sort_by_lon([image1, image2])
 
-    lon_sorted_imgs = sort_by_lon([image1, image2])
-    im1, im2 = lon_sorted_imgs
-    i2 = im1.nearest_pixel(lon=im2.first_lon)
-    print(i2)
+    lat_tup = im1_lat.nearest_pixel(lat=im2_lat.first_lat)
+    lon_tup = im1_lon.nearest_pixel(lon=im2_lon.first_lon)
+
+    # Now combine by ignoring the Nones for each that don't matter
+    return (lat_tup[0], lon_tup[1])
+
+
+def find_total_rows(image_list):
+    if any(img.dem_rsc is None for img in image_list):
+        raise ValueError("All images must have dem_rsc provided")
+    if any(img.dem_rsc['y_step'] != image_list[0].dem_rsc['y_step'] for img in image_list):
+        raise ValueError("All images must have same y_step in dem_rsc")
+    images_sorted = sort_by_lat(image_list)
+    im_first = images_sorted[0]
+    im_last = images_sorted[0]
+    return round(int((im_last.last_lat - im_first.first_lat) / im_first.dem_rsc['y_step']))
+
+
+def find_total_columns(image_list):
+    if any(img.dem_rsc is None for img in image_list):
+        raise ValueError("All images must have dem_rsc provided")
+    if any(img.dem_rsc['x_step'] != image_list[0].dem_rsc['x_step'] for img in image_list):
+        raise ValueError("All images must have same x_step in dem_rsc")
+    images_sorted = sort_by_lat(image_list)
+    im_first = images_sorted[0]
+    im_last = images_sorted[0]
+    return round(int((im_last.last_lon - im_first.first_lon) / im_first.dem_rsc['x_step']))
