@@ -1,7 +1,7 @@
 from __future__ import division
 import copy
 from numpy import sin, cos, sqrt, arctan2, radians
-# import os
+import os
 import numpy as np
 from insar import sario, utils, kml
 from insar.log import get_log
@@ -239,6 +239,15 @@ class LatlonImage(np.ndarray):
         """Convert a km distance into number of pixels across"""
         deg_per_pixel = self.x_step  # assume x_step = y_step
         return km_to_pixels(km, deg_per_pixel)
+
+
+def load_deformation_img(igram_path, n=3, filename='deformation.npy', rsc_filename='dem.rsc'):
+    """Loads mean of last n images of a deformation stack in LatlonImage
+    """
+    defo_stack = np.load(os.path.join(igram_path, filename))
+    rsc_filename = os.path.join(igram_path, rsc_filename)
+    img = LatlonImage(data=np.mean(defo_stack[-n:], axis=0), dem_rsc_file=rsc_filename)
+    return img
 
 
 def rowcol_to_latlon(row, col, rsc_data):

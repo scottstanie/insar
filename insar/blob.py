@@ -14,7 +14,6 @@ except ImportError:
     print("Warning: scikit-image not installed. Blob function not available.")
     print("pip install scikit-image")
     pass
-import sardem
 from insar.log import get_log
 from insar import latlon, plotting, timeseries, sario, utils
 
@@ -124,9 +123,26 @@ def plot_blobs(image, blobs=None, cur_fig=None, cur_axes=None, color='blue', **k
     return blobs, cur_axes
 
 
-def indexes_within_circle(cx, cy, radius, height, width):
-    """Get a mask of indexes within a circle"""
-    X, Y = np.ogrid[:height, :width]
+def indexes_within_circle(mask_shape=None, center=None, radius=None, blob=None):
+    """Get a mask of indexes within a circle
+
+    Args:
+        center (tuple[float, float]): row, column of center of circle
+        radius (float): radius of circle
+        mask_shape (tuple[int, int]) rows, cols to make enture mask
+        blob (tuple[float, float, float]): row, col, radius of blob
+            This option is instead of using `center` and `radius`
+    """
+    if mask_shape is None:
+        raise ValueError("Need mask_shape to determine output array size")
+    height, width = mask_shape
+    if blob is not None:
+        cy, cx, radius = blob[:3]
+    elif center is not None:
+        cy, cx = center
+    if radius is None:
+        raise ValueError("Need radius if not using `blob` input")
+    Y, X = np.ogrid[:height, :width]
     dist_from_center = np.sqrt((X - cx)**2 + (Y - cy)**2)
     return dist_from_center <= radius
 
@@ -154,13 +170,13 @@ def get_blob_stats(blobs, image, center_only=False, accum_func=np.max):
 
     height, width = image.shape
     # blob: [row, col, radius, [possibly mag]]
-    masks = map(lambda blob: indexes_within_circle(blob[0], blob[1], blob[2], height, width), blobs)
+    masks = map(lambda blob: indexes_within_circle(blob=blob, mask_shape=image.shape), blobs)
     return np.stack([accum_func(image[mask]) for mask in masks])
 
 
 def append_stats(blobs, image, stat_funcs=[np.var, np.ptp]):
     """Append columns based on the statistic functions in stats
-    
+
     Default: adds the variance and peak-to-peak within blob"""
     new_blobs = blobs.copy()
     for func in stat_funcs:
@@ -262,23 +278,16 @@ def make_blob_image(igram_path=".",
     """Find and view blobs in deformation"""
 
     logger.info("Searching %s for igram_path" % igram_path)
-    geolist, deformation = timeseries.load_deformation(igram_path)
-    rsc_data = sardem.loading.load_dem_rsc(os.path.join(igram_path, 'dem.rsc'))
-
-    # TODO: Is mean/max better than just looking at last image? probably
-    # MAKE OPTION FOR THE COMMENTED PARTS
-    # img = deformation[-1, row_start:row_end, col_start:col_end]
-    # img = np.mean(deformation[-3:, row_start:row_end, col_start:col_end], axis=0)
-    img = latlon.LatlonImage(data=np.mean(deformation[-3:], axis=0), dem_rsc=rsc_data)
+    geolist = np.load(os.path.join(igram_path, 'geolist.npy'), encoding='bytes')
+    img = latlon.load_deformation_img(igram_path, n=3)
     img = img[row_start:row_end, col_start:col_end]
     # Note: now we use img.dem_rsc after cropping to keep track of new latlon bounds
 
     title = "%s Deformation from %s to %s" % (title_prefix, geolist[0], geolist[-1])
     imagefig, axes_image = plotting.plot_image_shifted(
         img, img_data=img.dem_rsc, title=title, xlabel='Longitude', ylabel='Latitude')
+    # Or without lat/lon data:
     # imagefig, axes_image = plotting.plot_image_shifted(img, title=title)
-
-    # blob_filename = 'blobs.npy'
 
     if load and os.path.exists(blob_filename):
         print("Loading %s" % blob_filename)
