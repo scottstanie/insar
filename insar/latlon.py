@@ -624,7 +624,7 @@ def find_total_rows(image_list):
         raise ValueError("All images must have same y_step in dem_rsc")
     images_sorted = sort_by_lat(image_list)
     im_first = images_sorted[0]
-    im_last = images_sorted[0]
+    im_last = images_sorted[-1]
     return round(int((im_last.last_lat - im_first.first_lat) / im_first.dem_rsc['y_step']))
 
 
@@ -633,7 +633,7 @@ def find_total_columns(image_list):
         raise ValueError("All images must have dem_rsc provided")
     if any(img.dem_rsc['x_step'] != image_list[0].dem_rsc['x_step'] for img in image_list):
         raise ValueError("All images must have same x_step in dem_rsc")
-    images_sorted = sort_by_lat(image_list)
+    images_sorted = sort_by_lon(image_list)
     im_first = images_sorted[0]
-    im_last = images_sorted[0]
+    im_last = images_sorted[-1]
     return round(int((im_last.last_lon - im_first.first_lon) / im_first.dem_rsc['x_step']))
