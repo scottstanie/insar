@@ -458,3 +458,4 @@ def cluster_blobs(blobs):
     ax.set_xlabel('size')
     ax.set_ylabel('magniture')
     ax.set_zlabel('variance')
+    return y_pred
