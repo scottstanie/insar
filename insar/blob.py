@@ -6,13 +6,15 @@ import os
 import multiprocessing as mp
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 # Note: This is just a temp stopgap to not make skimage a hard requirement
 # In the future, will port just the blob function, ski rest of skimage
 try:
     import skimage.feature
+    from sklearn import cluster
 except ImportError:
-    print("Warning: scikit-image not installed. Blob function not available.")
-    print("pip install scikit-image")
+    print("Warning: scikit-image/scikit-learn not installed. Blob function not available.")
+    print("pip install scikit-image scikit-learn")
     pass
 from insar.log import get_log
 from insar import latlon, plotting, timeseries, sario, utils
@@ -97,15 +99,14 @@ def find_blobs_parallel(image_list, processes=MAX_PROCS, **kwargs):
     return results
 
 
-def plot_blobs(image, blobs=None, cur_fig=None, cur_axes=None, color='blue', **kwargs):
+def plot_blobs(image=None, blobs=None, cur_fig=None, cur_axes=None, color='blue', **kwargs):
     """Takes the blob results from find_blobs and overlays on image
 
     Can either make new figure of plot on top of existing axes.
     """
-    if cur_fig:
-        cur_axes = cur_fig.gca()
-    elif not cur_axes:
-        cur_fig = plt.figure()
+    if not cur_axes:
+        if not cur_fig:
+            cur_fig = plt.figure()
         cur_axes = cur_fig.gca()
         cur_axes.imshow(image)
 
@@ -303,8 +304,8 @@ def make_blob_image(igram_path=".",
         for lat, lon, r, val in blobs_ll:
             logger.info('({0:.4f}, {1:.4f}): radius: {2}, val: {3}'.format(lat, lon, r, val))
 
-    plot_blobs(img, blobs=blobs_ll, cur_axes=imagefig.gca())
-    # plot_blobs(img, blobs=blobs, cur_axes=imagefig.gca())
+    plot_blobs(blobs=blobs_ll, cur_axes=imagefig.gca())
+    # plot_blobs(blobs=blobs, cur_axes=imagefig.gca())
 
 
 def stack_blob_bins(unw_file_list,
@@ -367,11 +368,17 @@ def plot_hist(H, row_edges, col_edges, ax=None):
     return fig, ax
 
 
-def scatter_blobs(blobs, axes=None, color='b', label=None):
+def scatter_blobs(blobs, image=None, axes=None, color='b', label=None):
     if axes is None:
         fig, axes = plt.subplots(1, 3)
     else:
         fig = axes[0].get_figure()
+
+    if blobs.shape[1] < 6:
+        blobs = append_stats(blobs, image)
+
+    print('Taking abs value of blobs')
+    blobs = np.abs(blobs)
 
     # Size vs amplitude
     sizes = blobs[:, 2]
@@ -394,3 +401,60 @@ def scatter_blobs(blobs, axes=None, color='b', label=None):
     axes[2].set_ylabel("peak-to-peak")
 
     return fig, axes
+
+
+def normalize_features(features):
+    """Divide each column by its max.
+
+    Returns the maxes as well to denormalize later
+    """
+    maxes = np.max(features, axis=0)
+    return features / maxes, maxes
+
+
+def cluster_blobs(blobs):
+    print('Taking abs value of blobs')
+    blobs = np.abs(blobs)
+    X_size_mag = blobs[:, [2, 3]]
+    print('Pre normalizing:', np.max(X_size_mag, axis=0))
+    # X_size_mag[:, 1] = X_size_mag[:, 1]**3
+    # X_size_mag[:, 0] = X_size_mag[:, 0]**(1 / 3)
+    X_size_mag, maxes = normalize_features(X_size_mag)
+    print('Post normalizing: ', np.max(X_size_mag, axis=0))
+
+    fig = plt.figure()
+
+    # y_pred = cluster.KMeans(n_clusters=2).fit_predict(X_size_mag)
+    y_pred = cluster.SpectralClustering(
+        n_clusters=2, affinity="nearest_neighbors").fit_predict(X_size_mag)
+
+    ax = fig.add_subplot(1, 2, 1)
+    ax.scatter(X_size_mag[:, 0], X_size_mag[:, 1], c=y_pred)
+    ax.set_title("Size vs mag clusters (normalized)")
+    ax.set_xlabel('size')
+    ax.set_ylabel('magniture')
+
+    # X_size_mag[:, 1] = X_size_mag[:, 1]**(1 / 3)
+    # X_size_mag[:, 0] = X_size_mag[:, 0]**(3)
+    X_size_mag = X_size_mag * maxes
+    ax = fig.add_subplot(1, 2, 2)
+    ax.scatter(X_size_mag[:, 0], X_size_mag[:, 1], c=y_pred)
+    ax.set_title("Size vs mag clusters")
+    ax.set_xlabel('size')
+    ax.set_ylabel('magniture')
+
+    # 3D data
+    X_3 = blobs[:, [2, 3, 4]]
+    X_3, maxes = normalize_features(X_3)
+    y_pred = cluster.SpectralClustering(n_clusters=2, affinity="nearest_neighbors").fit_predict(X_3)
+    # ax = fig.add_subplot(1, 3, 3, projection='3d')
+    fig1 = plt.figure()
+    ax = fig1.add_subplot(1, 1, 1, projection='3d')
+
+    X_3 = X_3 * maxes
+
+    ax.scatter(X_3[:, 0], X_3[:, 1], X_3[:, 2], c=y_pred)
+    ax.set_title("Size, mag, var clusters")
+    ax.set_xlabel('size')
+    ax.set_ylabel('magniture')
+    ax.set_zlabel('variance')
