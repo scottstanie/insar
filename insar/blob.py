@@ -399,8 +399,28 @@ def scatter_blobs(blobs, image=None, axes=None, color='b', label=None):
     axes[2].scatter(sizes, ptps, c=color, label=label)
     axes[2].set_xlabel("Size")
     axes[2].set_ylabel("peak-to-peak")
-
     return fig, axes
+
+
+def scatter_blobs_3d(blobs, image=None, ax=None, color='b', label=None):
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1, projection='3d')
+    else:
+        fig = ax.get_figure()
+
+    if blobs.shape[1] < 6:
+        blobs = append_stats(blobs, image)
+
+    sizes = blobs[:, 2]
+    mags = blobs[:, 3]
+    vars_ = blobs[:, 4]
+    ax.scatter(sizes, mags, vars_, c=color, label=label)
+    ax.set_title("Size, mag, var of blobs")
+    ax.set_xlabel('size')
+    ax.set_ylabel('magniture')
+    ax.set_zlabel('variance')
+    return fig, ax
 
 
 def normalize_features(features):
