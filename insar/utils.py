@@ -299,66 +299,6 @@ def crop_to_smallest(image_list):
     return [img[:min_rows, :min_cols] for img in image_list]
 
 
-def remove_dupes(lat_lon_list, xyz_list):
-    """De-duplicates list of lat/lons with LOS vectors
-
-    Example:
-    >>> ll_list = [(1, 2), (1, 2), (1, 2), (3, 4)]
-    >>> xyz_list = [(0,0,0), (1,2,3), (0,0,0), (4, 5, 6)]
-    >>> ll2, xyz2 = remove_dupes(ll_list, xyz_list)
-    >>> ll2
-    [(1, 2), (3, 4)]
-    >>> xyz2
-    [(1, 2, 3), (4, 5, 6)]
-    """
-
-    latlons, xyzs = [], []
-    idx = -1  # Will increment to 1 upon first append
-    for latlon, xyz in zip(lat_lon_list, xyz_list):
-        if latlon in latlons:
-            # If we added a (0,0,0) vector, check to update it
-            if any(xyz) and not any(xyzs[idx]):
-                xyzs[idx] = xyz
-        else:
-            latlons.append(latlon)
-            xyzs.append(xyz)
-            idx += 1
-    return latlons, xyzs
-
-
-def read_los_output(los_file, dedupe=True):
-    """Reads file of x,y,z positions, parses for lat/lon and vectors
-
-    Example line:
-     19.0  -155.0
-        0.94451263868681301      -0.30776088245682498      -0.11480032487005554
-         6399       4259
-
-    Where first line is "gps station position", or "lat lon",
-    next line are the 3 LOS vector coordinates to satellite in XYZ,
-    next is x position, y position within the DEM grid
-
-    Args:
-        los_file (str): Name of file with line of sight vectors
-        dedupe (bool): Remove duplicate lat,lon points which may appear
-            recorded with 0s from a wrong .db file
-
-    Returns:
-        lat_lon_list (list[tuple]): (lat, lon) tuples of points in file
-        xyz_list (list[tuple]): (x, y, z) components of line of sight
-    """
-
-    def _line_to_floats(line, split_char=None):
-        return tuple(map(float, line.split(split_char)))
-
-    with open(los_file) as f:
-        los_lines = f.read().splitlines()
-
-    lat_lon_list = [_line_to_floats(line) for line in los_lines[::3]]
-    xyz_list = [_line_to_floats(line) for line in los_lines[1::3]]
-    return remove_dupes(lat_lon_list, xyz_list) if dedupe else (lat_lon_list, xyz_list)
-
-
 def split_array_into_blocks(data):
     """Takes a long rectangular array (like UAVSAR) and creates blocks
 

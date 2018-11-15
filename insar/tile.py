@@ -344,8 +344,7 @@ def plot_tiles(dirlist, gps_station_list=None):
     all_station_data = read_station_dict(os.path.join(gps_dir, 'texas_stations.csv'))
     station_data_list = find_station_data(gps_dir)
     stations_with_data = [tup for tup in all_station_data if tup[0] in station_data_list]
-    print(stations_with_data)
-    return
+    return stations_with_data
 
     vmax = np.nanmax(np.stack(defo_img_list, axis=0))
     vmin = np.nanmin(np.stack(defo_img_list, axis=0))

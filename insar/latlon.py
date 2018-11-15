@@ -43,7 +43,7 @@ class LatlonImage(np.ndarray):
                 setattr(obj, k, v)
 
         if obj.dem_rsc is not None:
-            if (obj.file_length, obj.width) != obj.shape:
+            if (obj.file_length, obj.width) != obj.shape[-2:]:
                 raise ValueError("Shape %s does not equal dem_rsc data (%s, %s)" %
                                  (obj.shape, obj.file_length, obj.width))
 
@@ -188,7 +188,7 @@ class LatlonImage(np.ndarray):
             return self.x_step
 
     def nearest_pixel(self, lat=None, lon=None):
-        """Find the nearest row or col number to a given lat or lon
+        """Find the nearest row, col to a given lat and/or lon
 
         Returns (tuple[int, int]): If both given, a pixel (row, col) is returned
             Otherwise if only one, it is (None, col) or (row, None)
@@ -515,62 +515,6 @@ def grid_contains(point, **kwargs):
     point_x, point_y = point
     left, right, bot, top = grid_extent(**kwargs)
     return (left < point_x < right) and (bot < point_y < top)
-
-
-def rot(angle, axis, in_degrees=True):
-    """
-    Find a 3x3 euler rotation matrix given an angle and axis.
-
-    Rotation matrix used for rotating a vector about a single axis.
-
-    Args:
-        angle (float): angle in degrees to rotate
-        axis (int): 1, 2 or 3
-        in_degrees (bool): specify the angle in degrees. if false, using
-            radians for `angle`
-    """
-    R = np.eye(3)
-    if in_degrees:
-        angle = np.deg2rad(angle)
-    cang = cos(angle)
-    sang = sin(angle)
-    if (axis == 1):
-        R[1, 1] = cang
-        R[2, 2] = cang
-        R[1, 2] = sang
-        R[2, 1] = -sang
-    elif (axis == 2):
-        R[0, 0] = cang
-        R[2, 2] = cang
-        R[0, 2] = -sang
-        R[2, 0] = sang
-    elif (axis == 3):
-        R[0, 0] = cang
-        R[1, 1] = cang
-        R[1, 0] = -sang
-        R[0, 1] = sang
-    else:
-        raise ValueError("axis must be 1, 2 or 2")
-    return R
-
-
-def rotate_xyz_to_enu(xyz, lat, lon):
-    """Rotates a vector in XYZ coords to ENU
-
-    Args:
-        xyz (list[float], ndarray[float]): length 3 x, y, z coordinates
-        lat (float): latitude of point to rotate into
-        lon (float): longitude of point to rotate into
-    """
-    # Rotate about axis 3 with longitude, then axis 1 with latitude
-    R3 = rot(90 + lon, 3)
-    R1 = rot(90 - lat, 1)
-    R = np.matmul(R3, R1)
-    return np.matmul(R, xyz)
-
-
-def convert_xyz_latlon_to_enu(lat_lons, xyz_array):
-    return [rotate_xyz_to_enu(xyz, lat, lon) for (lat, lon), xyz in zip(lat_lons, xyz_array)]
 
 
 def intersects1d(low1, high1, low2, high2):
