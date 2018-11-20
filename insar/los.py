@@ -3,11 +3,15 @@
 import os
 import glob
 import numpy as np
+from numpy import sin, cos
+import datetime
+import pandas as pd
 import subprocess
 # from scipy import interpolate
 import sardem.loading
 
-from insar import utils, latlon, timeseries
+from insar import latlon, timeseries
+import matplotlib.pyplot as plt
 
 from insar.log import get_log
 logger = get_log()
@@ -18,7 +22,7 @@ def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt", cl
 
     Function will run through all possible .db files until non-zero vector is computed
 
-    Records answer in outfile, can be read by utils.read_los_output
+    Records answer in outfile, can be read by read_los_output
 
     Returns:
         db_files [list]: names of files used to find the xyz vectors
@@ -51,7 +55,7 @@ def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt", cl
         # print(cmd)
         print("Checking db file: %s" % db_file)
         subprocess.check_output(cmd, shell=True)
-        _, xyz_list = utils.read_los_output(outfile)
+        _, xyz_list = read_los_output(outfile)
         # if not all((any(vector) for vector in xyz_list)):  # Some corner produced 0s
         if not any(xyz_list[-1]):  # corner produced only 0s
             try:
@@ -63,9 +67,68 @@ def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt", cl
             break
 
     # print("Returning to {}".format(cur_dir))
-
     os.chdir(cur_dir)
     return db_files_used
+
+
+def read_los_output(los_file, dedupe=True):
+    """Reads file of x,y,z positions, parses for lat/lon and vectors
+
+    Example line:
+     19.0  -155.0
+        0.94451263868681301      -0.30776088245682498      -0.11480032487005554
+         6399       4259
+
+    Where first line is "gps station position", or "lat lon",
+    next line are the 3 LOS vector coordinates from ground to satellite in XYZ,
+    next is x (col) position, y (row) position within the DEM grid
+
+    Args:
+        los_file (str): Name of file with line of sight vectors
+        dedupe (bool): Remove duplicate lat,lon points which may appear
+            recorded with 0s from a wrong .db file
+
+    Returns:
+        lat_lon_list (list[tuple]): (lat, lon) tuples of points in file
+        xyz_list (list[tuple]): (x, y, z) components of line of sight
+    """
+
+    def _line_to_floats(line, split_char=None):
+        return tuple(map(float, line.split(split_char)))
+
+    with open(los_file) as f:
+        los_lines = f.read().splitlines()
+
+    lat_lon_list = [_line_to_floats(line) for line in los_lines[::3]]
+    xyz_list = [_line_to_floats(line) for line in los_lines[1::3]]
+    return remove_dupes(lat_lon_list, xyz_list) if dedupe else (lat_lon_list, xyz_list)
+
+
+def remove_dupes(lat_lon_list, xyz_list):
+    """De-duplicates list of lat/lons with LOS vectors
+
+    Example:
+    >>> ll_list = [(1, 2), (1, 2), (1, 2), (3, 4)]
+    >>> xyz_list = [(0,0,0), (1,2,3), (0,0,0), (4, 5, 6)]
+    >>> ll2, xyz2 = remove_dupes(ll_list, xyz_list)
+    >>> ll2
+    [(1, 2), (3, 4)]
+    >>> xyz2
+    [(1, 2, 3), (4, 5, 6)]
+    """
+
+    latlons, xyzs = [], []
+    idx = -1  # Will increment to 1 upon first append
+    for lat_lon, xyz in zip(lat_lon_list, xyz_list):
+        if lat_lon in latlons:
+            # If we added a (0,0,0) vector, check to update it
+            if any(xyz) and not any(xyzs[idx]):
+                xyzs[idx] = xyz
+        else:
+            latlons.append(lat_lon)
+            xyzs.append(xyz)
+            idx += 1
+    return latlons, xyzs
 
 
 def los_to_enu(los_file=None, lat_lons=None, xyz_los_vecs=None):
@@ -85,8 +148,128 @@ def los_to_enu(los_file=None, lat_lons=None, xyz_los_vecs=None):
         ndarray: ENU 3-vectors
     """
     if los_file:
-        lat_lons, xyz_los_vecs = utils.read_los_output(los_file)
-    return np.array(latlon.convert_xyz_latlon_to_enu(lat_lons, xyz_los_vecs))
+        lat_lons, xyz_los_vecs = read_los_output(los_file)
+    return convert_xyz_latlon_to_enu(lat_lons, xyz_los_vecs)
+
+
+def rot(angle, axis, in_degrees=True):
+    """
+    Find a 3x3 euler rotation matrix given an angle and axis.
+
+    Rotation matrix used for rotating a vector about a single axis.
+
+    Args:
+        angle (float): angle in degrees to rotate
+        axis (int): 1, 2 or 3
+        in_degrees (bool): specify the angle in degrees. if false, using
+            radians for `angle`
+    """
+    R = np.eye(3)
+    if in_degrees:
+        angle = np.deg2rad(angle)
+    cang = cos(angle)
+    sang = sin(angle)
+    if axis == 1:
+        R[1, 1] = cang
+        R[2, 2] = cang
+        R[1, 2] = sang
+        R[2, 1] = -sang
+    elif axis == 2:
+        R[0, 0] = cang
+        R[2, 2] = cang
+        R[0, 2] = -sang
+        R[2, 0] = sang
+    elif axis == 3:
+        R[0, 0] = cang
+        R[1, 1] = cang
+        R[1, 0] = -sang
+        R[0, 1] = sang
+    else:
+        raise ValueError("axis must be 1, 2 or 2")
+    return R
+
+
+def rotate_xyz_to_enu(xyz, lat, lon):
+    """Rotates a vector in XYZ coords to ENU
+
+    Args:
+        xyz (list[float], ndarray[float]): length 3 x,y,z coordinates, either
+            as list of 3, or a 3xk array of k ENU vectors
+        lat (float): latitude (deg) of point to rotate into
+        lon (float): longitude (deg) of point to rotate into
+
+    Reference: https://gssc.esa.int/navipedia/index.php/\
+Transformations_between_ECEF_and_ENU_coordinates
+
+    Example:
+    >>> rotate_xyz_to_enu([-2, -3, 1], 0, 0)
+    array([ 1.,  2.,  3.])
+    """
+    # Rotate about axis 3 with longitude, then axis 1 with latitude
+    R3 = rot(90 + lon, 3, in_degrees=True)
+    R1 = rot(90 - lat, 1, in_degrees=True)
+    R = np.matmul(R3, R1)
+    return np.matmul(R, xyz)
+
+
+def rotate_enu_to_xyz(enu, lat, lon):
+    """Given a vector in ENU, rotate to XYZ coords
+
+    Args:
+        enu (list[float], ndarray[float]): E,N,U coordinates, either
+            as list of 3, or a 3xk array of k ENU vectors
+        lat (float): latitude (deg) of point to rotate into
+        lon (float): longitude (deg) of point to rotate into
+
+    Reference: https://gssc.esa.int/navipedia/index.php/\
+Transformations_between_ECEF_and_ENU_coordinates
+
+    Example:
+    >>> rotate_enu_to_xyz([1,2,3], 0, 0)
+    array([-2., -3.,  1.])
+
+
+    test_xyz = [-0.127341338217677e7, -0.529776534925940e7,  0.330588991387726e7]
+    test_enu = [-1489.929802,   3477268.994159 ,  769.948314]
+
+
+    """
+    # Rotate about axis 3 with longitude, then axis 1 with latitude
+    R1 = rot(-(90 - lat), 1, in_degrees=True)
+    R3 = rot(-(90 + lon), 3, in_degrees=True)
+    R = np.matmul(R1, R3)
+    return np.matmul(R, enu)
+
+
+def convert_xyz_latlon_to_enu(lat_lons, xyz_array):
+    return np.array(
+        [rotate_xyz_to_enu(xyz, lat, lon) for (lat, lon), xyz in zip(lat_lons, xyz_array)])
+
+
+def project_enu_to_los(enu, los_vec, lat, lon):
+    """Find mgnitude of an ENU vector in the LOS direction
+
+    Args:
+        enu (list[float], ndarray[float]): E,N,U coordinates, either
+            as list of 3, or a (3, k) array of k ENU vectors
+        los_vec (ndarray[float]) length 3 line of sight, in XYZ frame
+        lat (float): degrees latitude of los point
+        lon (float): degrees longitude of los point
+
+    Returns:
+        ndarray: magnitudes same length as enu input, (k, 1)
+
+    Examples:
+    >>> print('%.2f' % project_enu_to_los([1,2,3],[1, 0, 0], 0, 0))
+    -2.00
+    >>> print('%.2f' % project_enu_to_los([1,2,3],[0, 1, 0], 0, 0))
+    -3.00
+    >>> print('%.2f' % project_enu_to_los([1,2,3],[0, 0, 1], 0, 0))
+    1.00
+    """
+    xyz_vectors = rotate_enu_to_xyz(enu, lat, lon)
+    los_hat = los_vec / np.linalg.norm(los_vec)
+    return np.dot(xyz_vectors.T, los_hat)
 
 
 def corner_los_vectors(rsc_data, db_path, los_output_file):
@@ -98,7 +281,7 @@ def corner_los_vectors(rsc_data, db_path, los_output_file):
         db_files = record_xyz_los_vector(*p, db_path=db_path, outfile=los_output_file)
         db_files_used.append(db_files)
 
-    return db_files_used, utils.read_los_output(los_output_file)
+    return db_files_used, read_los_output(los_output_file)
 
 
 def check_corner_differences(rsc_data, db_path, los_file):
@@ -219,6 +402,51 @@ def merge_geolists(geolist1, geolist2):
     _, indices1, _ = np.intersect1d(merged_geolist, geolist1, return_indices=True)
     _, indices2, _ = np.intersect1d(merged_geolist, geolist2, return_indices=True)
     return merged_geolist, indices1, indices2
+
+
+def load_gps_enu(basedir='/data1/scott/pecos/gps_station_data/'):
+    stationname = 'TXKM'
+    gps_data_file = os.path.join(basedir, '%s.NA12.tenv3' % stationname)
+    df = pd.read_csv(gps_data_file, header=0, sep='\s+')
+    df['dt'] = pd.to_datetime(df['YYMMMDD'], format='%y%b%d')
+    df2015 = df[df['dt'] > datetime.datetime(2014, 12, 31)]
+    df_enu = df2015[['dt', '__east(m)', '_north(m)', '____up(m)']]
+    df_enu = df_enu.rename(mapper=lambda s: s.replace('_', '').replace('(m)', ''), axis='columns')
+
+    gps_lonlat = os.path.join(basedir, '%s_lonlat.txt' % stationname)
+    lon, lat = open(gps_lonlat).read().strip('\n').split(',')
+
+    return df_enu, float(lon), float(lat)
+
+
+def gps_to_los():
+    insar_dir = '/data4/scott/delaware-basin/test2/N31.4W103.0'
+    lla, xyz = read_los_output(os.path.join(insar_dir, 'extra_files/los_vectors.txt'))
+
+    los_vec = np.array(xyz).T
+    df, lon, lat = load_gps_enu()
+    enu_data = df[['east', 'north', 'up']].T
+    los_gps_data = project_enu_to_los(enu_data, los_vec, lat, lon)
+    return los_gps_data, df['dt']
+
+
+def plot_gps_vs_insar():
+    insar_dir = '/data4/scott/delaware-basin/test2/N31.4W103.0'
+    lla, xyz = read_los_output(os.path.join(insar_dir, 'extra_files/los_vectors.txt'))
+    los_gps_data, gps_dts = gps_to_los()
+
+    # plt.plot(gps_dts, los_gps_data, 'b.', label='gps data')
+
+    igrams_dir = os.path.join(insar_dir, 'igrams')
+    geolist, deformation = timeseries.load_deformation(igrams_dir)
+    defo_ll = latlon.LatlonImage(data=deformation, dem_rsc_file=os.path.join(igrams_dir, 'dem.rsc'))
+
+    df, lon, lat = load_gps_enu()
+    insar_row, insar_col = defo_ll.nearest_pixel(lat=lat, lon=lon)
+    insar_ts = defo_ll[:, insar_row, insar_col]
+
+    # plt.plot(geolist, insar_ts, 'r.', label='insar data')
+    return geolist, insar_ts, gps_dts, los_gps_data
 
 
 # def interpolate_coeffs(rsc_data, nrows, ncols, east_up):

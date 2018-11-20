@@ -17,6 +17,7 @@ def run_blob(thresh, mag_thresh, fname, min_sigma=10, max_sigma=100):
         'mag_threshold': mag_thresh,
         'max_sigma': max_sigma,
         'min_sigma': min_sigma,
+        # 'overlap': 2,  # 2 overlap will never apply, keep all blobs
     }
     blobs = blob._make_blobs(img, extra_args)
 

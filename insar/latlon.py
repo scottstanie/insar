@@ -1,7 +1,7 @@
 from __future__ import division
 import copy
 from numpy import sin, cos, sqrt, arctan2, radians
-# import os
+import os
 import numpy as np
 from insar import sario, utils, kml
 from insar.log import get_log
@@ -36,10 +36,17 @@ class LatlonImage(np.ndarray):
         else:
             obj.dem_rsc = None
 
+        # Also make each element in the dem_rsc dict an object attr
+        # e.g. : img.x_first
+        if obj.dem_rsc:
+            for k, v in obj.dem_rsc.items():
+                setattr(obj, k, v)
+
         if obj.dem_rsc is not None:
-            if (obj.dem_rsc['file_length'], obj.dem_rsc['width']) != obj.shape:
+            if (obj.file_length, obj.width) != obj.shape[-2:]:
                 raise ValueError("Shape %s does not equal dem_rsc data (%s, %s)" %
-                                 (obj.shape, obj.dem_rsc['file_length'], obj.dem_rsc['width']))
+                                 (obj.shape, obj.file_length, obj.width))
+
         if not hasattr(obj, 'points'):
             obj.points = []
 
@@ -106,17 +113,17 @@ class LatlonImage(np.ndarray):
 
         Example:
         >>> im_test = np.arange(30).reshape((6, 5))
-        >>> rsc_info = {'x_first': 1.0, 'y_first': 2.0, 'x_step': 0.1, 'y_step': 0.2, 'file_length': 6,'width': 5}
+        >>> rsc_info = {'x_first': 1.0, 'y_first': 2.0, 'x_step': 0.1, 'y_step': -0.2, 'file_length': 6,'width': 5}
         >>> im = LatlonImage(data=im_test, dem_rsc=rsc_info)
         >>> out = im.crop_rsc_data(rsc_info, None, None, 2, 2)
         >>> print(out['width'], out['file_length'])
         2 2
         >>> out = im.crop_rsc_data(rsc_info, 1, 1, 2, 2)
         >>> print(out['x_first'], out['y_first'])
-        1.1 2.2
+        1.1 1.8
         >>> out = im.crop_rsc_data(rsc_info, None, None, 2, 2, 2, 2)
         >>> print(out['x_step'], out['y_step'])
-        0.2 0.4
+        0.2 -0.4
         >>> im2 = LatlonImage(data=im_test, dem_rsc=None)
         >>> print(im.crop_rsc_data(None, 1, 4, 2, 5))
         None
@@ -150,7 +157,56 @@ class LatlonImage(np.ndarray):
         if self.dem_rsc:
             return grid_extent(**self.dem_rsc)
 
+    @property
+    def top_left(self):
+        """Returns the (lat, lon) of the top left corner"""
+        if self.dem_rsc:
+            return self.x_first, self.y_first
+
+    @property
+    def last_lat(self):
+        """The latitude of the last row of the image"""
+        if self.dem_rsc:
+            return self.y_first + self.y_step * (self.shape[0] - 1)
+
+    @property
+    def last_lon(self):
+        """The longitude of the last column of the image"""
+        if self.dem_rsc:
+            return self.x_first + self.x_step * (self.shape[1] - 1)
+
+    @property
+    def lat_step(self):
+        """The latitude increment for each pixel"""
+        if self.dem_rsc:
+            return self.y_step
+
+    @property
+    def lon_step(self):
+        """The longitude increment of each pixel"""
+        if self.dem_rsc:
+            return self.x_step
+
+    def nearest_pixel(self, lat=None, lon=None):
+        """Find the nearest row, col to a given lat and/or lon
+
+        Returns (tuple[int, int]): If both given, a pixel (row, col) is returned
+            Otherwise if only one, it is (None, col) or (row, None)
+        """
+        out_row_col = [None, None]
+        if lat:
+            row_idx = (lat - self.y_first) / self.y_step
+            if row_idx >= 0 and row_idx < self.shape[0]:
+                out_row_col[0] = int(round(row_idx))
+        if lon:
+            col_idx = (lon - self.x_first) / self.x_step
+            if col_idx >= 0 and col_idx < self.shape[1]:
+                out_row_col[1] = int(round(col_idx))
+
+        return tuple(out_row_col)
+
     def to_kml(self, tif_filename, title=None, desc="Description", kml_out=None):
+        """Convert the dem.rsc data into a kml string"""
         return kml.create_kml(self.dem_rsc, tif_filename, title=title, desc=desc, kml_out=kml_out)
 
     def distance(self, row_col1, row_col2):
@@ -181,22 +237,17 @@ class LatlonImage(np.ndarray):
 
     def km_to_pixels(self, km):
         """Convert a km distance into number of pixels across"""
-        deg_per_pixel = self.dem_rsc['x_step']  # assume x_step = y_step
+        deg_per_pixel = self.x_step  # assume x_step = y_step
         return km_to_pixels(km, deg_per_pixel)
 
 
-def LatlonStack(LatlonImage):
-    """3D stack version of LatlonImage"""
-    # TODO: data = sario.load_stack(directory=stack_path, file_ext=ext)
-    pass
-
-
-class DemTile(object):
-    def __init__(self, rsc_file=None, rsc_data=None):
-        if rsc_data:
-            self.rsc_data = rsc_data
-        elif rsc_file:
-            self.rsc_data = sario.load(rsc_file)
+def load_deformation_img(igram_path, n=3, filename='deformation.npy', rsc_filename='dem.rsc'):
+    """Loads mean of last n images of a deformation stack in LatlonImage
+    """
+    defo_stack = np.load(os.path.join(igram_path, filename))
+    rsc_filename = os.path.join(igram_path, rsc_filename)
+    img = LatlonImage(data=np.mean(defo_stack[-n:], axis=0), dem_rsc_file=rsc_filename)
+    return img
 
 
 def rowcol_to_latlon(row, col, rsc_data):
@@ -218,8 +269,6 @@ def rowcol_to_latlon(row, col, rsc_data):
         >>> rowcol_to_latlon(7, 3, rsc_data)
         (1.4, 1.4)
     """
-    # Force keys to lowercase
-    rsc_data = {k.lower(): v for k, v in rsc_data.items()}
     start_lon = rsc_data["x_first"]
     start_lat = rsc_data["y_first"]
     lon_step, lat_step = rsc_data["x_step"], rsc_data["y_step"]
@@ -227,6 +276,32 @@ def rowcol_to_latlon(row, col, rsc_data):
     lon = start_lon + (col - 1) * lon_step
 
     return lat, lon
+
+
+def latlon_to_rowcol(lat, lon, rsc_data):
+    """Takes latitude, longitude and finds pixel location.
+
+    Inverse of rowcol_to_latlon function
+
+    Args:
+        lat (float): latitude
+        lon (float): longitude
+        rsc_data (dict): data output from load_dem_rsc
+
+    Returns:
+        tuple[int, int]: row, col for the pixel
+
+    Example:
+        >>> rsc_data = {"x_first": 1.0, "y_first": 2.0, "x_step": 0.2, "y_step": -0.1}
+        >>> latlon_to_rowcol(1.4, 1.4, rsc_data)
+        (7, 3)
+    """
+    start_lon = rsc_data["x_first"]
+    start_lat = rsc_data["y_first"]
+    lon_step, lat_step = rsc_data["x_step"], rsc_data["y_step"]
+    row = 1 + (lat - start_lat) / lat_step
+    col = 1 + (lon - start_lon) / lon_step
+    return int(round(row)), int(round(col))
 
 
 def latlon_to_dist(lat_lon_start, lat_lon_end, R=6378):
@@ -442,62 +517,6 @@ def grid_contains(point, **kwargs):
     return (left < point_x < right) and (bot < point_y < top)
 
 
-def rot(angle, axis, in_degrees=True):
-    """
-    Find a 3x3 euler rotation matrix given an angle and axis.
-
-    Rotation matrix used for rotating a vector about a single axis.
-
-    Args:
-        angle (float): angle in degrees to rotate
-        axis (int): 1, 2 or 3
-        in_degrees (bool): specify the angle in degrees. if false, using
-            radians for `angle`
-    """
-    R = np.eye(3)
-    if in_degrees:
-        angle = np.deg2rad(angle)
-    cang = cos(angle)
-    sang = sin(angle)
-    if (axis == 1):
-        R[1, 1] = cang
-        R[2, 2] = cang
-        R[1, 2] = sang
-        R[2, 1] = -sang
-    elif (axis == 2):
-        R[0, 0] = cang
-        R[2, 2] = cang
-        R[0, 2] = -sang
-        R[2, 0] = sang
-    elif (axis == 3):
-        R[0, 0] = cang
-        R[1, 1] = cang
-        R[1, 0] = -sang
-        R[0, 1] = sang
-    else:
-        raise ValueError("axis must be 1, 2 or 2")
-    return R
-
-
-def rotate_xyz_to_enu(xyz, lat, lon):
-    """Rotates a vector in XYZ coords to ENU
-
-    Args:
-        xyz (list[float], ndarray[float]): length 3 x, y, z coordinates
-        lat (float): latitude of point to rotate into
-        lon (float): longitude of point to rotate into
-    """
-    # Rotate about axis 3 with longitude, then axis 1 with latitude
-    R3 = rot(90 + lon, 3)
-    R1 = rot(90 - lat, 1)
-    R = np.matmul(R3, R1)
-    return np.matmul(R, xyz)
-
-
-def convert_xyz_latlon_to_enu(lat_lons, xyz_array):
-    return [rotate_xyz_to_enu(xyz, lat, lon) for (lat, lon), xyz in zip(lat_lons, xyz_array)]
-
-
 def intersects1d(low1, high1, low2, high2):
     """Checks if two line segments intersect
 
@@ -535,3 +554,61 @@ def intersects(box1, box2):
     left1, right1, bot1, top1 = box1
     left2, right2, bot2, top2 = box2
     return (intersects1d(left1, right1, left2, right2) and intersects1d(bot1, top1, bot2, top2))
+
+
+def sort_by_lat(latlon_img_list):
+    """Sorts a list of LatlonImages by latitude, north to south"""
+    return sorted(latlon_img_list, key=lambda img: img.y_first, reverse=True)
+
+
+def sort_by_lon(latlon_img_list):
+    """Sorts a list of LatlonImages by longitude, west to east"""
+    return sorted(latlon_img_list, key=lambda img: img.x_first)
+
+
+def find_img_intersections(image1, image2):
+    """Takes two LatlonImages, finds which pixels mark their intersection
+    """
+    if not intersects(image1.extent, image2.extent):
+        return (None, None)
+
+    # TODO: i'm messing up the order between bottom right/ left overlap, e.g.
+    im1_lat, im2_lat = sort_by_lat([image1, image2])
+    im1_lon, im2_lon = sort_by_lon([image1, image2])
+
+    lat_tup = im1_lat.nearest_pixel(lat=im2_lat.y_first)
+    lon_tup = im1_lon.nearest_pixel(lon=im2_lon.x_first)
+
+    # Now combine by ignoring the Nones for each that don't matter
+    return (lat_tup[0], lon_tup[1])
+
+
+def find_total_pixels(image_list):
+    """Get the total number of rows and columns for overlapping images
+    """
+    # TODO: + 1 needed?
+    if any(img.dem_rsc is None for img in image_list):
+        raise ValueError("All images must have dem_rsc provided")
+    elif any(img.x_step != image_list[0].x_step for img in image_list):
+        raise ValueError("All images must have same x_step in dem_rsc")
+    elif any(img.y_step != image_list[0].y_step for img in image_list):
+        raise ValueError("All images must have same y_step in dem_rsc")
+
+    images_sorted = sort_by_lat(image_list)
+    im_first = images_sorted[0]
+    im_last = images_sorted[-1]
+    row_increments = int(round((im_last.last_lat - im_first.y_first) / im_first.y_step))
+
+    images_sorted = sort_by_lon(image_list)
+    im_first = images_sorted[0]
+    im_last = images_sorted[-1]
+    col_increments = int(round((im_last.last_lon - im_first.x_first) / im_first.x_step))
+    # Add 1 to count the starting row
+    return (1 + row_increments, 1 + col_increments)
+
+
+def stitch_images(image_list):
+    total_rows, total_cols = find_total_pixels(image_list)
+    # out = np.zero((total_rows, total_cols))
+    # img1 = image_list[0]
+    # out[:rows, :cols] = img1
