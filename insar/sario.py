@@ -57,10 +57,11 @@ def find_files(directory, search_term):
 
 
 def find_rsc_file(filename, verbose=False):
-    basepath = os.path.split(filename)[0]
+    basepath = os.path.split(os.path.abspath(filename))[0]
     # Should be just elevation.dem.rsc (for .geo folder) or dem.rsc (for igrams)
     possible_rscs = find_files(basepath, '*.rsc')
     if verbose:
+        logger.info("Searching %s for rsc files", basepath)
         logger.info("Possible rsc files:")
         logger.info(possible_rscs)
     if len(possible_rscs) < 1:
