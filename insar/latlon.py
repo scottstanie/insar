@@ -187,23 +187,33 @@ class LatlonImage(np.ndarray):
         if self.dem_rsc:
             return self.x_step
 
-    def nearest_pixel(self, lat=None, lon=None):
+    def nearest_pixel(self, lon=None, lat=None):
         """Find the nearest row, col to a given lat and/or lon
 
         Returns (tuple[int, int]): If both given, a pixel (row, col) is returned
             Otherwise if only one, it is (None, col) or (row, None)
         """
         out_row_col = [None, None]
-        if lat:
-            row_idx = (lat - self.y_first) / self.y_step
-            if row_idx >= 0 and row_idx < self.shape[0]:
-                out_row_col[0] = int(round(row_idx))
         if lon:
             col_idx = (lon - self.x_first) / self.x_step
             if col_idx >= 0 and col_idx < self.shape[1]:
                 out_row_col[1] = int(round(col_idx))
+        if lat:
+            row_idx = (lat - self.y_first) / self.y_step
+            if row_idx >= 0 and row_idx < self.shape[0]:
+                out_row_col[0] = int(round(row_idx))
 
         return tuple(out_row_col)
+
+    def contains(self, lon_lat_point_list=None, lon_lat_point=None):
+        if lon_lat_point:
+            lon, lat = lon_lat_point
+            return grid_contains((lon, lat), **self.dem_rsc)
+        elif lon_lat_point_list:
+            return [grid_contains((lon, lat), **self.dem_rsc) for lon, lat in lon_lat_point_list]
+        # Alternative:
+        # Each of the tuple must contain an answer for the point to be contained
+        # return all(num is not None for num in self.nearest_pixel(lon, lat))
 
     def to_kml(self, tif_filename, title=None, desc="Description", kml_out=None):
         """Convert the dem.rsc data into a kml string"""

@@ -339,13 +339,6 @@ def plot_tiles(dirlist, gps_station_list=None):
         defo_img_list.append(defo_img)
         img_data_list.append(img_data)
 
-    # Now also get gps station list
-    gps_dir = '/data1/scott/pecos/gps_station_data'
-    all_station_data = read_station_dict(os.path.join(gps_dir, 'texas_stations.csv'))
-    station_data_list = find_station_data(gps_dir)
-    stations_with_data = [tup for tup in all_station_data if tup[0] in station_data_list]
-    return stations_with_data
-
     vmax = np.nanmax(np.stack(defo_img_list, axis=0))
     vmin = np.nanmin(np.stack(defo_img_list, axis=0))
     print('vmin, vmax', vmin, vmax)
@@ -394,6 +387,26 @@ def plot_tiles(dirlist, gps_station_list=None):
     return fig, axes, defo_img_list, img_data_list
 
 
+def find_stations_with_data(gps_dir=None):
+    # Now also get gps station list
+    if not gps_dir:
+        gps_dir = '/data1/scott/pecos/gps_station_data'
+
+    all_station_data = read_station_dict(os.path.join(gps_dir, 'texas_stations.csv'))
+    station_data_list = find_station_data_files(gps_dir)
+    stations_with_data = [tup for tup in all_station_data if tup[0] in station_data_list]
+    return stations_with_data
+
+
+def find_station_data_files(gps_dir):
+    station_files = glob.glob(os.path.join(gps_dir, '*.tenv3'))
+    station_list = []
+    for filename in station_files:
+        _, name = os.path.split(filename)
+        station_list.append(name.split('.')[0])
+    return station_list
+
+
 def read_station_dict(filename):
     """Reads in GPS station data"""
     with open(filename) as f:
@@ -404,12 +417,3 @@ def read_station_dict(filename):
         name, lat, lon, _ = row.split(',')  # Ignore altitude
         all_station_data.append((name, float(lon), float(lat)))
     return all_station_data
-
-
-def find_station_data(gps_dir):
-    station_files = glob.glob(os.path.join(gps_dir, '*.tenv3'))
-    station_list = []
-    for filename in station_files:
-        _, name = os.path.split(filename)
-        station_list.append(name.split('.')[0])
-    return station_list

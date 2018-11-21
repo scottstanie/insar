@@ -303,6 +303,30 @@ def check_corner_differences(rsc_data, db_path, los_file):
     return np.max(enu_ranges), enu_coeffs
 
 
+def find_enu_coeffs(lon, lat, geo_path=None):
+    """Find the coefficients for east and up components for LOS deformation
+
+    Args:
+        geo_path (str): path to the directory with the sentinel
+            timeseries inversion (contains line-of-sight deformation.npy, dem.rsc,
+            and has .db files one directory higher)
+
+    Returns:
+        ndarray: enu_coeffs, a 1x3 array [[alpha_e, alpha_n, alpha_up]]
+        Can be used to project an ENU vector into the line of sight direction
+    """
+    los_file = os.path.realpath(os.path.join(geo_path, 'los_vector_%s_%s.txt' % (lon, lat)))
+    db_path = os.path.join(geo_path, 'extra_files') if os.path.exists(
+        os.path.join(geo_path, 'extra_files')) else geo_path
+
+    record_xyz_los_vector(lon, lat, db_path=db_path, outfile=los_file, clear=True)
+
+    enu_coeffs = los_to_enu(los_file)
+
+    # Note: vectors are from sat to ground, so uplift is negative
+    return enu_coeffs
+
+
 def find_east_up_coeffs(geo_path):
     """Find the coefficients for east and up components for LOS deformation
 
@@ -420,7 +444,8 @@ def load_gps_enu(basedir='/data1/scott/pecos/gps_station_data/'):
 
 
 def gps_to_los():
-    insar_dir = '/data4/scott/delaware-basin/test2/N31.4W103.0'
+    # WRONG DIR
+    insar_dir = '/data4/scott/delaware-basin/test2/N31.4W103.7'
     lla, xyz = read_los_output(os.path.join(insar_dir, 'extra_files/los_vectors.txt'))
 
     los_vec = np.array(xyz).T
@@ -431,7 +456,8 @@ def gps_to_los():
 
 
 def plot_gps_vs_insar():
-    insar_dir = '/data4/scott/delaware-basin/test2/N31.4W103.0'
+    # WRONG DIR
+    insar_dir = '/data4/scott/delaware-basin/test2/N31.4W103.7'
     lla, xyz = read_los_output(os.path.join(insar_dir, 'extra_files/los_vectors.txt'))
     los_gps_data, gps_dts = gps_to_los()
 
@@ -443,10 +469,13 @@ def plot_gps_vs_insar():
 
     df, lon, lat = load_gps_enu()
     insar_row, insar_col = defo_ll.nearest_pixel(lat=lat, lon=lon)
+    print('insar row')
+    print(insar_row)
+    print(insar_col)
     insar_ts = defo_ll[:, insar_row, insar_col]
 
     # plt.plot(geolist, insar_ts, 'r.', label='insar data')
-    return geolist, insar_ts, gps_dts, los_gps_data
+    return geolist, insar_ts, gps_dts, los_gps_data, defo_ll
 
 
 # def interpolate_coeffs(rsc_data, nrows, ncols, east_up):
