@@ -18,6 +18,7 @@ from insar.log import get_log
 logger = get_log()
 
 FLOAT_32_LE = np.dtype('<f4')
+COMPLEX_64_LE = np.dtype('<c8')
 
 SENTINEL_EXTS = ['.geo', '.cc', '.int', '.amp', '.unw', '.unwflat']
 UAVSAR_EXTS = ['.int', '.mlc', '.slc', '.amp', '.cor', '.grd']
@@ -306,6 +307,14 @@ def save(filename, array):
         """All UAVSAR data products save in little endian byte order"""
         return sys.byteorder == 'little'
 
+    def _force_float32(arr):
+        if np.issubdtype(arr.dtype, np.floating):
+            return arr.astype(FLOAT_32_LE)
+        elif np.issubdtype(arr.dtype, np.complexfloating):
+            return arr.astype(COMPLEX_64_LE)
+        else:
+            return arr
+
     ext = insar.utils.get_file_ext(filename)
 
     if ext == '.png':  # TODO: or ext == '.jpg':
@@ -320,7 +329,7 @@ def save(filename, array):
         if not _is_little_endian():
             array.byteswap(inplace=True)
 
-        array.tofile(filename)
+        _force_float32(array).tofile(filename)
     elif ext in STACKED_FILES:
         if array.ndim != 3:
             raise ValueError("Need 3D stack ([amp, data]) to save.")
