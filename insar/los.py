@@ -17,6 +17,80 @@ from insar.log import get_log
 logger = get_log()
 
 
+def find_enu_coeffs(lon, lat, geo_path=None):
+    """Find the coefficients for east, north, up components of LOS deformation
+
+    Args:
+        lon (float): longitude of point to get LOS vector
+        lat (float): latitude of point
+        geo_path (str): path to the directory with the sentinel
+            timeseries inversion (contains line-of-sight deformation.npy, dem.rsc,
+            and has .db files one directory higher)
+
+    Returns:
+        ndarray: enu_coeffs, shape = (3,) array [alpha_e, alpha_n, alpha_up]
+        Can be used to project an ENU vector into the line of sight direction
+    """
+    los_file = os.path.realpath(os.path.join(geo_path, 'los_vector_%s_%s.txt' % (lon, lat)))
+    db_path = os.path.join(geo_path, 'extra_files') if os.path.exists(
+        os.path.join(geo_path, 'extra_files')) else geo_path
+
+    record_xyz_los_vector(lon, lat, db_path=db_path, outfile=los_file, clear=True)
+
+    enu_coeffs = los_to_enu(los_file)
+
+    # Note: vectors are from sat to ground, so uplift is negative
+    return enu_coeffs[0]
+
+
+def find_east_up_coeffs(geo_path):
+    """Find the coefficients for east and up components for LOS deformation
+
+    Args:
+        geo_path (str): path to the directory with the sentinel
+            timeseries inversion (contains line-of-sight deformation.npy, dem.rsc,
+            and has .db files one directory higher)
+
+    Returns:
+        ndarray: east_up_coeffs, a 1x2 array [[east_def, up_def]]
+        Combined with another path, used for solving east-up deformation.:
+            [east_asc,  up_asc;
+             east_desc, up_desc]
+        Used as the "A" matrix for solving Ax = b, where x is [east_def; up_def]
+    """
+    # TODO: make something to adjust 'params' file in case we moved it
+    geo_path = os.path.realpath(geo_path)
+    # Are we doing this in the .geo folder, or the igram folder?
+    # rsc_data = sardem.loading.load_dem_rsc(os.path.join(geo_path, 'dem.rsc'), lower=True)
+    rsc_data = sardem.loading.load_dem_rsc(os.path.join(geo_path, 'elevation.dem.rsc'), lower=True)
+
+    midpoint = latlon.grid_midpoint(**rsc_data)
+    # The path to each orbit's .db files assumed in same directory as elevation.dem.rsc
+
+    los_file = os.path.realpath(os.path.join(geo_path, 'los_vectors.txt'))
+    db_path = os.path.join(geo_path, 'extra_files') if os.path.exists(
+        os.path.join(geo_path, 'extra_files')) else geo_path
+
+    max_corner_difference, enu_coeffs = check_corner_differences(rsc_data, db_path, los_file)
+    logger.info(
+        "Max difference in ENU LOS vectors for area corners: {:2f}".format(max_corner_difference))
+    if max_corner_difference > 0.05:
+        logger.warning("Area is not small, actual LOS vector differs over area.")
+        logger.info('Corner ENU coeffs:')
+        logger.info(enu_coeffs)
+    logger.info("Using midpoint of area for line of sight vectors")
+
+    print("Finding LOS vector for midpoint", midpoint)
+    record_xyz_los_vector(*midpoint, db_path=db_path, outfile=los_file, clear=True)
+
+    enu_coeffs = los_to_enu(los_file)
+
+    # Get only East and Up out of ENU
+    east_up_coeffs = enu_coeffs[:, ::2]
+    # -1 multiplied since vectors are from sat to ground, so vert is negative
+    return -1 * east_up_coeffs
+
+
 def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt", clear=False):
     """Given one (lon, lat) point, find the LOS from Sat to ground
 
@@ -145,11 +219,39 @@ def los_to_enu(los_file=None, lat_lons=None, xyz_los_vecs=None):
         exclusive with los_file
 
     Returns:
-        ndarray: ENU 3-vectors
+        ndarray: k x 3 ENU 3-vectors
     """
     if los_file:
         lat_lons, xyz_los_vecs = read_los_output(los_file)
     return convert_xyz_latlon_to_enu(lat_lons, xyz_los_vecs)
+
+
+def convert_xyz_latlon_to_enu(lat_lons, xyz_array):
+    return np.array(
+        [rotate_xyz_to_enu(xyz, lat, lon) for (lat, lon), xyz in zip(lat_lons, xyz_array)])
+
+
+def rotate_xyz_to_enu(xyz, lat, lon):
+    """Rotates a vector in XYZ coords to ENU
+
+    Args:
+        xyz (list[float], ndarray[float]): length 3 x,y,z coordinates, either
+            as list of 3, or a 3xk array of k ENU vectors
+        lat (float): latitude (deg) of point to rotate into
+        lon (float): longitude (deg) of point to rotate into
+
+    Reference: https://gssc.esa.int/navipedia/index.php/\
+Transformations_between_ECEF_and_ENU_coordinates
+
+    Example:
+    >>> rotate_xyz_to_enu([-2, -3, 1], 0, 0)
+    array([ 1.,  2.,  3.])
+    """
+    # Rotate about axis 3 with longitude, then axis 1 with latitude
+    R3 = rot(90 + lon, 3, in_degrees=True)
+    R1 = rot(90 - lat, 1, in_degrees=True)
+    R = np.matmul(R3, R1)
+    return np.matmul(R, xyz)
 
 
 def rot(angle, axis, in_degrees=True):
@@ -189,29 +291,6 @@ def rot(angle, axis, in_degrees=True):
     return R
 
 
-def rotate_xyz_to_enu(xyz, lat, lon):
-    """Rotates a vector in XYZ coords to ENU
-
-    Args:
-        xyz (list[float], ndarray[float]): length 3 x,y,z coordinates, either
-            as list of 3, or a 3xk array of k ENU vectors
-        lat (float): latitude (deg) of point to rotate into
-        lon (float): longitude (deg) of point to rotate into
-
-    Reference: https://gssc.esa.int/navipedia/index.php/\
-Transformations_between_ECEF_and_ENU_coordinates
-
-    Example:
-    >>> rotate_xyz_to_enu([-2, -3, 1], 0, 0)
-    array([ 1.,  2.,  3.])
-    """
-    # Rotate about axis 3 with longitude, then axis 1 with latitude
-    R3 = rot(90 + lon, 3, in_degrees=True)
-    R1 = rot(90 - lat, 1, in_degrees=True)
-    R = np.matmul(R3, R1)
-    return np.matmul(R, xyz)
-
-
 def rotate_enu_to_xyz(enu, lat, lon):
     """Given a vector in ENU, rotate to XYZ coords
 
@@ -241,13 +320,11 @@ Transformations_between_ECEF_and_ENU_coordinates
     return np.matmul(R, enu)
 
 
-def convert_xyz_latlon_to_enu(lat_lons, xyz_array):
-    return np.array(
-        [rotate_xyz_to_enu(xyz, lat, lon) for (lat, lon), xyz in zip(lat_lons, xyz_array)])
+def project_enu_to_los(enu, los_vec=None, lat=None, lon=None, enu_coeffs=None):
+    """Find magnitude of an ENU vector in the LOS direction
 
-
-def project_enu_to_los(enu, los_vec, lat, lon):
-    """Find mgnitude of an ENU vector in the LOS direction
+    Rotates the line of sight vector to ENU coordinates at
+    (lat, lon), then dots with the enu data vector
 
     Args:
         enu (list[float], ndarray[float]): E,N,U coordinates, either
@@ -255,6 +332,9 @@ def project_enu_to_los(enu, los_vec, lat, lon):
         los_vec (ndarray[float]) length 3 line of sight, in XYZ frame
         lat (float): degrees latitude of los point
         lon (float): degrees longitude of los point
+        enu_coeffs (ndarray) size 3 array of the E,N,U coefficients
+        of a line of sight vector. Comes from `find_enu_coeffs`.
+            If this arg is used, others are not needed
 
     Returns:
         ndarray: magnitudes same length as enu input, (k, 1)
@@ -267,9 +347,15 @@ def project_enu_to_los(enu, los_vec, lat, lon):
     >>> print('%.2f' % project_enu_to_los([1,2,3],[0, 0, 1], 0, 0))
     1.00
     """
-    xyz_vectors = rotate_enu_to_xyz(enu, lat, lon)
-    los_hat = los_vec / np.linalg.norm(los_vec)
-    return np.dot(xyz_vectors.T, los_hat)
+    if enu_coeffs is None:
+        los_hat = los_vec / np.linalg.norm(los_vec)
+        enu_coeffs = rotate_xyz_to_enu(los_hat, lat, lon)
+    # import pdb
+    # pdb.set_trace()
+    return np.dot(enu_coeffs, enu)
+    # xyz_vectors = rotate_enu_to_xyz(enu, lat, lon)
+    # los_hat = los_vec / np.linalg.norm(los_vec)
+    # return np.dot(xyz_vectors.T, los_hat)
 
 
 def corner_los_vectors(rsc_data, db_path, los_output_file):
@@ -301,78 +387,6 @@ def check_corner_differences(rsc_data, db_path, los_file):
     # Find range of data for E, N and U
     enu_ranges = np.ptp(enu_coeffs, axis=0)  # ptp = 'peak to peak' aka range
     return np.max(enu_ranges), enu_coeffs
-
-
-def find_enu_coeffs(lon, lat, geo_path=None):
-    """Find the coefficients for east and up components for LOS deformation
-
-    Args:
-        geo_path (str): path to the directory with the sentinel
-            timeseries inversion (contains line-of-sight deformation.npy, dem.rsc,
-            and has .db files one directory higher)
-
-    Returns:
-        ndarray: enu_coeffs, a 1x3 array [[alpha_e, alpha_n, alpha_up]]
-        Can be used to project an ENU vector into the line of sight direction
-    """
-    los_file = os.path.realpath(os.path.join(geo_path, 'los_vector_%s_%s.txt' % (lon, lat)))
-    db_path = os.path.join(geo_path, 'extra_files') if os.path.exists(
-        os.path.join(geo_path, 'extra_files')) else geo_path
-
-    record_xyz_los_vector(lon, lat, db_path=db_path, outfile=los_file, clear=True)
-
-    enu_coeffs = los_to_enu(los_file)
-
-    # Note: vectors are from sat to ground, so uplift is negative
-    return enu_coeffs
-
-
-def find_east_up_coeffs(geo_path):
-    """Find the coefficients for east and up components for LOS deformation
-
-    Args:
-        geo_path (str): path to the directory with the sentinel
-            timeseries inversion (contains line-of-sight deformation.npy, dem.rsc,
-            and has .db files one directory higher)
-
-    Returns:
-        ndarray: east_up_coeffs, a 1x2 array [[east_def, up_def]]
-        Combined with another path, used for solving east-up deformation.:
-            [east_asc,  up_asc;
-             east_desc, up_desc]
-        Used as the "A" matrix for solving Ax = b, where x is [east_def; up_def]
-    """
-    # TODO: make something to adjust 'params' file in case we moved it
-    geo_path = os.path.realpath(geo_path)
-    # Are we doing this in the .geo folder, or the igram folder?
-    # rsc_data = sardem.loading.load_dem_rsc(os.path.join(geo_path, 'dem.rsc'), lower=True)
-    rsc_data = sardem.loading.load_dem_rsc(os.path.join(geo_path, 'elevation.dem.rsc'), lower=True)
-
-    midpoint = latlon.grid_midpoint(**rsc_data)
-    # The path to each orbit's .db files assumed in same directory as elevation.dem.rsc
-
-    los_file = os.path.realpath(os.path.join(geo_path, 'los_vectors.txt'))
-    db_path = os.path.join(geo_path, 'extra_files') if os.path.exists(
-        os.path.join(geo_path, 'extra_files')) else geo_path
-
-    max_corner_difference, enu_coeffs = check_corner_differences(rsc_data, db_path, los_file)
-    logger.info(
-        "Max difference in ENU LOS vectors for area corners: {:2f}".format(max_corner_difference))
-    if max_corner_difference > 0.05:
-        logger.warning("Area is not small, actual LOS vector differs over area.")
-        logger.info('Corner ENU coeffs:')
-        logger.info(enu_coeffs)
-    logger.info("Using midpoint of area for line of sight vectors")
-
-    print("Finding LOS vector for midpoint", midpoint)
-    record_xyz_los_vector(*midpoint, db_path=db_path, outfile=los_file, clear=True)
-
-    enu_coeffs = los_to_enu(los_file)
-
-    # Get only East and Up out of ENU
-    east_up_coeffs = enu_coeffs[:, ::2]
-    # -1 multiplied since vectors are from sat to ground, so vert is negative
-    return -1 * east_up_coeffs
 
 
 def find_vertical_def(asc_path, desc_path):
@@ -428,8 +442,7 @@ def merge_geolists(geolist1, geolist2):
     return merged_geolist, indices1, indices2
 
 
-def load_gps_enu(basedir='/data1/scott/pecos/gps_station_data/'):
-    stationname = 'TXKM'
+def load_gps_enu(stationname, basedir='/data1/scott/pecos/gps_station_data/'):
     gps_data_file = os.path.join(basedir, '%s.NA12.tenv3' % stationname)
     df = pd.read_csv(gps_data_file, header=0, sep='\s+')
     df['dt'] = pd.to_datetime(df['YYMMMDD'], format='%y%b%d')
@@ -448,8 +461,10 @@ def gps_to_los():
     insar_dir = '/data4/scott/delaware-basin/test2/N31.4W103.7'
     lla, xyz = read_los_output(os.path.join(insar_dir, 'extra_files/los_vectors.txt'))
 
-    los_vec = np.array(xyz).T
-    df, lon, lat = load_gps_enu()
+    los_vec = np.array(xyz)[0]
+
+    stationname = 'TXKM'
+    df, lon, lat = load_gps_enu(stationname)
     enu_data = df[['east', 'north', 'up']].T
     los_gps_data = project_enu_to_los(enu_data, los_vec, lat, lon)
     return los_gps_data, df['dt']
@@ -457,24 +472,40 @@ def gps_to_los():
 
 def plot_gps_vs_insar():
     # WRONG DIR
-    insar_dir = '/data4/scott/delaware-basin/test2/N31.4W103.7'
-    lla, xyz = read_los_output(os.path.join(insar_dir, 'extra_files/los_vectors.txt'))
-    los_gps_data, gps_dts = gps_to_los()
+    # insar_dir = '/data4/scott/delaware-basin/test2/N31.4W103.7'
+    insar_dir = '/data1/scott/pecos/path85/N31.4W103.7'
+    los_dir = '/data4/scott/delaware-basin/test2/N31.4W103.7/'
+    enu_coeffs = find_enu_coeffs(-102.894010019, 31.557733084, los_dir)
 
-    # plt.plot(gps_dts, los_gps_data, 'b.', label='gps data')
+    lla, xyz = read_los_output(os.path.join(los_dir, 'extra_files/los_vectors.txt'))
+    stationname = 'TXKM'
+    df, lon, lat = load_gps_enu(stationname)
+    enu_data = df[['east', 'north', 'up']].T
+    gps_dts = df['dt']
+    # los_gps_data = project_enu_to_los(enu_data, los_vec, lat, lon)
+    los_gps_data = project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
+    print('Resetting GPS data start to 0, converting to cm:')
+    los_gps_data = 100 * (los_gps_data - np.mean(los_gps_data[0:100]))
+
+    plt.plot(gps_dts, los_gps_data, 'b.', label='gps data: %s' % stationname)
 
     igrams_dir = os.path.join(insar_dir, 'igrams')
     geolist, deformation = timeseries.load_deformation(igrams_dir)
     defo_ll = latlon.LatlonImage(data=deformation, dem_rsc_file=os.path.join(igrams_dir, 'dem.rsc'))
 
-    df, lon, lat = load_gps_enu()
+    print('lon', lon, 'lat', lat, type(lat))
+    print(latlon.grid_corners(**defo_ll.dem_rsc))
+    # import pdb
+    # pdb.set_trace()
     insar_row, insar_col = defo_ll.nearest_pixel(lat=lat, lon=lon)
     print('insar row')
     print(insar_row)
     print(insar_col)
-    insar_ts = defo_ll[:, insar_row, insar_col]
+    insar_ts = np.array(defo_ll[:, insar_row, insar_col])
 
-    # plt.plot(geolist, insar_ts, 'r.', label='insar data')
+    plt.plot(geolist, insar_ts, 'rx', label='insar data', ms=5)
+    plt.legend()
+    # return geolist, insar_ts, gps_dts, los_gps_data, defo_ll
     return geolist, insar_ts, gps_dts, los_gps_data, defo_ll
 
 

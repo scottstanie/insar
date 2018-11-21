@@ -149,6 +149,24 @@ class LatlonImage(np.ndarray):
         rsc_copy['y_step'] *= row_step
         return rsc_copy
 
+    @property
+    def nrows(self):
+        if len(self.shape) == 2:
+            return self.shape[0]
+        elif len(self.shape) == 3:
+            return self.shape[1]
+        else:
+            raise ValueError("LatlonImage must be dim 2 or 3 to have nrows")
+
+    @property
+    def ncols(self):
+        if len(self.shape) == 2:
+            return self.shape[1]
+        elif len(self.shape) == 3:
+            return self.shape[2]
+        else:
+            raise ValueError("LatlonImage must be dim 2 or 3 to have ncols")
+
     def rowcol_to_latlon(self, row, col):
         return rowcol_to_latlon(row, col, self.dem_rsc)
 
@@ -196,11 +214,11 @@ class LatlonImage(np.ndarray):
         out_row_col = [None, None]
         if lon:
             col_idx = (lon - self.x_first) / self.x_step
-            if col_idx >= 0 and col_idx < self.shape[1]:
+            if col_idx >= 0 and col_idx < self.ncols:
                 out_row_col[1] = int(round(col_idx))
         if lat:
             row_idx = (lat - self.y_first) / self.y_step
-            if row_idx >= 0 and row_idx < self.shape[0]:
+            if row_idx >= 0 and row_idx < self.nrows:
                 out_row_col[0] = int(round(row_idx))
 
         return tuple(out_row_col)
@@ -209,11 +227,11 @@ class LatlonImage(np.ndarray):
         if lon_lat_point:
             lon, lat = lon_lat_point
             return grid_contains((lon, lat), **self.dem_rsc)
+            # Alternative:
+            # Each of the tuple must contain an answer for the point to be contained
+            # return all(num is not None for num in self.nearest_pixel(lon, lat))
         elif lon_lat_point_list:
             return [grid_contains((lon, lat), **self.dem_rsc) for lon, lat in lon_lat_point_list]
-        # Alternative:
-        # Each of the tuple must contain an answer for the point to be contained
-        # return all(num is not None for num in self.nearest_pixel(lon, lat))
 
     def to_kml(self, tif_filename, title=None, desc="Description", kml_out=None):
         """Convert the dem.rsc data into a kml string"""
