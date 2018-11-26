@@ -101,7 +101,8 @@ def plot_gps_vs_insar():
     plt.plot(gps_dts, los_gps_data, 'b.', label='gps data: %s' % station_name)
 
     igrams_dir = os.path.join(insar_dir, 'igrams')
-    geolist, deformation = timeseries.load_deformation(igrams_dir, filename='deformation.npy')
+    defo_name = 'deformation_linear.npy'
+    geolist, deformation = timeseries.load_deformation(igrams_dir, filename=defo_name)
     defo_ll = latlon.LatlonImage(data=deformation, dem_rsc_file=os.path.join(igrams_dir, 'dem.rsc'))
 
     print('lon', lon, 'lat', lat, type(lat))
@@ -112,7 +113,7 @@ def plot_gps_vs_insar():
     print('insar row')
     print(insar_row)
     print(insar_col)
-    insar_ts = np.array(defo_ll[:, insar_row, insar_col])
+    insar_ts = timeseries.window_stack(defo_ll, insar_row, insar_col, window_size=5, func=np.mean)
 
     plt.plot(geolist, insar_ts, 'rx', label='insar data', ms=5)
     plt.legend()

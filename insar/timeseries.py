@@ -170,7 +170,40 @@ def build_B_matrix(geolist, intlist):
     return B
 
 
-def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
+def window_stack(stack, row, col, window_size=3, func=np.mean):
+    """Combines square around (row, col) in 3D stack to a 1D array
+
+    Used to average around a pixel in a stack and produce a timeseries
+
+    Args:
+        stack (ndarray): 3D array of images, stacked along axis=0
+        row (int): row index of the reference pixel to subtract
+        col (int): col index of the reference pixel to subtract
+        window_size (int): size of the group around ref pixel to avg for reference.
+            if window_size=1 or None, only the single pixel location used for output
+        func (str): default=np.mean, numpy function to use on window.
+
+    Raises:
+        ValueError: if window_size is not a positive int, or if ref pixel out of bounds
+    """
+    window_size = window_size or 1
+    if not isinstance(window_size, int) or window_size < 1:
+        raise ValueError("Invalid window_size %s: must be odd positive int" % window_size)
+    elif row > stack.shape[1] or col > stack.shape[2]:
+        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (row, col,
+                                                                                 stack.shape))
+
+    if window_size % 2 == 0:
+        window_size -= 1
+        logger.warning("Making window_size an odd number (%s) to get square", window_size)
+
+    win_size = window_size // 2
+    return func(stack[:,
+                      row - win_size:row + win_size + 1,
+                      col - win_size:col + win_size + 1], axis=(1, 2))  # yapf: disable
+
+
+def shift_stack(stack, ref_row, ref_col, window=3, window_func=np.mean):
     """Subtracts reference pixel group from each layer
 
     Args:
@@ -186,27 +219,7 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func='mean'):
     Raises:
         ValueError: if window is not a positive int, or if ref pixel out of bounds
     """
-    window = window or 1
-    if not isinstance(window, int) or window < 1:
-        raise ValueError("Invalid window %s: must be odd positive int" % window)
-    elif ref_row > stack.shape[1] or ref_col > stack.shape[2]:
-        raise ValueError(
-            "(%s, %s) out of bounds reference for stack size %s" % (ref_row, ref_col, stack.shape))
-
-    if window % 2 == 0:
-        window -= 1
-        logger.warning("Making window an odd number (%s) to get square window", window)
-
-    win_size = window // 2
-    if window_func == 'mean':
-        func = np.nanmean
-    elif window_func == 'max':
-        func = np.nanmin
-    elif window_func == 'min':
-        func = np.nanmin
-    means = func(stack[:,
-                       ref_row - win_size:ref_row + win_size + 1,
-                       ref_col - win_size:ref_col + win_size + 1], axis=(1, 2))  # yapf: disable
+    means = utils.window_stack(stack, ref_row, ref_col, window, window_func)
     return stack - means[:, np.newaxis, np.newaxis]  # pad with axes to broadcast
 
 
@@ -768,7 +781,7 @@ def create_igram_masks(igram_path, row_looks=1, col_looks=1):
 #     unw_stack = np.stack(remove_ramp(layer) for layer in unw_stack)
 #
 #     # Pick reference point and shift
-#     unw_shifted = shift_stack(unw_stack, 100, 100, window=9, window_func='mean')
+#     unw_shifted = shift_stack(unw_stack, 100, 100, window=9, window_func=np.mean)
 #     stack_mean = np.mean(unw_shifted, axis=0)
 #
 #     start_dt = _parse(pairs2[0][0])

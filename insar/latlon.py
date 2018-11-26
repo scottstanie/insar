@@ -137,7 +137,7 @@ class LatlonImage(np.ndarray):
         >>> print(im.crop_rsc_data(None, 1, 4, 2, 5))
         None
         """
-        if dem_rsc is None:
+        if not dem_rsc_is_valid:
             return None
 
         # Adjust and Nones from the slice object
@@ -181,37 +181,37 @@ class LatlonImage(np.ndarray):
 
     @property
     def extent(self):
-        if self.dem_rsc:
+        if self.dem_rsc_is_valid:
             return grid_extent(**self.dem_rsc)
 
     @property
     def top_left(self):
         """Returns the (lat, lon) of the top left corner"""
-        if self.dem_rsc:
+        if self.dem_rsc_is_valid:
             return self.x_first, self.y_first
 
     @property
     def last_lat(self):
         """The latitude of the last row of the image"""
-        if self.dem_rsc:
+        if self.dem_rsc_is_valid:
             return self.y_first + self.y_step * (self.shape[0] - 1)
 
     @property
     def last_lon(self):
         """The longitude of the last column of the image"""
-        if self.dem_rsc:
+        if self.dem_rsc_is_valid:
             return self.x_first + self.x_step * (self.shape[1] - 1)
 
     @property
     def lat_step(self):
         """The latitude increment for each pixel"""
-        if self.dem_rsc:
+        if self.dem_rsc_is_valid:
             return self.y_step
 
     @property
     def lon_step(self):
         """The longitude increment of each pixel"""
-        if self.dem_rsc:
+        if self.dem_rsc_is_valid:
             return self.x_step
 
     def nearest_pixel(self, lon=None, lat=None):
@@ -624,7 +624,7 @@ def find_total_pixels(image_list):
     """Get the total number of rows and columns for overlapping images
     """
     # TODO: + 1 needed?
-    if any(img.dem_rsc is None for img in image_list):
+    if any(not img.dem_rsc_is_valid for img in image_list):
         raise ValueError("All images must have dem_rsc provided")
     elif any(img.x_step != image_list[0].x_step for img in image_list):
         raise ValueError("All images must have same x_step in dem_rsc")
