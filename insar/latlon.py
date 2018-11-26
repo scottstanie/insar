@@ -36,17 +36,22 @@ class LatlonImage(np.ndarray):
         else:
             obj.dem_rsc = None
 
+        # Set the flag to say whether a valid dem rsc exists/ is active
         # Also make each element in the dem_rsc dict an object attr
         # e.g. : img.x_first
         if obj.dem_rsc:
+            obj.dem_rsc_is_valid = True
             for k, v in obj.dem_rsc.items():
                 setattr(obj, k, v)
+        else:
+            obj.dem_rsc_is_valid = False
 
         if obj.dem_rsc is not None:
             if (obj.file_length, obj.width) != obj.shape[-2:]:
                 raise ValueError("Shape %s does not equal dem_rsc data (%s, %s)" %
                                  (obj.shape, obj.file_length, obj.width))
 
+        # For things like keeping track of GPS points within image
         if not hasattr(obj, 'points'):
             obj.points = []
 
@@ -58,6 +63,7 @@ class LatlonImage(np.ndarray):
         self.filename = getattr(obj, 'filename', None)
         self.dem_rsc_file = getattr(obj, 'dem_rsc_file', None)
         self.dem_rsc = getattr(obj, 'dem_rsc', None)
+        self.dem_rsc_is_valid = getattr(obj, 'dem_rsc_is_valid', False)
         self.points = getattr(obj, 'points', None)
 
     def __getitem__(self, items):
@@ -72,18 +78,21 @@ class LatlonImage(np.ndarray):
 
         try:
             row_slice, col_slice = items
-        except TypeError:
-            # Note: this means they did A[100] or A[2:4], not A[2:4,:]
-            # We need this to stay 2D!
-            raise ValueError("Can only do 2D slices on %s" % self.__class__.__name__)
-        except ValueError:
-            # Here they passed, for instance, an ndarray to index
-            # We'll assume that this indexing will destroy the dem_rsc data
-            # Since mask will destroy the shape to 1D
-            sliced_out.dem_rsc = None
+        except (TypeError, ValueError):
+            # If we want this to stay 2D:
+            # TypeError means they did A[100] or A[2:4], not A[2:4,:]
+            # ValueError means something like an ndarray was used to index
+            # We'll assume that this indexing will invalidate the dem_rsc data
+            # raise ValueError("Can only do 2D slices on %s" % self.__class__.__name__)
+            sliced_out.dem_rsc_is_valid = False
             return sliced_out
 
-        # print(sliced_out.shape)
+        if row_slice == slice(None) or col_slice == slice(None):
+            sliced_out.dem_rsc_is_valid = False
+            return sliced_out
+
+        print('sliced out shape', sliced_out.shape)
+        print('row_slice', row_slice, 'col slice', col_slice)
         nrows, ncols = sliced_out.shape
 
         row_start, row_step = row_slice.start, row_slice.step
