@@ -97,11 +97,19 @@ def plot_gps_vs_insar():
     los_gps_data = los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
     print('Resetting GPS data start to 0, converting to cm:')
     los_gps_data = 100 * (los_gps_data - np.mean(los_gps_data[0:100]))
-
     plt.plot(gps_dts, los_gps_data, 'b.', label='gps data: %s' % station_name)
 
+    days_smooth = 60
+    los_gps_data_smooth = timeseries.moving_average(los_gps_data, days_smooth)
+    plt.plot(
+        gps_dts,
+        los_gps_data_smooth,
+        'b',
+        linewidth='4',
+        label='%d day smoothed gps data: %s' % (days_smooth, station_name))
+
     igrams_dir = os.path.join(insar_dir, 'igrams')
-    defo_name = 'deformation_linear.npy'
+    defo_name = 'deformation.npy'
     geolist, deformation = timeseries.load_deformation(igrams_dir, filename=defo_name)
     defo_ll = latlon.LatlonImage(data=deformation, dem_rsc_file=os.path.join(igrams_dir, 'dem.rsc'))
 
@@ -116,6 +124,12 @@ def plot_gps_vs_insar():
     insar_ts = timeseries.window_stack(defo_ll, insar_row, insar_col, window_size=5, func=np.mean)
 
     plt.plot(geolist, insar_ts, 'rx', label='insar data', ms=5)
+
+    days_smooth = 5
+    insar_ts_smooth = timeseries.moving_average(insar_ts, days_smooth)
+    plt.plot(
+        geolist, insar_ts_smooth, 'r', label='%s day smoothed insar' % days_smooth, linewidth=3)
+
     plt.legend()
     # return geolist, insar_ts, gps_dts, los_gps_data, defo_ll
     return geolist, insar_ts, gps_dts, los_gps_data, defo_ll

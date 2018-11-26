@@ -16,7 +16,7 @@ import os
 import re
 import datetime
 import numpy as np
-from scipy.ndimage.filters import uniform_filter
+from scipy.ndimage.filters import uniform_filter, uniform_filter1d
 
 from sardem.loading import load_dem_rsc
 from insar.parsers import Sentinel
@@ -705,8 +705,10 @@ def find_coherent_patch(correlations, window=11):
     else:
         raise ValueError("correlations must be a 2D mean array, or 3D correlations")
 
+    # Run a 2d average over the image, then convert to masked array
     conv = uniform_filter(mean_stack, size=window, mode='constant')
     conv = np.ma.array(conv, mask=correlations.mask.any(axis=0))
+    # Now find row, column of the max value
     max_idx = conv.argmax()
     return np.unravel_index(max_idx, mean_stack.shape)
 
@@ -725,6 +727,12 @@ def create_igram_masks(igram_path, row_looks=1, col_looks=1):
         row_looks=row_looks,
         col_looks=col_looks,
     )
+    return
+
+
+def moving_average(arr, window_size=7):
+    """Takes a 1D array and returns the running average of same size"""
+    return uniform_filter1d(arr, size=window_size, mode='nearest')
 
 
 # TODO: make simple stack averaging work
