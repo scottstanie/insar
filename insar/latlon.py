@@ -224,13 +224,13 @@ class LatlonImage(np.ndarray):
         return tuple(out_row_col)
 
     def contains(self, lon_lat_point_list=None, lon_lat_point=None):
-        if lon_lat_point:
+        if lon_lat_point is not None:
             lon, lat = lon_lat_point
             return grid_contains((lon, lat), **self.dem_rsc)
             # Alternative:
             # Each of the tuple must contain an answer for the point to be contained
             # return all(num is not None for num in self.nearest_pixel(lon, lat))
-        elif lon_lat_point_list:
+        elif lon_lat_point_list is not None:
             return [grid_contains((lon, lat), **self.dem_rsc) for lon, lat in lon_lat_point_list]
 
     def to_kml(self, tif_filename, title=None, desc="Description", kml_out=None):
