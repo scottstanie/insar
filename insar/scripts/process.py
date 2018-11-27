@@ -167,7 +167,7 @@ sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
     subprocess.check_call(ps_sbas_cmd, shell=True)
 
     # Also create masks of invalid areas of igrams/.geos
-    insar.scripts.preproc.create_igram_masks('.', row_looks=looks, col_looks=looks)
+    insar.timeseries.create_igram_masks('.', row_looks=looks, col_looks=looks)
 
 
 def run_snaphu(lowpass=None, **kwargs):

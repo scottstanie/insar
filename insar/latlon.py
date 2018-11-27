@@ -137,7 +137,7 @@ class LatlonImage(np.ndarray):
         >>> print(im.crop_rsc_data(None, 1, 4, 2, 5))
         None
         """
-        if not dem_rsc_is_valid:
+        if not dem_rsc:
             return None
 
         # Adjust and Nones from the slice object
