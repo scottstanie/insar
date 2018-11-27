@@ -1,5 +1,18 @@
 from insar import geojson
 
+# TODO: GEOTiff stuff with gdal!
+# Maybe rename this to something not kml, maybe use rasterio
+# For box: upper left, lower right
+# gdal_translate -of GTiff -a_ullr -105.19105 33.508629 -102.552689 31.8869 -a_srs EPSG:4326 20150726_20160720.tif out1.tif
+#
+# If we need to warp
+# For quad_template
+# gdal_translate -of GTiff -a_srs EPSG:4326 -gcp 1 1 -104.869621 33.508629 -gcp 1 2186 -105.191055 31.886913 -gcp 1482 1 -102.181068 33.105865 quick-look-1.png out_gcp.tif
+#
+# gdalwarp -s_srs EPSG:4326 -t_srs EPSG:3857 out1.tif out2.tif
+#
+# Reminder: 4326 is the WGS84 coordinate system, 3857 is pseudo mercator
+
 # Square image in a box
 box_template = """\
 <?xml version="1.0" encoding="UTF-8"?>

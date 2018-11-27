@@ -91,8 +91,8 @@ class LatlonImage(np.ndarray):
             sliced_out.dem_rsc_is_valid = False
             return sliced_out
 
-        print('sliced out shape', sliced_out.shape)
-        print('row_slice', row_slice, 'col slice', col_slice)
+        # print('sliced out shape', sliced_out.shape)
+        # print('row_slice', row_slice, 'col slice', col_slice)
         nrows, ncols = sliced_out.shape
 
         row_start, row_step = row_slice.start, row_slice.step
