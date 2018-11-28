@@ -6,14 +6,14 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-from insar import los, timeseries, latlon
+from insar import los, timeseries, latlon, kml
 
 GPS_DIR = '/data1/scott/pecos/gps_station_data'
 
 
 @functools.lru_cache()
-def read_station_df(filename='/data1/scott/pecos/gps_station_data/texas_stations.csv', cache=True):
-    df = pd.read_csv(filename, header=None)
+def read_station_df(filename=os.path.join(GPS_DIR, 'texas_stations.csv'), header=None):
+    df = pd.read_csv(filename, header=header)
     df.columns = ['name', 'lat', 'lon', 'alt']
     return df
 
@@ -246,6 +246,17 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
     plt.ylabel('cm of cumulative LOS displacement')
     plt.legend()
     return los_gps_data1, los_gps_data2, gps_diff_ts, insar_ts1, insar_ts2, insar_diff
+
+
+def save_station_points_kml(station_iter):
+    for name, lat, lon, alt in station_iter:
+        kml.create_kml(
+            title=name,
+            desc='GPS station location',
+            lon_lat=(lon, lat),
+            kml_out='%s.kml' % name,
+            shape='point',
+        )
 
 
 # def read_station_dict(filename):
