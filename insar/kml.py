@@ -1,14 +1,17 @@
+import subprocess
+import re
 from insar import geojson
+import insar.latlon
 
 # TODO: GEOTiff stuff with gdal!
 # Maybe rename this to something not kml, maybe use rasterio
 # For box: upper left, lower right
 # gdal_translate -of GTiff -a_ullr -105.19105 33.508629 -102.552689 31.8869 -a_srs EPSG:4326 20150726_20160720.tif out1.tif
 #
-# If we need to warp
 # For quad_template
 # gdal_translate -of GTiff -a_srs EPSG:4326 -gcp 1 1 -104.869621 33.508629 -gcp 1 2186 -105.191055 31.886913 -gcp 1482 1 -102.181068 33.105865 quick-look-1.png out_gcp.tif
 #
+# If we need to warp
 # gdalwarp -s_srs EPSG:4326 -t_srs EPSG:3857 out1.tif out2.tif
 #
 # Reminder: 4326 is the WGS84 coordinate system, 3857 is pseudo mercator
@@ -89,13 +92,26 @@ quad_template = """\
 """
 
 
-def rsc_bounds(rsc_data):
-    """Uses the x/y and step data from a .rsc file to generate LatLonBox for .kml"""
+def rsc_nsew(rsc_data):
+    """return tuple of (north, south, east, west) from rsc data"""
+
     north = rsc_data['y_first']
     west = rsc_data['x_first']
     east = west + rsc_data['width'] * rsc_data['x_step']
     south = north + rsc_data['file_length'] * rsc_data['y_step']
+    return north, south, east, west
+
+
+def rsc_bounds(rsc_data):
+    """Uses the x/y and step data from a .rsc file to generate LatLonBox for .kml"""
+    north, south, east, west = rsc_nsew(rsc_data)
     return {'north': north, 'south': south, 'east': east, 'west': west}
+
+
+def parse_quad_kml(quad_kml_filename):
+    lon_lat_overlay_coords = insar.latlon.map_overlay_coords(self.map_overlay_kml)
+    etree = ElementTree.parse(quad_kml_filename)
+    root = etree.getroot()
 
 
 def create_kml(rsc_data=None,
@@ -157,3 +173,59 @@ def create_kml(rsc_data=None,
             f.write(output)
 
     return output
+
+
+def create_geotiff(rsc_data=None, kml_file=None, img_filename=None, shape='box', outfile='out.tif'):
+    """Create geotiff from rsc_data and image file
+
+    Args:
+        rsc_data (dict): dem rsc data
+        kml_file (str): name of Sentinel provided kml with coordinates for quick-look.png
+        img_filename (str): name of the image file
+        shape (str): Options = ('box', 'quad'). Box is square, quad is arbitrary 4 sides
+        kml_out (str): filename of kml to write
+        lon_lat (tuple[float]): if shape == 'point', the lon and lat of the point
+    """
+
+    gdal_translate_box = "gdal_translate -of GTiff -a_srs EPSG:4326 -a_ullr {ullr} {input} {out}"
+    gdal_translate_quad = "gdal_translate -of GTiff -a_srs EPSG:4326 -gcp 1 1 {ul} -gcp 1 {nrows} {ll} -gcp {ncols} 1 {ur} {input} {out}"
+    # gdalwarp -s_srs EPSG:4326 -t_srs EPSG:3857 out1.tif out2.tif
+    if shape == 'box':
+        # ullr means upper left, lower right (lon, lat) points
+        north, south, east, west = rsc_nsew(rsc_data)
+        ullr_string = "%f %f %f %f" % (west, north, east, south)
+        cmd = gdal_translate_box.format(ullr=ullr_string, input=img_filename, out=outfile)
+    elif shape == 'quad':
+        # coords:
+        # [(-105.191055, 31.886913),
+        #  (-104.869621, 33.508629),
+        #  (-102.552689, 31.481976),
+        #  (-102.181068, 33.105865)]
+
+        # gdalinfo output:
+        # Driver: PNG/Portable Network Graphics
+        # Files: quick-look-1.png
+        # Size is 1482, 2186
+        output = subprocess.check_output("gdalinfo %s" % img_filename, shell=True)
+        size_line = output.decode('utf-8').splitlines()[2]
+        ncols, nrows = re.match(r'Size is (\d+), (\d+)', size_line).groups()
+        # Out[17]: ('1482', '2186')
+
+        ll, ul, lr, ur = sorted(
+            insar.latlon.map_overlay_coords(kml_file), key=lambda tup: (tup[0], -tup[1]))
+        ul = '%s %s' % ul
+        ll = '%s %s' % ll
+        ur = '%s %s' % ur
+        cmd = gdal_translate_quad.format(
+            ul=ul,
+            ll=ll,
+            ur=ur,
+            nrows=nrows,
+            ncols=ncols,
+            input=img_filename,
+            out=outfile,
+        )
+
+    print('Running:')
+    print(cmd)
+    subprocess.check_call(cmd, shell=True)
