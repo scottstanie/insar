@@ -70,6 +70,44 @@ def load_gps_station_df(station_name, basedir=GPS_DIR, start_year=2015):
     return _clean_gps_df(df, start_year)
 
 
+def plot_gps_enu(station=None, station_df=None, days_smooth=12):
+    def remove_xticks(ax):
+        ax.tick_params(
+            axis='x',  # changes apply to the x-axis
+            which='both',  # both major and minor ticks are affected
+            bottom=False,  # ticks along the bottom edge are off
+            top=False,  # ticks along the top edge are off
+            labelbottom=False)
+
+    if station is not None:
+        station_df = load_gps_station_df(station)
+
+    fig, axes = plt.subplots(3, 1)
+    east_mm = 100 * (station_df['east'] - station_df['east'].iloc[0])
+    north_mm = 100 * (station_df['north'] - station_df['north'].iloc[0])
+    up_mm = 100 * (station_df['up'] - station_df['up'].iloc[0])
+    dts = station_df['dt']
+    axes[0].plot(dts, east_mm, 'b.')
+    axes[0].set_ylabel('east (cm)')
+    axes[0].plot(dts, timeseries.moving_average(east_mm, days_smooth), 'r-')
+    axes[0].grid(True)
+    remove_xticks(axes[0])
+
+    axes[1].plot(dts, north_mm, 'b.')
+    axes[1].set_ylabel('north (cm)')
+    axes[1].plot(dts, timeseries.moving_average(north_mm, days_smooth), 'r-')
+    axes[1].grid(True)
+    remove_xticks(axes[1])
+
+    axes[2].plot(dts, up_mm, 'b.')
+    axes[2].set_ylabel('up (cm)')
+    axes[2].plot(dts, timeseries.moving_average(up_mm, days_smooth), 'r-')
+    axes[2].grid(True)
+    remove_xticks(axes[2])
+
+    return fig, axes
+
+
 def load_gps_los_data(insar_dir, station_name=None, to_cm=True, zero_start=True):
     """Load the GPS timeseries of a station name
 
