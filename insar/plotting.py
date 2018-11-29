@@ -366,10 +366,16 @@ def make_figure_noborder():
 
 def set_aspect_image(fig, img, height=4):
     """Adjusts sizes to match image data ratio
-    
+
     Can pick a height (default 4), and keeps data rows/col ratio
     """
     nrows, ncols = img.shape
     width = ncols / nrows * height
     print('width', width, 'height', height)
     fig.set_size_inches(width, height)
+
+
+def save_paper_figure(fig, fname):
+    fig.tight_layout()
+    print('Saving %s' % fname)
+    fig.savefig(fname, bbox_inches='tight', transparent=True, dpi=300)

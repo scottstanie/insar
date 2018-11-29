@@ -15,7 +15,8 @@ blobs_all = np.vstack([blobs_real_with_vars_ptp, blobs_with_vars_ptp])
 clusters_3d = blob.cluster_blobs(np.abs(blobs_all))
 
 fig, ax = blob.scatter_blobs_3d(np.abs(blobs_with_vars_ptp), color='r', label='bad')
-blob.scatter_blobs_3d(np.abs(blobs_real_with_vars_ptp), color='g', label='real', ax=ax)
+blob.scatter_blobs_3d(
+    np.abs(blobs_real_with_vars_ptp), color='g', label='real', ax=ax, blob_img=image)
 fig.tight_layout()
 fig.legend()
 fig, axes = blob.scatter_blobs(np.abs(blobs_with_vars_ptp), color='r', label='bad')

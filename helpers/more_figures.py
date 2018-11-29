@@ -5,7 +5,7 @@ import sys
 
 # defo = np.load('deformation.npy')
 # defo_img = latlon.LatlonImage(data=np.mean(defo[-3:], axis=0), dem_rsc_file='dem.rsc')
-defo2 = np.load('/data3/scott/pecos/path85stitch/igrams/deformation.npy')
+defo2 = np.load('/data3/scott/pecos/path85stitch-linear/igrams/deformation.npy')
 defo_img2 = latlon.LatlonImage(
     data=np.mean(defo2[-3:], axis=0), dem_rsc_file='/data3/scott/pecos/path85stitch/igrams/dem.rsc')
 

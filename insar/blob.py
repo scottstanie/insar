@@ -402,7 +402,7 @@ def scatter_blobs(blobs, image=None, axes=None, color='b', label=None):
     return fig, axes
 
 
-def scatter_blobs_3d(blobs, image=None, ax=None, color='b', label=None):
+def scatter_blobs_3d(blobs, image=None, ax=None, color='b', label=None, blob_img=None):
     if ax is None:
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1, projection='3d')
@@ -412,7 +412,10 @@ def scatter_blobs_3d(blobs, image=None, ax=None, color='b', label=None):
     if blobs.shape[1] < 6:
         blobs = append_stats(blobs, image)
 
-    sizes = blobs[:, 2]
+    if blob_img is not None:
+        sizes = blob_img.blob_size(blobs[:, 2])
+    else:
+        sizes = blobs[:, 2]
     mags = blobs[:, 3]
     vars_ = blobs[:, 4]
     ax.scatter(sizes, mags, vars_, c=color, label=label)
