@@ -54,20 +54,22 @@ def find_station_data_files(gps_dir):
     return station_list
 
 
-def _clean_gps_df(df, start_year):
+def _clean_gps_df(df, start_year, end_year=None):
     df['dt'] = pd.to_datetime(df['YYMMMDD'], format='%y%b%d')
 
-    df_recent = df[df['dt'] >= datetime.datetime(start_year, 1, 1)]
-    df_enu = df_recent[['dt', '__east(m)', '_north(m)', '____up(m)']]
+    df_ranged = df[df['dt'] >= datetime.datetime(start_year, 1, 1)]
+    if end_year:
+        df_ranged = df_ranged[df_ranged['dt'] <= datetime.datetime(end_year, 1, 1)]
+    df_enu = df_ranged[['dt', '__east(m)', '_north(m)', '____up(m)']]
     df_enu = df_enu.rename(mapper=lambda s: s.replace('_', '').replace('(m)', ''), axis='columns')
     return df_enu
 
 
-def load_gps_station_df(station_name, basedir=GPS_DIR, start_year=2015):
+def load_gps_station_df(station_name, basedir=GPS_DIR, start_year=2015, end_year=2018):
     """Loads one gps station file's data of ENU displacement since start_year"""
     gps_data_file = os.path.join(basedir, '%s.NA12.tenv3' % station_name)
     df = pd.read_csv(gps_data_file, header=0, sep='\s+')
-    return _clean_gps_df(df, start_year)
+    return _clean_gps_df(df, start_year, end_year)
 
 
 def plot_gps_enu(station=None, station_df=None, days_smooth=12):
@@ -244,8 +246,8 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
     # gps_diff_ts = los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
     # gps_dts = diff_df['dt']
 
-    print("Converting GPS to cm:")
-    gps_diff_ts = 100 * gps_diff_ts
+    # print("Converting GPS to cm:")
+    # gps_diff_ts = 100 * gps_diff_ts
 
     start_mean = np.mean(gps_diff_ts[:100])
     # start_mean = np.mean(los_gps_data2[:100])
@@ -269,7 +271,7 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
     _, insar_ts2 = find_insar_ts(insar_dir, stat2, defo_name=defo_name)
     insar_diff = insar_ts1 - insar_ts2
 
-    plt.plot(geolist, insar_diff, 'rx', label='insar data difference', ms=5)
+    plt.plot(geolist, insar_diff, 'r', label='insar data difference', ms=5)
 
     days_smooth = 5
     insar_diff_smooth = timeseries.moving_average(insar_diff, days_smooth)

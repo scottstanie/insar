@@ -87,7 +87,8 @@ class LatlonImage(np.ndarray):
             sliced_out.dem_rsc_is_valid = False
             return sliced_out
 
-        if row_slice == slice(None) or col_slice == slice(None):
+        if not isinstance(row_slice, slice) or not isinstance(col_slice, slice)\
+                or row_slice == slice(None) or col_slice == slice(None):
             sliced_out.dem_rsc_is_valid = False
             return sliced_out
 
@@ -270,7 +271,7 @@ class LatlonImage(np.ndarray):
         # (really only sigma/radius matters)
         nrows, ncols = self.shape
         midrow, midcol = nrows // 2, ncols // 2
-        return self.distance((midrow, midcol), (midrow + radius, midcol + radius))
+        return self.distance((midrow, midcol), (midrow + radius, midcol))
 
     def km_to_pixels(self, km):
         """Convert a km distance into number of pixels across"""
