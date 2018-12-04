@@ -5,8 +5,6 @@ Utilities for parsing file names of SAR products for relevant info.
 import os
 import re
 import pprint
-import glob
-from xml.etree import ElementTree
 from datetime import datetime
 
 import insar
@@ -116,7 +114,7 @@ class Sentinel(Base):
         self._safe_dir = self._form_safe_dir(filename)
         self._preview_folder = os.path.join(self._safe_dir, 'preview')
         self.map_overlay_kml = os.path.join(self._preview_folder, 'map-overlay.kml')
-        self._lon_lat_overlay_coords = self._map_overlay_coords(self.map_overlay_kml)
+        self._lon_lat_overlay_coords = insar.latlon.map_overlay_coords(self.map_overlay_kml)
 
     def _form_safe_dir(self, filename):
         """Get just the Sentinel product name without extensions, then add .SAFE"""
@@ -266,21 +264,6 @@ class Sentinel(Base):
         """Width and height of the swath area in degrees"""
         left, right, bot, top = self.swath_extent
         return right - left, top - bot
-
-    def _map_overlay_coords(self, kml_file=None, etree=None):
-        if not os.path.exists(kml_file):
-            return None
-        # Use the cache doesn't exist, parse xml and save it
-        if kml_file:
-            etree = ElementTree.parse(kml_file)
-        if not etree:
-            raise ValueError("Need xml_file or etree")
-
-        root = etree.getroot()
-        # point_str looks like:
-        # <coordinates>-102.552971,31.482372 -105.191353,31.887299...
-        point_str = list(elem.text for elem in root.iter('coordinates'))[0]
-        return [(float(lon), float(lat)) for lon, lat in [p.split(',') for p in point_str.split()]]
 
     def overlaps_dem(self, dem_rsc_data):
         """Swath is contained in DEM from rsc data"""

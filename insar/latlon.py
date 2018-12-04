@@ -1,6 +1,7 @@
 from __future__ import division
 import copy
 from numpy import sin, cos, sqrt, arctan2, radians
+from xml.etree import ElementTree
 import os
 import numpy as np
 from insar import sario, utils, kml
@@ -643,6 +644,22 @@ def find_total_pixels(image_list):
     col_increments = int(round((im_last.last_lon - im_first.x_first) / im_first.x_step))
     # Add 1 to count the starting row
     return (1 + row_increments, 1 + col_increments)
+
+
+def map_overlay_coords(kml_file=None, etree=None):
+    if not os.path.exists(kml_file):
+        return None
+    # Use the cache doesn't exist, parse xml and save it
+    if kml_file:
+        etree = ElementTree.parse(kml_file)
+    if not etree:
+        raise ValueError("Need xml_file or etree")
+
+    root = etree.getroot()
+    # point_str looks like:
+    # <coordinates>-102.552971,31.482372 -105.191353,31.887299...
+    point_str = list(elem.text for elem in root.iter('coordinates'))[0]
+    return [(float(lon), float(lat)) for lon, lat in [p.split(',') for p in point_str.split()]]
 
 
 def stitch_images(image_list):
