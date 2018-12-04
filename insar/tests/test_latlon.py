@@ -58,3 +58,43 @@ class TestLatlonConversion(unittest.TestCase):
         out = np.zeros(latlon.find_total_pixels(self.image_list))
         start_row, start_col = latlon.find_img_intersections(*self.image_list)
         out[start_row:, start_col:] = self.im2
+
+
+class TestLatlonImage(unittest.TestCase):
+    def setUp(self):
+        self.im_data = np.arange(20).reshape((5, 4))
+        self.stack_data = np.arange(60).reshape((3, 5, 4))
+        self.rsc_info = {
+            'x_first': -5.0,
+            'y_first': 4.0,
+            'x_step': 0.5,
+            'y_step': -0.5,
+            'file_length': 5,
+            'width': 4
+        }
+        self.im_ll = latlon.LatlonImage(data=self.im_data, dem_rsc=self.rsc_info)
+        self.stack_ll = latlon.LatlonImage(data=self.stack_data, dem_rsc=self.rsc_info)
+
+    def test_crop_2(self):
+        # Should be valid images still
+        self.assertTrue(self.im_ll.dem_rsc_is_valid)
+        self.assertTrue(self.im_ll[:2, :2].dem_rsc_is_valid)
+        self.assertTrue(self.im_ll[:2].dem_rsc_is_valid)
+
+        # Turning into <1D shapes:
+        self.assertFalse(self.im_ll[:2, 2].dem_rsc_is_valid)
+        self.assertFalse(self.im_ll[2].dem_rsc_is_valid)
+        with self.assertRaises(AttributeError):
+            self.im_ll[2, 2].dem_rsc_is_valid
+
+    def test_crop_3(self):
+        # Should be valid images still
+        self.assertTrue(self.stack_ll.dem_rsc_is_valid)
+        self.assertTrue(self.stack_ll[:, :2, :2].dem_rsc_is_valid)
+        self.assertTrue(self.stack_ll[:2].dem_rsc_is_valid)
+        self.assertTrue(self.stack_ll[2].dem_rsc_is_valid)
+
+        # Turning into <1D shapes:
+        self.assertFalse(self.stack_ll[:2, 2].dem_rsc_is_valid)
+        self.assertFalse(self.stack_ll[2, 2].dem_rsc_is_valid)
+        self.assertFalse(self.stack_ll[:, 2, 2].dem_rsc_is_valid)

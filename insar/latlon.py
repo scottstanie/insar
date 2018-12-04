@@ -67,34 +67,72 @@ class LatlonImage(np.ndarray):
         self.dem_rsc_is_valid = getattr(obj, 'dem_rsc_is_valid', False)
         self.points = getattr(obj, 'points', None)
 
+    def _disable_dem_rsc(self, sliced):
+        sliced.dem_rsc_is_valid = False
+        return sliced
+
     def __getitem__(self, items):
         """Runs on access/slicing: we want to adjust the dem_rsc
 
         Will get the right starts and steps to pass to `crop_rsc_data`
         """
-        sliced_out = super(LatlonImage, self).__getitem__(items)
+        # import pdb
+        # pdb.set_trace()
+        sliced = super(LatlonImage, self).__getitem__(items)
         # __getitem__ called multiple times: only do extra on first
-        if not isinstance(sliced_out, LatlonImage):
-            return sliced_out
+        if not isinstance(sliced, LatlonImage):
+            return sliced
+        # print('items')
+        # print(items)
+        # print('ndims', sliced.ndim, self.ndim)
 
-        try:
+        if sliced.ndim < 2 or sliced.ndim > 3:
+            return self._disable_dem_rsc(sliced)
+        if self.ndim == 2:
+            return self._handle_slice2(items, sliced)
+        elif self.ndim == 3:
+            return self._handle_slice3(items, sliced)
+
+    def _handle_slice2(self, items, sliced):
+        # We want this to stay 2D to have a valid dem.rsc
+        if isinstance(items, slice):
+            # This is a slice along rows, all cols
+            return sliced
+        elif isinstance(items, tuple):
             row_slice, col_slice = items
-        except (TypeError, ValueError):
-            # If we want this to stay 2D:
+            # try:
+            # except (TypeError, ValueError):
             # TypeError means they did A[100] or A[2:4], not A[2:4,:]
             # ValueError means something like an ndarray was used to index
             # We'll assume that this indexing will invalidate the dem_rsc data
             # raise ValueError("Can only do 2D slices on %s" % self.__class__.__name__)
-            sliced_out.dem_rsc_is_valid = False
-            return sliced_out
+        else:
+            return self._disable_dem_rsc(sliced)
+        # Why would we need to check for Nones? the crop function seems to handle fine...
+        # if row_slice == slice(None) or col_slice == slice(None):
+        return self._handle_dem_slice(sliced, row_slice, col_slice)
 
-        if row_slice == slice(None) or col_slice == slice(None):
-            sliced_out.dem_rsc_is_valid = False
-            return sliced_out
+    def _handle_slice3(self, items, sliced):
+        if isinstance(items, int):
+            # We asked for just one slice of stack, no need for further processing
+            return sliced
+        elif isinstance(items, slice):
+            # We want a slice of the stack, still a 3d stack
+            return sliced
+        elif isinstance(items, tuple):
+            # If we did something like A[:, :4, :4], crop the dem, still valid
+            if len(items) == 3:
+                _, row_slice, col_slice = items
+                return self._handle_dem_slice(sliced, row_slice, col_slice)
+            else:
+                # Didn't pass 3 slices... unsure what this would be now
+                return self._disable_dem_rsc(sliced)
 
-        # print('sliced out shape', sliced_out.shape)
+    def _handle_dem_slice(self, sliced, row_slice, col_slice):
+        # print('sliced out shape', sliced.shape)
         # print('row_slice', row_slice, 'col slice', col_slice)
-        nrows, ncols = sliced_out.shape
+        # Note: we handled already returning slices of ndim < 2
+        nrows, ncols = sliced.shape[-2:]
 
         row_start, row_step = row_slice.start, row_slice.step
         col_start, col_step = col_slice.start, col_slice.step
@@ -108,8 +146,8 @@ class LatlonImage(np.ndarray):
             col_step,
         )
 
-        sliced_out.dem_rsc = new_rsc_data
-        return sliced_out
+        sliced.dem_rsc = new_rsc_data
+        return sliced
 
     @staticmethod
     def crop_rsc_data(dem_rsc, row_start, col_start, nrows, ncols, row_step=1, col_step=1):
