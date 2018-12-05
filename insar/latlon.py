@@ -309,7 +309,7 @@ class LatlonImage(np.ndarray):
         # (really only sigma/radius matters)
         nrows, ncols = self.shape
         midrow, midcol = nrows // 2, ncols // 2
-        return self.distance((midrow, midcol), (midrow + radius, midcol + radius))
+        return self.distance((midrow, midcol), (midrow + radius, midcol))
 
     def km_to_pixels(self, km):
         """Convert a km distance into number of pixels across"""

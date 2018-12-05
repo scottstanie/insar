@@ -199,24 +199,24 @@ def sort_blobs_by_val(blobs, image):
     Returns:
         tuple[tuple[ndarrays], tuple[floats]]: The pair of (blobs, mags)
     """
-    blob_vals = get_blob_stats(blobs, image, np.max)
+    blob_vals = get_blob_stats(blobs, image, accum_func=np.max)
     blobs_with_mags = np.hstack((blobs, utils.force_column(blob_vals)))
     # Sort rows based on the 4th column, blob_mag, and in reverse order
     return _sort_by_col(blobs_with_mags, 3, reverse=True)
 
 
 def blobs_to_latlon(blobs, blob_info):
-    """Converts (y, x, sigma, val) format to (lat, lon, sigma_latlon, val)
+    """Converts (y, x, sigma, ...) format to (lat, lon, sigma_latlon, ...)
 
     Uses the dem x_step/y_step data to rescale blobs so that appear on an
     image using lat/lon as the `extent` argument of imshow.
     """
     blobs_latlon = []
     for blob in blobs:
-        row, col, r, val = blob
+        row, col, r = blob[:3]
         lat, lon = latlon.rowcol_to_latlon(row, col, blob_info)
         new_radius = r * blob_info['x_step']
-        blobs_latlon.append((lat, lon, new_radius, val))
+        blobs_latlon.append((lat, lon, new_radius) + tuple(blob[3:]))
 
     return np.array(blobs_latlon)
 
@@ -247,7 +247,7 @@ def _handle_args(extra_args):
     return dict(zip(keys, vals))
 
 
-def _make_blobs(img, extra_args):
+def _make_blobs(img, extra_args, verbose=False):
     blob_kwargs = BLOB_KWARG_DEFAULTS.copy()
     blob_kwargs.update(extra_args)
     logger.info("Using the following blob function settings:")
@@ -260,8 +260,9 @@ def _make_blobs(img, extra_args):
     blobs_pos = find_blobs(img, **blob_kwargs)
 
     logger.info("Blobs found:")
-    logger.info(blobs_neg)
-    logger.info(blobs_pos)
+    if verbose:
+        logger.info(blobs_neg)
+        logger.info(blobs_pos)
     # Skip empties
     return np.vstack((b for b in (blobs_neg, blobs_pos) if b is not None))
 
