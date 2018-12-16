@@ -116,6 +116,31 @@ class Sentinel(Base):
         self.map_overlay_kml = os.path.join(self._preview_folder, 'map-overlay.kml')
         self._lon_lat_overlay_coords = insar.latlon.map_overlay_coords(self.map_overlay_kml)
 
+
+# TODO: in 30_20181107T092858_024480_02AF1F_BD80.iso.xml
+#                    <gmd:EX_BoundingPolygon>
+#                      <gmd:polygon>
+#                        <gml:Polygon srsName="http://www.opengis.net/gml/srs/epsg.xml#4326" srsDimension="2" gml:id="boundingPolygon">
+#                          <gml:exterior>
+#                            <gml:LinearRing>
+#                              <gml:pos>64.329208 -42.509876</gml:pos>
+#                              <gml:pos>64.784164 -47.771400</gml:pos>
+#                              <gml:pos>66.444023 -47.122295</gml:pos>
+#                              <gml:pos>65.972809 -41.522572</gml:pos>
+#                              <gml:pos>64.329208 -42.509876</gml:pos>
+#                            </gml:LinearRing>
+#                          </gml:exterior>
+#                        </gml:Polygon>
+#                      </gmd:polygon>
+#                    </gmd:EX_BoundingPolygon>
+# or
+#                      <gmd:eastBoundLongitude>
+#                        <gco:Decimal>-41.522572</gco:Decimal>
+#                      </gmd:eastBoundLongitude>
+#                      <gmd:southBoundLatitude>
+#                        <gco:Decimal>64.329208</gco:Decimal>
+#                      </gmd:southBoundLatitude>
+
     def _form_safe_dir(self, filename):
         """Get just the Sentinel product name without extensions, then add .SAFE"""
         fname = filename.replace('.zip', '').replace('.geo', '')
