@@ -108,12 +108,17 @@ def make_blob_image(igram_path=".",
     """Find and view blobs in deformation"""
 
     logger.info("Searching %s for igram_path" % igram_path)
-    geolist = np.load(os.path.join(igram_path, 'geolist.npy'), encoding='bytes')
     img = latlon.load_deformation_img(igram_path, n=3)
     img = img[row_start:row_end, col_start:col_end]
     # Note: now we use img.dem_rsc after cropping to keep track of new latlon bounds
 
-    title = "%s Deformation from %s to %s" % (title_prefix, geolist[0], geolist[-1])
+    try:
+        geolist = np.load(os.path.join(igram_path, 'geolist.npy'), encoding='bytes')
+        title = "%s Deformation from %s to %s" % (title_prefix, geolist[0], geolist[-1])
+    except FileNotFoundError:
+        logger.warning("No geolist found in %s" % igram_path)
+        title = "%s Deformation" % title_prefix
+
     imagefig, axes_image = plotting.plot_image_shifted(
         img, img_data=img.dem_rsc, title=title, xlabel='Longitude', ylabel='Latitude')
     # Or without lat/lon data:
