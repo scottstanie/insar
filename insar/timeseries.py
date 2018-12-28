@@ -506,12 +506,17 @@ def run_inversion(igram_path,
     dphi_columns = stack_to_cols(unw_stack)
 
     phi_arr_list = []
-    for idx, columns in enumerate(np.array_split(dphi_columns, 4, axis=1)):
-        logger.info("Inverting patch %s" % idx)
+    # TODO: figure out out to split
+    max_bytes = 500e6
+    num_patches = int(np.ceil(dphi_columns.nbytes / max_bytes)) + 1
+    geo_mask_patches = np.array_split(geo_mask_columns, num_patches, axis=1)
+    for idx, columns in enumerate(np.array_split(dphi_columns, num_patches, axis=1)):
+        logger.info("Inverting patch %s out of %s" % (idx, num_patches))
+        geo_mask_patch = geo_mask_patches[idx]
         varr = invert_sbas(
             columns,
             B,
-            geo_mask_columns=geo_mask_columns,
+            geo_mask_columns=geo_mask_patch,
             constant_vel=constant_vel,
             alpha=alpha,
             difference=difference,
