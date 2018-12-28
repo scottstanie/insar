@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 # Note: This is just a temp stopgap to not make skimage a hard requirement
-# In the future, will port just the blob function, ski rest of skimage
+# In the future, will port just the blob function, skip rest of skimage
 try:
     import skimage.feature
     from sklearn import cluster
@@ -21,7 +21,7 @@ from insar import latlon, plotting, timeseries, sario, utils
 
 logger = get_log()
 MAX_PROCS = mp.cpu_count()
-BLOB_KWARG_DEFAULTS = {'threshold': 1, 'min_sigma': 3, 'max_sigma': 40}
+BLOB_KWARG_DEFAULTS = {'threshold': 1, 'min_sigma': 3, 'max_sigma': 60}
 
 
 def find_blobs(image,

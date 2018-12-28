@@ -263,7 +263,7 @@ def invert_sbas(delta_phis, B, geo_mask_columns=None, constant_vel=False, alpha=
         delta_phis (ndarray): columns of unwrapped phases (delta phis)
             Each col is 1 pixel of load_stack along 3rd axis
         B (ndarray): output of build_B_matrix for current set of igrams
-        geo_mask_columns (ndarray[bool])
+        geo_mask_columns (ndarray[bool]): .geo file masks, reshaped to columns
         constant_vel (bool): force solution to have constant velocity
             mutually exclusive with `alpha` option
         alpha (float): nonnegative Tikhonov regularization parameter.

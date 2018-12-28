@@ -104,21 +104,21 @@ def solve_good_columns(A, good_col_idxs, b_masked):
 
 
 def solve_bad_columns(A, bad_col_idxs, b_masked, geo_mask_columns, out_final):
+    # Solve one partially masked column at a time
     for idx in bad_col_idxs:
         col_masked = b_masked[:, idx]
 
         missing = col_masked.mask
         if np.all(missing):
             # Here the entire column is masked, so skip with nans
-            out_final[:, idx] = np.full((out_final.shape[0], 1), np.nan)
+            # Bracket around [idx] so that out_final[:,[idx]] is (n, 1) shape
+            out_final[:, [idx]] = np.full((out_final.shape[0], 1), np.nan)
             continue
 
-        # Add squeeze for empty mask case, since it adds
-        # a singleton dimension to beginning (?? why)
-        A_deleted = utils.atleast_2d(np.squeeze(A[~missing]))
+        A_deleted = A[~missing, :]
+        col_deleted = col_masked[~missing]
 
-        col_deleted = utils.atleast_2d(np.squeeze(col_masked[~missing]))
-
+        # TODO: failing if all except one of `missing` == True (only one pixel to solve)
         sol, residuals, rank, _ = np.linalg.lstsq(A_deleted, col_deleted, rcond=None)
 
         # If underdetermined, fill appropriate places with NaNs
@@ -130,8 +130,12 @@ def solve_bad_columns(A, bad_col_idxs, b_masked, geo_mask_columns, out_final):
             else:
                 mask_col = geo_mask_columns[:, idx]
                 masked_idxs = np.where(mask_col)[0]
-                # In min velocity LS, a 0 affects before and on cur index
-                masked_idxs = np.concatenate((masked_idxs, np.clip(masked_idxs - 1, 0, None)))
+                # In min velocity LS, mask on day j affects velocities (j-1, j)
+                masked_idxs = np.clip(
+                    np.concatenate((masked_idxs, masked_idxs - 1)),
+                    0,
+                    sol.shape[0] - 1,
+                )
                 sol[masked_idxs] = np.NaN
                 # Also update the mask for these NaNs
                 sol = np.ma.masked_invalid(sol)
