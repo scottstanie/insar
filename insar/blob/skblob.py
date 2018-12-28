@@ -93,12 +93,12 @@ def blob_log(image,
 
     # computing gaussian laplace
     # s**2 provides scale invariance
-    image_cube = _create_gl_cube(image, sigma_list)
+    image_cube = create_gl_cube(image, sigma_list)
 
     local_maxima = peak_local_max(
         image_cube,
         threshold_abs=threshold,
-        footprint=np.ones((3, ) * (image.ndim + 1)),
+        min_distance=1,
         threshold_rel=0.0,
         exclude_border=False)
 
@@ -121,12 +121,8 @@ def _create_sigma_list(min_sigma=1, max_sigma=50, num_sigma=10, log_scale=False)
     return sigma_list
 
 
-def _create_gl_cube(image,
-                    sigma_list=None,
-                    min_sigma=1,
-                    max_sigma=50,
-                    num_sigma=10,
-                    log_scale=False):
+def create_gl_cube(image, sigma_list=None, min_sigma=1, max_sigma=50, num_sigma=10,
+                   log_scale=False):
     """Compute gaussian laplace for a range of sigma on image
 
     Multiplying by s**2 provides scale invariance to Gaussian sizes
@@ -135,7 +131,7 @@ def _create_gl_cube(image,
     Can either pass a premade sigma_list from _create_sigma_list, or pass the
     parameters to make a list
     """
-    if not sigma_list:
+    if sigma_list is None:
         sigma_list = _create_sigma_list(min_sigma, max_sigma, num_sigma, log_scale)
     gl_images = [-gaussian_laplace(image, s) * s**2 for s in sigma_list]
     return np.stack(gl_images, axis=-1)

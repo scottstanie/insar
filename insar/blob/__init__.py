@@ -21,16 +21,12 @@ def find_blobs(image,
                max_sigma=60,
                threshold=0.5,
                **kwargs):
-    """Use skimage functions to find blobs in image
-
-    Note: when looking for negative blobs, you should pass in -image,
-    as the sorter performs a `max` to find the largest value within the
-    radius of the blob
+    """Find blob features within an image
 
     Args:
         image (ndarray): image containing blobs
-        negative (bool): default False: if True, multiplies image by -1 and
-            searches for negative blobs in the image
+        negative (bool): default False: if True, searchers for negative
+            (dark, subsidence) blobs within image
         mag_threshold (float): absolute value in the image blob must exceed
             Should be positive number even if negative=True (since image is inverted)
         threshold (float): response threshold passed to the blob finding function
@@ -51,7 +47,8 @@ def find_blobs(image,
     """
 
     image = -1 * image if negative else image
-    image = image.astype('float64')  # skimage fails for float32 when unnormalized
+    # some skimage funcs fail for float32 when unnormalized [0,1]
+    image = image.astype('float64')
 
     blobs = skblob.blob_log(
         image, threshold=threshold, min_sigma=min_sigma, max_sigma=max_sigma, **kwargs)
