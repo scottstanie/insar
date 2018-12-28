@@ -503,10 +503,13 @@ def run_inversion(igram_path,
     unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
     logger.debug("Shifting stack complete")
 
+    # Possible todo: process as blocks with view_as_blocks(stack, (num_stack, 4, 4))
+    # from skimage.util.shape import view_as_blocks
+    # Might need to save as separate blocks to get loading right
+
     dphi_columns = stack_to_cols(unw_stack)
 
     phi_arr_list = []
-    # TODO: figure out out to split
     max_bytes = 500e6
     num_patches = int(np.ceil(dphi_columns.nbytes / max_bytes)) + 1
     geo_mask_patches = np.array_split(geo_mask_columns, num_patches, axis=1)
