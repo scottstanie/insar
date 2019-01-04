@@ -11,10 +11,11 @@ from scipy import spatial
 # Theory behind: http://en.wikipedia.org/wiki/Blob_detection (04.04.2013)
 
 
-def blob_log(image,
+def blob_log(image=None,
              min_sigma=1,
              max_sigma=50,
-             num_sigma=10,
+             num_sigma=20,
+             image_cube=None,
              threshold=.2,
              overlap=.5,
              log_scale=False):
@@ -37,6 +38,8 @@ def blob_log(image,
     num_sigma : int, optional
         The number of intermediate values of standard deviations to consider
         between `min_sigma` and `max_sigma`.
+    image_cube (ndarray): optional: 3D volume, output of create_gl_cube
+        if provided, overrides the min_sigma, max_sigma, num_sigma args
     threshold : float, optional.
         The absolute lower bound for scale space maxima. Local maxima smaller
         than thresh are ignored. Reduce this to detect blobs with less
@@ -87,20 +90,13 @@ def blob_log(image,
     The radius of each blob is approximately :math:`\sqrt{2}\sigma` for
     a 2-D image and :math:`\sqrt{3}\sigma` for a 3-D image.
     """
-    image = image.astype(np.floating)
-
     sigma_list = _create_sigma_list(min_sigma, max_sigma, num_sigma, log_scale=log_scale)
-
-    # computing gaussian laplace
-    # s**2 provides scale invariance
-    image_cube = create_gl_cube(image, sigma_list)
+    if image_cube is None:
+        image = image.astype(np.floating)
+        image_cube = create_gl_cube(image, sigma_list)
 
     local_maxima = peak_local_max(
-        image_cube,
-        threshold_abs=threshold,
-        min_distance=1,
-        threshold_rel=0.0,
-        exclude_border=False)
+        image_cube, threshold_abs=threshold, min_distance=1, exclude_border=False)
 
     # Catch no peaks
     if local_maxima.size == 0:
@@ -112,7 +108,7 @@ def blob_log(image,
     return _prune_blobs(lm, overlap)
 
 
-def _create_sigma_list(min_sigma=1, max_sigma=50, num_sigma=10, log_scale=False):
+def _create_sigma_list(min_sigma=1, max_sigma=50, num_sigma=20, log_scale=False):
     if log_scale:
         start, stop = log(min_sigma, 10), log(max_sigma, 10)
         sigma_list = np.logspace(start, stop, num_sigma)
@@ -121,7 +117,7 @@ def _create_sigma_list(min_sigma=1, max_sigma=50, num_sigma=10, log_scale=False)
     return sigma_list
 
 
-def create_gl_cube(image, sigma_list=None, min_sigma=1, max_sigma=50, num_sigma=10,
+def create_gl_cube(image, sigma_list=None, min_sigma=1, max_sigma=50, num_sigma=20,
                    log_scale=False):
     """Compute gaussian laplace for a range of sigma on image
 
@@ -259,6 +255,7 @@ def _prune_blobs(blobs_array, overlap):
         for (i, j) in pairs:
             blob1, blob2 = blobs_array[i], blobs_array[j]
             if _blob_overlap(blob1, blob2) > overlap:
+                # kill the smaller blob if enough overlap
                 if blob1[-1] > blob2[-1]:
                     blob2[-1] = 0
                 else:

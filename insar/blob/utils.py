@@ -73,7 +73,7 @@ def _sort_by_col(arr, col, reverse=False):
     return sorted_arr[::-1] if reverse else sorted_arr
 
 
-def sort_blobs_by_val(blobs, image):
+def sort_blobs_by_val(blobs, image, positive=True):
     """Sort the blobs by their absolute value in the image
 
     Note: blobs must be in (row, col, sigma) form, not (lat, lon, sigma_ll)
@@ -81,10 +81,16 @@ def sort_blobs_by_val(blobs, image):
     Returns:
         tuple[tuple[ndarrays], tuple[floats]]: The pair of (blobs, mags)
     """
-    blob_vals = get_blob_stats(blobs, image, accum_func=np.max)
+    if positive:
+        reverse = True
+        func = np.max
+    else:
+        reverse = False
+        func = np.min
+    blob_vals = get_blob_stats(blobs, image, accum_func=func)
     blobs_with_mags = np.hstack((blobs, insar.utils.force_column(blob_vals)))
     # Sort rows based on the 4th column, blob_mag, and in reverse order
-    return _sort_by_col(blobs_with_mags, 3, reverse=True)
+    return _sort_by_col(blobs_with_mags, 3, reverse=reverse)
 
 
 def blobs_to_latlon(blobs, blob_info):

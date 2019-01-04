@@ -6,27 +6,29 @@ from matplotlib import cm
 import numpy as np
 
 
-def make_delta(N):
+def make_delta(N, row=None, col=None):
     delta = np.zeros((N, N))
-    delta[N // 2, N // 2] = 1
+    if row is None or col is None:
+        row, col = N // 2, N // 2
+    delta[row, col] = 1
     return delta
 
 
-def make_gaussian(N, sigma):
-    delta = make_delta(N)
-    return nd.gaussian_filter(delta, sigma)
+def make_gaussian(N, sigma, row=None, col=None):
+    delta = make_delta(N, row, col)
+    return nd.gaussian_filter(delta, sigma) * sigma**2
 
 
-def make_log(N, sigma):
-    delta = make_delta(N)
-    log = -nd.gaussian_laplace(delta, sigma)
+def make_log(N, sigma, row=None, col=None):
+    delta = make_delta(N, row, col)
+    return nd.gaussian_laplace(delta, sigma) * sigma**2
 
 
 GAUSSIAN = make_gaussian
 LOG = make_log
 
 
-def plot_func(func, N=501, sigma=None):
+def plot_func(func=GAUSSIAN, N=501, sigma=None):
     if sigma is None:
         sigma = N / 19
     f = func(N, sigma)
@@ -37,6 +39,20 @@ def plot_func(func, N=501, sigma=None):
     ax = fig.gca(projection='3d')
     surf = ax.plot_surface(X, Y, f, cmap=cm.coolwarm, linewidth=0, antialiased=True)
     plt.show()
+
+
+def make_stack(N=501, max_amp=3):
+    """Makes composite of 3 blob sizes, with small negative inside big positive"""
+    b1 = make_gaussian(N, 100, None, None)
+    b2 = make_gaussian(N, 30, N // 3, N // 3)
+    b3 = make_gaussian(N, 7, 4 * N // 7, 4 * N // 7)
+    out = b1 - b2 - .7 * b3
+    out *= max_amp / np.max(out)
+
+    fig = plt.figure()
+    plt.imshow(out)
+    plt.colorbar()
+    return out, fig
 
 
 # # ax.get_xaxis().set_visible(False)

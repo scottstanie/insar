@@ -13,7 +13,8 @@ def plot_blobs(image=None, blobs=None, cur_fig=None, cur_axes=None, color='blue'
         if not cur_fig:
             cur_fig = plt.figure()
         cur_axes = cur_fig.gca()
-        cur_axes.imshow(image)
+        ax_img = cur_axes.imshow(image)
+        cur_fig.colorbar(ax_img)
 
     for blob in blobs:
         c = plt.Circle((blob[1], blob[0]),

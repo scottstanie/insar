@@ -15,23 +15,27 @@ BLOB_KWARG_DEFAULTS = {'threshold': 1, 'min_sigma': 3, 'max_sigma': 40}
 
 def find_blobs(image,
                include_values=True,
+               positive=True,
                negative=False,
                mag_threshold=1.0,
                min_sigma=3,
                max_sigma=60,
+               num_sigma=20,
                threshold=0.5,
                **kwargs):
     """Find blob features within an image
 
     Args:
         image (ndarray): image containing blobs
-        negative (bool): default False: if True, searchers for negative
-            (dark, subsidence) blobs within image
+        positive (bool): default True: if True, searches for positive (light, uplift)
+            blobs within image
+        negative (bool): default False: if True, finds dark, subsidence blobs
         mag_threshold (float): absolute value in the image blob must exceed
             Should be positive number even if negative=True (since image is inverted)
         threshold (float): response threshold passed to the blob finding function
         min_sigma (int): minimum pixel size to check for blobs
         max_sigma (int): max pixel size to check for blobs
+        num_sigma : int, optional: number of intermediate values of filter size to use
 
     Returns:
         ndarray: rows are blobs with values: [(r, c, s, mag)], where
@@ -45,31 +49,57 @@ def find_blobs(image,
     Reference:
     [1] http://scikit-image.org/docs/dev/auto_examples/features_detection/plot_blob.html
     """
-
-    image = -1 * image if negative else image
     # some skimage funcs fail for float32 when unnormalized [0,1]
     image = image.astype('float64')
+    image_cube = skblob.create_gl_cube(
+        image,
+        min_sigma=min_sigma,
+        max_sigma=max_sigma,
+        num_sigma=num_sigma,
+        **kwargs,
+    )
+    print(min_sigma)
 
-    blobs = skblob.blob_log(
-        image, threshold=threshold, min_sigma=min_sigma, max_sigma=max_sigma, **kwargs)
-
-    if not blobs.size:  # Empty return: no blobs matched criteria
-        return None
-
-    # Multiply each sigma by sqrt(2) to convert to a radius
-    blobs = blobs * np.array([1, 1, np.sqrt(2)])
-
-    # Append mags as a column and sort by it
-    blobs_with_mags = utils.sort_blobs_by_val(blobs, image)
-
-    if mag_threshold:
-        blobs_with_mags = blobs_with_mags[blobs_with_mags[:, -1] >= mag_threshold]
-
-    # If negative, flip back last col to get correct img values
+    blobs = np.empty((0, 4))
+    if positive:
+        blobs_pos = skblob.blob_log(
+            threshold=threshold,
+            image_cube=image_cube,
+            min_sigma=min_sigma,
+            max_sigma=max_sigma,
+            num_sigma=num_sigma,
+            **kwargs)
+        # Append mags as a column and sort by it
+        # TODO: FIX vvv
+        if blobs_pos.size:
+            blobs_with_mags = utils.sort_blobs_by_val(blobs_pos, image, positive=True)
+        print('bpos')
+        print(blobs_with_mags)
+        if mag_threshold:
+            blobs_with_mags = blobs_with_mags[blobs_with_mags[:, -1] >= mag_threshold]
+        blobs = np.vstack((blobs, blobs_with_mags))
     if negative:
-        blobs_with_mags = blobs_with_mags * np.array([1, 1, 1, -1])
+        blobs_neg = skblob.blob_log(
+            threshold=threshold,
+            image_cube=-1 * image_cube,
+            min_sigma=min_sigma,
+            max_sigma=max_sigma,
+            num_sigma=num_sigma,
+            **kwargs)
+        if blobs_neg.size:
+            blobs_with_mags = utils.sort_blobs_by_val(blobs_neg, image, positive=False)
+        print('bneg')
+        print(blobs_with_mags)
+        if mag_threshold:
+            blobs_with_mags = blobs_with_mags[-1 * blobs_with_mags[:, -1] >= mag_threshold]
+        blobs = np.vstack((blobs, blobs_with_mags))
 
-    return blobs_with_mags
+    import pdb
+    pdb.set_trace()
+    # Multiply each sigma by sqrt(2) to convert sigma to a circle radius
+    blobs = blobs * np.array([1, 1, np.sqrt(2), 1])
+
+    return blobs
 
 
 def _make_blobs(img, extra_args, verbose=False):
@@ -79,17 +109,12 @@ def _make_blobs(img, extra_args, verbose=False):
     logger.info(blob_kwargs)
 
     logger.info("Finding neg blobs")
-    blobs_neg = find_blobs(img, negative=True, **blob_kwargs)
-
-    logger.info("Finding pos blobs")
-    blobs_pos = find_blobs(img, **blob_kwargs)
+    blobs = find_blobs(img, positive=True, negative=True, **blob_kwargs)
 
     logger.info("Blobs found:")
     if verbose:
-        logger.info(blobs_neg)
-        logger.info(blobs_pos)
-    # Skip empties
-    return np.vstack((b for b in (blobs_neg, blobs_pos) if b is not None))
+        logger.info(blobs)
+    return blobs
 
 
 def make_blob_image(igram_path=".",
