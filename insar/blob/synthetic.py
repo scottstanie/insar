@@ -14,14 +14,16 @@ def make_delta(N, row=None, col=None):
     return delta
 
 
-def make_gaussian(N, sigma, row=None, col=None):
+def make_gaussian(N, sigma, row=None, col=None, normalize=False):
     delta = make_delta(N, row, col)
-    return nd.gaussian_filter(delta, sigma) * sigma**2
+    out = nd.gaussian_filter(delta, sigma) * sigma**2
+    return out / np.max(out) if normalize else out
 
 
-def make_log(N, sigma, row=None, col=None):
+def make_log(N, sigma, row=None, col=None, normalize=False):
     delta = make_delta(N, row, col)
-    return nd.gaussian_laplace(delta, sigma) * sigma**2
+    out = nd.gaussian_laplace(delta, sigma) * sigma**2
+    return out / np.max(out) if normalize else out
 
 
 GAUSSIAN = make_gaussian
