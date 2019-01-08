@@ -86,11 +86,12 @@ class LatlonImage(np.ndarray):
         # print(items)
         # print('ndims', sliced.ndim, self.ndim)
 
-        if sliced.ndim < 2 or sliced.ndim > 3:
+        if not sliced.dem_rsc_is_valid or sliced.ndim < 2 or sliced.ndim > 3:
             return self._disable_dem_rsc(sliced)
-        if self.ndim == 2:
+
+        if sliced.ndim == 2:
             return self._handle_slice2(items, sliced)
-        elif self.ndim == 3:
+        elif sliced.ndim == 3:
             return self._handle_slice3(items, sliced)
 
     def _handle_slice2(self, items, sliced):
@@ -299,7 +300,7 @@ class LatlonImage(np.ndarray):
         latlon2 = self.rowcol_to_latlon(*row_col2)
         return latlon_to_dist(latlon1, latlon2)
 
-    def blob_size(self, radius):
+    def blob_radius(self, radius):
         """Finds the radius of a circles/blobs on the LatlonImage in km
 
         Can also pass array of radii to get multiple distances

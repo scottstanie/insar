@@ -91,7 +91,7 @@ def scatter_blobs_3d(blobs, image=None, ax=None, color='b', label=None, blob_img
         blobs = utils.append_stats(blobs, image)
 
     if blob_img is not None:
-        sizes = blob_img.blob_size(blobs[:, 2])
+        sizes = blob_img.blob_radius(blobs[:, 2])
     else:
         sizes = blobs[:, 2]
     mags = blobs[:, 3]
