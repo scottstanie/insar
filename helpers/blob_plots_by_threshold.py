@@ -107,7 +107,7 @@ if __name__ == '__main__':
     legends = []
     for thresh, data in sorted(features_vs_size.items()):
         legends.append('thresh: %s' % thresh)
-        axes[1].scatter(img.blob_radius(data[:, 0]), data[:, 1])
+        axes[1].scatter(img.pixel_to_km(data[:, 0]), data[:, 1])
     axes[1].set_title('Features vs size (thresh=0.5)')
     # axes[1].set_xlabel('Size, $\sigma$')
     axes[1].set_xlabel('Size, km')

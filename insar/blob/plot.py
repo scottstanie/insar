@@ -20,7 +20,7 @@ def plot_blobs(image=None, blobs=None, cur_fig=None, cur_axes=None, color='blue'
     viridis = cm.get_cmap('viridis', len(blobs))
     patches = []
     for idx, blob in enumerate(blobs):
-        color_pct = idx/len(blobs)
+        color_pct = idx / len(blobs)
         c = plt.Circle((blob[1], blob[0]),
                        blob[2],
                        color=viridis(color_pct),
@@ -91,7 +91,8 @@ def scatter_blobs_3d(blobs, image=None, ax=None, color='b', label=None, blob_img
         blobs = utils.append_stats(blobs, image)
 
     if blob_img is not None:
-        sizes = blob_img.blob_radius(blobs[:, 2])
+        # Length of radii in km
+        sizes = blob_img.pixel_to_km(blobs[:, 2])
     else:
         sizes = blobs[:, 2]
     mags = blobs[:, 3]

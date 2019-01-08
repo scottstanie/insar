@@ -300,22 +300,27 @@ class LatlonImage(np.ndarray):
         latlon2 = self.rowcol_to_latlon(*row_col2)
         return latlon_to_dist(latlon1, latlon2)
 
-    def blob_radius(self, radius):
-        """Finds the radius of a circles/blobs on the LatlonImage in km
+    def pixel_to_km(self, num_pixels):
+        """Compute the length in km of segment `num_pixels` long
 
-        Can also pass array of radii to get multiple distances
+        Can also pass array to get multiple distances
         """
-        radius = np.array(radius)
-        # Use the center of the image as dummy center for circle
-        # (really only sigma/radius matters)
+        num_pixels = np.array(num_pixels)
+        # Use the center of the image as dummy anchor
+        # (really only length should matter)
         nrows, ncols = self.shape
         midrow, midcol = nrows // 2, ncols // 2
-        return self.distance((midrow, midcol), (midrow + radius, midcol))
+        return self.distance((midrow, midcol), (midrow + num_pixels, midcol))
 
     def km_to_pixels(self, km):
         """Convert a km distance into number of pixels across"""
         deg_per_pixel = self.x_step  # assume x_step = y_step
         return km_to_pixels(km, deg_per_pixel)
+
+    @property
+    def km_per_pixel_sq(self):
+        """Approximate area in one square pixel"""
+        return self.pixel_to_km(1)**2
 
 
 def load_deformation_img(igram_path, n=3, filename='deformation.npy', rsc_filename='dem.rsc'):
