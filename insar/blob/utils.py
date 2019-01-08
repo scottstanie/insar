@@ -4,6 +4,7 @@ from __future__ import print_function
 import insar.utils
 import insar.latlon
 import numpy as np
+import cv2 as cv
 
 
 def indexes_within_circle(mask_shape=None, center=None, radius=None, blob=None):
@@ -122,3 +123,15 @@ def blobs_to_rowcol(blobs, blob_info):
         blobs_rowcol.append((lat, lon, old_radius, val))
 
     return np.array(blobs_rowcol)
+
+
+def find_mser_regions(img, min_area=50):
+    mser = cv.MSER_create()
+    mser.setMinArea(220)
+    regions, bboxes = mser.detectRegions(img)
+    regions, bboxes = merge_regions(regions, bboxes)
+    return regions, bboxes
+
+
+def merge_regions(regions, bboxes):
+    pass

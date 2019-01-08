@@ -633,9 +633,21 @@ def intersects(box1, box2):
     >>> print(intersects(box2, box1))
     False
     """
+    return intersect_area(box1, box2) > 0
+
+
+def intersect_area(box1, box2):
+    """Returns area of overlap of two rectangles
+
+    box = (left, right, bot, top), same as matplotlib `extent` format
+    """
     left1, right1, bot1, top1 = box1
     left2, right2, bot2, top2 = box2
-    return (intersects1d(left1, right1, left2, right2) and intersects1d(bot1, top1, bot2, top2))
+    dx = min(right1, right2) - max(left1, left2)
+    dy = min(top1, top2) - max(bot1, bot2)
+    dx = np.clip(dx, 0, None)
+    dy = np.clip(dy, 0, None)
+    return dx * dy
 
 
 def sort_by_lat(latlon_img_list):
