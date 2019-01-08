@@ -56,7 +56,7 @@ def find_blobs(image,
         min_sigma=min_sigma,
         max_sigma=max_sigma,
         num_sigma=num_sigma,
-        **kwargs,
+        **kwargs
     )
 
     blobs = np.empty((0, 4))
