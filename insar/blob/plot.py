@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
 from . import utils
 
@@ -16,13 +17,17 @@ def plot_blobs(image=None, blobs=None, cur_fig=None, cur_axes=None, color='blue'
         ax_img = cur_axes.imshow(image)
         cur_fig.colorbar(ax_img)
 
-    for blob in blobs:
+    viridis = cm.get_cmap('viridis', len(blobs))
+    patches = []
+    for idx, blob in enumerate(blobs):
+        color_pct = idx/len(blobs)
         c = plt.Circle((blob[1], blob[0]),
                        blob[2],
-                       color=color,
+                       color=viridis(color_pct),
                        fill=False,
                        linewidth=2,
                        clip_on=False)
+        patches.append(c)
         cur_axes.add_patch(c)
 
     plt.draw()

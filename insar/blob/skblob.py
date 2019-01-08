@@ -19,7 +19,7 @@ def blob_log(image=None,
              max_sigma=50,
              num_sigma=20,
              image_cube=None,
-             threshold=.2,
+             threshold=.5,
              overlap=.5,
              log_scale=False):
     """Finds blobs in the given grayscale image.
@@ -47,6 +47,8 @@ def blob_log(image=None,
         The absolute lower bound for scale space maxima. Local maxima smaller
         than thresh are ignored. Reduce this to detect blobs with less
         intensities.
+        For a gaussian with height 1, the filter response is 0.5. Thus,
+        0.5 would filter blobs of lower height or worse shape
     overlap : float, optional
         A value between 0 and 1. If the area of two blobs overlaps by a
         fraction greater than `threshold`, the smaller blob is eliminated.
@@ -68,6 +70,7 @@ def blob_log(image=None,
 
     Examples:
     >>> from skimage import data, feature, exposure
+    >>> import numpy as np; np.set_printoptions(legacy="1.13")
     >>> img = data.coins()
     >>> img = exposure.equalize_hist(img)  # improves detection
     >>> feature.blob_log(img, threshold = .3)

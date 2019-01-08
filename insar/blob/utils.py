@@ -57,7 +57,7 @@ def get_blob_stats(blobs, image, center_only=False, accum_func=np.max):
     return np.stack([accum_func(image[mask]) for mask in masks])
 
 
-def append_stats(blobs, image, stat_funcs=[np.var, np.ptp]):
+def append_stats(blobs, image, stat_funcs=(np.var, np.ptp)):
     """Append columns based on the statistic functions in stats
 
     Default: adds the variance and peak-to-peak within blob"""
