@@ -636,18 +636,65 @@ def intersects(box1, box2):
     return intersect_area(box1, box2) > 0
 
 
+def box_area(box):
+    """Returns area of box from format (left, right, bot, top)
+    Example:
+    >>> box1 = (-1, 1, -1, 1)
+    >>> print(box_area(box1))
+    4
+    """
+    left, right, bot, top = box
+    dx = np.clip(right - left, 0, None)
+    dy = np.clip(top - bot, 0, None)
+    return dx * dy
+
+
 def intersect_area(box1, box2):
     """Returns area of overlap of two rectangles
 
     box = (left, right, bot, top), same as matplotlib `extent` format
+    Example:
+    >>> box1 = (-1, 1, -1, 1)
+    >>> box2 = (-1, 1, 0, 2)
+    >>> print(intersect_area(box1, box2))
+    2
+    >>> box2 = (0, 2, -1, 1)
+    >>> print(intersect_area(box1, box2))
+    2
+    >>> box2 = (4, 6, -1, 1)
+    >>> print(intersect_area(box1, box2))
+    0
     """
     left1, right1, bot1, top1 = box1
     left2, right2, bot2, top2 = box2
-    dx = min(right1, right2) - max(left1, left2)
-    dy = min(top1, top2) - max(bot1, bot2)
-    dx = np.clip(dx, 0, None)
-    dy = np.clip(dy, 0, None)
-    return dx * dy
+    intersect_box = (max(left1, left2), min(right1, right2), max(bot1, bot2), min(top1, top2))
+    return box_area(intersect_box)
+
+
+def union_area(box1, box2):
+    """Returns area of union of two rectangles, which is A1 + A2 - intersection
+
+    box = (left, right, bot, top), same as matplotlib `extent` format
+    >>> box1 = (-1, 1, -1, 1)
+    >>> box2 = (-1, 1, 0, 2)
+    >>> print(union_area(box1, box2))
+    6
+    """
+    A1 = box_area(box1)
+    A2 = box_area(box2)
+    return A1 + A2 - intersect_area(box1, box2)
+
+
+def intersection_over_union(box1, box2):
+    """Returns the IoU critera for pct of overlap area
+
+    box = (left, right, bot, top), same as matplotlib `extent` format
+    >>> box1 = (0, 1, 0, 1)
+    >>> box2 = (0, 2, 0, 2)
+    >>> print(intersection_over_union(box1, box2))
+    0.25
+    """
+    return intersect_area(box1, box2) / union_area(box1, box2)
 
 
 def sort_by_lat(latlon_img_list):
