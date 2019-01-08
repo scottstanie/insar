@@ -58,7 +58,6 @@ def find_blobs(image,
         num_sigma=num_sigma,
         **kwargs,
     )
-    print(min_sigma)
 
     blobs = np.empty((0, 4))
     if positive:
@@ -73,8 +72,10 @@ def find_blobs(image,
         # TODO: FIX vvv
         if blobs_pos.size:
             blobs_with_mags = utils.sort_blobs_by_val(blobs_pos, image, positive=True)
-        print('bpos')
-        print(blobs_with_mags)
+        else:
+            blobs_with_mags = np.empty((0, 4))
+        # print('bpos')
+        # print(blobs_with_mags)
         if mag_threshold:
             blobs_with_mags = blobs_with_mags[blobs_with_mags[:, -1] >= mag_threshold]
         blobs = np.vstack((blobs, blobs_with_mags))
@@ -88,14 +89,16 @@ def find_blobs(image,
             **kwargs)
         if blobs_neg.size:
             blobs_with_mags = utils.sort_blobs_by_val(blobs_neg, image, positive=False)
-        print('bneg')
-        print(blobs_with_mags)
+        else:
+            blobs_with_mags = np.empty((0, 4))
+        # print('bneg')
+        # print(blobs_with_mags)
         if mag_threshold:
             blobs_with_mags = blobs_with_mags[-1 * blobs_with_mags[:, -1] >= mag_threshold]
         blobs = np.vstack((blobs, blobs_with_mags))
 
-    import pdb
-    pdb.set_trace()
+    # import pdb
+    # pdb.set_trace()
     # Multiply each sigma by sqrt(2) to convert sigma to a circle radius
     blobs = blobs * np.array([1, 1, np.sqrt(2), 1])
 
@@ -177,3 +180,15 @@ def _handle_args(extra_args):
         except ValueError:
             vals.append(val)
     return dict(zip(keys, vals))
+
+
+def find_corner_blobs(blobs, im_shape):
+    """Takes output of find_blobs, separates those at edge of image"""
+    rows, cols = im_shape
+    mid_blobs, corner_blobs = [], []
+    for b in blobs:
+        if b[0] < 1 or b[0] >= (rows - 1) or b[1] < 1 or b[1] >= (cols - 1):
+            corner_blobs.append(b)
+        else:
+            mid_blobs.append(b)
+    return mid_blobs, corner_blobs

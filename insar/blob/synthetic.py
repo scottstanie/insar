@@ -46,7 +46,10 @@ def make_stack(N=501, max_amp=3):
     b1 = make_gaussian(N, 100, None, None)
     b2 = make_gaussian(N, 30, N // 3, N // 3)
     b3 = make_gaussian(N, 7, 4 * N // 7, 4 * N // 7)
-    out = b1 - b2 - .7 * b3
+    # 3 little ones that merge to one
+    b4 = make_gaussian(N, 17, 6 * N // 7, 6 * N // 7)
+    b4 += make_gaussian(N, 17, 33 + 6 * N // 7, 6 * N // 7)
+    out = b1 - b2 - .7 * b3 + .68 * b4
     out *= max_amp / np.max(out)
 
     fig = plt.figure()

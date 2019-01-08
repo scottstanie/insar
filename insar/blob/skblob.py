@@ -1,5 +1,8 @@
 """Functions transferred/modified from skimage.feature"""
 from __future__ import division
+
+import multiprocessing
+
 import numpy as np
 from scipy.ndimage import gaussian_laplace, maximum_filter
 import math
@@ -105,6 +108,8 @@ def blob_log(image=None,
     lm = local_maxima.astype(np.float64)
     # Convert the last index to its corresponding scale value
     lm[:, -1] = sigma_list[local_maxima[:, -1]]
+    # print('lm')
+    # print(lm)
     return _prune_blobs(lm, overlap)
 
 
@@ -129,9 +134,17 @@ def create_gl_cube(image, sigma_list=None, min_sigma=1, max_sigma=50, num_sigma=
     """
     if sigma_list is None:
         sigma_list = _create_sigma_list(min_sigma, max_sigma, num_sigma, log_scale)
-    gl_images = [-gaussian_laplace(image, s) * s**2 for s in sigma_list]
-    return np.stack(gl_images, axis=-1)
-    # return np.stack(gl_images)
+    filtered = []
+
+    # Run each convolution in a separate process
+    pool = multiprocessing.Pool()
+    for s in sigma_list:
+        filtered.append(pool.apply_async(gaussian_laplace, args=(image, s)))
+    # Include -s**2 for scale invariance, searches for positive signal
+    return np.stack([-s**2 * res.get() for res, s in zip(filtered, sigma_list)], axis=-1)
+    # Old way:
+    # gl_images = [ -gaussian_laplace(im, s)*s**2 for s in sigma_list]
+    # return np.stack(gl_images, axis=-1)
 
 
 def _compute_disk_overlap(d, r1, r2):
