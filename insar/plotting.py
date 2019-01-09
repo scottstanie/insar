@@ -157,6 +157,8 @@ def plot_image_shifted(img,
             see https://matplotlib.org/api/_as_gen/matplotlib.pyplot.imshow.html
         perform_shift (bool): default True. If false, skip cmap shifting step
         colorbar (bool): display colorbar in figure
+    Returns:
+        fig, axes_image
     """
     nrows, ncols = img.shape
     if img_data:

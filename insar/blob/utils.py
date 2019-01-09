@@ -4,6 +4,7 @@ from __future__ import print_function
 import insar.utils
 import insar.latlon
 import numpy as np
+import skimage
 import cv2 as cv
 from scipy.spatial.qhull import ConvexHull
 
@@ -124,6 +125,11 @@ def blobs_to_rowcol(blobs, blob_info):
         blobs_rowcol.append((lat, lon, old_radius, val))
 
     return np.array(blobs_rowcol)
+
+
+def img_as_uint8(img):
+    # TODO: maybe account for mask?
+    return skimage.img_as_ubyte(skimage.exposure.rescale_intensity(np.nan_to_num(img, 0)))
 
 
 def cv_bbox_to_extent(bbox):
