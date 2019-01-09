@@ -2,6 +2,7 @@
 """
 from __future__ import print_function
 import os
+import multiprocessing
 import numpy as np
 from insar.log import get_log
 from . import skblob, utils, plot
@@ -14,15 +15,17 @@ BLOB_KWARG_DEFAULTS = {'threshold': 1, 'min_sigma': 3, 'max_sigma': 40}
 # __all__ = ["BLOB_KWARG_DEFAULTS", "find_blobs"]
 
 
+# TODO: clean up redundancies in this function
 def find_blobs(image,
                include_values=True,
                positive=True,
-               negative=False,
-               mag_threshold=1.0,
+               negative=True,
+               threshold=0.5,
+               mag_threshold=None,
                min_sigma=3,
                max_sigma=60,
                num_sigma=20,
-               threshold=0.5,
+               log_scale=False,
                **kwargs):
     """Find blob features within an image
 
@@ -30,7 +33,7 @@ def find_blobs(image,
         image (ndarray): image containing blobs
         positive (bool): default True: if True, searches for positive (light, uplift)
             blobs within image
-        negative (bool): default False: if True, finds dark, subsidence blobs
+        negative (bool): default True: if True, finds dark, subsidence blobs
         mag_threshold (float): absolute value in the image blob must exceed
             Should be positive number even if negative=True (since image is inverted)
         threshold (float): response threshold passed to the blob finding function
@@ -39,9 +42,11 @@ def find_blobs(image,
         num_sigma : int, optional: number of intermediate values of filter size to use
 
     Returns:
-        ndarray: rows are blobs with values: [(r, c, s, mag)], where
-        r = row num of center, c is column, s is sigma (size of Gaussian
-        that detected blob), mag is the extreme value within the blob radius.
+        blobs: ndarray: rows are blobs with values: [(r, c, s, mag)], where
+            r = row num of center, c is column, s is sigma (size of Gaussian
+            that detected blob), mag is the extreme value within the blob radius.
+        sigma_list: ndarray
+            array of sigma values used to filter scale space
 
     Notes:
         kwargs are passed to the blob_log function (such as overlap).
@@ -52,8 +57,9 @@ def find_blobs(image,
     """
     # some skimage funcs fail for float32 when unnormalized [0,1]
     image = image.astype('float64')
-    image_cube = skblob.create_gl_cube(
-        image, min_sigma=min_sigma, max_sigma=max_sigma, num_sigma=num_sigma, **kwargs)
+    sigma_list = skblob.create_sigma_list(
+        min_sigma=min_sigma, max_sigma=max_sigma, num_sigma=num_sigma, log_scale=log_scale)
+    image_cube = skblob.create_gl_cube(image, sigma_list=sigma_list)
 
     blobs = np.empty((0, 4))
     if positive:
@@ -72,7 +78,7 @@ def find_blobs(image,
             blobs_with_mags = np.empty((0, 4))
         # print('bpos')
         # print(blobs_with_mags)
-        if mag_threshold:
+        if mag_threshold is not None:
             blobs_with_mags = blobs_with_mags[blobs_with_mags[:, -1] >= mag_threshold]
         blobs = np.vstack((blobs, blobs_with_mags))
     if negative:
@@ -89,16 +95,14 @@ def find_blobs(image,
             blobs_with_mags = np.empty((0, 4))
         # print('bneg')
         # print(blobs_with_mags)
-        if mag_threshold:
+        if mag_threshold is not None:
             blobs_with_mags = blobs_with_mags[-1 * blobs_with_mags[:, -1] >= mag_threshold]
         blobs = np.vstack((blobs, blobs_with_mags))
 
-    # import pdb
-    # pdb.set_trace()
     # Multiply each sigma by sqrt(2) to convert sigma to a circle radius
     blobs = blobs * np.array([1, 1, np.sqrt(2), 1])
 
-    return blobs
+    return blobs, sigma_list
 
 
 def _make_blobs(image, extra_args, verbose=False):
@@ -108,7 +112,7 @@ def _make_blobs(image, extra_args, verbose=False):
     logger.info(blob_kwargs)
 
     logger.info("Finding neg blobs")
-    blobs = find_blobs(image, positive=True, negative=True, **blob_kwargs)
+    blobs, _ = find_blobs(image, positive=True, negative=True, **blob_kwargs)
 
     logger.info("Blobs found:")
     if verbose:
@@ -195,7 +199,7 @@ def compute_harris_peaks(image, sigma_list, gamma=1.4, threshold_rel=0.1):
 
     Args:
         image (ndarray): input image to compute corner harris reponse
-        sigma_list (array-like): output of _create_sigma_list
+        sigma_list (array-like): output of create_sigma_list
         gamma (float): adjustment from sigma in LoG to harris
             The Gaussian kernel for the LoG scale space (t) is smaller
             than the window used to pre-smooth and find the Harris response (s),
@@ -209,15 +213,34 @@ def compute_harris_peaks(image, sigma_list, gamma=1.4, threshold_rel=0.1):
     Sources:
     https://en.wikipedia.org/wiki/Corner_detection#The_multi-scale_Harris_operator
     """
-    corner_img_list = [feature.corner_harris(image, sigma=s * gamma) for s in sigma_list]
-    peaks = [
-        skblob.peak_local_max(corner_img, threshold_rel=threshold_rel)
-        for corner_img in corner_img_list
-    ]
+    # TODO: parallelize this
+    # corner_img_list = [feature.corner_harris(image, sigma=s * gamma) for s in sigma_list]
+    # peaks = [
+    #     skblob.peak_local_max(corner_img, threshold_rel=threshold_rel)
+    #     for corner_img in corner_img_list
+    # ]
+    pool = multiprocessing.Pool()
+    jobs = []
+    for s in sigma_list:
+        jobs.append(pool.apply_async(feature.corner_harris, args=(image, s * gamma)))
+    corner_img_list = [result.get() for result in jobs]
+
+    jobs = []
+    for corner_img in corner_img_list:
+        jobs.append(
+            pool.apply_async(skblob.peak_local_max, (corner_img, ),
+                             {'threshold_rel': threshold_rel}))
+    peaks = [result.get() for result in jobs]
+
     return peaks
 
 
-def find_blobs_with_harris_peaks(blobs, image, sigma_list, gamma=1.4, threshold_rel=.1):
+def find_blobs_with_harris_peaks(image,
+                                 blobs=None,
+                                 sigma_list=None,
+                                 gamma=1.4,
+                                 threshold_rel=.1,
+                                 **kwargs):
     """Takes the list of blobs found from find_blobs, check for high cornerness
 
     Computes a harris corner response at each level gamma*sigma_list, finds
@@ -226,22 +249,28 @@ def find_blobs_with_harris_peaks(blobs, image, sigma_list, gamma=1.4, threshold_
     blobs found at the ring of sharp real blobs)
 
     Args:
-        blobs (ndarray): rows are blobs with values: [(r, c, s, ...)]
         image (ndarray): input image to compute corners on
-        sigma_list (array-like): output of _create_sigma_list
+        blobs (ndarray): rows are blobs with values: [(r, c, s, ...)]
+        sigma_list (array-like): output of create_sigma_list
         gamma (float): adjustment from sigma in LoG to harris
         threshold_rel (float): passed to find peaks to threshold real peaks.
+        kwargs: passed to find_blobs if `blobs` not passed as argument
 
     Returns:
         ndarray: like blobs, with some rows deleted that contained no corners
     """
+    if blobs is None:
+        blobs, sigma_list = find_blobs(image, **kwargs)
+    print(blobs[:, 2] / np.sqrt(2))
+    print(sigma_list)
+
     # Find peaks for every sigma in sigma_list
     corner_peaks = compute_harris_peaks(image, sigma_list, gamma=gamma, threshold_rel=threshold_rel)
 
     sigma_idxs = utils.find_sigma_idxs(blobs, sigma_list)
+    # import ipdb
+    # ipdb.set_trace()
     out_blobs = []
-    import ipdb
-    ipdb.set_trace()
     for blob, sigma_idx in zip(blobs, sigma_idxs):
         # Get the peaks that correspond to the currend sigma level
         cur_peaks = corner_peaks[sigma_idx]

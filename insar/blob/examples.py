@@ -9,7 +9,7 @@ except IndexError:
     path = '.'
 
 defo_img = latlon.load_deformation_img(path)
-sigma_list = blob.skblob._create_sigma_list(max_sigma=200, num_sigma=20)
+sigma_list = blob.skblob.create_sigma_list(max_sigma=200, num_sigma=20)
 image_cube = blob.skblob.create_gl_cube(defo_img, max_sigma=200)
 gl_stack = np.moveaxis(image_cube, -1, 0)
 maxes = np.max(gl_stack, axis=(1, 2))

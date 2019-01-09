@@ -4,6 +4,7 @@ from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial.qhull import ConvexHull
 from . import utils
+from insar import plotting
 
 
 def plot_blobs(image=None, blobs=None, cur_fig=None, cur_axes=None, color='blue', **kwargs):
@@ -15,8 +16,13 @@ def plot_blobs(image=None, blobs=None, cur_fig=None, cur_axes=None, color='blue'
         if not cur_fig:
             cur_fig = plt.figure()
         cur_axes = cur_fig.gca()
-        ax_img = cur_axes.imshow(image)
-        cur_fig.colorbar(ax_img)
+        _, ax_img = plotting.plot_image_shifted(
+            image,
+            fig=cur_fig,
+            ax=cur_axes,
+        )
+        # ax_img = cur_axes.imshow(image)
+        # cur_fig.colorbar(ax_img)
 
     viridis = cm.get_cmap('viridis', len(blobs))
     patches = []
