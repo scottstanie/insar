@@ -153,8 +153,7 @@ def make_blob_image(igram_path=".",
         print("Loading %s" % blob_filename)
         blobs = np.load(blob_filename)
     else:
-        extra_args = _handle_args(blobfunc_args)
-        blobs = _make_blobs(image, extra_args)
+        blobs = _make_blobs(image, blobfunc_args)
         print("Saving %s" % blob_filename)
         np.save(blob_filename, blobs)
 
@@ -165,25 +164,6 @@ def make_blob_image(igram_path=".",
 
     plot.plot_blobs(blobs=blobs_ll, cur_axes=imagefig.gca())
     # plot_blobs(blobs=blobs, cur_axes=imagefig.gca())
-
-
-def _handle_args(extra_args):
-    """Convert command line args into function-usable strings
-
-    '--num-sigma' gets processed into num_sigma
-    """
-    keys = [arg.lstrip('--').replace('-', '_') for arg in list(extra_args)[::2]]
-    vals = []
-    for val in list(extra_args)[1::2]:
-        # First check for string true/false, then try number
-        if val.lower() in ('true', 'false'):
-            vals.append(val.lower() == 'true')
-        else:
-            try:
-                vals.append(float(val))
-            except ValueError:
-                vals.append(val)
-    return dict(zip(keys, vals))
 
 
 def find_edge_blobs(blobs, im_shape):
@@ -232,8 +212,9 @@ def compute_harris_peaks(image, sigma_list, gamma=1.4, threshold_rel=0.1):
     jobs = []
     for corner_img in corner_img_list:
         jobs.append(
-            pool.apply_async(skblob.peak_local_max, (corner_img, ),
-                             {'threshold_rel': threshold_rel}))
+            pool.apply_async(skblob.peak_local_max, (corner_img, ), {
+                'threshold_rel': threshold_rel
+            }))
     peaks = [result.get() for result in jobs]
 
     return peaks
@@ -265,8 +246,6 @@ def find_blobs_with_harris_peaks(image,
     """
     if blobs is None:
         blobs, sigma_list = find_blobs(image, **kwargs)
-    print(blobs[:, 2] / np.sqrt(2))
-    print(sigma_list)
 
     # Find peaks for every sigma in sigma_list
     corner_peaks = compute_harris_peaks(image, sigma_list, gamma=gamma, threshold_rel=threshold_rel)
