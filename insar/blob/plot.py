@@ -115,5 +115,13 @@ def plot_hull(regions=None, hull=None, ax=None, linecolor='k-'):
         ax.plot(hull.points[simplex, 0], hull.points[simplex, 1], linecolor)
 
 
-def plot_bbox(bbox, ax=None, linecolor='k-'):
-    pass
+def plot_bbox(bbox, ax=None, linecolor='k-', cv_format=False):
+    for c in utils.bbox_to_coords(bbox, cv_format=cv_format):
+        print(c)
+        ax.plot(c[0], c[1], 'rx', markersize=6)
+
+
+def plot_regions(regions, ax=None, linecolor='k-'):
+    for shape in utils.regions_to_shapes(regions):
+        xx, yy = shape.convex_hull.exterior.xy
+        ax.plot(xx, yy, linecolor)
