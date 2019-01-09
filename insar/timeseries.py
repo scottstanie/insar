@@ -190,8 +190,8 @@ def window_stack(stack, row, col, window_size=3, func=np.mean):
     if not isinstance(window_size, int) or window_size < 1:
         raise ValueError("Invalid window_size %s: must be odd positive int" % window_size)
     elif row > stack.shape[1] or col > stack.shape[2]:
-        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (row, col,
-                                                                                 stack.shape))
+        raise ValueError(
+            "(%s, %s) out of bounds reference for stack size %s" % (row, col, stack.shape))
 
     if window_size % 2 == 0:
         window_size -= 1
@@ -401,7 +401,6 @@ def cols_to_stack(columns, rows, cols):
 def run_inversion(igram_path,
                   reference=(None, None),
                   window=None,
-                  deramp=True,
                   constant_vel=False,
                   alpha=0,
                   difference=False,
@@ -415,7 +414,6 @@ def run_inversion(igram_path,
         reference (tuple[int, int]): row and col index of the reference pixel to subtract
         window (int): size of the group around ref pixel to avg for reference.
             if window=1 or None, only the single pixel used to shift the group.
-        deramp (bool): Fits plane to each igram and subtracts (to remove orbital error)
         constant_vel (bool): force solution to have constant velocity
             mutually exclusive with `alpha` option
         alpha (float): nonnegative Tikhonov regularization parameter.
@@ -447,44 +445,13 @@ def run_inversion(igram_path,
     logger.debug("Reading unw stack")
     int_file_names = read_intlist(igram_path, parse=False)
 
-    unw_ext = ".unw"
-    if deramp:
-        # For larger areas, use quadratic ramp. Otherwise, linear
-        max_linear = 20
-        width, height = latlon.grid_size(**load_dem_rsc(os.path.join(igram_path, 'dem.rsc')))
-        order = 1 if (width < max_linear or height < max_linear) else 2
-        logger.info("Dem size %.2f by %.2f km: using order %s surface to deramp", width, height,
-                    order)
-        unw_stack = deramp_stack(int_file_names, unw_ext, order=order)
-    else:
-        unw_file_names = [f.replace('.int', unw_ext) for f in int_file_names]
-        unw_stack = sario.load_stack(file_list=unw_file_names)
-
-    unw_stack = unw_stack.view(np.ma.MaskedArray)
-    # Save shape for end
-    num_ints, rows, cols = unw_stack.shape
-
-    if masking:
-        int_mask_file_names = [n + '.mask.npy' for n in int_file_names]
-        if not all(os.path.exists(f) for f in int_mask_file_names):
-            logger.info("Creating and saving igram masks")
-            row_looks, col_looks = utils.find_looks_taken(igram_path)
-            create_igram_masks(igram_path, row_looks=row_looks, col_looks=col_looks)
-
-        logger.info("Reading geoload masks into columns")
-        geo_file_names = read_geolist(filepath=igram_path, fnames_only=True)
-        geo_mask_file_names = [n + '.mask.npy' for n in geo_file_names]
-        geo_masks = np.ma.array(sario.load_stack(file_list=geo_mask_file_names))
-        geo_mask_columns = stack_to_cols(geo_masks)
-        del geo_masks
-
-        # need to specify file_list or the order is different from read_intlist
-        logger.info("Reading igram masks")
-        mask_stack = sario.load_stack(file_list=int_mask_file_names)
-        unw_stack.mask = mask_stack
-    else:
-        mask_stack = np.full_like(unw_stack, False, dtype=bool)
-        geo_mask_columns = np.full((len(timediffs), rows * cols), False)
+    unw_stack, mask_stack, geo_mask_columns = load_deramped_masked_stack(
+        igram_path,
+        int_file_names,
+        num_timediffs=len(timediffs),
+        unw_ext='.unw',
+        masking=masking,
+    )
 
     # Process the correlation, mask bad corr pixels in the igrams
     # TODO
@@ -506,7 +473,6 @@ def run_inversion(igram_path,
     dphi_columns = stack_to_cols(unw_stack)
 
     phi_arr_list = []
-    # TODO: figure out out to split
     max_bytes = 500e6
     num_patches = int(np.ceil(dphi_columns.nbytes / max_bytes)) + 1
     geo_mask_patches = np.array_split(geo_mask_columns, num_patches, axis=1)
@@ -528,6 +494,7 @@ def run_inversion(igram_path,
     # Multiple by wavelength ratio to go from phase to cm
     deformation = PHASE_TO_CM * phi_arr
 
+    num_ints, rows, cols = unw_stack.shape
     # Now reshape all outputs that should be in stack form
     phi_arr = cols_to_stack(phi_arr, rows, cols)
     deformation = cols_to_stack(deformation, rows, cols).filled(np.NaN)
@@ -589,6 +556,47 @@ def matrix_indices(shape, flatten=True):
         return row_block.flatten(), col_block.flatten()
     else:
         return row_block, col_block
+
+
+def load_deramped_masked_stack(igram_path,
+                               int_file_names,
+                               num_timediffs=None,
+                               unw_ext='.unw',
+                               masking=True):
+    # Deramp each .unw file
+    # For larger areas, use quadratic ramp. Otherwise, linear
+    max_linear = 20
+    width, height = latlon.grid_size(**load_dem_rsc(os.path.join(igram_path, 'dem.rsc')))
+    order = 1 if (width < max_linear or height < max_linear) else 2
+    logger.info("Dem size %.2f by %.2f km: using order %s surface to deramp", width, height, order)
+    unw_stack = deramp_stack(int_file_names, unw_ext, order=order)
+
+    unw_stack = unw_stack.view(np.ma.MaskedArray)
+
+    if masking:
+        int_mask_file_names = [n + '.mask.npy' for n in int_file_names]
+        if not all(os.path.exists(f) for f in int_mask_file_names):
+            logger.info("Creating and saving igram masks")
+            row_looks, col_looks = utils.find_looks_taken(igram_path)
+            create_igram_masks(igram_path, row_looks=row_looks, col_looks=col_looks)
+
+        logger.info("Reading geoload masks into columns")
+        geo_file_names = read_geolist(filepath=igram_path, fnames_only=True)
+        geo_mask_file_names = [n + '.mask.npy' for n in geo_file_names]
+        geo_masks = np.ma.array(sario.load_stack(file_list=geo_mask_file_names))
+        geo_mask_columns = stack_to_cols(geo_masks)
+        del geo_masks
+
+        # need to specify file_list or the order is different from read_intlist
+        logger.info("Reading igram masks")
+        mask_stack = sario.load_stack(file_list=int_mask_file_names)
+        unw_stack.mask = mask_stack
+    else:
+        mask_stack = np.full_like(unw_stack, False, dtype=bool)
+        num_ints, rows, cols = unw_stack.shape
+        geo_mask_columns = np.full((num_timediffs, rows * cols), False)
+
+    return unw_stack, mask_stack, geo_mask_columns
 
 
 def _estimate_ramp(z, order):
