@@ -15,8 +15,8 @@ from scipy import spatial
 
 
 def blob_log(image=None,
-             min_sigma=1,
-             max_sigma=50,
+             min_sigma=3,
+             max_sigma=60,
              num_sigma=20,
              image_cube=None,
              threshold=.5,
@@ -96,7 +96,7 @@ def blob_log(image=None,
     The radius of each blob is approximately :math:`\sqrt{2}\sigma` for
     a 2-D image and :math:`\sqrt{3}\sigma` for a 3-D image.
     """
-    sigma_list = _create_sigma_list(min_sigma, max_sigma, num_sigma, log_scale=log_scale)
+    sigma_list = create_sigma_list(min_sigma, max_sigma, num_sigma, log_scale=log_scale)
     if image_cube is None:
         image = image.astype(np.floating)
         image_cube = create_gl_cube(image, sigma_list)
@@ -111,12 +111,10 @@ def blob_log(image=None,
     lm = local_maxima.astype(np.float64)
     # Convert the last index to its corresponding scale value
     lm[:, -1] = sigma_list[local_maxima[:, -1]]
-    # print('lm')
-    # print(lm)
     return _prune_blobs(lm, overlap)
 
 
-def _create_sigma_list(min_sigma=1, max_sigma=50, num_sigma=20, log_scale=False):
+def create_sigma_list(min_sigma=1, max_sigma=50, num_sigma=20, log_scale=False, **kwargs):
     """Make array of sigmas for scale-space.
 
     Example with log_scale, which uses base 2 for powers:
@@ -142,11 +140,12 @@ def create_gl_cube(image, sigma_list=None, min_sigma=1, max_sigma=50, num_sigma=
     Multiplying by s**2 provides scale invariance to Gaussian sizes
     Negative in front of filter flips the filter to be "upright cowboy hat"
 
-    Can either pass a premade sigma_list from _create_sigma_list, or pass the
+    Can either pass a premade sigma_list from create_sigma_list, or pass the
     parameters to make a list
     """
     if sigma_list is None:
-        sigma_list = _create_sigma_list(min_sigma, max_sigma, num_sigma, log_scale)
+        sigma_list = create_sigma_list(min_sigma, max_sigma, num_sigma, log_scale)
+        print(sigma_list)
     filtered = []
 
     # Run each convolution in a separate process
