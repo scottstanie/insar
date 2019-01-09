@@ -129,7 +129,7 @@ def make_blob_image(igram_path=".",
                     col_start=0,
                     col_end=-1,
                     verbose=False,
-                    blobfunc_args=None):
+                    blobfunc_args=()):
     """Find and view blobs in deformation"""
 
     logger.info("Searching %s for igram_path" % igram_path)
@@ -175,10 +175,14 @@ def _handle_args(extra_args):
     keys = [arg.lstrip('--').replace('-', '_') for arg in list(extra_args)[::2]]
     vals = []
     for val in list(extra_args)[1::2]:
-        try:
-            vals.append(float(val))
-        except ValueError:
-            vals.append(val)
+        # First check for string true/false, then try number
+        if val.lower() in ('true', 'false'):
+            vals.append(val.lower() == 'true')
+        else:
+            try:
+                vals.append(float(val))
+            except ValueError:
+                vals.append(val)
     return dict(zip(keys, vals))
 
 
