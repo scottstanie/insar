@@ -5,6 +5,7 @@ import insar.utils
 import insar.latlon
 import numpy as np
 import cv2 as cv
+from scipy.spatial.qhull import ConvexHull
 
 
 def indexes_within_circle(mask_shape=None, center=None, radius=None, blob=None):
@@ -125,13 +126,62 @@ def blobs_to_rowcol(blobs, blob_info):
     return np.array(blobs_rowcol)
 
 
+def cv_bbox_to_extent(bbox):
+    """convert opencv (top x, top y, w, h) to (left, right, bot, top)
+
+    For use in latlon.intersection_over_union"""
+    x, y, w, h = bbox
+    # Note: these are row, col pixels, but we still do y + h so that
+    # top is a larger number
+    return (x, x + w, y, y + h)
+
+
+def _box_is_bad(bbox, min_pix=3, max_ratio=5):
+    """Returns true if (x, y, w, h) box is too small or w/h is too oblong"""
+    x, y, w, h = bbox
+    return w < min_pix or h < min_pix or w / h > max_ratio or h / w > max_ratio
+
+
 def find_mser_regions(img, min_area=50):
     mser = cv.MSER_create()
+    # TODO: get minarea, maxarea from some km set, convert to pixel
     mser.setMinArea(220)
+    # mser.setMaxArea(220)
     regions, bboxes = mser.detectRegions(img)
-    regions, bboxes = merge_regions(regions, bboxes)
+    regions, bboxes = prune_regions(regions, bboxes, overlap=0.5)
     return regions, bboxes
 
 
-def merge_regions(regions, bboxes):
-    pass
+def combine_hulls(points1, points2):
+    # h = ConvexHull(np.vstack((points1, points2)))
+    # Or maybe
+    # h.add_points(points2)
+    # h.close()
+    h = ConvexHull(points1)
+    h.add_points(points2)
+    return h
+
+
+def prune_regions(regions, bboxes, overlap_thresh=0.5):
+    """Takes in mser regions and bboxs, prunes smaller overlapped regions"""
+    # tup = (box, region)
+    bb = [cv_bbox_to_extent(b) for b in bboxes]
+    sorted_bbox_regions = sorted(
+        zip(bb, regions), key=lambda tup: insar.latlon.box_area(tup[0]), reverse=True)
+    # Break apart again
+    sorted_bboxes, sorted_regions = zip(*sorted_bbox_regions)
+
+    # TODO: i'm just eliminating now (like nonmax suppression)... do i
+    # want to merge by combining hulls?
+    eliminated_idxs = set()
+    # Start with current largest box, check all smaller for overlaps to eliminate
+    for idx, big_box in enumerate(sorted_bboxes):
+        for jdx, box in enumerate(sorted_bboxes[idx + 1:], start=idx + 1):
+            if insar.latlon.intersection_over_union(big_box, box) > overlap_thresh:
+                eliminated_idxs.add(jdx)
+
+    # Now get the non-eliminated indices
+    all_idx = np.arange(len(sorted_bboxes))
+    remaining = list(set(all_idx) - set(eliminated_idxs))
+    # Converts to np.array to use fancy indexing
+    return list(np.array(sorted_regions)[remaining]), np.array(sorted_bboxes)[remaining]

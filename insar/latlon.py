@@ -649,6 +649,12 @@ def box_area(box):
     return dx * dy
 
 
+def _check_valid_box(box):
+    left, right, bot, top = box
+    assert (left <= right) and (bot <=
+                                top), "Box %s must be in form (left, right, bot, top)" % str(box)
+
+
 def intersect_area(box1, box2):
     """Returns area of overlap of two rectangles
 
@@ -665,6 +671,7 @@ def intersect_area(box1, box2):
     >>> print(intersect_area(box1, box2))
     0
     """
+    _check_valid_box(box1), _check_valid_box(box2)
     left1, right1, bot1, top1 = box1
     left2, right2, bot2, top2 = box2
     intersect_box = (max(left1, left2), min(right1, right2), max(bot1, bot2), min(top1, top2))
@@ -679,7 +686,10 @@ def union_area(box1, box2):
     >>> box2 = (-1, 1, 0, 2)
     >>> print(union_area(box1, box2))
     6
+    >>> print(union_area(box1, box1) == box_area(box1))
+    True
     """
+    _check_valid_box(box1), _check_valid_box(box2)
     A1 = box_area(box1)
     A2 = box_area(box2)
     return A1 + A2 - intersect_area(box1, box2)
@@ -693,8 +703,14 @@ def intersection_over_union(box1, box2):
     >>> box2 = (0, 2, 0, 2)
     >>> print(intersection_over_union(box1, box2))
     0.25
+    >>> print(intersection_over_union(box1, box1))
+    1.0
     """
-    return intersect_area(box1, box2) / union_area(box1, box2)
+    ua = union_area(box1, box2)
+    if ua == 0:
+        return 0
+    else:
+        return intersect_area(box1, box2) / ua
 
 
 def sort_by_lat(latlon_img_list):

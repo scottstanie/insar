@@ -103,3 +103,10 @@ def scatter_blobs_3d(blobs, image=None, ax=None, color='b', label=None, blob_img
     ax.set_ylabel('magniture')
     ax.set_zlabel('variance')
     return fig, ax
+
+
+def plot_hull(hull, ax=None, linecolor='k-'):
+    if ax is None:
+        fig, ax = plt.subplots(1, 1)
+    for simplex in hull.simplices:
+        ax.plot(hull.points[simplex, 0], hull.points[simplex, 1], linecolor)
