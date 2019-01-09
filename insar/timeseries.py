@@ -443,11 +443,8 @@ def run_inversion(igram_path,
             B.shape, timediffs.shape))
 
     logger.debug("Reading unw stack")
-    int_file_names = read_intlist(igram_path, parse=False)
-
     unw_stack, mask_stack, geo_mask_columns = load_deramped_masked_stack(
         igram_path,
-        int_file_names,
         num_timediffs=len(timediffs),
         unw_ext='.unw',
         masking=masking,
@@ -558,11 +555,9 @@ def matrix_indices(shape, flatten=True):
         return row_block, col_block
 
 
-def load_deramped_masked_stack(igram_path,
-                               int_file_names,
-                               num_timediffs=None,
-                               unw_ext='.unw',
-                               masking=True):
+def load_deramped_masked_stack(igram_path, num_timediffs=None, unw_ext='.unw', masking=True):
+
+    int_file_names = read_intlist(igram_path, parse=False)
     # Deramp each .unw file
     # For larger areas, use quadratic ramp. Otherwise, linear
     max_linear = 20
