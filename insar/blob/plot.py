@@ -110,3 +110,7 @@ def plot_hull(hull, ax=None, linecolor='k-'):
         fig, ax = plt.subplots(1, 1)
     for simplex in hull.simplices:
         ax.plot(hull.points[simplex, 0], hull.points[simplex, 1], linecolor)
+
+
+def plot_bbox(bbox, ax=None, linecolor='k-'):
+    pass

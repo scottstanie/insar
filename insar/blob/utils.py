@@ -165,9 +165,11 @@ def combine_hulls(points1, points2):
 def prune_regions(regions, bboxes, overlap_thresh=0.5):
     """Takes in mser regions and bboxs, prunes smaller overlapped regions"""
     # tup = (box, region)
-    bb = [cv_bbox_to_extent(b) for b in bboxes]
+    # bb = [cv_bbox_to_extent(b) for b in bboxes]
     sorted_bbox_regions = sorted(
-        zip(bb, regions), key=lambda tup: insar.latlon.box_area(tup[0]), reverse=True)
+        zip(bboxes, regions),
+        key=lambda tup: insar.latlon.box_area(cv_bbox_to_extent(tup[0])),
+        reverse=True)
     # Break apart again
     sorted_bboxes, sorted_regions = zip(*sorted_bbox_regions)
 
@@ -176,8 +178,15 @@ def prune_regions(regions, bboxes, overlap_thresh=0.5):
     eliminated_idxs = set()
     # Start with current largest box, check all smaller for overlaps to eliminate
     for idx, big_box in enumerate(sorted_bboxes):
+        if idx in eliminated_idxs:
+            continue
+        bbig = cv_bbox_to_extent(big_box)
         for jdx, box in enumerate(sorted_bboxes[idx + 1:], start=idx + 1):
-            if insar.latlon.intersection_over_union(big_box, box) > overlap_thresh:
+            if jdx in eliminated_idxs:
+                continue
+            bsmall = cv_bbox_to_extent(box)
+            if (insar.latlon.intersect_area(bbig, bsmall) /
+                    insar.latlon.box_area(bsmall)) > overlap_thresh:
                 eliminated_idxs.add(jdx)
 
     # Now get the non-eliminated indices
