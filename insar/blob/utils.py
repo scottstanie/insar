@@ -142,6 +142,7 @@ def _box_is_bad(bbox, min_pix=3, max_ratio=5):
     return w < min_pix or h < min_pix or w / h > max_ratio or h / w > max_ratio
 
 
+# TODO: does this work on negative regions at same time as pos? try big path85
 def find_mser_regions(img, min_area=50):
     mser = cv.MSER_create()
     # TODO: get minarea, maxarea from some km set, convert to pixel

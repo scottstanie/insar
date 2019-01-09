@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
+from scipy.spatial.qhull import ConvexHull
 from . import utils
 
 
@@ -105,9 +106,11 @@ def scatter_blobs_3d(blobs, image=None, ax=None, color='b', label=None, blob_img
     return fig, ax
 
 
-def plot_hull(hull, ax=None, linecolor='k-'):
+def plot_hull(regions=None, hull=None, ax=None, linecolor='k-'):
     if ax is None:
         fig, ax = plt.subplots(1, 1)
+    if hull is None:
+        hull = ConvexHull(regions)
     for simplex in hull.simplices:
         ax.plot(hull.points[simplex, 0], hull.points[simplex, 1], linecolor)
 
