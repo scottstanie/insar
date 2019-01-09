@@ -1,12 +1,15 @@
 """utils.py: Functions for finding blobs in deformation maps
 """
 from __future__ import print_function
+import collections
+import itertools
 import insar.utils
 import insar.latlon
 import numpy as np
 import skimage
 import cv2 as cv
-from scipy.spatial.qhull import ConvexHull
+# from scipy.spatial.qhull import ConvexHull
+from shapely.geometry import Point, MultiPoint, Polygon, box
 
 
 def indexes_within_circle(mask_shape=None, center=None, radius=None, blob=None):
@@ -15,9 +18,11 @@ def indexes_within_circle(mask_shape=None, center=None, radius=None, blob=None):
     Args:
         center (tuple[float, float]): row, column of center of circle
         radius (float): radius of circle
-        mask_shape (tuple[int, int]) rows, cols to make enture mask
+        mask_shape (tuple[int, int]) rows, cols to make mask for entire image
         blob (tuple[float, float, float]): row, col, radius of blob
             This option is instead of using `center` and `radius`
+    Returns:
+       np.array[bool]: boolean mask of size `mask_shape`
     """
     if mask_shape is None:
         raise ValueError("Need mask_shape to determine output array size")
@@ -60,12 +65,23 @@ def get_blob_stats(blobs, image, center_only=False, accum_func=np.max):
     return np.stack([accum_func(image[mask]) for mask in masks])
 
 
-def append_stats(blobs, image, stat_funcs=(np.var, np.ptp)):
+def append_stats(blobs, image, stat_funcs=(np.var, np.ptp), center_only=False):
     """Append columns based on the statistic functions in stats
 
-    Default: adds the variance and peak-to-peak within blob"""
+    Default: adds the variance and peak-to-peak within blob
+
+    Args:
+        center_only (bool, or array-list[bool]): pass to get_blob_stats
+            Can either do 1 true false for all stat_funcs, or an iterable
+            of matching size
+    """
     new_blobs = blobs.copy()
-    for func in stat_funcs:
+    if isinstance(center_only, collections.Iterable):
+        center_iter = center
+    else:
+        center_iter = itertools.repeat(center_only)
+
+    for func, center in zip(stat_funcs, center_iter):
         blob_stat = get_blob_stats(new_blobs, image, accum_func=func)
         new_blobs = np.hstack((new_blobs, blob_stat.reshape((-1, 1))))
     return new_blobs
@@ -94,6 +110,13 @@ def sort_blobs_by_val(blobs, image, positive=True):
     blobs_with_mags = np.hstack((blobs, insar.utils.force_column(blob_vals)))
     # Sort rows based on the 4th column, blob_mag, and in reverse order
     return _sort_by_col(blobs_with_mags, 3, reverse=reverse)
+
+
+def find_sigma_idxs(blobs, sigma_list):
+    """Finds which sigma each blob uses by its index in sigma_list
+
+    Assumes blobs already like (r, c, radius,...), where radius=sqrt(2) * sigma"""
+    return np.searchsorted(sigma_list, blobs[:, 2] / np.sqrt(2))
 
 
 def blobs_to_latlon(blobs, blob_info):
@@ -127,9 +150,12 @@ def blobs_to_rowcol(blobs, blob_info):
     return np.array(blobs_rowcol)
 
 
-def img_as_uint8(img):
-    # TODO: maybe account for mask?
-    return skimage.img_as_ubyte(skimage.exposure.rescale_intensity(np.nan_to_num(img, 0)))
+def img_as_uint8(img, vmin=None, vmax=None):
+    # Handle invalids with masked array, set it to 0
+    out = np.ma.masked_invalid(img).filled(0)
+    if vmin is not None or vmax is not None:
+        out = np.clip(out, vmin, vmax)
+    return skimage.img_as_ubyte(skimage.exposure.rescale_intensity(out))
 
 
 def cv_bbox_to_extent(bbox):
@@ -142,12 +168,25 @@ def cv_bbox_to_extent(bbox):
     return (x, x + w, y, y + h)
 
 
+def bbox_to_coords(bbox, cv_format=False):
+    if cv_format:
+        bbox = cv_bbox_to_extent(bbox)
+    left, right, bot, top = bbox
+    return ((left, bot), (right, bot), (right, top), (left, top), (left, bot))
+
+
+def regions_to_shapes(regions):
+    return [Polygon(r) for r in regions]
+
+
 def _box_is_bad(bbox, min_pix=3, max_ratio=5):
     """Returns true if (x, y, w, h) box is too small or w/h is too oblong"""
     x, y, w, h = bbox
     return w < min_pix or h < min_pix or w / h > max_ratio or h / w > max_ratio
 
 
+# TODO: GET THE KM TO PIXEL CONVERSSERION
+# TODO: maybe make a gauss pyramid, then only do small MSERs
 # TODO: does this work on negative regions at same time as pos? try big path85
 def find_mser_regions(img, min_area=50):
     mser = cv.MSER_create()
@@ -170,7 +209,7 @@ def combine_hulls(points1, points2):
 
 
 def prune_regions(regions, bboxes, overlap_thresh=0.5):
-    """Takes in mser regions and bboxs, prunes smaller overlapped regions"""
+    """Takes in mser regions and bboxs, merges nested regions into the largest"""
     # tup = (box, region)
     # bb = [cv_bbox_to_extent(b) for b in bboxes]
     sorted_bbox_regions = sorted(
@@ -188,10 +227,10 @@ def prune_regions(regions, bboxes, overlap_thresh=0.5):
         if idx in eliminated_idxs:
             continue
         bbig = cv_bbox_to_extent(big_box)
-        for jdx, box in enumerate(sorted_bboxes[idx + 1:], start=idx + 1):
+        for jdx, sbox in enumerate(sorted_bboxes[idx + 1:], start=idx + 1):
             if jdx in eliminated_idxs:
                 continue
-            bsmall = cv_bbox_to_extent(box)
+            bsmall = cv_bbox_to_extent(sbox)
             if (insar.latlon.intersect_area(bbig, bsmall) /
                     insar.latlon.box_area(bsmall)) > overlap_thresh:
                 eliminated_idxs.add(jdx)
