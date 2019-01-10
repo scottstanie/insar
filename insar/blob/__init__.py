@@ -191,6 +191,10 @@ def compute_harris_peaks(image, sigma_list, gamma=1.4, threshold_rel=0.1):
         threshold_rel (float): passed to find peaks. Using relative since
             smaller sigmas for corner_harris have higher
 
+    Returns:
+        peaks: output of peak_local_max on stack of corner responses
+        corner_img_list: the corner response at each level
+
     TODO: see if doing corner_harris * s**2 to normalize, and using threshold_abs
         works better than threshold_rel
 
@@ -206,25 +210,24 @@ def compute_harris_peaks(image, sigma_list, gamma=1.4, threshold_rel=0.1):
     pool = multiprocessing.Pool()
     jobs = []
     for s in sigma_list:
-        jobs.append(pool.apply_async(feature.corner_harris, args=(image, s * gamma)))
-    corner_img_list = [result.get() for result in jobs]
+        jobs.append(pool.apply_async(feature.corner_harris, (image, ), {'sigma': s * gamma}))
+    corner_img_list = [s**2 * result.get() for result, s in zip(jobs, sigma_list)]
 
     jobs = []
     for corner_img in corner_img_list:
         jobs.append(
-            pool.apply_async(skblob.peak_local_max, (corner_img, ), {
-                'threshold_rel': threshold_rel
-            }))
+            pool.apply_async(skblob.peak_local_max, (corner_img, ),
+                             {'threshold_rel': threshold_rel}))
     peaks = [result.get() for result in jobs]
 
-    return peaks
+    return peaks, corner_img_list
 
 
 def find_blobs_with_harris_peaks(image,
                                  blobs=None,
                                  sigma_list=None,
                                  gamma=1.4,
-                                 threshold_rel=.1,
+                                 threshold_rel=0.1,
                                  **kwargs):
     """Takes the list of blobs found from find_blobs, check for high cornerness
 
@@ -248,7 +251,8 @@ def find_blobs_with_harris_peaks(image,
         blobs, sigma_list = find_blobs(image, **kwargs)
 
     # Find peaks for every sigma in sigma_list
-    corner_peaks = compute_harris_peaks(image, sigma_list, gamma=gamma, threshold_rel=threshold_rel)
+    corner_peaks, _ = compute_harris_peaks(
+        image, sigma_list, gamma=gamma, threshold_rel=threshold_rel)
 
     sigma_idxs = utils.find_sigma_idxs(blobs, sigma_list)
     # import ipdb
@@ -259,6 +263,7 @@ def find_blobs_with_harris_peaks(image,
         cur_peaks = corner_peaks[sigma_idx]
         blob_mask = utils.indexes_within_circle(blob=blob, mask_shape=image.shape)
         corners_contained_in_mask = blob_mask[cur_peaks[:, 0], cur_peaks[:, 1]]
+        # corners_contained_in_mask = blob_mask[cur_peaks[:, 1], cur_peaks[:, 0]]
         if any(corners_contained_in_mask):
             out_blobs.append(blob)
 

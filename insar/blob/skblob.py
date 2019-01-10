@@ -117,8 +117,8 @@ def blob_log(image=None,
 def create_sigma_list(min_sigma=1, max_sigma=50, num_sigma=20, log_scale=False, **kwargs):
     """Make array of sigmas for scale-space.
 
-    Example with log_scale, which uses base 2 for powers:
-        min_sigma=4, max_sigma=145 <-- these are powers of 2
+    Example with log_scale:
+        min_sigma=4, max_sigma=145
     array([  4.        ,   5.93776639,   8.81426744,  13.08426524,
         19.42282761,  28.83205326,  42.79949922,  63.53335704,
         94.31155807, 140.        ])

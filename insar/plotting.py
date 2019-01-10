@@ -289,7 +289,7 @@ def animate_stack(stack,
                   label=None,
                   save_title=None,
                   cmap_name='seismic',
-                  shifted='True',
+                  shifted=True,
                   vmin=None,
                   vmax=None,
                   **savekwargs):
@@ -315,7 +315,7 @@ def animate_stack(stack,
             and https://matplotlib.org/api/animation_api.html#writer-classes
 
     Returns:
-        None
+        stack_ani: the animation object
     """
     num_images = stack.shape[0]
     if titles:
@@ -354,6 +354,7 @@ def animate_stack(stack,
 
     if display:
         plt.show()
+    return stack_ani
 
 
 def make_figure_noborder():
