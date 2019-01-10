@@ -15,6 +15,23 @@ class LatlonImage(np.ndarray):
         """Can pass in either filenames to load, or 2D arrays/dem_rsc dicts
 
         https://docs.scipy.org/doc/numpy/user/basics.subclassing.html
+        Custom attributes on top of np.array:
+            filename
+            dem_rsc_file
+            dem_rsc
+            dem_rsc_is_valid
+        Keys from the dem_rsc dict which are also attributes:
+            width
+            file_length
+            x_first
+            y_first
+            x_step
+            y_step
+            x_unit (degrees, almost always)
+            y_unit (degrees)
+            z_offset (0)
+            z_scale (1)
+            projection (LL)
         """
         # TODO: do we need to check that the rsc info matches the data?
         if data is None and filename is None:
@@ -65,6 +82,9 @@ class LatlonImage(np.ndarray):
         self.dem_rsc_file = getattr(obj, 'dem_rsc_file', None)
         self.dem_rsc = getattr(obj, 'dem_rsc', None)
         self.dem_rsc_is_valid = getattr(obj, 'dem_rsc_is_valid', False)
+        if self.dem_rsc:
+            for k, v in self.dem_rsc.items():
+                setattr(self, k, v)
         self.points = getattr(obj, 'points', None)
 
     def _disable_dem_rsc(self, sliced):
