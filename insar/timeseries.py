@@ -404,6 +404,7 @@ def run_inversion(igram_path,
                   constant_vel=False,
                   alpha=0,
                   difference=False,
+                  deramp=True,
                   masking=True,
                   verbose=False):
     """Runs SBAS inversion on all unwrapped igrams
@@ -420,7 +421,8 @@ def run_inversion(igram_path,
             See https://en.wikipedia.org/wiki/Tikhonov_regularization
         difference (bool): for regularization, penalize differences in velocity
             Used to make a smoother final solution
-        masking (bool): flag to load stack og .int.mask files to mask invalid areas
+        deramp (bool): Fits plane to each igram and subtracts (to remove orbital error)
+        masking (bool): flag to load stack of .int.mask files to mask invalid areas
         verbose (bool): print extra timing and debug info
 
     Returns:
@@ -443,10 +445,11 @@ def run_inversion(igram_path,
             B.shape, timediffs.shape))
 
     logger.debug("Reading unw stack")
-    unw_stack, mask_stack, geo_mask_columns = load_deramped_masked_stack(
+    unw_stack, mask_stack, geo_mask_columns = load_unw_masked_stack(
         igram_path,
         num_timediffs=len(timediffs),
         unw_ext='.unw',
+        deramp=deramp,
         masking=masking,
     )
 
@@ -553,16 +556,22 @@ def matrix_indices(shape, flatten=True):
         return row_block, col_block
 
 
-def load_deramped_masked_stack(igram_path, num_timediffs=None, unw_ext='.unw', masking=True):
+def load_unw_masked_stack(igram_path, num_timediffs=None, unw_ext='.unw', deramp=True,
+                          masking=True):
 
     int_file_names = read_intlist(igram_path, parse=False)
-    # Deramp each .unw file
-    # For larger areas, use quadratic ramp. Otherwise, linear
-    max_linear = 20  # km
-    width, height = latlon.grid_size(**load_dem_rsc(os.path.join(igram_path, 'dem.rsc')))
-    order = 1 if (width < max_linear or height < max_linear) else 2
-    logger.info("Dem size %.2f by %.2f km: using order %s surface to deramp", width, height, order)
-    unw_stack = deramp_stack(int_file_names, unw_ext, order=order)
+    if deramp:
+        # Deramp each .unw file
+        # For larger areas, use quadratic ramp. Otherwise, linear
+        max_linear = 20  # km
+        width, height = latlon.grid_size(**load_dem_rsc(os.path.join(igram_path, 'dem.rsc')))
+        order = 1 if (width < max_linear or height < max_linear) else 2
+        logger.info("Dem size %.2f by %.2f km: using order %s surface to deramp", width, height,
+                    order)
+        unw_stack = deramp_stack(int_file_names, unw_ext, order=order)
+    else:
+        unw_file_names = [f.replace('.int', unw_ext) for f in int_file_names]
+        unw_stack = sario.load_stack(file_list=unw_file_names)
 
     unw_stack = unw_stack.view(np.ma.MaskedArray)
 

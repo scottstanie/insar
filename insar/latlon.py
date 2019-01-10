@@ -96,8 +96,6 @@ class LatlonImage(np.ndarray):
 
         Will get the right starts and steps to pass to `crop_rsc_data`
         """
-        # import pdb
-        # pdb.set_trace()
         sliced = super(LatlonImage, self).__getitem__(items)
         # __getitem__ called multiple times: only do extra on first
         if not isinstance(sliced, LatlonImage):
@@ -106,12 +104,16 @@ class LatlonImage(np.ndarray):
         # print(items)
         # print('ndims', sliced.ndim, self.ndim)
 
+        # print('here')
+        # print(sliced, items)
+        # import pdb
+        # pdb.set_trace()
         if not sliced.dem_rsc_is_valid or sliced.ndim < 2 or sliced.ndim > 3:
             return self._disable_dem_rsc(sliced)
 
-        if sliced.ndim == 2:
+        if self.ndim == 2:
             return self._handle_slice2(items, sliced)
-        elif sliced.ndim == 3:
+        elif self.ndim == 3:
             return self._handle_slice3(items, sliced)
 
     def _handle_slice2(self, items, sliced):
