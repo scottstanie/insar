@@ -8,11 +8,15 @@ import matplotlib.pyplot as plt
 
 from insar import los, timeseries, latlon, kml
 
-GPS_DIR = '/data1/scott/pecos/gps_station_data'
+GPS_DIR = os.environ.get('GPS_DIR', '/data1/scott/pecos/gps_station_data')
 
 
 @functools.lru_cache()
-def read_station_df(filename=os.path.join(GPS_DIR, 'texas_stations.csv'), header=None):
+def read_station_df(gps_dir=None, header=None):
+    """Read in the name, lat, lon, alt list of gps stations"""
+    gps_dir = gps_dir or GPS_DIR
+    filename = os.path.join(GPS_DIR, 'texas_stations.csv')
+    print("Searching %s for gps data" % filename)
     df = pd.read_csv(filename, header=header)
     df.columns = ['name', 'lat', 'lon', 'alt']
     return df
@@ -25,7 +29,14 @@ def station_lonlat(station_name):
 
 
 def stations_within_image(image_ll):
-    """Given a LatlonImage, find gps stations contained in area"""
+    """Given a LatlonImage, find gps stations contained in area
+
+    Args:
+        image_ll (LatlonImage): LatlonImage of area with data
+
+    Returns:
+        ndarray: Nx3, with columns ['name', 'lon', 'lat']
+    """
     df = read_station_df()
     station_lon_lat_arr = df[['lon', 'lat']].values
     contains_bools = image_ll.contains(station_lon_lat_arr)
