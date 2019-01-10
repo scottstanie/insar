@@ -454,7 +454,8 @@ def run_inversion(igram_path,
 
     # Use the given reference, or find one on based on max correlation
     if any(r is None for r in reference):
-        # Make a dummy latlon image to check for gps data containment
+        # Make a latlon image to check for gps data containment
+        # TODO: maybe i need to search for masks? dont wanna pick a garbage one by accident
         latlon_image = latlon.LatlonImage(
             data=unw_stack[0], dem_rsc_file=os.path.join(igram_path, 'dem.rsc'))
         find_reference_location(latlon_image, igram_path, mask_stack, gps_dir=None)
@@ -682,7 +683,7 @@ def deramp_stack(int_file_list, unw_ext, order=1):
 def find_reference_location(latlon_image, igram_path=None, mask_stack=None, gps_dir=None):
     ref_row, ref_col = None, None
     logger.info("Searching for gps station within area")
-    stations = gps.stations_within_image(latlon_image)
+    stations = gps.stations_within_image(latlon_image, mask_invalid=True)
     if len(stations) > 0:
         # TODO: pick best station somehow? maybe higher mean correlation?
         logger.info("Station options:")
