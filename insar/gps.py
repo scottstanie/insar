@@ -46,8 +46,7 @@ def stations_within_image(image_ll, mask_invalid=True):
     good_stations = []
     if mask_invalid:
         for name, lon, lat in candidates:
-            row, col = image_ll.nearest_pixel(lon=lon, lat=lat)
-            val = image_ll[..., row, col]
+            val = image_ll[..., lat, lon]
             if np.isnan(val) or val == 0:
                 continue
             else:

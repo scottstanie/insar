@@ -220,7 +220,6 @@ class LatlonImage(np.ndarray):
             lat_stop = lat.stop or self.last_lat
             lat_step = lat.step or self.lat_step
             lat = np.arange(lat_start, lat_stop, lat_step)
-        print(lat)
         if isinstance(lon, slice):
             lon_start = lon.start or self.first_lon
             lon_stop = lon.stop or self.last_lon
