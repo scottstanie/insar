@@ -7,30 +7,40 @@ from . import utils
 from insar import plotting
 
 
-def plot_blobs(image=None, blobs=None, cur_fig=None, cur_axes=None, color='blue', **kwargs):
+def plot_blobs(image=None,
+               blobs=None,
+               cur_fig=None,
+               cur_axes=None,
+               color='blue',
+               blob_cmap=None,
+               **kwargs):
     """Takes the blob results from find_blobs and overlays on image
 
     Can either make new figure of plot on top of existing axes.
     """
-    if not cur_axes:
-        if not cur_fig:
-            cur_fig = plt.figure()
+    if cur_fig:
         cur_axes = cur_fig.gca()
-        _, ax_img = plotting.plot_image_shifted(
+    if not cur_axes:
+        cur_fig, ax_img = plotting.plot_image_shifted(
             image,
             fig=cur_fig,
             ax=cur_axes,
         )
+        if not cur_axes:
+            cur_axes = cur_fig.gca()
         # ax_img = cur_axes.imshow(image)
         # cur_fig.colorbar(ax_img)
 
-    viridis = cm.get_cmap('viridis', len(blobs))
+    if blob_cmap:
+        blob_cm = cm.get_cmap(blob_cmap, len(blobs))
     patches = []
     for idx, blob in enumerate(blobs):
-        color_pct = idx / len(blobs)
+        if blob_cmap:
+            color_pct = idx / len(blobs)
+            color = viridis(color_pct)
         c = plt.Circle((blob[1], blob[0]),
                        blob[2],
-                       color=viridis(color_pct),
+                       color=color,
                        fill=False,
                        linewidth=2,
                        clip_on=False)

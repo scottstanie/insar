@@ -4,6 +4,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import numpy as np
+from insar import blob
 
 
 def make_delta(N, row=None, col=None):
@@ -43,19 +44,23 @@ def plot_func(func=GAUSSIAN, N=501, sigma=None):
     plt.show()
 
 
-def make_stack(N=501, max_amp=3):
+def make_stack(N=501, max_amp=3, cmap='jet'):
     """Makes composite of 3 blob sizes, with small negative inside big positive"""
     b1 = make_gaussian(N, 100, None, None)
     b2 = make_gaussian(N, 30, N // 3, N // 3)
     b3 = make_gaussian(N, 7, 4 * N // 7, 4 * N // 7)
-    # 3 little ones that merge to one
-    b4 = make_gaussian(N, 17, 6 * N // 7, 6 * N // 7)
-    b4 += make_gaussian(N, 17, 33 + 6 * N // 7, 6 * N // 7)
+    # little ones that merge to one
+    # b4 = make_gaussian(N, 19, 6 * N // 7, 6 * N // 7)
+    # b4 += make_gaussian(N, 19, 47 + 6 * N // 7, 6 * N // 7)
+    b4 = make_gaussian(N, 19, 6 * N // 8, 6 * N // 8)
+    b4 += make_gaussian(N, 19, 48 + 6 * N // 8, 6 * N // 8)
+    b4 += make_gaussian(N, 19, 6 * N // 8, 48 + 6 * N // 8)
+    b4 += make_gaussian(N, 19, 48 + 6 * N // 8, 48 + 6 * N // 8)
     out = b1 - b2 - .7 * b3 + .68 * b4
     out *= max_amp / np.max(out)
 
     fig = plt.figure()
-    plt.imshow(out)
+    plt.imshow(out, cmap=cmap)
     plt.colorbar()
     return out, fig
 
@@ -74,3 +79,18 @@ def make_stack(N=501, max_amp=3):
 # # fig.colorbar(surf, shrink=0.5, aspect=5)
 # ax.set_axis_off()
 # # plt.show()
+
+
+def igarss_fig():
+    out, fig = make_stack()
+    blobs, sigma_list = blob.find_blobs(out, min_sigma=3, max_sigma=100, num_sigma=40)
+    image_cube = blob.skblob.create_gl_cube(out, sigma_list=sigma_list)
+
+    _, cur_axes = blob.plot.plot_blobs(
+        image=out,
+        blobs=blob.find_edge_blobs(blobs, out.shape)[0],
+        cur_axes=fig.gca(),
+        color='blue')
+
+    plt.imshow(image_cube[:, :, 30], cmap='jet', vmin=-1.4, vmax=1.3)
+    plt.imshow(image_cube[:, :, 10], cmap='jet', vmin=-1.4, vmax=1.3)

@@ -167,7 +167,11 @@ def make_blob_image(igram_path=".",
 
 
 def find_edge_blobs(blobs, im_shape):
-    """Takes output of find_blobs, separates those at edge of image"""
+    """Takes output of find_blobs, separates those at edge of image
+
+    Returns:
+        mid_blobs, corner_blobs
+    """
     rows, cols = im_shape
     mid_blobs, corner_blobs = [], []
     for b in blobs:

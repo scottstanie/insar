@@ -111,6 +111,7 @@ def blob_log(image=None,
     lm = local_maxima.astype(np.float64)
     # Convert the last index to its corresponding scale value
     lm[:, -1] = sigma_list[local_maxima[:, -1]]
+    print(lm)
     return _prune_blobs(lm, overlap)
 
 

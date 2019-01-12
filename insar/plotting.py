@@ -147,7 +147,6 @@ def plot_image_shifted(img,
         img (ndarray): 2D numpy array to imshow
         fig (matplotlib.Figure): Figure to plot image onto
         ax (matplotlib.AxesSubplot): Axes to plot image onto
-            Need to pass `fig` if passing `ax`
         cmap (str): name of colormap to shift
         img_data (dict): rsc_data from load_dem_rsc containing lat/lon
             data about image, used to make axes into lat/lon instead of row/col
@@ -166,10 +165,12 @@ def plot_image_shifted(img,
     else:
         extent = (0, ncols, nrows, 0)
 
-    if not fig:
-        fig = plt.figure()
-        ax = fig.gca()
+    if ax and not fig:
+        fig = ax.figure
     elif fig and not ax:
+        ax = fig.gca()
+    else:
+        fig = plt.figure()
         ax = fig.gca()
 
     if perform_shift:
@@ -378,7 +379,9 @@ def set_aspect_image(fig, img, height=4):
     fig.set_size_inches(width, height)
 
 
-def save_paper_figure(fig, fname):
+def save_paper_figure(fig, fname, axis_off=True):
     fig.tight_layout()
+    if axis_off:
+        plt.axis('off')
     print('Saving %s' % fname)
     fig.savefig(fname, bbox_inches='tight', transparent=True, dpi=300)
