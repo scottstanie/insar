@@ -65,6 +65,24 @@ def make_stack(N=501, max_amp=3, cmap='jet'):
     return out, fig
 
 
+def make_stack2(N=501, max_amp=3, cmap='jet'):
+    """Simpler composite of 3 blob sizes, no superimposing"""
+    b1 = make_gaussian(N, 60, N // 3, 2 * N // 3)
+    b2 = make_gaussian(N, 20, N // 3, N // 3)
+
+    b4 = make_gaussian(N, 29, 345, 345)
+    b4 += make_gaussian(N, 29, 73 + 345, 345)
+    b4 += make_gaussian(N, 29, 345, 73 + 345)
+    b4 += make_gaussian(N, 29, 73 + 345, 73 + 345)
+    out = b1 - .65 * b2 + .84 * b4
+    out *= max_amp / np.max(out)
+
+    fig = plt.figure()
+    plt.imshow(out, cmap=cmap)
+    plt.colorbar()
+    return out, fig
+
+
 # # ax.get_xaxis().set_visible(False)
 # # ax.get_yaxis().set_visible(False)
 # ax.w_zaxis.line.set_lw(0.)
@@ -82,7 +100,8 @@ def make_stack(N=501, max_amp=3, cmap='jet'):
 
 
 def igarss_fig():
-    out, fig = make_stack()
+    # out, fig = make_stack()
+    out, fig = make_stack2()
     blobs, sigma_list = blob.find_blobs(out, min_sigma=3, max_sigma=100, num_sigma=40)
     image_cube = blob.skblob.create_gl_cube(out, sigma_list=sigma_list)
 
@@ -94,3 +113,4 @@ def igarss_fig():
 
     plt.imshow(image_cube[:, :, 30], cmap='jet', vmin=-1.4, vmax=1.3)
     plt.imshow(image_cube[:, :, 10], cmap='jet', vmin=-1.4, vmax=1.3)
+    return out, blobs, sigma_list, image_cube, fig
