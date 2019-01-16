@@ -7,6 +7,46 @@ import numpy as np
 from insar import blob
 
 
+def generate_blobs(num_blobs,
+                   imsize=(1000, 1000),
+                   border_pad=100,
+                   min_sigma=5,
+                   max_sigma=80,
+                   mean_sigma=10,
+                   max_amp=5,
+                   mean_amp=3,
+                   min_amp=1,
+                   amp_scale=3):
+    # end columns are (x, y, sigma, Amplitude)
+    # Uniformly spread blobs: first make size they lie within (pad, max-pad)
+    rand_xy = np.random.rand(num_blobs, 2)
+    rand_xy *= np.array([imsize[0] - 2 * border_pad, imsize[1] - 2 * border_pad])
+    rand_xy += border_pad
+    rand_xy = rand_xy.astype(int)
+
+    sigmas = np.random.exponential(scale=mean_sigma, size=(num_blobs, ))
+    sigmas += min_sigma
+    sigmas = np.clip(sigmas, None, max_sigma)
+
+    amplitudes = []
+    # Make larger sigma blobs have lower expected amplitude
+    amp_means = 1 / sigmas
+    amplitudes = np.random.exponential(scale=amp_means * amp_scale)
+    amplitudes += min_amp
+    amplitudes = np.clip(amplitudes, None, max_amp)
+
+    # # Or just use exponential dist
+    # amplitudes = np.random.exponential(scale=mean_amp)
+
+    blobs = np.stack([rand_xy[:, 0], rand_xy[:, 1], sigmas, amplitudes], axis=1)
+
+    out = np.zeros(imsize)
+    for col, row, sigma, amp in blobs:
+        # TODO: correct the N to be sizes
+        out += make_gaussian(imsize[0], sigma, row=int(row), col=int(col), amp=amp)
+    return blobs, out
+
+
 def make_delta(N, row=None, col=None):
     delta = np.zeros((N, N))
     if row is None or col is None:
@@ -15,10 +55,15 @@ def make_delta(N, row=None, col=None):
     return delta
 
 
-def make_gaussian(N, sigma, row=None, col=None, normalize=False):
+def make_gaussian(N, sigma, row=None, col=None, normalize=False, amp=None):
     delta = make_delta(N, row, col)
     out = nd.gaussian_filter(delta, sigma) * sigma**2
-    return out / np.max(out) if normalize else out
+    if normalize:
+        return out / np.max(out) if normalize else out
+    elif amp is not None:
+        return amp * (out / np.max(out))
+    else:
+        return out
 
 
 def make_log(N, sigma, row=None, col=None, normalize=False):
