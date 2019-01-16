@@ -17,7 +17,6 @@ BLOB_KWARG_DEFAULTS = {'threshold': 1, 'min_sigma': 3, 'max_sigma': 40}
 
 # TODO: clean up redundancies in this function
 def find_blobs(image,
-               include_values=True,
                positive=True,
                negative=True,
                threshold=0.5,

@@ -16,7 +16,8 @@ def generate_blobs(num_blobs,
                    max_amp=5,
                    mean_amp=3,
                    min_amp=1,
-                   amp_scale=3):
+                   amp_scale=3,
+                   seed=None):
     # end columns are (x, y, sigma, Amplitude)
     # Uniformly spread blobs: first make size they lie within (pad, max-pad)
     rand_xy = np.random.rand(num_blobs, 2)
@@ -34,6 +35,8 @@ def generate_blobs(num_blobs,
     amplitudes = np.random.exponential(scale=amp_means * amp_scale)
     amplitudes += min_amp
     amplitudes = np.clip(amplitudes, None, max_amp)
+    signs = 2*np.random.randint(0, 2, size=(num_blobs,) ) - 1
+    amplitudes *= signs
 
     # # Or just use exponential dist
     # amplitudes = np.random.exponential(scale=mean_amp)
@@ -45,6 +48,15 @@ def generate_blobs(num_blobs,
         # TODO: correct the N to be sizes
         out += make_gaussian(imsize[0], sigma, row=int(row), col=int(col), amp=amp)
     return blobs, out
+
+def demo_ghost_blobs():
+    np.random.seed(1)
+    finding_params = {'positive': True, 'negative': True, 'threshold': 0.5, 'mag_threshold': None, 'min_sigma': 3,
+                      'max_sigma': 60, 'num_sigma': 20}
+    blobs, out = generate_blobs(10, max_amp=15, amp_scale=25, seed=1)
+    detected, sigma_list = blob.find_blobs(out, **finding_params)
+    blob.plot.plot_blobs(image=out, blobs=detected)
+    return blobs, out, detected, sigma_list
 
 
 def make_delta(N, row=None, col=None):
