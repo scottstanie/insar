@@ -24,6 +24,7 @@ def find_blobs(image,
                min_sigma=3,
                max_sigma=60,
                num_sigma=20,
+               sigma_bins=1,
                log_scale=False,
                **kwargs):
     """Find blob features within an image
@@ -39,6 +40,12 @@ def find_blobs(image,
         min_sigma (int): minimum pixel size to check for blobs
         max_sigma (int): max pixel size to check for blobs
         num_sigma : int, optional: number of intermediate values of filter size to use
+        sigma_bins : int or array-like of edges: Will only prune overlapping
+            blobs that are within the same bin (to keep big very large and nested
+            small blobs). int passed will divide range evenly
+        log_scale : bool, optional
+            If set intermediate values of standard deviations are interpolated
+            using a logarithmic scale. If not, linear
 
     Returns:
         blobs: ndarray: rows are blobs with values: [(r, c, s, mag)], where
@@ -62,12 +69,13 @@ def find_blobs(image,
 
     blobs = np.empty((0, 4))
     if positive:
+
+        print('bpos')
         blobs_pos = skblob.blob_log(
             threshold=threshold,
             image_cube=image_cube,
-            min_sigma=min_sigma,
-            max_sigma=max_sigma,
-            num_sigma=num_sigma,
+            sigma_list=sigma_list,
+            sigma_bins=sigma_bins,
             **kwargs)
         # Append mags as a column and sort by it
         # TODO: FIX vvv
@@ -75,24 +83,22 @@ def find_blobs(image,
             blobs_with_mags = utils.sort_blobs_by_val(blobs_pos, image, positive=True)
         else:
             blobs_with_mags = np.empty((0, 4))
-        # print('bpos')
         # print(blobs_with_mags)
         if mag_threshold is not None:
             blobs_with_mags = blobs_with_mags[blobs_with_mags[:, -1] >= mag_threshold]
         blobs = np.vstack((blobs, blobs_with_mags))
     if negative:
+        print('bneg')
         blobs_neg = skblob.blob_log(
             threshold=threshold,
             image_cube=-1 * image_cube,
-            min_sigma=min_sigma,
-            max_sigma=max_sigma,
-            num_sigma=num_sigma,
+            sigma_list=sigma_list,
+            sigma_bins=sigma_bins,
             **kwargs)
         if blobs_neg.size:
             blobs_with_mags = utils.sort_blobs_by_val(blobs_neg, image, positive=False)
         else:
             blobs_with_mags = np.empty((0, 4))
-        # print('bneg')
         # print(blobs_with_mags)
         if mag_threshold is not None:
             blobs_with_mags = blobs_with_mags[-1 * blobs_with_mags[:, -1] >= mag_threshold]
