@@ -112,7 +112,7 @@ def blob_log(image=None,
     # Convert the last index to its corresponding scale value
     lm[:, -1] = sigma_list[local_maxima[:, -1]]
     print(lm)
-    return _prune_blobs(lm, overlap)
+    return prune_blobs(lm, overlap)
 
 
 def create_sigma_list(min_sigma=1, max_sigma=50, num_sigma=20, log_scale=False, **kwargs):
@@ -207,8 +207,8 @@ def _compute_sphere_overlap(d, r1, r2):
     See for example http://mathworld.wolfram.com/Sphere-SphereIntersection.html
     for more details.
     """
-    vol = (math.pi / (12 * d) * (r1 + r2 - d)**2 *
-           (d**2 + 2 * d * (r1 + r2) - 3 * (r1**2 + r2**2) + 6 * r1 * r2))  # yapf:disable
+    vol = (math.pi / (12 * d) * (r1 + r2 - d) ** 2 *
+           (d ** 2 + 2 * d * (r1 + r2) - 3 * (r1 ** 2 + r2 ** 2) + 6 * r1 * r2))  # yapf:disable
     return vol / (4. / 3 * math.pi * min(r1, r2)**3)
 
 
@@ -254,40 +254,106 @@ def _blob_overlap(blob1, blob2):
         return _compute_sphere_overlap(d, r1, r2)
 
 
-def _prune_blobs(blobs_array, overlap):
+def prune_blobs(blobs_array, overlap, num_sigma_bands=1):
     """Eliminated blobs with area overlap.
 
     Args:
         blobs_array (ndarray): A 2d array with each row representing 3 (or 4)
-        values, ``(row, col, sigma)`` or ``(pln, row, col, sigma)`` in 3D,
-        where ``(row, col)`` (``(pln, row, col)``) are coordinates of the blob
-        and ``sigma`` is the standard deviation of the Gaussian kernel which
-        detected the blob.
-        This array must not have a dimension of size 0.
-    overlap (float): A value between 0 and 1. If the fraction of area overlapping
-        for 2 blobs is greater than `overlap` the smaller blob is eliminated.
+            values, ``(row, col, sigma)`` or ``(pln, row, col, sigma)`` in 3D,
+            where ``(row, col)`` (``(pln, row, col)``) are coordinates of the blob
+            and ``sigma`` is the standard deviation of the Gaussian kernel which
+            detected the blob.
+            This array must not have a dimension of size 0.
+        overlap (float): A value between 0 and 1. If the fraction of area overlapping
+            for 2 blobs is greater than `overlap` the smaller blob is eliminated.
+        num_sigma_bands (int): if provided, divides the sigma_range of blobs and only
+            removes overlap within this band.
+            For example, if you want to prune small to mid blobs, and keep bigger blobs
+            that entirely overlap, set num_sigma_bands = 2 or 3
 
     Returns
     -------
     A (ndarray): `array` with overlapping blobs removed.
+
+    Examples:
+        >>> import numpy as np; np.set_printoptions(legacy="1.13")
+        >>> blobs = np.array([[ 0, 0,  4], [1, 1, 10], [2, 2, 20]])
+        >>> print(prune_blobs(blobs, 0.5))
+        [[ 2  2 20]]
+        >>> print(prune_blobs(blobs, 0.5, num_sigma_bands=2))
+        [[ 1  1 10]
+         [ 2  2 20]]
+        >>> print(prune_blobs(blobs, 0.5, num_sigma_bands=5))
+        [[ 0  0  4]
+         [ 1  1 10]
+         [ 2  2 20]]
     """
+    if num_sigma_bands > 1:
+        out_blobs = []
+        for b_arr in bin_blobs(blobs_array, num_sigma_bands):
+            # Now recurse to prune each bin level, then stack all together
+            out_blobs.append(prune_blobs(b_arr, overlap, 1))
+        return np.vstack([b for b in out_blobs if b.size])
+
+    if not blobs_array.size:
+        return blobs_array
+
     sigma = blobs_array[:, -1].max()
-    distance = 2 * sigma * sqrt(blobs_array.shape[1] - 1)
+    max_distance = 2 * sigma * sqrt(blobs_array.shape[1] - 1)
     tree = spatial.cKDTree(blobs_array[:, :-1])
-    pairs = np.array(list(tree.query_pairs(distance)))
+    pairs = np.array(list(tree.query_pairs(max_distance)))
+
     if len(pairs) == 0:
         return blobs_array
     else:
+        # Use in
+        keep_idxs = np.ones((blobs_array.shape[0],)).astype(bool)
         for (i, j) in pairs:
             blob1, blob2 = blobs_array[i], blobs_array[j]
             if _blob_overlap(blob1, blob2) > overlap:
                 # kill the smaller blob if enough overlap
                 if blob1[-1] > blob2[-1]:
-                    blob2[-1] = 0
+                    keep_idxs[j] = False
                 else:
-                    blob1[-1] = 0
+                    keep_idxs[i] = False
 
-    return np.array([b for b in blobs_array if b[-1] > 0])
+    return blobs_array[keep_idxs]
+    # Note: skblob way overwrote the original blobs array's sigma value: blob1[-1] = 0
+    # return np.array([b for b in blobs_array if b[-1] > 0])
+
+
+def bin_blobs(blobs_array, num_sigma_bands):
+    """Group the blobs array by its sigma values into bins
+
+    Args:
+        blobs_array (ndarray):
+        num_sigma_bands (int):
+
+    Returns:
+        list[ndarray]: blobs binned by their sigma value into `num_sigma_bands` groups
+        
+    Example:
+        >>> import numpy as np; np.set_printoptions(legacy="1.13")
+        >>> blobs = np.array([[ 0, 0,  1], [1, 1, 2], [2, 2, 20]])
+        >>> print(bin_blobs(blobs, 2)[0])
+        [[0 0 1]
+         [1 1 2]]
+        >>> print(bin_blobs(blobs, 2)[1])
+        [[ 2  2 20]]
+
+    """
+
+    def _bin_by_sigmas(sigma_list, num_bins):
+        bins = np.histogram_bin_edges(sigma_list, bins=num_bins)
+        bin_idxs = np.digitize(sigma_list, bins[1:], right=True)
+        return bin_idxs
+
+    bin_idxs = _bin_by_sigmas(blobs_array[:, 2], num_sigma_bands)
+
+    out_list = []
+    for cur_idx in range(num_sigma_bands):
+        out_list.append(blobs_array[bin_idxs == cur_idx])
+    return out_list
 
 
 def peak_local_max(image,
