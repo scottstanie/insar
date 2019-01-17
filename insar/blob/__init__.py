@@ -86,6 +86,7 @@ def find_blobs(image,
         # print(blobs_with_mags)
         if mag_threshold is not None:
             blobs_with_mags = blobs_with_mags[blobs_with_mags[:, -1] >= mag_threshold]
+        blobs_with_mags = utils.prune_edge_extrema(image, blobs_with_mags, positive=True)
         blobs = np.vstack((blobs, blobs_with_mags))
     if negative:
         print('bneg')
@@ -102,6 +103,7 @@ def find_blobs(image,
         # print(blobs_with_mags)
         if mag_threshold is not None:
             blobs_with_mags = blobs_with_mags[-1 * blobs_with_mags[:, -1] >= mag_threshold]
+        blobs_with_mags = utils.prune_edge_extrema(image, blobs_with_mags, positive=False)
         blobs = np.vstack((blobs, blobs_with_mags))
 
     # Multiply each sigma by sqrt(2) to convert sigma to a circle radius

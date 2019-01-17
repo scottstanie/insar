@@ -17,6 +17,10 @@ def plot_blobs(image=None,
     """Takes the blob results from find_blobs and overlays on image
 
     Can either make new figure of plot on top of existing axes.
+
+    Returns:
+        blobs
+        cur_axes
     """
     if cur_fig:
         cur_axes = cur_fig.gca()

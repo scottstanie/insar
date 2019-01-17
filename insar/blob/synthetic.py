@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 import numpy as np
 from insar import blob
+import ipdb
 
 
 def generate_blobs(num_blobs,
@@ -49,7 +50,6 @@ def generate_blobs(num_blobs,
     return blobs * np.array([1, 1, np.sqrt(2), 1]), out
 
 
-import ipdb
 
 
 def calc_detection_stats(blobs_real, detected, min_iou=0.5):
@@ -77,27 +77,27 @@ def calc_detection_stats(blobs_real, detected, min_iou=0.5):
     true_detects = []
     false_positives = []
     matched_idx_set = set()
-    for b in detected:
+    for cur_clob in detected:
         # Find closest blob in 3d, check its overlap
-        diffs_3d = (blobs_real - b)[:, :3]
+        diffs_3d = (blobs_real - cur_clob)[:, :3]
         dist_3d = np.sqrt(np.sum(diffs_3d**2, axis=1))
 
         closest_idx = dist_3d.argmin()
         closest_dist = dist_3d[closest_idx]
         min_dist_real_blob = blobs_real[closest_idx, :]
-        iou_frac = blob.skblob.intersection_over_union(b[:3], min_dist_real_blob[:3], using_sigma=False)
+        iou_frac = blob.skblob.intersection_over_union(cur_clob[:3], min_dist_real_blob[:3], using_sigma=False)
         is_overlapping = iou_frac > min_iou
         # ipdb.set_trace()
         # if np.any(matches):  # If we want to check all iou, maybe do this
         if is_overlapping:
             print('true (overlap, dist):', iou_frac, dist_3d[closest_idx])
-            true_detects.append(b)
+            true_detects.append(cur_clob)
             # match_idxs = np.where(matches)[0]
             # matched_idx_set.update(match_idxs)
             matched_idx_set.add(closest_idx)
         else:
             print('false (overlap, dist):', iou_frac, dist_3d[closest_idx])
-            false_positives.append(blob)
+            false_positives.append(cur_clob)
 
     # Now find misses
     miss_idxs = set(np.arange(len(blobs_real))) - matched_idx_set
@@ -106,12 +106,13 @@ def calc_detection_stats(blobs_real, detected, min_iou=0.5):
     precision = len(true_detects) / len(detected)
     recall = len(true_detects) / len(blobs_real)
 
-    assert 2 * len(true_detects) + len(false_positives) + len(misses) == len(blobs_real) + len(
-        detected)
+    if 2 * len(true_detects) + len(false_positives) + len(misses) != len(blobs_real) + len(
+        detected):
+        print('CAUTION: weird num of true + fp + miss')
     return np.array(true_detects), np.array(false_positives), misses, precision, recall
 
 
-def demo_ghost_blobs():
+def demo_ghost_blobs(min_iou=0.5):
     np.random.seed(1)
     finding_params = {
         'positive': True,
@@ -123,10 +124,18 @@ def demo_ghost_blobs():
         'num_sigma': 50,
         'sigma_bins': 3,
     }
-    blobs, out = generate_blobs(10, max_amp=15, amp_scale=25)
+    real_blobs, out = generate_blobs(10, max_amp=15, amp_scale=25)
     detected, sigma_list = blob.find_blobs(out, **finding_params)
-    blob.plot.plot_blobs(image=out, blobs=detected)
-    return blobs, out, detected, sigma_list
+
+    true_d, fp, misses, precision, recall = calc_detection_stats(real_blobs, detected, min_iou=min_iou)
+    print("Results:")
+    print("precision: ", precision)
+    print("recall: ", recall)
+
+    _, cur_axes = blob.plot.plot_blobs(image=out, blobs=true_d, color='green')
+    _, cur_axes = blob.plot.plot_blobs(image=out, blobs=fp, color='black', cur_axes=cur_axes)
+    _, cur_axes = blob.plot.plot_blobs(image=out, blobs=misses, color='red', cur_axes=cur_axes)
+    return out, sigma_list, real_blobs, detected, fp, misses
 
 
 def make_delta(N, row=None, col=None):

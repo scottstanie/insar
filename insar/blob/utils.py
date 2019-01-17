@@ -59,10 +59,80 @@ def get_blob_stats(blobs, image, center_only=False, accum_func=np.max):
         coords = blobs[:, :2].astype(int)
         return image[coords[:, 0], coords[:, 1]]
 
-    height, width = image.shape
     # blob: [row, col, radius, [possibly mag]]
     masks = map(lambda blob: indexes_within_circle(blob=blob, mask_shape=image.shape), blobs)
     return np.stack([accum_func(image[mask]) for mask in masks])
+
+
+def mask_border(mask):
+    rows = np.where(np.nanargmax(mask, axis=1))[0]
+    cols = np.where(np.nanargmax(mask, axis=0))[0]
+    return np.min(rows), np.max(rows), np.min(cols), np.max(cols)
+
+
+def crop_image_to_mask(image, mask):
+    masked_out = image.copy()
+    masked_out[~mask] = np.nan
+    min_row, max_row, min_col, max_col = mask_border(mask)
+    return masked_out[min_row:max_row + 1, min_col:max_col + 1]
+
+
+def crop_blob(image, blob):
+    """Crops an image to the box around a blob with nans outside blob area
+    Args:
+        image:
+        blob: (row, col, radius, ...)
+
+    Returns:
+        ndarray: size = (2r, 2r), r = radius of blob
+    """
+    mask = indexes_within_circle(blob=blob, mask_shape=image.shape)
+    return crop_image_to_mask(image, mask)
+
+
+def get_dist_to_extreme(image, blob, positive=True):
+    """Finds how far from center a blobs extreme point is that caused the result
+
+    Assumes blob[2] is radius, not sigma, to pass to indexes_within_circle
+
+    Returns as a ratio distance/blob_radius (0 to 1)
+    """
+    patch = crop_blob(image, blob)
+    # Remove any bias to just look at peak difference
+    if positive:
+        patch += np.nanmin(patch)
+        row, col = np.unravel_index(np.nanargmax(patch), patch.shape)
+    else:
+        patch -= np.nanmax(patch)
+        row, col = np.unravel_index(np.nanargmin(patch), patch.shape)
+
+    nrows, _ = patch.shape  # circle, will have same rows and cols
+    midpoint = nrows // 2
+    dist = np.sqrt((row - midpoint)**2 + (col - midpoint)**2)
+    return dist / blob[2]
+
+
+def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True):
+    """Finds filters out blobs whose extreme point is far from center
+    
+    Args:
+        image: 
+        blobs: 
+        max_dist_ratio:
+        positive: 
+
+    Returns:
+        out_blobs: 
+
+    """
+    out_blobs = []
+    for b in blobs:
+        if get_dist_to_extreme(image, b, positive=positive) < max_dist_ratio:
+            out_blobs.append(b)
+    if out_blobs:
+        return np.vstack(out_blobs)
+    else:
+        return np.empty((0, blobs.shape[1]))
 
 
 def append_stats(blobs, image, stat_funcs=(np.var, np.ptp), center_only=False):
@@ -77,7 +147,7 @@ def append_stats(blobs, image, stat_funcs=(np.var, np.ptp), center_only=False):
     """
     new_blobs = blobs.copy()
     if isinstance(center_only, collections.Iterable):
-        center_iter = center
+        center_iter = center_only
     else:
         center_iter = itertools.repeat(center_only)
 
