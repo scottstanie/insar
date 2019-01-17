@@ -16,8 +16,7 @@ def generate_blobs(num_blobs,
                    max_amp=5,
                    mean_amp=3,
                    min_amp=1,
-                   amp_scale=3,
-                   seed=None):
+                   amp_scale=3):
     # end columns are (x, y, sigma, Amplitude)
     # Uniformly spread blobs: first make size they lie within (pad, max-pad)
     rand_xy = np.random.rand(num_blobs, 2)
@@ -29,31 +28,118 @@ def generate_blobs(num_blobs,
     sigmas += min_sigma
     sigmas = np.clip(sigmas, None, max_sigma)
 
-    amplitudes = []
     # Make larger sigma blobs have lower expected amplitude
     amp_means = 1 / sigmas
     amplitudes = np.random.exponential(scale=amp_means * amp_scale)
     amplitudes += min_amp
     amplitudes = np.clip(amplitudes, None, max_amp)
-    signs = 2*np.random.randint(0, 2, size=(num_blobs,) ) - 1
+    signs = 2 * np.random.randint(0, 2, size=(num_blobs, )) - 1
     amplitudes *= signs
 
     # # Or just use exponential dist
     # amplitudes = np.random.exponential(scale=mean_amp)
 
-    blobs = np.stack([rand_xy[:, 0], rand_xy[:, 1], sigmas, amplitudes], axis=1)
+    blobs = np.stack([rand_xy[:, 1], rand_xy[:, 0], sigmas, amplitudes], axis=1)
 
     out = np.zeros(imsize)
-    for col, row, sigma, amp in blobs:
+    for row, col, sigma, amp in blobs:
         # TODO: correct the N to be sizes
         out += make_gaussian(imsize[0], sigma, row=int(row), col=int(col), amp=amp)
-    return blobs, out
+    # convert blobs into (row, col, radius, amp) format
+    return blobs * np.array([1, 1, np.sqrt(2), 1]), out
+
+
+import ipdb
+
+
+def calc_detection_stats(blobs_real, detected, min_overlap=0.8, margin_dist=.2, margin_radius=.2):
+    """Calculate how well find_blobs performed on synthetic blobs_real
+
+    Uses a distance threshold and sigma margin to confirm same blobs
+    Args:
+        blobs_real (ndarray): actual blobs in image
+        detected (ndarray): output from find_blobs
+        min_overlap (float): 0 to 1, minimum overlap of blob to be called a detection
+        margin_dist (float): max distance the detection can be from the
+            center of the real blob (as percentage of the blob radius)
+        margin_radius (float): max error in size of blob the detection can be from the
+            center of the real blob (as percentage of the blob radius)
+
+    Returns:
+        true_detects (ndarray): blobs in detected which are real
+        false_positives (ndarray): blobs in detected, not in real
+        misses (ndarray): blobs in blobs_real, not detected
+        precision (float): len(true_detection) / len(detections)
+        recall (float): true_detections / len(blobs_real)
+
+    Note: should be case that
+        2*len(true_detects) + len(false_positives) + len(misses) == len(blobs_real) + len(detected)
+
+    """
+
+    def _blob_matches(b):  # , max_dist, max_radius_diff):
+        # # Now check that this blob is close in x,y
+        # dists = blobs_real - blob
+        # dist_sq_arr = dists[:, 0]**2 + dists[:, 1]**2
+        # radius_arr = dists[:, 2]
+        # return np.logical_and(dist_sq_arr < max_dist, radius_arr < max_radius_diff)
+        # Find closest blob in 3d, check their overlap
+        dist_3d = np.sqrt(np.sum((blobs_real - b)[:, :3]**2))
+        closest_idx = dist_3d.argsort()[0]
+        min_dist_real_blob = blobs_real[closest_idx, :]
+        return blob.skblob.blob_overlap(b, min_dist_real_blob) > min_overlap
+
+    true_detects = []
+    false_positives = []
+    matched_idx_set = set()
+    for b in detected:
+        # max_dist = margin_dist * radius
+        # max_radius_diff = margin_radius * radius
+        # matches = _blob_matches(b)
+        diffs_3d = (blobs_real - b)[:, :3]
+        dist_3d = np.sqrt(np.sum(diffs_3d**2, axis=1))
+        closest_idx = dist_3d.argmin()
+        closest_dist = dist_3d[closest_idx]
+        min_dist_real_blob = blobs_real[closest_idx, :]
+        overlap_frac = blob.skblob.blob_overlap(b[:3], min_dist_real_blob[:3])
+        is_overlapping = overlap_frac > min_overlap
+        ipdb.set_trace()
+        # if np.any(matches):
+        if is_overlapping:
+            print('true (overlap, dist):', overlap_frac, dist_3d[closest_idx])
+            true_detects.append(b)
+            # match_idxs = np.where(matches)[0]
+            # matched_idx_set.update(match_idxs)
+            matched_idx_set.add(closest_idx)
+        else:
+            print('false (overlap, dist):', overlap_frac, dist_3d[closest_idx])
+            false_positives.append(blob)
+
+    # Now find misses
+    miss_idxs = set(np.arange(len(blobs_real))) - matched_idx_set
+    misses = blobs_real[tuple(miss_idxs), :]
+
+    precision = len(true_detects) / len(detected)
+    recall = len(true_detects) / len(blobs_real)
+
+    assert 2 * len(true_detects) + len(false_positives) + len(misses) == len(blobs_real) + len(
+        detected)
+    return np.array(true_detects), np.array(false_positives), misses, precision, recall
+
 
 def demo_ghost_blobs():
     np.random.seed(1)
-    finding_params = {'positive': True, 'negative': True, 'threshold': 0.5, 'mag_threshold': None, 'min_sigma': 3,
-                      'max_sigma': 60, 'num_sigma': 20}
-    blobs, out = generate_blobs(10, max_amp=15, amp_scale=25, seed=1)
+    finding_params = {
+        'positive': True,
+        'negative': True,
+        'threshold': 0.35,
+        'mag_threshold': None,
+        'min_sigma': 3,
+        'max_sigma': 60,
+        'num_sigma': 50,
+        'sigma_bins': 3,
+    }
+    blobs, out = generate_blobs(10, max_amp=15, amp_scale=25)
     detected, sigma_list = blob.find_blobs(out, **finding_params)
     blob.plot.plot_blobs(image=out, blobs=detected)
     return blobs, out, detected, sigma_list
