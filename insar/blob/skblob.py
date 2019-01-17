@@ -19,8 +19,10 @@ def blob_log(image=None,
              max_sigma=60,
              num_sigma=20,
              image_cube=None,
+             sigma_list=None,
              threshold=.5,
              overlap=.5,
+             sigma_bins=1,
              log_scale=False):
     """Finds blobs in the given grayscale image.
 
@@ -42,7 +44,10 @@ def blob_log(image=None,
         The number of intermediate values of standard deviations to consider
         between `min_sigma` and `max_sigma`.
     image_cube (ndarray): optional: 3D volume, output of create_gl_cube
-        if provided, overrides the min_sigma, max_sigma, num_sigma args
+        if provided, bypasses the creation of the response cube using
+        sigma_list or min_sigma, max_sigma, num_sigma args
+    sigma_list (ndarray): optional: bypasses the creation of sigma_list from
+        min_sigma, max_sigma, num_sigma args
     threshold : float, optional.
         The absolute lower bound for scale space maxima. Local maxima smaller
         than thresh are ignored. Reduce this to detect blobs with less
@@ -52,9 +57,12 @@ def blob_log(image=None,
     overlap : float, optional
         A value between 0 and 1. If the area of two blobs overlaps by a
         fraction greater than `threshold`, the smaller blob is eliminated.
+    sigma_bins : int or array-like of edges: Will only prune overlapping
+        blobs that are within the same bin (to keep big very large and nested
+        small blobs). int passed will divide range evenly
     log_scale : bool, optional
         If set intermediate values of standard deviations are interpolated
-        using a logarithmic scale to the base `10`. If not, linear
+        using a logarithmic scale . If not, linear
         interpolation is used.
 
     Returns:
@@ -96,7 +104,8 @@ def blob_log(image=None,
     The radius of each blob is approximately :math:`\sqrt{2}\sigma` for
     a 2-D image and :math:`\sqrt{3}\sigma` for a 3-D image.
     """
-    sigma_list = create_sigma_list(min_sigma, max_sigma, num_sigma, log_scale=log_scale)
+    if sigma_list is None:
+        sigma_list = create_sigma_list(min_sigma, max_sigma, num_sigma, log_scale)
     if image_cube is None:
         image = image.astype(np.floating)
         image_cube = create_gl_cube(image, sigma_list)
@@ -111,8 +120,9 @@ def blob_log(image=None,
     lm = local_maxima.astype(np.float64)
     # Convert the last index to its corresponding scale value
     lm[:, -1] = sigma_list[local_maxima[:, -1]]
-    print(lm)
-    return prune_blobs(lm, overlap)
+    # print('lm:')
+    # print(lm)
+    return prune_blobs(lm, overlap, sigma_bins=sigma_bins)
 
 
 def create_sigma_list(min_sigma=1, max_sigma=50, num_sigma=20, log_scale=False, **kwargs):
@@ -171,7 +181,7 @@ def _compute_disk_overlap(d, r1, r2):
         r2 (float): Radius of the second disk.
 
     Returns:
-        vol (float): Volume of the overlap between the two disks.
+        area (float): area of the overlap between the two disks.
     """
 
     ratio1 = (d**2 + r1**2 - r2**2) / (2 * d * r1)
@@ -187,7 +197,15 @@ def _compute_disk_overlap(d, r1, r2):
     c = d + r2 - r1
     d = d + r2 + r1
     area = (r1**2 * acos1 + r2**2 * acos2 - 0.5 * sqrt(abs(a * b * c * d)))
-    return area / (math.pi * (min(r1, r2)**2))
+    return area
+
+
+def _disk_area(r):
+    return math.pi * r**2
+
+
+def _sphere_vol(r):
+    return 4. / 3 * math.pi * r**3
 
 
 def _compute_sphere_overlap(d, r1, r2):
@@ -209,10 +227,10 @@ def _compute_sphere_overlap(d, r1, r2):
     """
     vol = (math.pi / (12 * d) * (r1 + r2 - d) ** 2 *
            (d ** 2 + 2 * d * (r1 + r2) - 3 * (r1 ** 2 + r2 ** 2) + 6 * r1 * r2))  # yapf:disable
-    return vol / (4. / 3 * math.pi * min(r1, r2)**3)
+    return vol
 
 
-def _blob_overlap(blob1, blob2):
+def blob_overlap(blob1, blob2):
     """Finds the overlapping area fraction between two blobs.
 
     Returns a float representing fraction of overlapped area.
@@ -248,13 +266,63 @@ def _blob_overlap(blob1, blob2):
         return 1
 
     if n_dim == 2:
-        return _compute_disk_overlap(d, r1, r2)
-
+        return _compute_disk_overlap(d, r1, r2) / _disk_area(min(r1, r1))
     else:  # http://mathworld.wolfram.com/Sphere-SphereIntersection.html
-        return _compute_sphere_overlap(d, r1, r2)
+        return _compute_sphere_overlap(d, r1, r2) / _sphere_vol(min(r1, r1))
 
 
-def prune_blobs(blobs_array, overlap, num_sigma_bands=1):
+def intersection_over_union(blob1, blob2):
+    """Alternative measure of closeness of 2 blobs
+
+    Used to see if guesses are close to real blob (x, y, radius)
+
+    Args:
+    blob1 (sequence of arrays):
+        A sequence of ``(row, col, sigma)`` or ``(pln, row, col, sigma)``,
+        where ``row, col`` (or ``(pln, row, col)``) are coordinates
+        of blob and ``sigma`` is the standard deviation of the Gaussian kernel
+        which detected the blob.
+    blob2 (sequence of arrays)
+        A sequence of ``(row, col, sigma)`` or ``(pln, row, col, sigma)``,
+        where ``row, col`` (or ``(pln, row, col)``) are coordinates
+        of blob and ``sigma`` is the standard deviation of the Gaussian kernel
+        which detected the blob.
+
+    Returns:
+        f (float): Fraction of overlapped area (or volume in 3D).
+
+    Examples:
+        >>> blob1 = np.array([0, 0, 6])
+        >>> blob2 = np.array([0, 0, 3])
+        >>> print(intersection_over_union(blob1, blob2))
+        0.25
+        >>> blob1 = np.array([0, 0, 1])
+        >>> blob2 = np.array([0.8079455, 0, 1])
+        >>> is_close = (intersection_over_union(blob1, blob2) - 0.472) < 1e3
+        >>> print(is_close)
+        True
+    """
+    n_dim = len(blob1) - 1
+    if n_dim != 2:
+        raise NotImplementedError("IoU only implemented for 2d blobs")
+    root_ndim = sqrt(n_dim)
+
+    # extent of the blob is given by sqrt(2)*scale
+    r1 = blob1[-1] * root_ndim
+    r2 = blob2[-1] * root_ndim
+
+    a1 = _disk_area(r1)
+    a2 = _disk_area(r2)
+    d = sqrt(np.sum((blob1[:-1] - blob2[:-1])**2))
+    if d <= abs(r1 - r2):  # One inside the other
+        return _disk_area(min(r1, r2)) /  _disk_area(max(r1, r2))
+
+    intersection = _compute_disk_overlap(d, r1, r2)
+    union = a1 + a2 - intersection
+    return intersection / union
+
+
+def prune_blobs(blobs_array, overlap, sigma_bins=1):
     """Eliminated blobs with area overlap.
 
     Args:
@@ -280,17 +348,17 @@ def prune_blobs(blobs_array, overlap, num_sigma_bands=1):
         >>> blobs = np.array([[ 0, 0,  4], [1, 1, 10], [2, 2, 20]])
         >>> print(prune_blobs(blobs, 0.5))
         [[ 2  2 20]]
-        >>> print(prune_blobs(blobs, 0.5, num_sigma_bands=2))
+        >>> print(prune_blobs(blobs, 0.5, sigma_bins=2))
         [[ 1  1 10]
          [ 2  2 20]]
-        >>> print(prune_blobs(blobs, 0.5, num_sigma_bands=5))
+        >>> print(prune_blobs(blobs, 0.5, sigma_bins=5))
         [[ 0  0  4]
          [ 1  1 10]
          [ 2  2 20]]
     """
-    if num_sigma_bands > 1:
+    if sigma_bins > 1:
         out_blobs = []
-        for b_arr in bin_blobs(blobs_array, num_sigma_bands):
+        for b_arr in bin_blobs(blobs_array, sigma_bins):
             # Now recurse to prune each bin level, then stack all together
             out_blobs.append(prune_blobs(b_arr, overlap, 1))
         return np.vstack([b for b in out_blobs if b.size])
@@ -307,10 +375,10 @@ def prune_blobs(blobs_array, overlap, num_sigma_bands=1):
         return blobs_array
     else:
         # Use in
-        keep_idxs = np.ones((blobs_array.shape[0],)).astype(bool)
+        keep_idxs = np.ones((blobs_array.shape[0], )).astype(bool)
         for (i, j) in pairs:
             blob1, blob2 = blobs_array[i], blobs_array[j]
-            if _blob_overlap(blob1, blob2) > overlap:
+            if blob_overlap(blob1, blob2) > overlap:
                 # kill the smaller blob if enough overlap
                 if blob1[-1] > blob2[-1]:
                     keep_idxs[j] = False
