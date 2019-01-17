@@ -52,14 +52,15 @@ def generate_blobs(num_blobs,
 import ipdb
 
 
-def calc_detection_stats(blobs_real, detected, min_overlap=0.8, margin_dist=.2, margin_radius=.2):
+def calc_detection_stats(blobs_real, detected, min_iou=0.5, margin_dist=.2, margin_radius=.2):
     """Calculate how well find_blobs performed on synthetic blobs_real
 
     Uses a distance threshold and sigma margin to confirm same blobs
     Args:
         blobs_real (ndarray): actual blobs in image
         detected (ndarray): output from find_blobs
-        min_overlap (float): 0 to 1, minimum overlap of blob to be called a detection
+        min_iou (float): 0 to 1, minimum intersection/union between blobs
+            to be called a detection
         margin_dist (float): max distance the detection can be from the
             center of the real blob (as percentage of the blob radius)
         margin_radius (float): max error in size of blob the detection can be from the
@@ -87,7 +88,7 @@ def calc_detection_stats(blobs_real, detected, min_overlap=0.8, margin_dist=.2, 
         dist_3d = np.sqrt(np.sum((blobs_real - b)[:, :3]**2))
         closest_idx = dist_3d.argsort()[0]
         min_dist_real_blob = blobs_real[closest_idx, :]
-        return blob.skblob.blob_overlap(b, min_dist_real_blob) > min_overlap
+        return blob.skblob.blob_overlap(b, min_dist_real_blob) > min_iou
 
     true_detects = []
     false_positives = []
@@ -101,18 +102,18 @@ def calc_detection_stats(blobs_real, detected, min_overlap=0.8, margin_dist=.2, 
         closest_idx = dist_3d.argmin()
         closest_dist = dist_3d[closest_idx]
         min_dist_real_blob = blobs_real[closest_idx, :]
-        overlap_frac = blob.skblob.blob_overlap(b[:3], min_dist_real_blob[:3])
-        is_overlapping = overlap_frac > min_overlap
-        ipdb.set_trace()
+        iou_frac = blob.skblob.intersection_over_union(b[:3], min_dist_real_blob[:3], using_sigma=False)
+        is_overlapping = iou_frac > min_iou
+        # ipdb.set_trace()
         # if np.any(matches):
         if is_overlapping:
-            print('true (overlap, dist):', overlap_frac, dist_3d[closest_idx])
+            print('true (overlap, dist):', iou_frac, dist_3d[closest_idx])
             true_detects.append(b)
             # match_idxs = np.where(matches)[0]
             # matched_idx_set.update(match_idxs)
             matched_idx_set.add(closest_idx)
         else:
-            print('false (overlap, dist):', overlap_frac, dist_3d[closest_idx])
+            print('false (overlap, dist):', iou_frac, dist_3d[closest_idx])
             false_positives.append(blob)
 
     # Now find misses

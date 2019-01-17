@@ -271,7 +271,7 @@ def blob_overlap(blob1, blob2):
         return _compute_sphere_overlap(d, r1, r2) / _sphere_vol(min(r1, r1))
 
 
-def intersection_over_union(blob1, blob2):
+def intersection_over_union(blob1, blob2, using_sigma=True):
     """Alternative measure of closeness of 2 blobs
 
     Used to see if guesses are close to real blob (x, y, radius)
@@ -287,6 +287,7 @@ def intersection_over_union(blob1, blob2):
         where ``row, col`` (or ``(pln, row, col)``) are coordinates
         of blob and ``sigma`` is the standard deviation of the Gaussian kernel
         which detected the blob.
+    using_sigma (bool): default True. If False, blobs are ``(row, col, radius)``
 
     Returns:
         f (float): Fraction of overlapped area (or volume in 3D).
@@ -307,14 +308,16 @@ def intersection_over_union(blob1, blob2):
         raise NotImplementedError("IoU only implemented for 2d blobs")
     root_ndim = sqrt(n_dim)
 
-    # extent of the blob is given by sqrt(2)*scale
-    r1 = blob1[-1] * root_ndim
-    r2 = blob2[-1] * root_ndim
+    # extent of the blob is given by sqrt(2)*scale if using sigma
+    r1 = blob1[-1] * root_ndim if using_sigma else blob1[-1]
+    r2 = blob2[-1] * root_ndim if using_sigma else blob2[-1]
 
     a1 = _disk_area(r1)
     a2 = _disk_area(r2)
     d = sqrt(np.sum((blob1[:-1] - blob2[:-1])**2))
-    if d <= abs(r1 - r2):  # One inside the other
+    if d > r1 + r2:
+        return 0
+    elif d <= abs(r1 - r2):  # One inside the other
         return _disk_area(min(r1, r2)) /  _disk_area(max(r1, r2))
 
     intersection = _compute_disk_overlap(d, r1, r2)
