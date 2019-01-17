@@ -52,7 +52,7 @@ def generate_blobs(num_blobs,
 import ipdb
 
 
-def calc_detection_stats(blobs_real, detected, min_iou=0.5, margin_dist=.2, margin_radius=.2):
+def calc_detection_stats(blobs_real, detected, min_iou=0.5):
     """Calculate how well find_blobs performed on synthetic blobs_real
 
     Uses a distance threshold and sigma margin to confirm same blobs
@@ -61,10 +61,6 @@ def calc_detection_stats(blobs_real, detected, min_iou=0.5, margin_dist=.2, marg
         detected (ndarray): output from find_blobs
         min_iou (float): 0 to 1, minimum intersection/union between blobs
             to be called a detection
-        margin_dist (float): max distance the detection can be from the
-            center of the real blob (as percentage of the blob radius)
-        margin_radius (float): max error in size of blob the detection can be from the
-            center of the real blob (as percentage of the blob radius)
 
     Returns:
         true_detects (ndarray): blobs in detected which are real
@@ -78,34 +74,21 @@ def calc_detection_stats(blobs_real, detected, min_iou=0.5, margin_dist=.2, marg
 
     """
 
-    def _blob_matches(b):  # , max_dist, max_radius_diff):
-        # # Now check that this blob is close in x,y
-        # dists = blobs_real - blob
-        # dist_sq_arr = dists[:, 0]**2 + dists[:, 1]**2
-        # radius_arr = dists[:, 2]
-        # return np.logical_and(dist_sq_arr < max_dist, radius_arr < max_radius_diff)
-        # Find closest blob in 3d, check their overlap
-        dist_3d = np.sqrt(np.sum((blobs_real - b)[:, :3]**2))
-        closest_idx = dist_3d.argsort()[0]
-        min_dist_real_blob = blobs_real[closest_idx, :]
-        return blob.skblob.blob_overlap(b, min_dist_real_blob) > min_iou
-
     true_detects = []
     false_positives = []
     matched_idx_set = set()
     for b in detected:
-        # max_dist = margin_dist * radius
-        # max_radius_diff = margin_radius * radius
-        # matches = _blob_matches(b)
+        # Find closest blob in 3d, check its overlap
         diffs_3d = (blobs_real - b)[:, :3]
         dist_3d = np.sqrt(np.sum(diffs_3d**2, axis=1))
+
         closest_idx = dist_3d.argmin()
         closest_dist = dist_3d[closest_idx]
         min_dist_real_blob = blobs_real[closest_idx, :]
         iou_frac = blob.skblob.intersection_over_union(b[:3], min_dist_real_blob[:3], using_sigma=False)
         is_overlapping = iou_frac > min_iou
         # ipdb.set_trace()
-        # if np.any(matches):
+        # if np.any(matches):  # If we want to check all iou, maybe do this
         if is_overlapping:
             print('true (overlap, dist):', iou_frac, dist_3d[closest_idx])
             true_detects.append(b)
