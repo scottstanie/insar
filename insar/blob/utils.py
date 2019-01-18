@@ -112,29 +112,6 @@ def get_dist_to_extreme(image, blob, positive=True):
     return dist / blob[2]
 
 
-def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True):
-    """Finds filters out blobs whose extreme point is far from center
-    
-    Args:
-        image: 
-        blobs: 
-        max_dist_ratio:
-        positive: 
-
-    Returns:
-        out_blobs: 
-
-    """
-    out_blobs = []
-    for b in blobs:
-        if get_dist_to_extreme(image, b, positive=positive) < max_dist_ratio:
-            out_blobs.append(b)
-    if out_blobs:
-        return np.vstack(out_blobs)
-    else:
-        return np.empty((0, blobs.shape[1]))
-
-
 def append_stats(blobs, image, stat_funcs=(np.var, np.ptp), center_only=False):
     """Append columns based on the statistic functions in stats
 

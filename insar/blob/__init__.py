@@ -25,6 +25,7 @@ def find_blobs(image,
                max_sigma=60,
                num_sigma=20,
                sigma_bins=1,
+               prune_edges=True,
                log_scale=False,
                **kwargs):
     """Find blob features within an image
@@ -43,6 +44,7 @@ def find_blobs(image,
         sigma_bins : int or array-like of edges: Will only prune overlapping
             blobs that are within the same bin (to keep big very large and nested
             small blobs). int passed will divide range evenly
+        prune_edges (bool):  will look for "ghost blobs" near strong extrema to remove
         log_scale : bool, optional
             If set intermediate values of standard deviations are interpolated
             using a logarithmic scale. If not, linear
@@ -86,7 +88,8 @@ def find_blobs(image,
         # print(blobs_with_mags)
         if mag_threshold is not None:
             blobs_with_mags = blobs_with_mags[blobs_with_mags[:, -1] >= mag_threshold]
-        blobs_with_mags = utils.prune_edge_extrema(image, blobs_with_mags, positive=True)
+        if prune_edges:
+            blobs_with_mags = utils.prune_edge_extrema(image, blobs_with_mags, positive=True)
         blobs = np.vstack((blobs, blobs_with_mags))
     if negative:
         print('bneg')
@@ -103,7 +106,8 @@ def find_blobs(image,
         # print(blobs_with_mags)
         if mag_threshold is not None:
             blobs_with_mags = blobs_with_mags[-1 * blobs_with_mags[:, -1] >= mag_threshold]
-        blobs_with_mags = utils.prune_edge_extrema(image, blobs_with_mags, positive=False)
+        if prune_edges:
+            blobs_with_mags = utils.prune_edge_extrema(image, blobs_with_mags, positive=False)
         blobs = np.vstack((blobs, blobs_with_mags))
 
     # Multiply each sigma by sqrt(2) to convert sigma to a circle radius

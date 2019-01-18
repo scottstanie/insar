@@ -23,6 +23,7 @@ def blob_log(image=None,
              threshold=.5,
              overlap=.5,
              sigma_bins=1,
+             prune_edges=True,
              log_scale=False):
     """Finds blobs in the given grayscale image.
 
@@ -81,7 +82,7 @@ def blob_log(image=None,
     >>> import numpy as np; np.set_printoptions(legacy="1.13")
     >>> img = data.coins()
     >>> img = exposure.equalize_hist(img)  # improves detection
-    >>> feature.blob_log(img, threshold = .3)
+    >>> blob_log(img, threshold = .3)
     array([[ 266.        ,  115.        ,   11.88888889],
            [ 263.        ,  302.        ,   17.33333333],
            [ 263.        ,  244.        ,   17.33333333],
@@ -391,6 +392,30 @@ def prune_blobs(blobs_array, overlap, sigma_bins=1):
     return blobs_array[keep_idxs]
     # Note: skblob way overwrote the original blobs array's sigma value: blob1[-1] = 0
     # return np.array([b for b in blobs_array if b[-1] > 0])
+
+
+def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True):
+    """Finds filters out blobs whose extreme point is far from center
+
+    Args:
+        image (ndarray): image to detect blobs within
+        blobs (ndarray): (N, 4) array of blobs from find_blobs
+        max_dist_ratio:
+        positive:
+
+    Returns:
+        out_blobs:
+
+    """
+    out_blobs = []
+    for b in blobs:
+        if get_dist_to_extreme(image, b, positive=positive) < max_dist_ratio:
+            out_blobs.append(b)
+    if out_blobs:
+        return np.vstack(out_blobs)
+    else:
+        return np.empty((0, blobs.shape[1]))
+
 
 
 def bin_blobs(blobs_array, num_sigma_bands):
