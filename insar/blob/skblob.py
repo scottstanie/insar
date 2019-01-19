@@ -118,8 +118,12 @@ def blob_log(image=None,
         image = image.astype(np.floating)
         image_cube = create_gl_cube(image, sigma_list)
 
+    # Note: we have to use exclude_border=False so that it will output blobs at
+    # first and last sigma values (they are part of the "border" of the cube
     local_maxima = peak_local_max(
         image_cube, threshold_abs=threshold, min_distance=1, exclude_border=False)
+
+    # TODO: something here is hanging if a nan happens... causing all nans
 
     # Catch no peaks
     if local_maxima.size == 0:
@@ -131,12 +135,17 @@ def blob_log(image=None,
 
     # Multiply each sigma by sqrt(2) to convert sigma to a circle radius
     lm = lm * np.array([1, 1, np.sqrt(2)])
-    print('lm:')
-    print(lm)
+    # print('lm:')
+    # print(lm)
+    # print(lm.shape)
+    # Now remove first the spatial border blobs
     if border_size > 0:
         lm = prune_border_blobs(image.shape, lm, border_size)
+    # return lm
+    # Next remove blobs that look like edges
+    smoothed_image = gaussian_filter(image, sigma=3)
     if prune_edges:
-        lm = prune_edge_extrema(image, lm, positive=positive)
+        lm = prune_edge_extrema(smoothed_image, lm, positive=positive)
     return prune_overlap_blobs(lm, overlap, sigma_bins=sigma_bins)
 
 
@@ -359,6 +368,8 @@ def prune_overlap_blobs(blobs_array, overlap, sigma_bins=1):
         for b_arr in bin_blobs(blobs_array, sigma_bins):
             # Now recurse at bin level, then stack all together
             out_blobs.append(prune_overlap_blobs(b_arr, overlap, 1))
+        if not np.array(out_blobs).size:
+            return np.empty((0, blobs_array.shape[1]))
         return np.vstack([b for b in out_blobs if b.size])
 
     if not blobs_array.size:
@@ -413,8 +424,8 @@ def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True):
         dist_to_extreme = get_dist_to_extreme(image, b, positive=positive)
         if dist_to_extreme < max_dist_ratio:
             out_blobs.append(b)
-        else:
-            print("Removing %s for dist_to_extreme=%s" % (str(b), dist_to_extreme))
+        # else:
+        # print("Removing %s for dist_to_extreme=%s" % (str(b), dist_to_extreme))
 
     if out_blobs:
         return np.vstack(out_blobs)
@@ -430,8 +441,6 @@ def get_dist_to_extreme(image, blob, positive=True):
     Returns as a ratio distance/blob_radius (0 to 1)
     """
     patch = blob_utils.crop_blob(image, blob)
-    # First smooth to mitigate spurrious peaks
-    patch = gaussian_filter(patch, sigma=3)
 
     # Remove any bias to just look at peak difference
     if positive:
@@ -477,15 +486,13 @@ def prune_border_blobs(im_shape, blobs, border=2):
         0
     """
     nrows, ncols = im_shape
-    mid_blobs = []
-    for b in blobs:
-        row, col = b[:2]
-        if row < 1 or row >= (nrows - border - 1) or col < border or col >= (ncols - border - 1):
-            continue
-        else:
-            mid_blobs.append(b)
-    if mid_blobs:
-        return np.array(mid_blobs)
+    mid_idxs = blobs[:, 0] >= border
+    mid_idxs = np.logical_and(mid_idxs, blobs[:, 1] >= border)
+    mid_idxs = np.logical_and(mid_idxs, blobs[:, 0] <= (nrows - border - 1))
+    mid_idxs = np.logical_and(mid_idxs, blobs[:, 1] <= (ncols - border - 1))
+
+    if mid_idxs.size:
+        return np.array(blobs[mid_idxs, :])
     else:
         return np.empty((0, blobs.shape[1]))
 

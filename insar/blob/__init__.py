@@ -26,7 +26,7 @@ def find_blobs(image,
                num_sigma=20,
                sigma_bins=1,
                prune_edges=True,
-               prune_border=2,
+               border_size=2,
                log_scale=False,
                **kwargs):
     """Find blob features within an image
@@ -46,7 +46,7 @@ def find_blobs(image,
             blobs that are within the same bin (to keep big very large and nested
             small blobs). int passed will divide range evenly
         prune_edges (bool):  will look for "ghost blobs" near strong extrema to remove,
-        prune_border (int): Blobs with centers within `prune_border` pixels of
+        border_size (int): Blobs with centers within `border_size` pixels of
             image borders will be discarded
         log_scale : bool, optional
             If set intermediate values of standard deviations are interpolated
@@ -77,10 +77,14 @@ def find_blobs(image,
 
         print('bpos')
         blobs_pos = skblob.blob_log(
+            image=image,
             threshold=threshold,
             image_cube=image_cube,
             sigma_list=sigma_list,
             sigma_bins=sigma_bins,
+            prune_edges=prune_edges,
+            border_size=border_size,
+            positive=True,
             **kwargs)
         # Append mags as a column and sort by it
         # TODO: FIX vvv
@@ -91,18 +95,18 @@ def find_blobs(image,
         # print(blobs_with_mags)
         if mag_threshold is not None:
             blobs_with_mags = blobs_with_mags[blobs_with_mags[:, -1] >= mag_threshold]
-        if prune_edges:
-            blobs_with_mags = skblob.prune_edge_extrema(image, blobs_with_mags, positive=True)
-        if prune_border > 0:
-            blobs_with_mags = prune_border_blobs(image.shape, blobs_with_mags, prune_border)
         blobs = np.vstack((blobs, blobs_with_mags))
     if negative:
         print('bneg')
         blobs_neg = skblob.blob_log(
+            image=image,
             threshold=threshold,
             image_cube=-1 * image_cube,
             sigma_list=sigma_list,
             sigma_bins=sigma_bins,
+            prune_edges=prune_edges,
+            border_size=border_size,
+            positive=False,
             **kwargs)
         if blobs_neg.size:
             blobs_with_mags = utils.sort_blobs_by_val(blobs_neg, image, positive=False)
@@ -111,14 +115,7 @@ def find_blobs(image,
         # print(blobs_with_mags)
         if mag_threshold is not None:
             blobs_with_mags = blobs_with_mags[-1 * blobs_with_mags[:, -1] >= mag_threshold]
-        if prune_edges:
-            blobs_with_mags = skblob.prune_edge_extrema(image, blobs_with_mags, positive=False)
-        if prune_border > 0:
-            blobs_with_mags = prune_border_blobs(image.shape, blobs_with_mags, prune_border)
         blobs = np.vstack((blobs, blobs_with_mags))
-
-    # Multiply each sigma by sqrt(2) to convert sigma to a circle radius
-    blobs = blobs * np.array([1, 1, np.sqrt(2), 1])
 
     return blobs, sigma_list
 
