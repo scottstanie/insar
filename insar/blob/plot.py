@@ -56,6 +56,29 @@ def plot_blobs(image=None,
     return blobs, cur_axes
 
 
+def plot_cropped_blob(image, blob):
+    patch = utils.crop_blob(image, blob)
+    ax = plot_heights(patch)
+    return ax
+
+
+# TODO: export this? seems useful
+def plot_heights(heights_grid):
+    """Makes default X, Y meshgrid to plot a surface of heights"""
+    rows, cols = heights_grid.shape
+    xx = np.linspace(1, cols + 1, cols)
+    yy = np.linspace(1, rows + 1, rows)
+    X, Y = np.meshgrid(xx, yy)
+    fig = plt.figure()
+
+    ax = fig.add_subplot(1, 2, 1, projection='3d')
+    ax.plot_surface(X, Y, heights_grid)
+    ax2 = fig.add_subplot(1, 2, 2)
+    axim = ax2.imshow(heights_grid)
+    fig.colorbar(axim, ax=ax2)
+    return ax
+
+
 def plot_hist(H, row_edges, col_edges, ax=None):
     if not ax:
         fig, ax = plt.subplots(1, 1)

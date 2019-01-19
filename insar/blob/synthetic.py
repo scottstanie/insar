@@ -6,8 +6,10 @@ from matplotlib import cm
 import numpy as np
 from insar import blob
 import ipdb
+from insar.log import log_runtime
 
 
+@log_runtime
 def generate_blobs(num_blobs,
                    imsize=(1000, 1000),
                    border_pad=100,
@@ -50,8 +52,7 @@ def generate_blobs(num_blobs,
     return blobs * np.array([1, 1, np.sqrt(2), 1]), out
 
 
-
-
+@log_runtime
 def calc_detection_stats(blobs_real, detected, min_iou=0.5):
     """Calculate how well find_blobs performed on synthetic blobs_real
 
@@ -85,7 +86,8 @@ def calc_detection_stats(blobs_real, detected, min_iou=0.5):
         closest_idx = dist_3d.argmin()
         closest_dist = dist_3d[closest_idx]
         min_dist_real_blob = blobs_real[closest_idx, :]
-        iou_frac = blob.skblob.intersection_over_union(cur_clob[:3], min_dist_real_blob[:3], using_sigma=False)
+        iou_frac = blob.skblob.intersection_over_union(
+            cur_clob[:3], min_dist_real_blob[:3], using_sigma=False)
         is_overlapping = iou_frac > min_iou
         # ipdb.set_trace()
         # if np.any(matches):  # If we want to check all iou, maybe do this
@@ -107,12 +109,23 @@ def calc_detection_stats(blobs_real, detected, min_iou=0.5):
     recall = len(true_detects) / len(blobs_real)
 
     if 2 * len(true_detects) + len(false_positives) + len(misses) != len(blobs_real) + len(
-        detected):
+            detected):
         print('CAUTION: weird num of true + fp + miss')
     return np.array(true_detects), np.array(false_positives), misses, precision, recall
 
 
-def demo_ghost_blobs(min_iou=0.5):
+def make_edge(N, row=None, col=None, jump=1, max_val=2, min_val=0):
+    """Create a discontinuity to check for edge detection/igoring"""
+    ramp = np.dot(np.ones((N, 1)), np.linspace(1, 1 + max_val, N).reshape((1, N)))
+    ramp = ramp - 1 + min_val
+    if col is None:
+        col = N // 2
+    ramp[:, col:] = ramp[:, col:] - jump
+    return ramp
+
+
+@log_runtime
+def demo_ghost_blobs(num_blobs=10, min_iou=0.5):
     np.random.seed(1)
     finding_params = {
         'positive': True,
@@ -120,14 +133,18 @@ def demo_ghost_blobs(min_iou=0.5):
         'threshold': 0.35,
         'mag_threshold': None,
         'min_sigma': 3,
-        'max_sigma': 60,
-        'num_sigma': 50,
+        'max_sigma': 100,
+        'num_sigma': 70,
         'sigma_bins': 3,
+        'log_scale': True,
     }
-    real_blobs, out = generate_blobs(10, max_amp=15, amp_scale=25)
+    print("Generating %s blobs" % num_blobs)
+    real_blobs, out = generate_blobs(num_blobs, max_amp=15, amp_scale=25)
+    print("Finding blobs in synthetic images")
     detected, sigma_list = blob.find_blobs(out, **finding_params)
 
-    true_d, fp, misses, precision, recall = calc_detection_stats(real_blobs, detected, min_iou=min_iou)
+    true_d, fp, misses, precision, recall = calc_detection_stats(
+        real_blobs, detected, min_iou=min_iou)
     print("Results:")
     print("precision: ", precision)
     print("recall: ", recall)

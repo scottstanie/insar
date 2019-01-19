@@ -4,10 +4,11 @@ from __future__ import division
 import multiprocessing
 
 import numpy as np
-from scipy.ndimage import gaussian_laplace, maximum_filter
+from scipy.ndimage import gaussian_laplace, maximum_filter, gaussian_filter
 import math
 from math import sqrt, log
 from scipy import spatial
+from . import utils as blob_utils
 
 # This basic blob detection algorithm is based on:
 # http://www.cs.utah.edu/~jfishbau/advimproc/project1/ (04.04.2013)
@@ -24,6 +25,8 @@ def blob_log(image=None,
              overlap=.5,
              sigma_bins=1,
              prune_edges=True,
+             border_size=2,
+             positive=True,
              log_scale=False):
     """Finds blobs in the given grayscale image.
 
@@ -61,6 +64,10 @@ def blob_log(image=None,
     sigma_bins : int or array-like of edges: Will only prune overlapping
         blobs that are within the same bin (to keep big very large and nested
         small blobs). int passed will divide range evenly
+    prune_edges (bool):  will look for "ghost blobs" near strong extrema to remove,
+    border_size (int): Blobs with centers within `border_size` pixels of
+        image borders will be discarded
+    positive (bool): default True: if True, searches for positive (light, uplift)
     log_scale : bool, optional
         If set intermediate values of standard deviations are interpolated
         using a logarithmic scale . If not, linear
@@ -121,9 +128,16 @@ def blob_log(image=None,
     lm = local_maxima.astype(np.float64)
     # Convert the last index to its corresponding scale value
     lm[:, -1] = sigma_list[local_maxima[:, -1]]
-    # print('lm:')
-    # print(lm)
-    return prune_blobs(lm, overlap, sigma_bins=sigma_bins)
+
+    # Multiply each sigma by sqrt(2) to convert sigma to a circle radius
+    lm = lm * np.array([1, 1, np.sqrt(2)])
+    print('lm:')
+    print(lm)
+    if border_size > 0:
+        lm = prune_border_blobs(image.shape, lm, border_size)
+    if prune_edges:
+        lm = prune_edge_extrema(image, lm, positive=positive)
+    return prune_overlap_blobs(lm, overlap, sigma_bins=sigma_bins)
 
 
 def create_sigma_list(min_sigma=1, max_sigma=50, num_sigma=20, log_scale=False, **kwargs):
@@ -238,25 +252,16 @@ def blob_overlap(blob1, blob2):
 
     Args:
     blob1 (sequence of arrays):
-        A sequence of ``(row, col, sigma)`` or ``(pln, row, col, sigma)``,
-        where ``row, col`` (or ``(pln, row, col)``) are coordinates
-        of blob and ``sigma`` is the standard deviation of the Gaussian kernel
+        A sequence of ``(row, col, radius)``, where ``row, col`` are coordinates
+        of blob and ``radius`` is sqrt(2)* standard deviation of the Gaussian kernel
         which detected the blob.
-    blob2 (sequence of arrays)
-        A sequence of ``(row, col, sigma)`` or ``(pln, row, col, sigma)``,
-        where ``row, col`` (or ``(pln, row, col)``) are coordinates
-        of blob and ``sigma`` is the standard deviation of the Gaussian kernel
-        which detected the blob.
+    blob2 (sequence of arrays): same type as blob1
 
     Returns:
-        f (float): Fraction of overlapped area (or volume in 3D).
+        f (float): Fraction of overlapped area
     """
-    n_dim = len(blob1) - 1
-    root_ndim = sqrt(n_dim)
-
-    # extent of the blob is given by sqrt(2)*scale
-    r1 = blob1[-1] * root_ndim
-    r2 = blob2[-1] * root_ndim
+    r1 = blob1[-1]
+    r2 = blob2[-1]
 
     d = sqrt(np.sum((blob1[:-1] - blob2[:-1])**2))
     if d > r1 + r2:
@@ -266,29 +271,23 @@ def blob_overlap(blob1, blob2):
     if d <= abs(r1 - r2):
         return 1
 
-    if n_dim == 2:
-        return _compute_disk_overlap(d, r1, r2) / _disk_area(min(r1, r1))
-    else:  # http://mathworld.wolfram.com/Sphere-SphereIntersection.html
-        return _compute_sphere_overlap(d, r1, r2) / _sphere_vol(min(r1, r1))
+    return _compute_disk_overlap(d, r1, r2) / _disk_area(min(r1, r2))
+    # return _compute_sphere_overlap(d, r1, r2) / _sphere_vol(min(r1, r2))
 
 
-def intersection_over_union(blob1, blob2, using_sigma=True):
+def intersection_over_union(blob1, blob2, using_sigma=False):
     """Alternative measure of closeness of 2 blobs
 
     Used to see if guesses are close to real blob (x, y, radius)
 
     Args:
     blob1 (sequence of arrays):
-        A sequence of ``(row, col, sigma)`` or ``(pln, row, col, sigma)``,
-        where ``row, col`` (or ``(pln, row, col)``) are coordinates
-        of blob and ``sigma`` is the standard deviation of the Gaussian kernel
+        A sequence of ``(row, col, radius)``, where ``row, col`` are coordinates
+        of blob and ``radius`` is sqrt(2)* standard deviation of the Gaussian kernel
         which detected the blob.
-    blob2 (sequence of arrays)
-        A sequence of ``(row, col, sigma)`` or ``(pln, row, col, sigma)``,
-        where ``row, col`` (or ``(pln, row, col)``) are coordinates
-        of blob and ``sigma`` is the standard deviation of the Gaussian kernel
-        which detected the blob.
-    using_sigma (bool): default True. If False, blobs are ``(row, col, radius)``
+    blob2 (sequence of arrays): same type as blob1
+    using_sigma (bool): default False. If False, blobs are ``(row, col, sigma)``
+    instead of (row, col, radius)
 
     Returns:
         f (float): Fraction of overlapped area (or volume in 3D).
@@ -304,14 +303,9 @@ def intersection_over_union(blob1, blob2, using_sigma=True):
         >>> print(is_close)
         True
     """
-    n_dim = len(blob1) - 1
-    if n_dim != 2:
-        raise NotImplementedError("IoU only implemented for 2d blobs")
-    root_ndim = sqrt(n_dim)
-
     # extent of the blob is given by sqrt(2)*scale if using sigma
-    r1 = blob1[-1] * root_ndim if using_sigma else blob1[-1]
-    r2 = blob2[-1] * root_ndim if using_sigma else blob2[-1]
+    r1 = blob1[-1] * sqrt(2) if using_sigma else blob1[-1]
+    r2 = blob2[-1] * sqrt(2) if using_sigma else blob2[-1]
 
     a1 = _disk_area(r1)
     a2 = _disk_area(r2)
@@ -319,29 +313,28 @@ def intersection_over_union(blob1, blob2, using_sigma=True):
     if d > r1 + r2:
         return 0
     elif d <= abs(r1 - r2):  # One inside the other
-        return _disk_area(min(r1, r2)) /  _disk_area(max(r1, r2))
+        return _disk_area(min(r1, r2)) / _disk_area(max(r1, r2))
 
     intersection = _compute_disk_overlap(d, r1, r2)
     union = a1 + a2 - intersection
     return intersection / union
 
 
-def prune_blobs(blobs_array, overlap, sigma_bins=1):
+def prune_overlap_blobs(blobs_array, overlap, sigma_bins=1):
     """Eliminated blobs with area overlap.
 
     Args:
-        blobs_array (ndarray): A 2d array with each row representing 3 (or 4)
-            values, ``(row, col, sigma)`` or ``(pln, row, col, sigma)`` in 3D,
-            where ``(row, col)`` (``(pln, row, col)``) are coordinates of the blob
-            and ``sigma`` is the standard deviation of the Gaussian kernel which
+        blobs_array (ndarray): A 2d array with each row representing ``(row, col, radius)``
+            where ``(row, col)`` are coordinates of the blob and ``radius`` is
+            the sqrt(2) * standard deviation of the Gaussian kernel which
             detected the blob.
             This array must not have a dimension of size 0.
         overlap (float): A value between 0 and 1. If the fraction of area overlapping
             for 2 blobs is greater than `overlap` the smaller blob is eliminated.
-        num_sigma_bands (int): if provided, divides the sigma_range of blobs and only
-            removes overlap within this band.
+        num_radius_bands (int): if provided, divides the sigma/radius range of blobs
+            and only removes overlap within bands.
             For example, if you want to prune small to mid blobs, and keep bigger blobs
-            that entirely overlap, set num_sigma_bands = 2 or 3
+            that entirely overlap, set num_radius_bands = 2 or 3
 
     Returns
     -------
@@ -350,21 +343,22 @@ def prune_blobs(blobs_array, overlap, sigma_bins=1):
     Examples:
         >>> import numpy as np; np.set_printoptions(legacy="1.13")
         >>> blobs = np.array([[ 0, 0,  4], [1, 1, 10], [2, 2, 20]])
-        >>> print(prune_blobs(blobs, 0.5))
+        >>> print(prune_overlap_blobs(blobs, 0.5))
         [[ 2  2 20]]
-        >>> print(prune_blobs(blobs, 0.5, sigma_bins=2))
+        >>> print(prune_overlap_blobs(blobs, 0.5, sigma_bins=2))
         [[ 1  1 10]
          [ 2  2 20]]
-        >>> print(prune_blobs(blobs, 0.5, sigma_bins=5))
+        >>> print(prune_overlap_blobs(blobs, 0.5, sigma_bins=5))
         [[ 0  0  4]
          [ 1  1 10]
          [ 2  2 20]]
     """
+    # If specified, divide into sigma bins, only prune within each range
     if sigma_bins > 1:
         out_blobs = []
         for b_arr in bin_blobs(blobs_array, sigma_bins):
-            # Now recurse to prune each bin level, then stack all together
-            out_blobs.append(prune_blobs(b_arr, overlap, 1))
+            # Now recurse at bin level, then stack all together
+            out_blobs.append(prune_overlap_blobs(b_arr, overlap, 1))
         return np.vstack([b for b in out_blobs if b.size])
 
     if not blobs_array.size:
@@ -390,12 +384,15 @@ def prune_blobs(blobs_array, overlap, sigma_bins=1):
                     keep_idxs[i] = False
 
     return blobs_array[keep_idxs]
-    # Note: skblob way overwrote the original blobs array's sigma value: blob1[-1] = 0
+    # Note: skimage way overwrote the original blobs array's sigma value: blob1[-1] = 0
     # return np.array([b for b in blobs_array if b[-1] > 0])
 
 
 def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True):
     """Finds filters out blobs whose extreme point is far from center
+
+    Searches for local maxima in case there is a nearby larger blob
+    at the edge overpowering a real smaller blob which was detected
 
     Args:
         image (ndarray): image to detect blobs within
@@ -404,30 +401,106 @@ def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True):
         positive:
 
     Returns:
-        out_blobs:
+        out_blobs: rows from `blobs` which have a local max within
+        `max_dist_ratio` of the center
 
     """
+    # TODO: check how it can give > 1 values
+    # Removing [  0., 131., 29.47353778, 1.70626337] for dist_to_extreme=1.199
+
     out_blobs = []
     for b in blobs:
-        if get_dist_to_extreme(image, b, positive=positive) < max_dist_ratio:
+        dist_to_extreme = get_dist_to_extreme(image, b, positive=positive)
+        if dist_to_extreme < max_dist_ratio:
             out_blobs.append(b)
+        else:
+            print("Removing %s for dist_to_extreme=%s" % (str(b), dist_to_extreme))
+
     if out_blobs:
         return np.vstack(out_blobs)
     else:
         return np.empty((0, blobs.shape[1]))
 
 
+def get_dist_to_extreme(image, blob, positive=True):
+    """Finds how far from center a blob's extreme point is that caused the result
 
-def bin_blobs(blobs_array, num_sigma_bands):
+    Assumes blob[2] is radius, not sigma, to pass to indexes_within_circle
+
+    Returns as a ratio distance/blob_radius (0 to 1)
+    """
+    patch = blob_utils.crop_blob(image, blob)
+    # First smooth to mitigate spurrious peaks
+    patch = gaussian_filter(patch, sigma=3)
+
+    # Remove any bias to just look at peak difference
+    if positive:
+        patch += np.nanmin(patch)
+        # Absolute max can fail with nearby stronger blob
+        # row, col = np.unravel_index(np.nanargmax(patch), patch.shape)
+        local_extreme = peak_local_max(np.nan_to_num(patch))
+    else:
+        patch -= np.nanmax(patch)
+        # row, col = np.unravel_index(np.nanargmin(patch), patch.shape)
+        local_extreme = peak_local_max(-1 * np.nan_to_num(patch))
+
+    nrows, _ = patch.shape  # circle, will have same rows and cols
+    midpoint = nrows // 2
+
+    if not local_extreme.size:
+        return 1  # No extreme: output max distance possible
+
+    rows = local_extreme[:, 0]
+    cols = local_extreme[:, 1]
+    dist_arr = np.sqrt((rows - midpoint)**2 + (cols - midpoint)**2)
+    return np.min(dist_arr / blob[2])
+
+
+def prune_border_blobs(im_shape, blobs, border=2):
+    """Takes output of find_blobs, removes those within `border` pixels of edges
+
+    Args:
+        im_shape (tuple[int, int]): size of total image where blobs found
+        blobs (ndarray): (row, col, sigma, amp) from find_blobs
+        border (int): pixels to pad edges and remove blobs from
+
+    Returns:
+        mid_blobs: rows of `blobs` that are inside `border` pixels of edge
+
+    Examples:
+        >>> blobs = np.array([[1, 1, 10, 10], [3, 5, 10, 10]])
+        >>> print(len(prune_border_blobs((20, 20), blobs, 1)))
+        2
+        >>> print(len(prune_border_blobs((20, 20), blobs, 2)))
+        1
+        >>> print(len(prune_border_blobs((7, 7), blobs, 2)))
+        0
+    """
+    nrows, ncols = im_shape
+    mid_blobs = []
+    for b in blobs:
+        row, col = b[:2]
+        if row < 1 or row >= (nrows - border - 1) or col < border or col >= (ncols - border - 1):
+            continue
+        else:
+            mid_blobs.append(b)
+    if mid_blobs:
+        return np.array(mid_blobs)
+    else:
+        return np.empty((0, blobs.shape[1]))
+
+
+def bin_blobs(blobs_array, num_radius_bands):
     """Group the blobs array by its sigma values into bins
 
     Args:
-        blobs_array (ndarray):
-        num_sigma_bands (int):
+        blobs_array (ndarray): rows are (row, col, radius)
+        num_radius_bands (int): number of distinct groups of radius to divide blobs
+            to remove overlaps
 
     Returns:
-        list[ndarray]: blobs binned by their sigma value into `num_sigma_bands` groups
-        
+        list[ndarray]: blobs binned by their sigma value into `num_radius_bands` groups
+
     Example:
         >>> import numpy as np; np.set_printoptions(legacy="1.13")
         >>> blobs = np.array([[ 0, 0,  1], [1, 1, 2], [2, 2, 20]])
@@ -439,15 +512,15 @@ def bin_blobs(blobs_array, num_sigma_bands):
 
     """
 
-    def _bin_by_sigmas(sigma_list, num_bins):
-        bins = np.histogram_bin_edges(sigma_list, bins=num_bins)
-        bin_idxs = np.digitize(sigma_list, bins[1:], right=True)
+    def _bin_by_radius(radius_list, num_bins):
+        bins = np.histogram_bin_edges(radius_list, bins=num_bins)
+        bin_idxs = np.digitize(radius_list, bins[1:], right=True)
         return bin_idxs
 
-    bin_idxs = _bin_by_sigmas(blobs_array[:, 2], num_sigma_bands)
+    bin_idxs = _bin_by_radius(blobs_array[:, 2], num_radius_bands)
 
     out_list = []
-    for cur_idx in range(num_sigma_bands):
+    for cur_idx in range(num_radius_bands):
         out_list.append(blobs_array[bin_idxs == cur_idx])
     return out_list
 

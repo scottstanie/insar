@@ -26,6 +26,7 @@ def find_blobs(image,
                num_sigma=20,
                sigma_bins=1,
                prune_edges=True,
+               prune_border=2,
                log_scale=False,
                **kwargs):
     """Find blob features within an image
@@ -44,7 +45,9 @@ def find_blobs(image,
         sigma_bins : int or array-like of edges: Will only prune overlapping
             blobs that are within the same bin (to keep big very large and nested
             small blobs). int passed will divide range evenly
-        prune_edges (bool):  will look for "ghost blobs" near strong extrema to remove
+        prune_edges (bool):  will look for "ghost blobs" near strong extrema to remove,
+        prune_border (int): Blobs with centers within `prune_border` pixels of
+            image borders will be discarded
         log_scale : bool, optional
             If set intermediate values of standard deviations are interpolated
             using a logarithmic scale. If not, linear
@@ -89,7 +92,9 @@ def find_blobs(image,
         if mag_threshold is not None:
             blobs_with_mags = blobs_with_mags[blobs_with_mags[:, -1] >= mag_threshold]
         if prune_edges:
-            blobs_with_mags = utils.prune_edge_extrema(image, blobs_with_mags, positive=True)
+            blobs_with_mags = skblob.prune_edge_extrema(image, blobs_with_mags, positive=True)
+        if prune_border > 0:
+            blobs_with_mags = prune_border_blobs(image.shape, blobs_with_mags, prune_border)
         blobs = np.vstack((blobs, blobs_with_mags))
     if negative:
         print('bneg')
@@ -107,7 +112,9 @@ def find_blobs(image,
         if mag_threshold is not None:
             blobs_with_mags = blobs_with_mags[-1 * blobs_with_mags[:, -1] >= mag_threshold]
         if prune_edges:
-            blobs_with_mags = utils.prune_edge_extrema(image, blobs_with_mags, positive=False)
+            blobs_with_mags = skblob.prune_edge_extrema(image, blobs_with_mags, positive=False)
+        if prune_border > 0:
+            blobs_with_mags = prune_border_blobs(image.shape, blobs_with_mags, prune_border)
         blobs = np.vstack((blobs, blobs_with_mags))
 
     # Multiply each sigma by sqrt(2) to convert sigma to a circle radius
@@ -175,22 +182,6 @@ def make_blob_image(igram_path=".",
 
     plot.plot_blobs(blobs=blobs_ll, cur_axes=imagefig.gca())
     # plot_blobs(blobs=blobs, cur_axes=imagefig.gca())
-
-
-def find_edge_blobs(blobs, im_shape):
-    """Takes output of find_blobs, separates those at edge of image
-
-    Returns:
-        mid_blobs, corner_blobs
-    """
-    rows, cols = im_shape
-    mid_blobs, corner_blobs = [], []
-    for b in blobs:
-        if b[0] < 1 or b[0] >= (rows - 1) or b[1] < 1 or b[1] >= (cols - 1):
-            corner_blobs.append(b)
-        else:
-            mid_blobs.append(b)
-    return mid_blobs, corner_blobs
 
 
 def compute_harris_peaks(image, sigma_list, gamma=1.4, threshold_rel=0.1):
