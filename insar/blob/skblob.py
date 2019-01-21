@@ -453,6 +453,7 @@ def get_dist_to_extreme(image, blob, positive=True):
         # row, col = np.unravel_index(np.nanargmin(patch), patch.shape)
         local_extreme = peak_local_max(-1 * np.nan_to_num(patch))
 
+    # print(local_extreme)
     nrows, _ = patch.shape  # circle, will have same rows and cols
     midpoint = nrows // 2
 

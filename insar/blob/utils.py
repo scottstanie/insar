@@ -70,25 +70,28 @@ def mask_border(mask):
     return np.min(rows), np.max(rows), np.min(cols), np.max(cols)
 
 
-def crop_image_to_mask(image, mask):
+def crop_image_to_mask(image, mask, crop_val=np.nan):
     """Returns only part of `image` within the bounding box of `mask`"""
     masked_out = image.copy()
-    masked_out[~mask] = np.nan
+    if crop_val is not None:
+        masked_out[~mask] = np.nan
     min_row, max_row, min_col, max_col = mask_border(mask)
     return masked_out[min_row:max_row + 1, min_col:max_col + 1]
 
 
-def crop_blob(image, blob):
+def crop_blob(image, blob, crop_val=np.nan):
     """Crops an image to the box around a blob with nans outside blob area
     Args:
         image:
         blob: (row, col, radius, ...)
+        crop_val (float or nan): value to make all pixels outside sigma radius
+            default=np.nan. if None, leaves the edges of bbox untouched
 
     Returns:
         ndarray: size = (2r, 2r), r = radius of blob
     """
     mask = indexes_within_circle(blob=blob, mask_shape=image.shape)
-    return crop_image_to_mask(image, mask)
+    return crop_image_to_mask(image, mask, crop_val=crop_val)
 
 
 def append_stats(blobs, image, stat_funcs=(np.var, np.ptp), center_only=False):
