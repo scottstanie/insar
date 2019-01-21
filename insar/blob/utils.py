@@ -145,7 +145,7 @@ def find_sigma_idxs(blobs, sigma_list):
     """Finds which sigma each blob uses by its index in sigma_list
 
     Assumes blobs already like (r, c, radius,...), where radius=sqrt(2) * sigma"""
-    idxs = np.searchsorted(sigma_list, blobs[:, 2] / np.sqrt(2), 'right')
+    idxs = np.searchsorted(sigma_list, blobs[:, 2] / np.sqrt(2), 'left')
     # Clip in case we are passed something larger than any sigma_list
     return np.clip(idxs, 0, len(sigma_list) - 1)
 

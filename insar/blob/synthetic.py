@@ -126,7 +126,7 @@ def make_edge(N, row=None, col=None, jump=1, max_val=2, min_val=0):
 
 
 @log_runtime
-def demo_ghost_blobs(num_blobs=10, min_iou=0.5):
+def demo_ghost_blobs(num_blobs=10, min_iou=0.5, out=None, real_blobs=None):
     np.random.seed(1)
     finding_params = {
         'positive': True,
@@ -134,13 +134,20 @@ def demo_ghost_blobs(num_blobs=10, min_iou=0.5):
         'threshold': 0.35,
         'mag_threshold': None,
         'min_sigma': 3,
-        'max_sigma': 100,
+        'max_sigma': 140,
         'num_sigma': 70,
         'sigma_bins': 3,
         'log_scale': True,
+        # 'bowl_score': .7,
+        'bowl_score': 5 / 8,
     }
-    print("Generating %s blobs" % num_blobs)
-    real_blobs, out = generate_blobs(num_blobs, max_amp=15, amp_scale=25)
+    if out is None or real_blobs is None:
+        print("Generating %s blobs" % num_blobs)
+        real_blobs, out = generate_blobs(num_blobs, max_amp=15, amp_scale=25)
+        # Make sure to remove overlap same as the finding
+        overlap = 0.5
+        real_blobs = blob.skblob.prune_overlap_blobs(real_blobs, overlap, sigma_bins=finding_params['sigma_bins'])
+
     print("Finding blobs in synthetic images")
     detected, sigma_list = blob.find_blobs(out, **finding_params)
 

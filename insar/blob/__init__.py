@@ -28,7 +28,7 @@ def find_blobs(image,
                sigma_bins=1,
                prune_edges=True,
                border_size=2,
-               bowl_score=6 / 8,
+               bowl_score=0,
                log_scale=False,
                **kwargs):
     """Find blob features within an image
@@ -122,6 +122,7 @@ def find_blobs(image,
         blobs = np.vstack((blobs, blobs_with_mags))
 
     if bowl_score > 0:
+        print("Removing blobs with bowl scores under %s" % bowl_score)
         blobs = find_blobs_with_bowl_scores(
             image,
             blobs=blobs,
@@ -270,7 +271,13 @@ def compute_blob_scores(image,
     return score_imgs, peaks
 
 
-def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff=6 / 8, **kwargs):
+def get_blob_bowl_score(image, blob, sigma=None):
+    patch = blob_utils.crop_blob(image, blob, crop_val=None)
+    shape_vals = feature.shape_index(patch, sigma=sigma, mode='nearest')
+    return _get_center_value(shape_vals, patch_size=3)
+
+
+def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff=.7, **kwargs):
     """Takes the list of blobs found from find_blobs, check for high shape score
 
     Computes a shape_index at each level gamma*sigma_list, finds blobs that have
@@ -282,8 +289,8 @@ def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff
         blobs (ndarray): rows are blobs with values: [(r, c, s, ...)]
         sigma_list (array-like): output of create_sigma_list
         score_cutoff (float): magnitude of shape index to approve of bowl blob
-            Default is 6/8: from [1], halfway between "bowl" cutoff at 7/8 and
-            "trough" cutoff at 5/8. Shapes at 5/8 still look "rut" ish, like
+            Default is .7: from [1], Slightly more "bowl"ish, cutoff at 7/8,
+            than "trough", at 5/8. Shapes at 5/8 still look "rut" ish, like
             a valley
         kwargs: passed to find_blobs if `blobs` not passed as argument
 
@@ -299,29 +306,42 @@ def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff
     if blobs is None:
         blobs, sigma_list = find_blobs(image, **kwargs)
 
-    # Find peaks for every sigma in sigma_list
-    score_images, _ = compute_blob_scores(image, sigma_list, find_peaks=False)
+    # OLD: Find peaks for every sigma in sigma_list
+    # score_images, _ = compute_blob_scores(image, sigma_list, find_peaks=False)
 
     sigma_idxs = blob_utils.find_sigma_idxs(blobs, sigma_list)
+    # Note: using smaller sigma than blob size seems to work better in bowl scoring
+    # sigma_arr = sigma_list[sigma_idxs]
+    sigma_arr = np.clip(sigma_list[sigma_idxs] / 10, 2, None)
+    # sigma_arr = 2 * np.ones(len(blobs))
+
     # import ipdb
     # ipdb.set_trace()
     out_blobs = []
-    for blob, sigma_idx in zip(blobs, sigma_idxs):
-        # Get the peaks that correspond to the current sigma level
-        cur_scores = score_images[sigma_idx]
-        # Only examine blob area
-        blob_scores = blob_utils.crop_blob(cur_scores, blob, crop_val=None)
-        center_score = _get_center_value(blob_scores)
-        print("blob: %s, score: %s" % (str(blob), center_score))
+    for blob, sigma in zip(blobs, sigma_arr):
+        # for blob, sigma_idx in zip(blobs, sigma_idxs):
+        # OLD WAY: comput scores, then crop. THIS is DIFFERENT than crop, then score for bowlness
+        # # Get the peaks that correspond to the current sigma level
+        # cur_scores = score_images[sigma_idx]
+        # # Only examine blob area
+        # blob_scores = blob_utils.crop_blob(cur_scores, blob, crop_val=None)
+        # center_score = _get_center_value(blob_scores)
+        center_score = get_blob_bowl_score(image, blob, sigma=sigma)
         if np.abs(center_score) >= score_cutoff:
             out_blobs.append(blob)
+        else:
+            print("removing blob: %s, score: %s" % (str(blob.astype(int)), center_score))
 
     return np.array(out_blobs)
 
 
-def _get_center_value(img):
+def _get_center_value(img, patch_size=1):
+    """Find center of image, taking mean around `patch_size` pixels"""
     rows, cols = img.shape
-    return img[rows // 2, cols // 2]
+    rcent = rows // 2
+    ccent = cols // 2
+    p = patch_size // 2
+    return np.mean(img[rcent - p:rcent + p + 1, ccent - p:ccent + p + 1])
 
 
 def find_blobs_with_harris_peaks(image,
