@@ -1,5 +1,6 @@
 # coding: utf-8
 import scipy.ndimage as nd
+from skimage import feature, transform
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from matplotlib import cm
@@ -267,3 +268,43 @@ def igarss_fig():
     plt.imshow(image_cube[:, :, 30], cmap='jet', vmin=-1.4, vmax=1.3)
     plt.imshow(image_cube[:, :, 10], cmap='jet', vmin=-1.4, vmax=1.3)
     return out, blobs, sigma_list, image_cube, fig
+
+
+def plot_auto_corr(image, sigma, mode='nearest', cval=0):
+    A = feature.structure_tensor(image, sigma=sigma, mode=mode, cval=cval)
+    lambda1, lambda2 = feature.structure_tensor_eigvals(*A)
+    fig, axes = plt.subplots(2, 3)
+    axim = axes.ravel()[0].imshow(image)
+    axes.ravel()[0].set_title('orig. image')
+    fig.colorbar(axim, ax=axes.ravel()[0])
+
+    titles = ['Ix * Ix', 'Ix * Iy', 'Iy * Iy']
+
+    for idx, ax in enumerate(axes.ravel()[1:4]):
+        axim = ax.imshow(A[idx])
+        ax.set_title(titles[idx])
+        fig.colorbar(axim, ax=ax)
+
+    ax4, ax5 = axes.ravel()[4:6]
+    axim = ax4.imshow(lambda1)
+    fig.colorbar(axim, ax=ax4)
+    ax4.set_title('larger lambda')
+    axim = ax5.imshow(lambda2)
+    fig.colorbar(axim, ax=ax5)
+    ax5.set_title('smaller lambda')
+
+    return A, lambda1, lambda2, fig, axes
+
+
+def make_valley(n, rotate=0):
+    out = np.dot(np.ones((n, 1)), (np.linspace(-1, 1, n)**2).reshape((1, n)))
+    if rotate > 0:
+        out = transform.rotate(out, None, mode='edge')
+    return out
+
+
+def make_bowl(n):
+    x = np.linspace(-1, 1, n)
+    xx, yy = np.meshgrid(x, x)
+    z = xx**2 + yy**2
+    return z / np.max(z)

@@ -5,7 +5,8 @@ import os
 import multiprocessing
 import numpy as np
 from insar.log import get_log
-from . import skblob, utils, plot
+from . import skblob, plot, utils
+from insar.blob import utils as blob_utils
 from skimage import feature
 from insar import latlon, plotting
 
@@ -27,6 +28,7 @@ def find_blobs(image,
                sigma_bins=1,
                prune_edges=True,
                border_size=2,
+               bowl_score=6 / 8,
                log_scale=False,
                **kwargs):
     """Find blob features within an image
@@ -48,6 +50,8 @@ def find_blobs(image,
         prune_edges (bool):  will look for "ghost blobs" near strong extrema to remove,
         border_size (int): Blobs with centers within `border_size` pixels of
             image borders will be discarded
+        bowl_score (float): if > 0, will compute the shape score and only accept
+            blobs that with higher shape_index than `bowl_score`
         log_scale : bool, optional
             If set intermediate values of standard deviations are interpolated
             using a logarithmic scale. If not, linear
@@ -89,7 +93,7 @@ def find_blobs(image,
         # Append mags as a column and sort by it
         # TODO: FIX vvv
         if blobs_pos.size:
-            blobs_with_mags = utils.sort_blobs_by_val(blobs_pos, image, positive=True)
+            blobs_with_mags = blob_utils.sort_blobs_by_val(blobs_pos, image, positive=True)
         else:
             blobs_with_mags = np.empty((0, 4))
         # print(blobs_with_mags)
@@ -109,13 +113,21 @@ def find_blobs(image,
             positive=False,
             **kwargs)
         if blobs_neg.size:
-            blobs_with_mags = utils.sort_blobs_by_val(blobs_neg, image, positive=False)
+            blobs_with_mags = blob_utils.sort_blobs_by_val(blobs_neg, image, positive=False)
         else:
             blobs_with_mags = np.empty((0, 4))
         # print(blobs_with_mags)
         if mag_threshold is not None:
             blobs_with_mags = blobs_with_mags[-1 * blobs_with_mags[:, -1] >= mag_threshold]
         blobs = np.vstack((blobs, blobs_with_mags))
+
+    if bowl_score > 0:
+        blobs = find_blobs_with_bowl_scores(
+            image,
+            blobs=blobs,
+            sigma_list=sigma_list,
+            score_cutoff=bowl_score,
+        )
 
     return blobs, sigma_list
 
@@ -172,7 +184,7 @@ def make_blob_image(igram_path=".",
         print("Saving %s" % blob_filename)
         np.save(blob_filename, blobs)
 
-    blobs_ll = utils.blobs_to_latlon(blobs, image.dem_rsc)
+    blobs_ll = blob_utils.blobs_to_latlon(blobs, image.dem_rsc)
     if verbose:
         for lat, lon, r, val in blobs_ll:
             logger.info('({0:.4f}, {1:.4f}): radius: {2}, val: {3}'.format(lat, lon, r, val))
@@ -181,13 +193,32 @@ def make_blob_image(igram_path=".",
     # plot_blobs(blobs=blobs, cur_axes=imagefig.gca())
 
 
-def compute_harris_peaks(image, sigma_list, gamma=1.4, threshold_rel=0.1):
-    """Computes harris corner response on image at each sigma, finds peaks
+def _corner_score(image, sigma=1):
+    """wrapper for corner_harris to normalize for multiprocessing"""
+    return sigma**2 * feature.corner_harris(image, sigma=sigma)
+
+
+def compute_blob_scores(image,
+                        sigma_list,
+                        score='shape',
+                        find_peaks=True,
+                        gamma=1.4,
+                        threshold_rel=0.1):
+    """Computes blob score on image at each sigma, finds peaks
+
+    Possible scores:
+        shape index: measure of "bowl"ness at a point for a given sigma
+            using Hessian eigenvalues. see skimage.feature.shape_index
+        harris corner: finds "cornerness" using autocorrelation eigenvalues
 
     Args:
         image (ndarray): input image to compute corner harris reponse
         sigma_list (array-like): output of create_sigma_list
-        gamma (float): adjustment from sigma in LoG to harris
+        score (str): choices: 'shape', 'harris' (or 'corner'): which function
+            to use to score each blob layer
+        find_peaks (bool): if true, also runs peak_local_max on each layer to find
+            the local peaks of scores
+        gamma (float): adjustment from sigma in LoG to harris (if using Harris)
             The Gaussian kernel for the LoG scale space (t) is smaller
             than the window used to pre-smooth and find the Harris response (s),
             where s = t * gamma**2
@@ -196,34 +227,101 @@ def compute_harris_peaks(image, sigma_list, gamma=1.4, threshold_rel=0.1):
 
     Returns:
         peaks: output of peak_local_max on stack of corner responses
-        corner_img_list: the corner response at each level
+        score_imgs: the score response at each level
 
     TODO: see if doing corner_harris * s**2 to normalize, and using threshold_abs
         works better than threshold_rel
 
     Sources:
-    https://en.wikipedia.org/wiki/Corner_detection#The_multi-scale_Harris_operator
+        https://en.wikipedia.org/wiki/Corner_detection#The_multi-scale_Harris_operator
+        Koenderink, J. J. & van Doorn, A. J.,
+           "Surface shape and curvature scales",
+           Image and Vision Computing, 1992, 10, 557-564.
+           :DOI:`10.1016/0262-8856(92)90076-F`
     """
-    # TODO: parallelize this
-    # corner_img_list = [feature.corner_harris(image, sigma=s * gamma) for s in sigma_list]
-    # peaks = [
-    #     skblob.peak_local_max(corner_img, threshold_rel=threshold_rel)
-    #     for corner_img in corner_img_list
-    # ]
+    valid_scores = ('corner', 'harris', 'shape')
+    if score not in valid_scores:
+        raise ValueError("'score' must be one of: %s" % str(valid_scores))
+
     pool = multiprocessing.Pool()
     jobs = []
     for s in sigma_list:
-        jobs.append(pool.apply_async(feature.corner_harris, (image, ), {'sigma': s * gamma}))
-    corner_img_list = [s**2 * result.get() for result, s in zip(jobs, sigma_list)]
+        if score == 'corner' or score == 'harris':
+            jobs.append(pool.apply_async(_corner_score, (image, ), {'sigma': s * gamma}))
+        elif score == 'shape':
+            jobs.append(
+                pool.apply_async(feature.shape_index, (image, ), {
+                    'sigma': s,
+                    'mode': 'nearest'
+                }))
 
-    jobs = []
-    for corner_img in corner_img_list:
-        jobs.append(
-            pool.apply_async(skblob.peak_local_max, (corner_img, ),
-                             {'threshold_rel': threshold_rel}))
-    peaks = [result.get() for result in jobs]
+    score_imgs = [result.get() for result, s in zip(jobs, sigma_list)]
 
-    return peaks, corner_img_list
+    if find_peaks:
+        jobs = []
+        for layer in score_imgs:
+            jobs.append(
+                pool.apply_async(skblob.peak_local_max, (layer, ),
+                                 {'threshold_rel': threshold_rel}))
+        peaks = [result.get() for result in jobs]
+    else:
+        peaks = None
+
+    return score_imgs, peaks
+
+
+def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff=6 / 8, **kwargs):
+    """Takes the list of blobs found from find_blobs, check for high shape score
+
+    Computes a shape_index at each level gamma*sigma_list, finds blobs that have
+    a |shape_index| > 5/8 (which indicate a bowl shape either up or down.
+    Blobs with no corner peak found are discarded (they are valleys or ridges)
+
+    Args:
+        image (ndarray): input image to compute corners on
+        blobs (ndarray): rows are blobs with values: [(r, c, s, ...)]
+        sigma_list (array-like): output of create_sigma_list
+        score_cutoff (float): magnitude of shape index to approve of bowl blob
+            Default is 6/8: from [1], halfway between "bowl" cutoff at 7/8 and
+            "trough" cutoff at 5/8. Shapes at 5/8 still look "rut" ish, like
+            a valley
+        kwargs: passed to find_blobs if `blobs` not passed as argument
+
+    Returns:
+        ndarray: like blobs, with some rows deleted that contained no corners
+
+    References:
+        [1] Koenderink, J. J. & van Doorn, A. J.,
+           "Surface shape and curvature scales",
+           Image and Vision Computing, 1992, 10, 557-564.
+           :DOI:`10.1016/0262-8856(92)90076-F`
+    """
+    if blobs is None:
+        blobs, sigma_list = find_blobs(image, **kwargs)
+
+    # Find peaks for every sigma in sigma_list
+    score_images, _ = compute_blob_scores(image, sigma_list, find_peaks=False)
+
+    sigma_idxs = blob_utils.find_sigma_idxs(blobs, sigma_list)
+    # import ipdb
+    # ipdb.set_trace()
+    out_blobs = []
+    for blob, sigma_idx in zip(blobs, sigma_idxs):
+        # Get the peaks that correspond to the current sigma level
+        cur_scores = score_images[sigma_idx]
+        # Only examine blob area
+        blob_scores = blob_utils.crop_blob(cur_scores, blob, crop_val=None)
+        center_score = _get_center_value(blob_scores)
+        print("blob: %s, score: %s" % (str(blob), center_score))
+        if np.abs(center_score) >= score_cutoff:
+            out_blobs.append(blob)
+
+    return np.array(out_blobs)
+
+
+def _get_center_value(img):
+    rows, cols = img.shape
+    return img[rows // 2, cols // 2]
 
 
 def find_blobs_with_harris_peaks(image,
@@ -254,17 +352,18 @@ def find_blobs_with_harris_peaks(image,
         blobs, sigma_list = find_blobs(image, **kwargs)
 
     # Find peaks for every sigma in sigma_list
-    corner_peaks, _ = compute_harris_peaks(
+    _, corner_peaks = compute_blob_scores(
         image, sigma_list, gamma=gamma, threshold_rel=threshold_rel)
 
-    sigma_idxs = utils.find_sigma_idxs(blobs, sigma_list)
+    sigma_idxs = blob_utils.find_sigma_idxs(blobs, sigma_list)
     # import ipdb
     # ipdb.set_trace()
     out_blobs = []
     for blob, sigma_idx in zip(blobs, sigma_idxs):
-        # Get the peaks that correspond to the currend sigma level
+        # Get the bowl_score that correspond to the current sigma level
         cur_peaks = corner_peaks[sigma_idx]
-        blob_mask = utils.indexes_within_circle(blob=blob, mask_shape=image.shape)
+        # Only examine blob area
+        blob_mask = blob_utils.indexes_within_circle(blob=blob, mask_shape=image.shape)
         corners_contained_in_mask = blob_mask[cur_peaks[:, 0], cur_peaks[:, 1]]
         # corners_contained_in_mask = blob_mask[cur_peaks[:, 1], cur_peaks[:, 0]]
         if any(corners_contained_in_mask):
