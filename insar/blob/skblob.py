@@ -399,7 +399,7 @@ def prune_overlap_blobs(blobs_array, overlap, sigma_bins=1):
     # return np.array([b for b in blobs_array if b[-1] > 0])
 
 
-def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True):
+def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True, smooth=True):
     """Finds filters out blobs whose extreme point is far from center
 
     Searches for local maxima in case there is a nearby larger blob
@@ -408,8 +408,13 @@ def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True):
     Args:
         image (ndarray): image to detect blobs within
         blobs (ndarray): (N, 4) array of blobs from find_blobs
-        max_dist_ratio:
-        positive:
+        max_dist_ratio (float): from 0 to 1, the (sigma normalized) distance
+            from the extrema to the center pixel.
+            Ghost blobs should have extrema near the edges
+        positive (bool): search for maxima (uplift). If False, search minima
+        smooth (bool): if True, smooth the blob patch with a gaussian filter
+            to remove noise when finding extreme value.
+            Filter size depends on size of blob radius
 
     Returns:
         out_blobs: rows from `blobs` which have a local max within
@@ -421,7 +426,13 @@ def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True):
 
     out_blobs = []
     for b in blobs:
-        dist_to_extreme = get_dist_to_extreme(image, b, positive=positive)
+        if smooth:
+            # Use 1/4 of the radius (ad hoc value) or 3 (to not wash out tiny blobs)
+            radius = b[2]
+            sigma = np.clip(radius / 3, 3, None)
+        else:
+            sigma = 0
+        dist_to_extreme = get_dist_to_extreme(image, b, positive=positive, sigma=sigma)
         if dist_to_extreme < max_dist_ratio:
             out_blobs.append(b)
         # else:
@@ -433,14 +444,23 @@ def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True):
         return np.empty((0, blobs.shape[1]))
 
 
-def get_dist_to_extreme(image, blob, positive=True):
+def get_dist_to_extreme(image, blob, positive=True, sigma=0):
     """Finds how far from center a blob's extreme point is that caused the result
 
     Assumes blob[2] is radius, not sigma, to pass to indexes_within_circle
 
     Returns as a ratio distance/blob_radius (0 to 1)
+
+    image (ndarray): image to detect blobs within
+    blobs (ndarray): (N, 4) array of blobs from find_blobs
+    positive (bool): search for maxima (uplift). If False, search minima
+    sigma (float): optional: used to smooth image before finding the
+        extreme value
     """
-    patch = blob_utils.crop_blob(image, blob)
+    patch = blob_utils.crop_blob(image, blob, crop_val=None)
+    if sigma > 0:
+        patch = gaussian_filter(patch, sigma=sigma)
+
 
     # Remove any bias to just look at peak difference
     if positive:
@@ -460,6 +480,7 @@ def get_dist_to_extreme(image, blob, positive=True):
     if not local_extreme.size:
         return 1  # No extreme: output max distance possible
 
+    # print(local_extreme)
     rows = local_extreme[:, 0]
     cols = local_extreme[:, 1]
     dist_arr = np.sqrt((rows - midpoint)**2 + (cols - midpoint)**2)

@@ -14,13 +14,14 @@ from insar.log import log_runtime
 def generate_blobs(num_blobs,
                    imsize=(1000, 1000),
                    border_pad=100,
-                   min_sigma=5,
+                   min_sigma=6,
                    max_sigma=80,
                    mean_sigma=10,
                    max_amp=5,
                    mean_amp=3,
                    min_amp=1,
-                   amp_scale=3):
+                   amp_scale=3,
+                   noise_sigma=1):
     # end columns are (x, y, sigma, Amplitude)
     # Uniformly spread blobs: first make size they lie within (pad, max-pad)
     rand_xy = np.random.rand(num_blobs, 2)
@@ -50,6 +51,8 @@ def generate_blobs(num_blobs,
         # TODO: correct the N to be sizes
         out += make_gaussian(imsize[0], sigma, row=int(row), col=int(col), amp=amp)
     # convert blobs into (row, col, radius, amp) format
+    if noise_sigma > 0:
+        out += make_noise(imsize, noise_sigma)
     return blobs * np.array([1, 1, np.sqrt(2), 1]), out
 
 
@@ -126,27 +129,28 @@ def make_edge(N, row=None, col=None, jump=1, max_val=2, min_val=0):
 
 
 @log_runtime
-def demo_ghost_blobs(num_blobs=10, min_iou=0.5, out=None, real_blobs=None):
+def demo_ghost_blobs(num_blobs=10, min_iou=0.5, out=None, real_blobs=None, noise_sigma=.5):
     np.random.seed(1)
     finding_params = {
         'positive': True,
         'negative': True,
         'threshold': 0.35,
         'mag_threshold': None,
-        'min_sigma': 3,
+        'min_sigma': 5,
         'max_sigma': 140,
         'num_sigma': 70,
         'sigma_bins': 3,
         'log_scale': True,
         # 'bowl_score': .7,
-        'bowl_score': 5 / 8,
+        # 'bowl_score': 5 / 8,
     }
     if out is None or real_blobs is None:
         print("Generating %s blobs" % num_blobs)
-        real_blobs, out = generate_blobs(num_blobs, max_amp=15, amp_scale=25)
+        real_blobs, out = generate_blobs(num_blobs, max_amp=15, amp_scale=25, noise_sigma=noise_sigma)
         # Make sure to remove overlap same as the finding
         overlap = 0.5
-        real_blobs = blob.skblob.prune_overlap_blobs(real_blobs, overlap, sigma_bins=finding_params['sigma_bins'])
+        real_blobs = blob.skblob.prune_overlap_blobs(
+            real_blobs, overlap, sigma_bins=finding_params['sigma_bins'])
 
     print("Finding blobs in synthetic images")
     detected, sigma_list = blob.find_blobs(out, **finding_params)
@@ -186,6 +190,11 @@ def make_log(N, sigma, row=None, col=None, normalize=False):
     delta = make_delta(N, row, col)
     out = nd.gaussian_laplace(delta, sigma) * sigma**2
     return out / np.max(out) if normalize else out
+
+
+def make_noise(shape, sigma):
+    """Generate (N, N) grid of noise terms with variance sigma**2"""
+    return sigma * np.random.standard_normal(shape)
 
 
 GAUSSIAN = make_gaussian
@@ -275,6 +284,12 @@ def igarss_fig():
     plt.imshow(image_cube[:, :, 30], cmap='jet', vmin=-1.4, vmax=1.3)
     plt.imshow(image_cube[:, :, 10], cmap='jet', vmin=-1.4, vmax=1.3)
     return out, blobs, sigma_list, image_cube, fig
+
+
+def auto_corr_ratio(image, sigma, mode='nearest', cval=0):
+    A = feature.structure_tensor(image, sigma=sigma, mode=mode, cval=cval)
+    lambda1, lambda2 = feature.structure_tensor_eigvals(*A)
+    return blob._get_center_value(lambda1 / lambda2)
 
 
 def plot_auto_corr(image, sigma, mode='nearest', cval=0):
