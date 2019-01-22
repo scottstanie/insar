@@ -311,8 +311,8 @@ def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff
 
     sigma_idxs = blob_utils.find_sigma_idxs(blobs, sigma_list)
     # Note: using smaller sigma than blob size seems to work better in bowl scoring
-    # sigma_arr = sigma_list[sigma_idxs]
-    sigma_arr = np.clip(sigma_list[sigma_idxs] / 10, 2, None)
+    sigma_arr = sigma_list[sigma_idxs]
+    # sigma_arr = np.clip(sigma_list[sigma_idxs] / 10, 2, None)
     # sigma_arr = 2 * np.ones(len(blobs))
 
     # import ipdb

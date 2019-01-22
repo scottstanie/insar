@@ -1,5 +1,6 @@
 # coding: utf-8
 import scipy.ndimage as nd
+from scipy.stats import multivariate_normal
 from skimage import feature, transform
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
@@ -20,6 +21,7 @@ def generate_blobs(num_blobs,
                    max_amp=5,
                    mean_amp=3,
                    min_amp=1,
+                   max_ecc=0.5,
                    amp_scale=3,
                    noise_sigma=1):
     # end columns are (x, y, sigma, Amplitude)
@@ -46,13 +48,43 @@ def generate_blobs(num_blobs,
 
     blobs = np.stack([rand_xy[:, 1], rand_xy[:, 0], sigmas, amplitudes], axis=1)
 
+    if max_ecc > 0:  # Noncircular allowed
+        if max_ecc > 0.99:
+            print("WARNING: max_ecc must be 0.99 or less")
+            max_ecc = min(max_ecc, 0.99)
+
+        mean_ecc = np.clip(max_ecc / 2, 0, 0.99)
+        ecc_arr = np.random.exponential(scale=mean_ecc, size=(num_blobs, ))
+        ecc_arr = np.clip(ecc_arr, 0, max_ecc)
+        # print('ecc')
+        # print(ecc_arr)
+        # b_arr = sigmas
+        # a_arr = ecc_arr * b_arr
+        theta_arr = np.random.randint(0, 180, size=(num_blobs, ))
+        # print(np.vstack((a_arr, b_arr)).T)
+
     out = np.zeros(imsize)
-    for row, col, sigma, amp in blobs:
-        # TODO: correct the N to be sizes
-        out += make_gaussian(imsize[0], sigma, row=int(row), col=int(col), amp=amp)
-    # convert blobs into (row, col, radius, amp) format
+    for idx, (row, col, sigma, amp) in enumerate(blobs):
+        if max_ecc > 0:
+            out += make_gaussian_ellipse(
+                imsize[0],
+                # a=a_arr[idx],
+                # b=b_arr[idx],
+                sigma=sigma,
+                ecc=ecc_arr[idx],
+                row=int(row),
+                col=int(col),
+                theta=theta_arr[idx],
+                amp=amp,
+            )
+        else:
+            # TODO: correct the N to be sizes
+            out += make_gaussian(imsize[0], sigma, row=int(row), col=int(col), amp=amp)
+
     if noise_sigma > 0:
         out += make_noise(imsize, noise_sigma)
+
+    # convert blobs into (row, col, radius, amp) format
     return blobs * np.array([1, 1, np.sqrt(2), 1]), out
 
 
@@ -142,11 +174,12 @@ def demo_ghost_blobs(num_blobs=10, min_iou=0.5, out=None, real_blobs=None, noise
         'sigma_bins': 3,
         'log_scale': True,
         # 'bowl_score': .7,
-        # 'bowl_score': 5 / 8,
+        'bowl_score': 5 / 8,
     }
     if out is None or real_blobs is None:
         print("Generating %s blobs" % num_blobs)
-        real_blobs, out = generate_blobs(num_blobs, max_amp=15, amp_scale=25, noise_sigma=noise_sigma)
+        real_blobs, out = generate_blobs(
+            num_blobs, max_amp=15, amp_scale=25, noise_sigma=noise_sigma)
         # Make sure to remove overlap same as the finding
         overlap = 0.5
         real_blobs = blob.skblob.prune_overlap_blobs(
@@ -175,15 +208,89 @@ def make_delta(N, row=None, col=None):
     return delta
 
 
-def make_gaussian(N, sigma, row=None, col=None, normalize=False, amp=None):
-    delta = make_delta(N, row, col)
-    out = nd.gaussian_filter(delta, sigma) * sigma**2
+def _normalize_gaussian(out, normalize=False, amp=None):
     if normalize:
         return out / np.max(out) if normalize else out
     elif amp is not None:
         return amp * (out / np.max(out))
     else:
         return out
+
+
+def make_gaussian(
+        N,
+        sigma,
+        row=None,
+        col=None,
+        normalize=False,
+        amp=None,
+):
+    delta = make_delta(N, row, col)
+    out = nd.gaussian_filter(delta, sigma) * sigma**2
+    return _normalize_gaussian(out, normalize=normalize, amp=amp)
+
+
+def _rotation_matrix(theta):
+    """CCW rotation matrix by `theta` degrees"""
+    theta_rad = np.deg2rad(theta)
+    return np.array([[np.cos(theta_rad), np.sin(theta_rad)],
+                     [-np.sin(theta_rad), np.cos(theta_rad)]])
+
+
+def _calc_ab(sigma, ecc):
+    a = np.sqrt(sigma**2 / (1 - ecc))
+    b = a * (1 - ecc)
+    return a, b
+
+
+def make_gaussian_ellipse(N,
+                          a=None,
+                          b=None,
+                          sigma=None,
+                          ecc=None,
+                          row=None,
+                          col=None,
+                          theta=0,
+                          normalize=False,
+                          amp=None):
+    """Make an ellipse using multivariate gaussian
+
+    Args:
+        N: size of grid
+        a: semi major axis length
+        b: semi minor axis length
+        sigma: std dev of gaussian, if it were circular
+        ecc: from 0 to 1, alternative to (a, b) specification is (sigma, ecc)
+            ecc = 1 - (b/a), and area = pi*sigma**2 = pi*a*b
+        row: row of center
+        col: col of center
+        theta: degrees of rotation (CCW)
+        normalize (bool): if true, set max value to 1
+        amp (float): value of peak of gaussian
+
+    Returns:
+        ndarray: grid with one multivariate gaussian heights
+
+    """
+    if row is None or col is None:
+        row, col = N // 2, N // 2
+
+    if sigma is not None and ecc is not None:
+        a, b = _calc_ab(sigma, ecc)
+    if a is None or b is None:
+        raise ValueError("Need a,b or sigma,ecc")
+
+    R = _rotation_matrix(theta)
+    # To rotate, we do R @ P @ R.T to rotate eigenvalues of P = S L S^-1
+    cov = np.dot(R, np.array([[b**2, 0], [0, a**2]]))
+    cov = np.dot(cov, R.T)
+    var = multivariate_normal(mean=[col, row], cov=cov)
+
+    x = np.linspace(1, N, N)
+    xx, yy = np.meshgrid(x, x)
+    xy = np.vstack((xx.flatten(), yy.flatten())).T
+    out = var.pdf(xy).reshape((N, N))
+    return _normalize_gaussian(out, normalize=normalize, amp=amp)
 
 
 def make_log(N, sigma, row=None, col=None, normalize=False):
