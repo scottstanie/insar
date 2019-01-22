@@ -89,7 +89,7 @@ def generate_blobs(num_blobs,
 
 
 @log_runtime
-def calc_detection_stats(blobs_real, detected, min_iou=0.5):
+def calc_detection_stats(blobs_real, detected, min_iou=0.5, verbose=True):
     """Calculate how well find_blobs performed on synthetic blobs_real
 
     Uses a distance threshold and sigma margin to confirm same blobs
@@ -128,13 +128,15 @@ def calc_detection_stats(blobs_real, detected, min_iou=0.5):
         # ipdb.set_trace()
         # if np.any(matches):  # If we want to check all iou, maybe do this
         if is_overlapping:
-            print('true (overlap, dist):', iou_frac, dist_3d[closest_idx])
+            if verbose:
+                print('true (overlap, dist):', iou_frac, dist_3d[closest_idx])
             true_detects.append(cur_clob)
             # match_idxs = np.where(matches)[0]
             # matched_idx_set.update(match_idxs)
             matched_idx_set.add(closest_idx)
         else:
-            print('false (overlap, dist):', iou_frac, dist_3d[closest_idx])
+            if verbose:
+                print('false (overlap, dist):', iou_frac, dist_3d[closest_idx])
             false_positives.append(cur_clob)
 
     # Now find misses
@@ -161,7 +163,7 @@ def make_edge(N, row=None, col=None, jump=1, max_val=2, min_val=0):
 
 
 @log_runtime
-def demo_ghost_blobs(num_blobs=10, min_iou=0.5, out=None, real_blobs=None, noise_sigma=.5):
+def demo_ghost_blobs(num_blobs=10, min_iou=0.5, out=None, real_blobs=None, noise_sigma=.5, max_ecc=0.4):
     np.random.seed(1)
     finding_params = {
         'positive': True,
@@ -179,7 +181,7 @@ def demo_ghost_blobs(num_blobs=10, min_iou=0.5, out=None, real_blobs=None, noise
     if out is None or real_blobs is None:
         print("Generating %s blobs" % num_blobs)
         real_blobs, out = generate_blobs(
-            num_blobs, max_amp=15, amp_scale=25, noise_sigma=noise_sigma)
+            num_blobs, max_amp=15, amp_scale=25, noise_sigma=noise_sigma, max_ecc=max_ecc)
         # Make sure to remove overlap same as the finding
         overlap = 0.5
         real_blobs = blob.skblob.prune_overlap_blobs(
@@ -437,3 +439,47 @@ def make_bowl(n):
     xx, yy = np.meshgrid(x, x)
     z = xx**2 + yy**2
     return z / np.max(z)
+
+
+@log_runtime
+def simulate_detections(num_sims, outfile='blobsim.csv', num_blobs=50, max_ecc=0.4, noise_sigma=0.5):
+    def run(run_idx):
+        finding_params = {
+            'positive': True,
+            'negative': True,
+            'threshold': 0.35,
+            'mag_threshold': None,
+            'min_sigma': 5,
+            'max_sigma': 140,
+            'num_sigma': 70,
+            'sigma_bins': 3,
+            'log_scale': True,
+            # 'bowl_score': .7,
+            'bowl_score': 5 / 8,
+        }
+        real_blobs, out = generate_blobs(
+            num_blobs, max_amp=15, amp_scale=25, noise_sigma=noise_sigma, max_ecc=max_ecc)
+        # Make sure to remove overlap same as the finding
+        overlap = 0.5
+        real_blobs = blob.skblob.prune_overlap_blobs(
+            real_blobs, overlap, sigma_bins=finding_params['sigma_bins'])
+
+        # print("Finding blobs in synthetic images")
+        detected, sigma_list = blob.find_blobs(out, **finding_params)
+
+        true_d, fp, misses, precision, recall = calc_detection_stats(real_blobs, detected, verbose=False)
+        print("Results for run %s:" % run_idx)
+        print("precision: ", precision)
+        print("recall: ", recall)
+        return precision, recall
+
+    total_precision, total_recall = 0, 0
+    with open(outfile, 'w') as f:
+        for run_idx in range(1, num_sims + 1):
+            precision, recall= run(run_idx)
+            f.write("%.2f,%.2f\n" % (precision, recall))
+            total_precision += precision
+            total_recall += recall
+
+    print("Total precision:", total_precision / num_sims)
+    print("Total recall:", total_recall / num_sims)
