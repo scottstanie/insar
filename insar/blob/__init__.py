@@ -5,7 +5,7 @@ import os
 import multiprocessing
 import numpy as np
 from insar.log import get_log
-from . import skblob, plot, utils
+from insar.blob import skblob, plot, utils
 from insar.blob import utils as blob_utils
 from skimage import feature
 from insar import latlon, plotting
@@ -251,7 +251,7 @@ def compute_blob_scores(image,
             jobs.append(pool.apply_async(_corner_score, (image, ), {'sigma': s * gamma}))
         elif score == 'shape':
             jobs.append(
-                pool.apply_async(feature.shape_index, (image, ), {
+                pool.apply_async(skblob.shape_index, (image, ), {
                     'sigma': s,
                     'mode': 'nearest'
                 }))
@@ -273,7 +273,7 @@ def compute_blob_scores(image,
 
 def get_blob_bowl_score(image, blob, sigma=None):
     patch = blob_utils.crop_blob(image, blob, crop_val=None)
-    shape_vals = feature.shape_index(patch, sigma=sigma, mode='nearest')
+    shape_vals = skblob.shape_index(patch, sigma=sigma, mode='nearest')
     return _get_center_value(shape_vals, patch_size=3)
 
 

@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial.qhull import ConvexHull
-from . import utils
+from insar.blob import utils as blob_utils
 from insar import plotting
 
 
@@ -56,8 +56,20 @@ def plot_blobs(image=None,
     return blobs, cur_axes
 
 
-def plot_cropped_blob(image, blob):
-    patch = utils.crop_blob(image, blob)
+def plot_cropped_blob(image, blob, crop_val=np.nan, sigma=0):
+    """Plot a 3d view of heighs of a blob along with its circle imshow view
+
+    Args:
+        image:
+        blob: (row, col, radius, ...)
+        crop_val (float or nan): value to make all pixels outside sigma radius
+            default=np.nan. if None, leaves the edges of bbox untouched
+        sigma (float): if provided, smooth by a gaussian filter of size `sigma`
+
+    Returns:
+        matplotlib.Axes
+    """
+    patch = blob_utils.crop_blob(image, blob, crop_val=crop_val, sigma=sigma)
     ax = plot_heights(patch)
     return ax
 
@@ -97,7 +109,7 @@ def scatter_blobs(blobs, image=None, axes=None, color='b', label=None):
         fig = axes[0].get_figure()
 
     if blobs.shape[1] < 6:
-        blobs = utils.append_stats(blobs, image)
+        blobs = blob_utils.append_stats(blobs, image)
 
     print('Taking abs value of blobs')
     blobs = np.abs(blobs)
@@ -132,7 +144,7 @@ def scatter_blobs_3d(blobs, image=None, ax=None, color='b', label=None, blob_img
         fig = ax.get_figure()
 
     if blobs.shape[1] < 6:
-        blobs = utils.append_stats(blobs, image)
+        blobs = blob_utils.append_stats(blobs, image)
 
     if blob_img is not None:
         # Length of radii in km
@@ -159,12 +171,12 @@ def plot_hull(regions=None, hull=None, ax=None, linecolor='k-'):
 
 
 def plot_bbox(bbox, ax=None, linecolor='k-', cv_format=False):
-    for c in utils.bbox_to_coords(bbox, cv_format=cv_format):
+    for c in blob_utils.bbox_to_coords(bbox, cv_format=cv_format):
         print(c)
         ax.plot(c[0], c[1], 'rx', markersize=6)
 
 
 def plot_regions(regions, ax=None, linecolor='k-'):
-    for shape in utils.regions_to_shapes(regions):
+    for shape in blob_utils.regions_to_shapes(regions):
         xx, yy = shape.convex_hull.exterior.xy
         ax.plot(xx, yy, linecolor)

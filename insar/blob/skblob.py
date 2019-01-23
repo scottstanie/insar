@@ -8,6 +8,7 @@ from scipy.ndimage import gaussian_laplace, maximum_filter, gaussian_filter
 import math
 from math import sqrt, log
 from scipy import spatial
+from skimage.feature import hessian_matrix, hessian_matrix_eigvals
 from . import utils as blob_utils
 
 # This basic blob detection algorithm is based on:
@@ -141,6 +142,9 @@ def blob_log(image=None,
     # Now remove first the spatial border blobs
     if border_size > 0:
         lm = prune_border_blobs(image.shape, lm, border_size)
+    # print('lm post prune_border_blobs:')
+    # print(lm)
+    # print(lm.shape)
     # return lm
     # Next remove blobs that look like edges
     smoothed_image = gaussian_filter(image, sigma=3)
@@ -425,6 +429,7 @@ def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True, smooth=T
     # Removing [  0., 131., 29.47353778, 1.70626337] for dist_to_extreme=1.199
 
     out_blobs = []
+    # import ipdb; ipdb.set_trace()
     for b in blobs:
         if smooth:
             # Use 1/4 of the radius (ad hoc value) or 3 (to not wash out tiny blobs)
@@ -684,3 +689,76 @@ def _get_high_intensity_peaks(image, mask, num_peaks):
         coord = np.column_stack(coord)
     # Higest peak first
     return coord[::-1]
+
+def shape_index(image, sigma=1, mode='constant', cval=0, eps=1e-16):
+    """Compute the shape index.
+
+    The shape index, as defined by Koenderink & van Doorn [1]_, is a
+    single valued measure of local curvature, assuming the image as a 3D plane
+    with intensities representing heights.
+
+    It is derived from the eigen values of the Hessian, and its
+    value ranges from -1 to 1 (and is undefined (=NaN) in *flat* regions),
+    with following ranges representing following shapes:
+
+    .. table:: Ranges of the shape index and corresponding shapes.
+
+      Interval (s in ...)  Shape
+      ===================  =============
+      [  -1, -7/8)         Spherical cup
+      [-7/8, -5/8)         Through
+      [-5/8, -3/8)         Rut
+      [-3/8, -1/8)         Saddle rut
+      [-1/8, +1/8)         Saddle
+      [+1/8, +3/8)         Saddle ridge
+      [+3/8, +5/8)         Ridge
+      [+5/8, +7/8)         Dome
+      [+7/8,   +1]         Spherical cap
+      ===================  =============
+
+    Parameters
+    ----------
+    image : ndarray
+        Input image.
+    sigma : float, optional
+        Standard deviation used for the Gaussian kernel, which is used for
+        smoothing the input data before Hessian eigen value calculation.
+    mode : {'constant', 'reflect', 'wrap', 'nearest', 'mirror'}, optional
+        How to handle values outside the image borders
+    cval : float, optional
+        Used in conjunction with mode 'constant', the value outside
+        the image boundaries.
+    eps : float, optional
+        Padding to the smaller hessian eigenvalue to avoid division by 0
+
+    Returns
+    -------
+    s : ndarray
+        Shape index
+
+    References
+    ----------
+    .. [1] Koenderink, J. J. & van Doorn, A. J.,
+           "Surface shape and curvature scales",
+           Image and Vision Computing, 1992, 10, 557-564.
+           DOI:10.1016/0262-8856(92)90076-F
+
+    Examples
+    --------
+    >>> square = np.zeros((5, 5))
+    >>> square[2, 2] = 4
+    >>> s = shape_index(square, sigma=0.1)
+    >>> s
+    array([[ nan,  nan, -0.5,  nan,  nan],
+           [ nan, -0. ,  nan, -0. ,  nan],
+           [-0.5,  nan, -1. ,  nan, -0.5],
+           [ nan, -0. ,  nan, -0. ,  nan],
+           [ nan,  nan, -0.5,  nan,  nan]])
+    """
+
+    H = hessian_matrix(image, sigma=sigma, mode=mode, cval=cval, order='rc')
+    l1, l2 = hessian_matrix_eigvals(H)
+    l2_safe = l2 + eps
+
+    return (2.0 / np.pi) * np.arctan((l2_safe + l1) / (l2_safe - l1))
+
