@@ -29,6 +29,7 @@ def plot_blobs(image=None,
             image,
             fig=cur_fig,
             ax=cur_axes,
+            **kwargs,
         )
         if not cur_axes:
             cur_axes = cur_fig.gca()

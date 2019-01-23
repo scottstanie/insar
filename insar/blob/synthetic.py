@@ -225,10 +225,14 @@ def make_gaussian(
         col=None,
         normalize=False,
         amp=None,
+        noise_sigma=0,
 ):
     delta = make_delta(shape, row, col)
     out = nd.gaussian_filter(delta, sigma) * sigma**2
-    return _normalize_gaussian(out, normalize=normalize, amp=amp)
+    normed = _normalize_gaussian(out, normalize=normalize, amp=amp)
+    if noise_sigma > 0:
+        normed += make_noise(shape, noise_sigma)
+    return normed
 
 
 def make_edge(imsize, row=None, col=None, jump=1, max_val=2, min_val=0, noise_sigma=0.2):
@@ -259,16 +263,29 @@ def _calc_ab(sigma, ecc):
     return a, b
 
 
-def make_gaussian_ellipse(shape,
-                          a=None,
-                          b=None,
-                          sigma=None,
-                          ecc=None,
-                          row=None,
-                          col=None,
-                          theta=0,
-                          normalize=False,
-                          amp=None):
+def _xy_grid(shape, xmin=None, xmax=None, ymin=None, ymax=None):
+    if xmin is None or xmax is None:
+        xmin, xmax = (1, shape[1])
+    if ymin is None or ymax is None:
+        ymin, ymax = (1, shape[0])
+    xx = np.linspace(xmin, xmax, shape[1])
+    yy = np.linspace(ymin, ymax, shape[0])
+    return np.meshgrid(xx, yy)
+
+
+def make_gaussian_ellipse(
+        shape,
+        a=None,
+        b=None,
+        sigma=None,
+        ecc=None,
+        row=None,
+        col=None,
+        theta=0,
+        normalize=False,
+        amp=None,
+        noise_sigma=0,
+):
     """Make an ellipse using multivariate gaussian
 
     Args:
@@ -283,6 +300,7 @@ def make_gaussian_ellipse(shape,
         theta: degrees of rotation (CCW)
         normalize (bool): if true, set max value to 1
         amp (float): value of peak of gaussian
+        noise_sigma (float): optional, adds gaussian noise to blob
 
     Returns:
         ndarray: grid with one multivariate gaussian heights
@@ -303,11 +321,13 @@ def make_gaussian_ellipse(shape,
     cov = np.dot(cov, R.T)
     var = multivariate_normal(mean=[col, row], cov=cov)
 
-    x = np.linspace(1, N, N)
-    xx, yy = np.meshgrid(x, x)
+    xx, yy = _xy_grid(shape)
     xy = np.vstack((xx.flatten(), yy.flatten())).T
-    out = var.pdf(xy).reshape((N, N))
-    return _normalize_gaussian(out, normalize=normalize, amp=amp)
+    out = var.pdf(xy).reshape(shape)
+    normed = _normalize_gaussian(out, normalize=normalize, amp=amp)
+    if noise_sigma > 0:
+        normed += make_noise(shape, noise_sigma)
+    return normed
 
 
 def make_log(shape, sigma, row=None, col=None, normalize=False):
@@ -329,9 +349,7 @@ def plot_func(func=GAUSSIAN, shape=(501, 501), sigma=None):
     if sigma is None:
         sigma = shape[0] / 19
     f = func(shape, sigma)
-    xx = np.linspace(-sigma, sigma, shape[1])
-    yy = np.linspace(-sigma, sigma, shape[0])
-    X, Y = np.meshgrid(xx, yy)
+    X, Y = _xy_grid(shape, xmin=sigma, xmax=sigma, ymin=sigma, ymax=sigma)
 
     fig = plt.figure(frameon=False)
     ax = fig.gca(projection='3d')
@@ -381,9 +399,7 @@ def make_valley(shape, rotate=0):
 
 def make_bowl(shape):
     rows, cols = shape
-    x = np.linspace(-1, 1, cols)
-    y = np.linspace(-1, 1, rows)
-    xx, yy = np.meshgrid(x, y)
+    xx, yy = _xy_grid(shape)
     z = xx**2 + yy**2
     return z / np.max(z)
 
@@ -462,6 +478,8 @@ def simulate_detections(num_sims,
             miss_fname = os.path.join(patch_dir, 'misses_%s' % run_idx)
             record_blob_patches(fp_fname, out, fp)
             record_blob_patches(miss_fname, out, misses)
+            img_fname = os.path.join(patch_dir, 'image_%s' % run_idx)
+            np.savez(img_fname, image=out, real_blobs=real_blobs)
         return precision, recall, len(real_blobs)
 
     total_precision, total_recall = 0, 0
@@ -482,7 +500,7 @@ def record_blob_patches(fname, image, blobs):
     for blob in blobs:
         patch = blob_utils.crop_blob(image, blob)
         patches.append(patch)
-    np.savez(fname, *patches, image=image, blobs=blobs)
+    np.savez(fname, *patches)
 
 
 def simulation_results(outfile):
