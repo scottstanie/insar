@@ -363,7 +363,7 @@ def plot_func(func=GAUSSIAN, shape=(501, 501), sigma=None):
 def auto_corr_ratio(image, sigma, mode='nearest', cval=0):
     A = feature.structure_tensor(image, sigma=sigma, mode=mode, cval=cval)
     lambda1, lambda2 = feature.structure_tensor_eigvals(*A)
-    return blob._get_center_value(lambda1 / lambda2)
+    return blob.get_center_value(lambda1 / lambda2)
 
 
 def plot_auto_corr(image, sigma, mode='nearest', cval=0):
@@ -558,6 +558,41 @@ def plot_run_patches(run_arrs, keys=('td', 'fp', 'miss'), sigma=0):
                 patch = blob_utils.gaussian_filter_nan(patch, sigma=sigma)
             blob.plot.plot_cropped_blob(patch=patch, )
             plt.suptitle(full_key)
+
+
+def apply_funcs_to_patch(patch, funcs=(,), *args, **kwargs):
+    """
+
+    Used to score patches in multiple ways
+
+    Args:
+        patch:
+        funcs:
+
+
+    """
+    return
+
+def analyze_patches(patch_list, funcs=(,), *args, **kwargs)
+    """Get scores from functions on a series of patches
+    
+    Runs each function in `funcs` over each `patch` to get stats on it
+    Each function must have a signature func(patch, *args, **kwargs),
+        and return a single float number
+    Args:
+        patch_list: 
+        funcs: 
+        *args: 
+        **kwargs: 
+
+    Returns:
+        ndarray: size (p, N) where p = num patches, N = len(funcs)
+            rows are scores on one patch
+    """
+    scores = []
+    for patch in patch_list:
+        scores.append([func(patch, *args, **kwargs) for func in funcs])
+    return np.array(scores)
 
 
 def simulation_results(outfile):

@@ -287,6 +287,7 @@ def prune_regions(regions, bboxes, overlap_thresh=0.5):
     # Converts to np.array to use fancy indexing
     return list(np.array(sorted_regions)[remaining]), np.array(sorted_bboxes)[remaining]
 
+
 def gaussian_filter_nan(image, sigma, **kwargs):
     """Apply a gaussian filter to an image with NaNs (avoiding all nans)
 

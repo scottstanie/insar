@@ -274,7 +274,7 @@ def compute_blob_scores(image,
 def get_blob_bowl_score(image, blob, sigma=None):
     patch = blob_utils.crop_blob(image, blob, crop_val=None)
     shape_vals = skblob.shape_index(patch, sigma=sigma, mode='nearest')
-    return _get_center_value(shape_vals, patch_size=3)
+    return get_center_value(shape_vals, patch_size=3)
 
 
 def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff=.7, **kwargs):
@@ -325,7 +325,7 @@ def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff
         # cur_scores = score_images[sigma_idx]
         # # Only examine blob area
         # blob_scores = blob_utils.crop_blob(cur_scores, blob, crop_val=None)
-        # center_score = _get_center_value(blob_scores)
+        # center_score = get_center_value(blob_scores)
         center_score = get_blob_bowl_score(image, blob, sigma=sigma)
         if np.abs(center_score) >= score_cutoff:
             out_blobs.append(blob)
@@ -335,7 +335,7 @@ def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff
     return np.array(out_blobs)
 
 
-def _get_center_value(img, patch_size=1):
+def get_center_value(img, patch_size=1):
     """Find center of image, taking mean around `patch_size` pixels"""
     rows, cols = img.shape
     rcent = rows // 2
