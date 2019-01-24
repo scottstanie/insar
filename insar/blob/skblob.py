@@ -136,20 +136,23 @@ def blob_log(image=None,
 
     # Multiply each sigma by sqrt(2) to convert sigma to a circle radius
     lm = lm * np.array([1, 1, np.sqrt(2)])
-    # print('lm:')
+    print('initial local max lm:')
     # print(lm)
-    # print(lm.shape)
+    print(lm.shape)
     # Now remove first the spatial border blobs
     if border_size > 0:
         lm = prune_border_blobs(image.shape, lm, border_size)
-    # print('lm post prune_border_blobs:')
-    # print(lm)
-    # print(lm.shape)
+    print('lm post prune_border_blobs:')
+    print(lm)
+    print(lm.shape)
     # return lm
     # Next remove blobs that look like edges
     smoothed_image = gaussian_filter(image, sigma=3)
     if prune_edges:
         lm = prune_edge_extrema(smoothed_image, lm, positive=positive)
+    print('lm post prune_edge_extrema:')
+    print(lm)
+    print(lm.shape)
     return prune_overlap_blobs(lm, overlap, sigma_bins=sigma_bins)
 
 
@@ -408,6 +411,8 @@ def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True, smooth=T
 
     Searches for local maxima in case there is a nearby larger blob
     at the edge overpowering a real smaller blob which was detected
+    This may produce "ghost" blobs, which don't look like a blob should
+    when the extreme point is far from the detected center
 
     Args:
         image (ndarray): image to detect blobs within
@@ -759,6 +764,11 @@ def shape_index(image, sigma=1, mode='constant', cval=0, eps=1e-16):
     H = hessian_matrix(image, sigma=sigma, mode=mode, cval=cval, order='rc')
     l1, l2 = hessian_matrix_eigvals(H)
     l2_safe = l2 + eps
+    num = l2 + l1
+    denom = l2 - l1
+    arg = num / denom
 
-    return (2.0 / np.pi) * np.arctan((l2_safe + l1) / (l2_safe - l1))
+    out = (2.0 / np.pi) * np.arctan(arg)
+    # import ipdb; ipdb.set_trace()
+    return out
 

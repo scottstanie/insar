@@ -13,6 +13,7 @@ from matplotlib import cm
 import pandas as pd
 
 from insar import blob
+import insar.blob.scores as scores
 import insar.blob.utils as blob_utils
 import ipdb
 from insar.log import log_runtime
@@ -539,6 +540,7 @@ def load_run(run_idx, data_path='.'):
 
 
 def plot_run_summary(run_arrays):
+    """Takes `run_arrays` from `load_run` and plots the image with detections and misses"""
     image = run_arrays['image']
     true_d = run_arrays['td_blobs']
     fp = run_arrays['fp_blobs']
@@ -560,20 +562,8 @@ def plot_run_patches(run_arrs, keys=('td', 'fp', 'miss'), sigma=0):
             plt.suptitle(full_key)
 
 
-def apply_funcs_to_patch(patch, funcs=(), *args, **kwargs):
-    """
 
-    Used to score patches in multiple ways
-
-    Args:
-        patch:
-        funcs:
-
-
-    """
-    return
-
-def analyze_patches(patch_list, funcs=(), *args, **kwargs):
+def analyze_patches(patch_list, funcs=scores.FUNC_LIST, *args, **kwargs):
     """Get scores from functions on a series of patches
     
     Runs each function in `funcs` over each `patch` to get stats on it
@@ -589,10 +579,10 @@ def analyze_patches(patch_list, funcs=(), *args, **kwargs):
         ndarray: size (p, N) where p = num patches, N = len(funcs)
             rows are scores on one patch
     """
-    scores = []
+    results = []
     for patch in patch_list:
-        scores.append([func(patch, *args, **kwargs) for func in funcs])
-    return np.array(scores)
+        results.append([func(patch, *args, **kwargs) for func in funcs])
+    return np.array(results)
 
 
 def simulation_results(outfile):

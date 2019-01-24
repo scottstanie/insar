@@ -271,10 +271,10 @@ def compute_blob_scores(image,
     return score_imgs, peaks
 
 
-def get_blob_bowl_score(image, blob, sigma=None):
-    patch = blob_utils.crop_blob(image, blob, crop_val=None)
+def get_blob_bowl_score(image, blob, sigma=None, patch_size=3):
+    patch = blob_utils.crop_blob(image, blob, crop_val=None)  # Don't crop with nans
     shape_vals = skblob.shape_index(patch, sigma=sigma, mode='nearest')
-    return blob_utils.get_center_value(shape_vals, patch_size=3)
+    return blob_utils.get_center_value(shape_vals, patch_size=patch_size)
 
 
 def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff=.7, **kwargs):
@@ -292,6 +292,7 @@ def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff
             Default is .7: from [1], Slightly more "bowl"ish, cutoff at 7/8,
             than "trough", at 5/8. Shapes at 5/8 still look "rut" ish, like
             a valley
+        patch_size (int):
         kwargs: passed to find_blobs if `blobs` not passed as argument
 
     Returns:
@@ -320,7 +321,7 @@ def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff
     out_blobs = []
     for blob, sigma in zip(blobs, sigma_arr):
         # for blob, sigma_idx in zip(blobs, sigma_idxs):
-        # OLD WAY: comput scores, then crop. THIS is DIFFERENT than crop, then score for bowlness
+        # OLD WAY: compute scores, then crop. THIS is DIFFERENT than crop, then score for bowlness
         # # Get the peaks that correspond to the current sigma level
         # cur_scores = score_images[sigma_idx]
         # # Only examine blob area

@@ -19,6 +19,7 @@ def get_center_value(img, patch_size=1, accum_func=np.mean):
     Args:
         img (ndarray): 2D image to get center value
         patch_size (int): number of pixels to look around center for
+            this will be the width/height. e.g. patch_size=3 means (3,3)
         accum_func (numpy function): default = np.mean.
             Reduces pixels in patch_size into one number
 
