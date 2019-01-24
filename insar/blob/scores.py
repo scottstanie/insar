@@ -3,6 +3,7 @@ import numpy as np
 from math import sqrt
 from insar.blob import utils as blob_utils
 from insar.blob import get_center_value
+from insar.blob.skblob import shape_index
 
 def _sigma_from_patch(patch):
     """Back out what the sigma is based on size of patch
@@ -14,7 +15,7 @@ def _sigma_from_patch(patch):
     return radius / sqrt(2)
 
 
-def center_shape_index(patch, sigma_scale=None):
+def center_shape_index(patch, sigma_scale=None, patch_size=3):
     """
 
     Args:
@@ -28,5 +29,6 @@ def center_shape_index(patch, sigma_scale=None):
     sigma = _sigma_from_patch(patch)
     if sigma_scale:
         sigma /= sigma_scale
-    get_center_value(shape_index(blob_utils.crop_blob(gauss_patch, blobs_gauss[0], crop_val=None), sigma=9), patch_size = 1)
-    return
+    return get_center_value(shape_index(patch, sigma=sigma), patch_size = 3)
+
+

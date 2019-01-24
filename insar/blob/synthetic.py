@@ -560,7 +560,7 @@ def plot_run_patches(run_arrs, keys=('td', 'fp', 'miss'), sigma=0):
             plt.suptitle(full_key)
 
 
-def apply_funcs_to_patch(patch, funcs=(,), *args, **kwargs):
+def apply_funcs_to_patch(patch, funcs=(), *args, **kwargs):
     """
 
     Used to score patches in multiple ways
@@ -573,7 +573,7 @@ def apply_funcs_to_patch(patch, funcs=(,), *args, **kwargs):
     """
     return
 
-def analyze_patches(patch_list, funcs=(,), *args, **kwargs)
+def analyze_patches(patch_list, funcs=(), *args, **kwargs):
     """Get scores from functions on a series of patches
     
     Runs each function in `funcs` over each `patch` to get stats on it

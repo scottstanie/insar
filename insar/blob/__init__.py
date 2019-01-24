@@ -335,13 +335,23 @@ def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff
     return np.array(out_blobs)
 
 
-def get_center_value(img, patch_size=1):
-    """Find center of image, taking mean around `patch_size` pixels"""
+def get_center_value(img, patch_size=1, accum_func=np.mean):
+    """Find center of image, taking reducing around `patch_size` pixels
+
+    Args:
+        img (ndarray): 2D image to get center value
+        patch_size (int): number of pixels to look around center for
+        accum_func (numpy function): default = np.mean.
+            Reduces pixels in patch_size into one number
+
+    Returns:
+
+    """
     rows, cols = img.shape
     rcent = rows // 2
     ccent = cols // 2
     p = patch_size // 2
-    return np.mean(img[rcent - p:rcent + p + 1, ccent - p:ccent + p + 1])
+    return accum_func(img[rcent - p:rcent + p + 1, ccent - p:ccent + p + 1])
 
 
 def find_blobs_with_harris_peaks(image,
