@@ -71,12 +71,14 @@ def mask_border(mask):
     return np.min(rows), np.max(rows), np.min(cols), np.max(cols)
 
 
-def crop_image_to_mask(image, mask, crop_val=np.nan, sigma=0):
+def crop_image_to_mask(image, mask, crop_val=None, sigma=0):
     """Returns only part of `image` within the bounding box of `mask`
 
     Args:
         image (ndarray): image to crop
         mask: boolean ndarray same size as image from indexes_within_circle
+            if provided (e.g. with np.nan), area around blob circle gets
+            masked and set to this value. Otherwise, a square patch is used
         crop_val (float or nan): value to make all pixels outside sigma radius
             default=np.nan. if None, leaves the edges of bbox untouched
         sigma (float): if provided, smooth by a gaussian filter of size `sigma`
@@ -86,17 +88,18 @@ def crop_image_to_mask(image, mask, crop_val=np.nan, sigma=0):
         masked_out = gaussian_filter(masked_out, sigma=sigma)
     if crop_val is not None:
         masked_out[~mask] = crop_val
+    # Now find square border of blob circle and crop
     min_row, max_row, min_col, max_col = mask_border(mask)
     return masked_out[min_row:max_row + 1, min_col:max_col + 1]
 
 
-def crop_blob(image, blob, crop_val=np.nan, sigma=0):
+def crop_blob(image, blob, crop_val=None, sigma=0):
     """Crops an image to the box around a blob with nans outside blob area
     Args:
         image:
         blob: (row, col, radius, ...)
         crop_val (float or nan): value to make all pixels outside sigma radius
-            default=np.nan. if None, leaves the edges of bbox untouched
+            e.g with p.nan. default=None, leaves the edges of bbox untouched
         sigma (float): if provided, smooth by a gaussian filter of size `sigma`
 
     Returns:
@@ -283,3 +286,34 @@ def prune_regions(regions, bboxes, overlap_thresh=0.5):
     remaining = list(set(all_idx) - set(eliminated_idxs))
     # Converts to np.array to use fancy indexing
     return list(np.array(sorted_regions)[remaining]), np.array(sorted_bboxes)[remaining]
+
+def gaussian_filter_nan(image, sigma, **kwargs):
+    """Apply a gaussian filter to an image with NaNs (avoiding all nans)
+
+    The scipy.ndimage `gaussian_filter` will make the output all NaNs if
+    any of the pixels in the input that touches the kernel is NaN
+
+    Source:
+    https://stackoverflow.com/a/36307291
+
+    Args:
+        image: ndarray with nans to filter
+        sigma: filter size, passed into gaussian_filter
+        **kwargs: passed into gaussian_filter
+
+    Returns:
+
+    """
+    if np.sum(np.isnan(image)) == 0:
+        return gaussian_filter(image, sigma=sigma, **kwargs)
+
+    V = image.copy()
+    nan_idxs = np.isnan(image)
+    V[nan_idxs] = 0
+    V_filt = gaussian_filter(V, sigma, **kwargs)
+
+    W = np.ones(image.shape)
+    W[nan_idxs] = 0
+    W_filt = gaussian_filter(W, sigma, **kwargs)
+
+    return V_filt / W_filt

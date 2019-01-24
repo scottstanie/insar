@@ -5,6 +5,7 @@ import glob
 import numpy as np
 import scipy.ndimage as nd
 from scipy.stats import multivariate_normal
+from scipy.ndimage import gaussian_filter
 from skimage import feature, transform
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
@@ -498,6 +499,15 @@ def simulate_detections(num_sims,
     print("Total recall:", total_recall / num_sims)
 
 
+def record_blob_patches(fname, image, blobs):
+    print("Recording %s" % fname)
+    patches = []
+    for blob in blobs:
+        patch = blob_utils.crop_blob(image, blob)
+        patches.append(patch)
+    np.savez(fname, *patches, blobs=blobs)
+
+
 def load_run(run_idx, data_path='.'):
     """Load a simulation run to retrieve image, blobs, and patches
     Args:
@@ -518,16 +528,17 @@ def load_run(run_idx, data_path='.'):
     run_arrays = {
         'td_patches': [td_arrs[key] for key in td_arrs.keys() if key.startswith('arr')],
         'td_blobs': td_arrs['blobs'],
-        'fp_patches': [fp_arrs[key] for key in fp_arrs.keys()],
+        'fp_patches': [fp_arrs[key] for key in fp_arrs.keys() if key.startswith('arr')],
         'fp_blobs': fp_arrs['blobs'],
-        'miss_patches': [miss_arrs[key] for key in miss_arrs.keys()],
+        'miss_patches': [miss_arrs[key] for key in miss_arrs.keys() if key.startswith('arr')],
         'miss_blobs': miss_arrs['blobs'],
         'image': image_arrs['image'],
         'real_blobs': image_arrs['real_blobs'],
     }
     return run_arrays
 
-def plot_run(run_arrays):
+
+def plot_run_summary(run_arrays):
     image = run_arrays['image']
     true_d = run_arrays['td_blobs']
     fp = run_arrays['fp_blobs']
@@ -538,13 +549,15 @@ def plot_run(run_arrays):
     return cur_axes
 
 
-def record_blob_patches(fname, image, blobs):
-    print("Recording %s" % fname)
-    patches = []
-    for blob in blobs:
-        patch = blob_utils.crop_blob(image, blob)
-        patches.append(patch)
-    np.savez(fname, *patches, blobs=blobs)
+def plot_run_patches(run_arrs, keys=('td', 'fp', 'miss'), sigma=0):
+    for key in keys:
+        full_key = '%s_patches' % key
+        patches = run_arrs[full_key]
+        for patch in patches:
+            if sigma > 0:
+                patch = blob_utils.gaussian_filter_nan(patch, sigma=sigma)
+            blob.plot.plot_cropped_blob(patch=patch, )
+            plt.suptitle(full_key)
 
 
 def simulation_results(outfile):

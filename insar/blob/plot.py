@@ -57,12 +57,14 @@ def plot_blobs(image=None,
     return blobs, cur_axes
 
 
-def plot_cropped_blob(image, blob, crop_val=np.nan, sigma=0):
+def plot_cropped_blob(image=None, blob=None, patch=None, crop_val=np.nan, sigma=0):
     """Plot a 3d view of heighs of a blob along with its circle imshow view
 
     Args:
-        image:
+        image (ndarray): image in which blobs are detected
         blob: (row, col, radius, ...)
+        patch (ndarray): optional: the sub-image from `crop_blob`, which is
+            the area of `image` cropped around `blob`
         crop_val (float or nan): value to make all pixels outside sigma radius
             default=np.nan. if None, leaves the edges of bbox untouched
         sigma (float): if provided, smooth by a gaussian filter of size `sigma`
@@ -70,7 +72,8 @@ def plot_cropped_blob(image, blob, crop_val=np.nan, sigma=0):
     Returns:
         matplotlib.Axes
     """
-    patch = blob_utils.crop_blob(image, blob, crop_val=crop_val, sigma=sigma)
+    if patch is None:
+        patch = blob_utils.crop_blob(image, blob, crop_val=crop_val, sigma=sigma)
     ax = plot_heights(patch)
     return ax
 
