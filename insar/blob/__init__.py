@@ -274,7 +274,7 @@ def compute_blob_scores(image,
 def get_blob_bowl_score(image, blob, sigma=None):
     patch = blob_utils.crop_blob(image, blob, crop_val=None)
     shape_vals = skblob.shape_index(patch, sigma=sigma, mode='nearest')
-    return get_center_value(shape_vals, patch_size=3)
+    return blob_utils.get_center_value(shape_vals, patch_size=3)
 
 
 def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff=.7, **kwargs):
@@ -325,7 +325,7 @@ def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff
         # cur_scores = score_images[sigma_idx]
         # # Only examine blob area
         # blob_scores = blob_utils.crop_blob(cur_scores, blob, crop_val=None)
-        # center_score = get_center_value(blob_scores)
+        # center_score = blob_utils.get_center_value(blob_scores)
         center_score = get_blob_bowl_score(image, blob, sigma=sigma)
         if np.abs(center_score) >= score_cutoff:
             out_blobs.append(blob)
@@ -333,25 +333,6 @@ def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff
             print("removing blob: %s, score: %s" % (str(blob.astype(int)), center_score))
 
     return np.array(out_blobs)
-
-
-def get_center_value(img, patch_size=1, accum_func=np.mean):
-    """Find center of image, taking reducing around `patch_size` pixels
-
-    Args:
-        img (ndarray): 2D image to get center value
-        patch_size (int): number of pixels to look around center for
-        accum_func (numpy function): default = np.mean.
-            Reduces pixels in patch_size into one number
-
-    Returns:
-
-    """
-    rows, cols = img.shape
-    rcent = rows // 2
-    ccent = cols // 2
-    p = patch_size // 2
-    return accum_func(img[rcent - p:rcent + p + 1, ccent - p:ccent + p + 1])
 
 
 def find_blobs_with_harris_peaks(image,

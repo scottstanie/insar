@@ -363,7 +363,7 @@ def plot_func(func=GAUSSIAN, shape=(501, 501), sigma=None):
 def auto_corr_ratio(image, sigma, mode='nearest', cval=0):
     A = feature.structure_tensor(image, sigma=sigma, mode=mode, cval=cval)
     lambda1, lambda2 = feature.structure_tensor_eigvals(*A)
-    return blob.get_center_value(lambda1 / lambda2)
+    return blob_utils.get_center_value(lambda1 / lambda2)
 
 
 def plot_auto_corr(image, sigma, mode='nearest', cval=0):
@@ -436,7 +436,7 @@ def demo_shape_index():
 
 @log_runtime
 def simulate_detections(num_sims,
-                        outfile='blobsim.csv',
+                        result_file='blobsim.csv',
                         patch_dir=None,
                         num_blobs=None,
                         min_blobs=20,
@@ -488,7 +488,7 @@ def simulate_detections(num_sims,
         return precision, recall, len(real_blobs)
 
     total_precision, total_recall = 0, 0
-    with open(outfile, 'w') as f:
+    with open(os.path.join(patch_dir, result_file), 'w') as f:
         for run_idx in range(1, num_sims + 1):
             precision, recall, nblobs = run(run_idx)
             f.write("%.2f,%.2f,%d\n" % (precision, recall, nblobs))

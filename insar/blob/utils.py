@@ -13,6 +13,25 @@ import cv2 as cv
 from shapely.geometry import Point, MultiPoint, Polygon, box
 
 
+def get_center_value(img, patch_size=1, accum_func=np.mean):
+    """Find center of image, taking reducing around `patch_size` pixels
+
+    Args:
+        img (ndarray): 2D image to get center value
+        patch_size (int): number of pixels to look around center for
+        accum_func (numpy function): default = np.mean.
+            Reduces pixels in patch_size into one number
+
+    Returns:
+
+    """
+    rows, cols = img.shape
+    rcent = rows // 2
+    ccent = cols // 2
+    p = patch_size // 2
+    return accum_func(img[rcent - p:rcent + p + 1, ccent - p:ccent + p + 1])
+
+
 def indexes_within_circle(mask_shape=None, center=None, radius=None, blob=None):
     """Get a mask of indexes within a circle
 

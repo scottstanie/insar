@@ -2,7 +2,6 @@
 import numpy as np
 from math import sqrt
 from insar.blob import utils as blob_utils
-from insar.blob import get_center_value
 from insar.blob.skblob import shape_index
 
 def _sigma_from_patch(patch):
@@ -29,6 +28,6 @@ def center_shape_index(patch, sigma_scale=None, patch_size=3):
     sigma = _sigma_from_patch(patch)
     if sigma_scale:
         sigma /= sigma_scale
-    return get_center_value(shape_index(patch, sigma=sigma), patch_size = 3)
+    return blob_utils.get_center_value(shape_index(patch, sigma=sigma), patch_size = 3)
 
 
