@@ -1,5 +1,7 @@
 # coding: utf-8
 import os
+from collections import defaultdict
+import glob
 import numpy as np
 import scipy.ndimage as nd
 from scipy.stats import multivariate_normal
@@ -474,10 +476,12 @@ def simulate_detections(num_sims,
         print("precision: ", precision)
         print("recall: ", recall)
         if patch_dir is not None:
+            td_fname = os.path.join(patch_dir, 'true_detections_%s' % run_idx)
             fp_fname = os.path.join(patch_dir, 'false_positives_%s' % run_idx)
             miss_fname = os.path.join(patch_dir, 'misses_%s' % run_idx)
             record_blob_patches(fp_fname, out, fp)
             record_blob_patches(miss_fname, out, misses)
+            record_blob_patches(td_fname, out, true_d)
             img_fname = os.path.join(patch_dir, 'image_%s' % run_idx)
             np.savez(img_fname, image=out, real_blobs=real_blobs)
         return precision, recall, len(real_blobs)
@@ -494,13 +498,53 @@ def simulate_detections(num_sims,
     print("Total recall:", total_recall / num_sims)
 
 
+def load_run(run_idx, data_path='.'):
+    """Load a simulation run to retrieve image, blobs, and patches
+    Args:
+        run_idx (int): run number
+        data_path (str): where .npz data is saved
+
+    Returns:
+        dict: keys = 'td_patches', 'td_blobs', 'fp_patches', 'fp_blobs',
+            'miss_patches', 'miss_blobs', 'image', 'real_blobs'
+            values: associated numpy arrays
+
+    """
+    image_arrs = np.load(os.path.join(data_path, "image_%s.npz" % run_idx))
+    td_arrs = np.load(os.path.join(data_path, 'true_detections_%s.npz' % run_idx))
+    fp_arrs = np.load(os.path.join(data_path, 'false_positives_%s.npz' % run_idx))
+    miss_arrs = np.load(os.path.join(data_path, 'misses_%s.npz' % run_idx))
+
+    run_arrays = {
+        'td_patches': [td_arrs[key] for key in td_arrs.keys() if key.startswith('arr')],
+        'td_blobs': td_arrs['blobs'],
+        'fp_patches': [fp_arrs[key] for key in fp_arrs.keys()],
+        'fp_blobs': fp_arrs['blobs'],
+        'miss_patches': [miss_arrs[key] for key in miss_arrs.keys()],
+        'miss_blobs': miss_arrs['blobs'],
+        'image': image_arrs['image'],
+        'real_blobs': image_arrs['real_blobs'],
+    }
+    return run_arrays
+
+def plot_run(run_arrays):
+    image = run_arrays['image']
+    true_d = run_arrays['td_blobs']
+    fp = run_arrays['fp_blobs']
+    misses = run_arrays['miss_blobs']
+    _, cur_axes = blob.plot.plot_blobs(image=image, blobs=true_d, color='green')
+    _, cur_axes = blob.plot.plot_blobs(image=image, blobs=fp, color='black', cur_axes=cur_axes)
+    _, cur_axes = blob.plot.plot_blobs(image=image, blobs=misses, color='red', cur_axes=cur_axes)
+    return cur_axes
+
+
 def record_blob_patches(fname, image, blobs):
     print("Recording %s" % fname)
     patches = []
     for blob in blobs:
         patch = blob_utils.crop_blob(image, blob)
         patches.append(patch)
-    np.savez(fname, *patches)
+    np.savez(fname, *patches, blobs=blobs)
 
 
 def simulation_results(outfile):
