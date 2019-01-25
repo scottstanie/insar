@@ -165,12 +165,12 @@ def plot_image_shifted(img,
     else:
         extent = (0, ncols, nrows, 0)
 
-    if ax and not fig:
+    if not fig and not ax:
+        fig = plt.figure()
+        ax = fig.gca()
+    elif ax and not fig:
         fig = ax.figure
     elif fig and not ax:
-        ax = fig.gca()
-    else:
-        fig = plt.figure()
         ax = fig.gca()
 
     if perform_shift:

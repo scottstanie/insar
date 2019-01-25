@@ -136,23 +136,23 @@ def blob_log(image=None,
 
     # Multiply each sigma by sqrt(2) to convert sigma to a circle radius
     lm = lm * np.array([1, 1, np.sqrt(2)])
-    print('initial local max lm:')
+    # print('initial local max lm:')
     # print(lm)
-    print(lm.shape)
+    # print(lm.shape)
     # Now remove first the spatial border blobs
     if border_size > 0:
         lm = prune_border_blobs(image.shape, lm, border_size)
-    print('lm post prune_border_blobs:')
-    print(lm)
-    print(lm.shape)
+    # print('lm post prune_border_blobs:')
+    # print(lm)
+    # print(lm.shape)
     # return lm
     # Next remove blobs that look like edges
     smoothed_image = gaussian_filter(image, sigma=3)
     if prune_edges:
         lm = prune_edge_extrema(smoothed_image, lm, positive=positive)
-    print('lm post prune_edge_extrema:')
-    print(lm)
-    print(lm.shape)
+    # print('lm post prune_edge_extrema:')
+    # print(lm)
+    # print(lm.shape)
     return prune_overlap_blobs(lm, overlap, sigma_bins=sigma_bins)
 
 
@@ -695,7 +695,7 @@ def _get_high_intensity_peaks(image, mask, num_peaks):
     # Higest peak first
     return coord[::-1]
 
-def shape_index(image, sigma=1, mode='constant', cval=0, eps=1e-16):
+def shape_index(image, sigma=1, mode='nearest', cval=0, eps=1e-16):
     """Compute the shape index.
 
     The shape index, as defined by Koenderink & van Doorn [1]_, is a

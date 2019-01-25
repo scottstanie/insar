@@ -79,7 +79,7 @@ def find_blobs(image,
     blobs = np.empty((0, 4))
     if positive:
 
-        print('bpos')
+        # print('bpos')
         blobs_pos = skblob.blob_log(
             image=image,
             threshold=threshold,
@@ -101,7 +101,7 @@ def find_blobs(image,
             blobs_with_mags = blobs_with_mags[blobs_with_mags[:, -1] >= mag_threshold]
         blobs = np.vstack((blobs, blobs_with_mags))
     if negative:
-        print('bneg')
+        # print('bneg')
         blobs_neg = skblob.blob_log(
             image=image,
             threshold=threshold,
@@ -190,8 +190,8 @@ def make_blob_image(igram_path=".",
         for lat, lon, r, val in blobs_ll:
             logger.info('({0:.4f}, {1:.4f}): radius: {2}, val: {3}'.format(lat, lon, r, val))
 
-    plot.plot_blobs(blobs=blobs_ll, cur_axes=imagefig.gca())
-    # plot_blobs(blobs=blobs, cur_axes=imagefig.gca())
+    plot.plot_blobs(blobs=blobs_ll, ax=imagefig.gca())
+    # plot_blobs(blobs=blobs, ax=imagefig.gca())
 
 
 def _corner_score(image, sigma=1):
@@ -271,6 +271,7 @@ def compute_blob_scores(image,
     return score_imgs, peaks
 
 
+# TODO: use the scores.py module instead of repeat here
 def get_blob_bowl_score(image, blob, sigma=None, patch_size=3):
     patch = blob_utils.crop_blob(image, blob, crop_val=None)  # Don't crop with nans
     shape_vals = skblob.shape_index(patch, sigma=sigma, mode='nearest')
@@ -319,7 +320,7 @@ def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff
     # import ipdb
     # ipdb.set_trace()
     out_blobs = []
-    for blob, sigma in zip(blobs, sigma_arr):
+    for b, sigma in zip(blobs, sigma_arr):
         # for blob, sigma_idx in zip(blobs, sigma_idxs):
         # OLD WAY: compute scores, then crop. THIS is DIFFERENT than crop, then score for bowlness
         # # Get the peaks that correspond to the current sigma level
@@ -327,11 +328,11 @@ def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff
         # # Only examine blob area
         # blob_scores = blob_utils.crop_blob(cur_scores, blob, crop_val=None)
         # center_score = blob_utils.get_center_value(blob_scores)
-        center_score = get_blob_bowl_score(image, blob, sigma=sigma)
+        center_score = get_blob_bowl_score(image, b, sigma=sigma)
         if np.abs(center_score) >= score_cutoff:
-            out_blobs.append(blob)
+            out_blobs.append(b)
         else:
-            print("removing blob: %s, score: %s" % (str(blob.astype(int)), center_score))
+            print("removing blob: %s, score: %s" % (str(b.astype(int)), center_score))
 
     return np.array(out_blobs)
 

@@ -9,10 +9,11 @@ from insar import plotting
 
 def plot_blobs(image=None,
                blobs=None,
-               cur_fig=None,
-               cur_axes=None,
+               fig=None,
+               ax=None,
                color='blue',
                blob_cmap=None,
+               plot_img=False,
                **kwargs):
     """Takes the blob results from find_blobs and overlays on image
 
@@ -20,21 +21,22 @@ def plot_blobs(image=None,
 
     Returns:
         blobs
-        cur_axes
+        ax
     """
-    if cur_fig:
-        cur_axes = cur_fig.gca()
-    if not cur_axes:
-        cur_fig, ax_img = plotting.plot_image_shifted(
+    if fig and not ax:
+        ax = fig.gca()
+    if plot_img or not ax:
+        fig, ax_img = plotting.plot_image_shifted(
             image,
-            fig=cur_fig,
-            ax=cur_axes,
+            fig=fig,
+            ax=ax,
             **kwargs,
         )
-        if not cur_axes:
-            cur_axes = cur_fig.gca()
-        # ax_img = cur_axes.imshow(image)
-        # cur_fig.colorbar(ax_img)
+        # ax_img = ax.imshow(image)
+        # fig.colorbar(ax_img)
+
+    if not ax:
+        ax = fig.gca()
 
     if blob_cmap:
         blob_cm = cm.get_cmap(blob_cmap, len(blobs))
@@ -42,7 +44,7 @@ def plot_blobs(image=None,
     for idx, blob in enumerate(blobs):
         if blob_cmap:
             color_pct = idx / len(blobs)
-            color = viridis(color_pct)
+            color = blob_cm(color_pct)
         c = plt.Circle((blob[1], blob[0]),
                        blob[2],
                        color=color,
@@ -50,11 +52,11 @@ def plot_blobs(image=None,
                        linewidth=2,
                        clip_on=False)
         patches.append(c)
-        cur_axes.add_patch(c)
+        ax.add_patch(c)
 
     plt.draw()
     plt.show()
-    return blobs, cur_axes
+    return blobs, ax
 
 
 def plot_cropped_blob(image=None, blob=None, patch=None, crop_val=None, sigma=0):

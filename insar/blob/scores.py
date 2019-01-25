@@ -36,6 +36,7 @@ def shape_index_stat(patch, accum_func, sigma=None, sigma_scale=None, patch_size
     # If they don't specify one sigma, use patch size
     if sigma is None:
         sigma = _sigma_from_patch(patch)
+        print('sfp', sigma)
     # if they want to scale down the default (which smooths proportional to the blob sigma)
     if sigma_scale:
         sigma /= sigma_scale
@@ -81,13 +82,11 @@ def shape_index_ptp_full(patch, sigma=None, sigma_scale=None):
     return shape_index_stat(patch, np.ptp, sigma=sigma, sigma_scale=sigma_scale, patch_size='full')
 
 
-def max_shape_gradient(patch):
+def max_gradient(patch):
     imy = np.abs(ndi.sobel(patch, axis=0, mode='nearest'))
     imx = np.abs(ndi.sobel(patch, axis=1, mode='nearest'))
     return max(np.max(imx), np.max(imy))
 
-
-return imx, imy
 
 FUNC_LIST = [
     shape_index_center,

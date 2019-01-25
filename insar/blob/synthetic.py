@@ -198,17 +198,19 @@ def demo_ghost_blobs(num_blobs=10,
     print("precision: ", precision)
     print("recall: ", recall)
 
-    _, cur_axes = blob.plot.plot_blobs(image=out, blobs=true_d, color='green')
-    _, cur_axes = blob.plot.plot_blobs(image=out, blobs=fp, color='black', cur_axes=cur_axes)
-    _, cur_axes = blob.plot.plot_blobs(image=out, blobs=misses, color='red', cur_axes=cur_axes)
+    _, ax = blob.plot.plot_blobs(image=out, blobs=true_d, color='green')
+    _, ax = blob.plot.plot_blobs(image=out, blobs=fp, color='black', ax=ax)
+    _, ax = blob.plot.plot_blobs(image=out, blobs=misses, color='red', ax=ax)
     return out, sigma_list, real_blobs, detected, fp, misses
 
 
 def make_delta(shape, row=None, col=None):
     delta = np.zeros(shape)
-    if row is None or col is None:
-        nrows, ncols = shape
-        row, col = nrows // 2, ncols // 2
+    rows, cols = shape
+    if col is None:
+        col = cols // 2
+    if row is None:
+        row = rows // 2
     delta[row, col] = 1
     return delta
 
@@ -545,10 +547,10 @@ def plot_run_summary(run_arrays):
     true_d = run_arrays['td_blobs']
     fp = run_arrays['fp_blobs']
     misses = run_arrays['miss_blobs']
-    _, cur_axes = blob.plot.plot_blobs(image=image, blobs=true_d, color='green')
-    _, cur_axes = blob.plot.plot_blobs(image=image, blobs=fp, color='black', cur_axes=cur_axes)
-    _, cur_axes = blob.plot.plot_blobs(image=image, blobs=misses, color='red', cur_axes=cur_axes)
-    return cur_axes
+    _, ax = blob.plot.plot_blobs(image=image, blobs=true_d, color='green')
+    _, ax = blob.plot.plot_blobs(image=image, blobs=fp, color='black', ax=ax)
+    _, ax = blob.plot.plot_blobs(image=image, blobs=misses, color='red', ax=ax)
+    return ax
 
 
 def plot_run_patches(run_arrs, keys=('td', 'fp', 'miss'), sigma=0):
@@ -655,10 +657,10 @@ def igarss_fig():
     blobs, sigma_list = blob.find_blobs(out, min_sigma=3, max_sigma=100, num_sigma=40)
     image_cube = blob.skblob.create_gl_cube(out, sigma_list=sigma_list)
 
-    _, cur_axes = blob.plot.plot_blobs(
+    _, ax = blob.plot.plot_blobs(
         image=out,
         blobs=blob.find_edge_blobs(blobs, out.shape)[0],
-        cur_axes=fig.gca(),
+        ax=fig.gca(),
         color='blue')
 
     plt.imshow(image_cube[:, :, 30], cmap='jet', vmin=-1.4, vmax=1.3)
