@@ -20,7 +20,7 @@ from scipy.ndimage.filters import uniform_filter, uniform_filter1d
 
 from sardem.loading import load_dem_rsc
 from insar.parsers import Sentinel
-from insar import sario, utils, latlon, mask
+from insar import sario, utils, latlon, mask, gps
 from insar.log import get_log, log_runtime
 
 SENTINEL_WAVELENGTH = 5.5465763  # cm
@@ -404,6 +404,7 @@ def run_inversion(igram_path,
                   constant_vel=False,
                   alpha=0,
                   difference=False,
+                  deramp=True,
                   masking=True,
                   verbose=False):
     """Runs SBAS inversion on all unwrapped igrams
@@ -420,7 +421,8 @@ def run_inversion(igram_path,
             See https://en.wikipedia.org/wiki/Tikhonov_regularization
         difference (bool): for regularization, penalize differences in velocity
             Used to make a smoother final solution
-        masking (bool): flag to load stack og .int.mask files to mask invalid areas
+        deramp (bool): Fits plane to each igram and subtracts (to remove orbital error)
+        masking (bool): flag to load stack of .int.mask files to mask invalid areas
         verbose (bool): print extra timing and debug info
 
     Returns:
@@ -443,24 +445,23 @@ def run_inversion(igram_path,
             B.shape, timediffs.shape))
 
     logger.debug("Reading unw stack")
-    unw_stack, mask_stack, geo_mask_columns = load_deramped_masked_stack(
+    unw_stack, mask_stack, geo_mask_columns = load_unw_masked_stack(
         igram_path,
         num_timediffs=len(timediffs),
         unw_ext='.unw',
+        deramp=deramp,
         masking=masking,
     )
 
-    # Process the correlation, mask bad corr pixels in the igrams
-    # TODO
+    # TODO: Process the correlation, mask very bad corr pixels in the igrams
 
     # Use the given reference, or find one on based on max correlation
     if any(r is None for r in reference):
-        logger.info("Finding most coherent patch in stack.")
-        cc_stack = sario.load_stack(directory=igram_path, file_ext=".cc")
-        cc_stack = np.ma.array(cc_stack, mask=mask_stack)
-        ref_row, ref_col = find_coherent_patch(cc_stack)
-        logger.info("Using %s as .unw reference point", (ref_row, ref_col))
-        del cc_stack  # In case of big memory
+        # Make a latlon image to check for gps data containment
+        # TODO: maybe i need to search for masks? dont wanna pick a garbage one by accident
+        latlon_image = latlon.LatlonImage(
+            data=unw_stack[0], dem_rsc_file=os.path.join(igram_path, 'dem.rsc'))
+        find_reference_location(latlon_image, igram_path, mask_stack, gps_dir=None)
     else:
         ref_row, ref_col = reference
 
@@ -555,16 +556,22 @@ def matrix_indices(shape, flatten=True):
         return row_block, col_block
 
 
-def load_deramped_masked_stack(igram_path, num_timediffs=None, unw_ext='.unw', masking=True):
+def load_unw_masked_stack(igram_path, num_timediffs=None, unw_ext='.unw', deramp=True,
+                          masking=True):
 
     int_file_names = read_intlist(igram_path, parse=False)
-    # Deramp each .unw file
-    # For larger areas, use quadratic ramp. Otherwise, linear
-    max_linear = 20
-    width, height = latlon.grid_size(**load_dem_rsc(os.path.join(igram_path, 'dem.rsc')))
-    order = 1 if (width < max_linear or height < max_linear) else 2
-    logger.info("Dem size %.2f by %.2f km: using order %s surface to deramp", width, height, order)
-    unw_stack = deramp_stack(int_file_names, unw_ext, order=order)
+    if deramp:
+        # Deramp each .unw file
+        # For larger areas, use quadratic ramp. Otherwise, linear
+        max_linear = 20  # km
+        width, height = latlon.grid_size(**load_dem_rsc(os.path.join(igram_path, 'dem.rsc')))
+        order = 1 if (width < max_linear or height < max_linear) else 2
+        logger.info("Dem size %.2f by %.2f km: using order %s surface to deramp", width, height,
+                    order)
+        unw_stack = deramp_stack(int_file_names, unw_ext, order=order)
+    else:
+        unw_file_names = [f.replace('.int', unw_ext) for f in int_file_names]
+        unw_stack = sario.load_stack(file_list=unw_file_names)
 
     unw_stack = unw_stack.view(np.ma.MaskedArray)
 
@@ -680,6 +687,31 @@ def deramp_stack(int_file_list, unw_ext, order=1):
     else:
         logger.info("Loading previous deramped files.")
         return sario.load_stack(file_list=flat_file_names)
+
+
+def find_reference_location(latlon_image, igram_path=None, mask_stack=None, gps_dir=None):
+    ref_row, ref_col = None, None
+    logger.info("Searching for gps station within area")
+    stations = gps.stations_within_image(latlon_image, mask_invalid=True)
+    if len(stations) > 0:
+        # TODO: pick best station somehow? maybe higher mean correlation?
+        logger.info("Station options:")
+        logger.info(stations)
+
+        name, lon, lat = stations[0]
+        logger.info("Using station %s at (lon, lat) (%s, %s)", name, lon, lat)
+        ref_row, ref_col = latlon_image.nearest_pixel(lon=lon, lat=lat)
+
+    if ref_row is None:
+        logger.warning("GPS station search failed, reverting to coherence")
+        logger.info("Finding most coherent patch in stack.")
+        cc_stack = sario.load_stack(directory=igram_path, file_ext=".cc")
+        cc_stack = np.ma.array(cc_stack, mask=mask_stack)
+        ref_row, ref_col = find_coherent_patch(cc_stack)
+        logger.info("Using %s as .unw reference point", (ref_row, ref_col))
+        del cc_stack  # In case of big memory
+
+    return ref_row, ref_col
 
 
 def find_coherent_patch(correlations, window=11):

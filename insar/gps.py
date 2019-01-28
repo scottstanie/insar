@@ -8,11 +8,15 @@ import matplotlib.pyplot as plt
 
 from insar import los, timeseries, latlon, kml
 
-GPS_DIR = '/data1/scott/pecos/gps_station_data'
+GPS_DIR = os.environ.get('GPS_DIR', '/data1/scott/pecos/gps_station_data')
 
 
 @functools.lru_cache()
-def read_station_df(filename=os.path.join(GPS_DIR, 'texas_stations.csv'), header=None):
+def read_station_df(gps_dir=None, header=None):
+    """Read in the name, lat, lon, alt list of gps stations"""
+    gps_dir = gps_dir or GPS_DIR
+    filename = os.path.join(GPS_DIR, 'texas_stations.csv')
+    print("Searching %s for gps data" % filename)
     df = pd.read_csv(filename, header=header)
     df.columns = ['name', 'lat', 'lon', 'alt']
     return df
@@ -24,12 +28,33 @@ def station_lonlat(station_name):
     return lon, lat
 
 
-def stations_within_image(image_ll):
-    """Given a LatlonImage, find gps stations contained in area"""
+def stations_within_image(image_ll, mask_invalid=True):
+    """Given a LatlonImage, find gps stations contained in area
+
+    Args:
+        image_ll (LatlonImage): LatlonImage of area with data
+        mask_invalid (bool): Default true. if true, don't return stations
+            where the image value is NaN or exactly 0
+
+    Returns:
+        ndarray: Nx3, with columns ['name', 'lon', 'lat']
+    """
     df = read_station_df()
     station_lon_lat_arr = df[['lon', 'lat']].values
     contains_bools = image_ll.contains(station_lon_lat_arr)
-    return df[contains_bools][['name', 'lon', 'lat']].values
+    candidates = df[contains_bools][['name', 'lon', 'lat']].values
+    good_stations = []
+    if mask_invalid:
+        for name, lon, lat in candidates:
+            row, col = image_ll.nearest_pixel(lon=lon, lat=lat)
+            val = image_ll[..., row, col]
+            if np.isnan(val) or val == 0:
+                continue
+            else:
+                good_stations.append([name, lon, lat])
+    else:
+        good_stations = candidates
+    return good_stations
 
 
 def find_stations_with_data(gps_dir=None):
