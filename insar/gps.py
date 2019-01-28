@@ -5,6 +5,7 @@ import functools
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.ndimage.filters import uniform_filter1d
 
 from insar import los, timeseries, latlon, kml
 
@@ -95,6 +96,43 @@ def load_gps_station_df(station_name, basedir=GPS_DIR, start_year=2015, end_year
     df = pd.read_csv(gps_data_file, header=0, sep='\s+')
     return _clean_gps_df(df, start_year, end_year)
 
+
+def moving_average(arr, window_size=7):
+    """Takes a 1D array and returns the running average of same size"""
+    return uniform_filter1d(arr, size=window_size, mode='nearest')
+
+
+def window_stack(stack, row, col, window_size=3, func=np.mean):
+    """Combines square around (row, col) in 3D stack to a 1D array
+
+    Used to average around a pixel in a stack and produce a timeseries
+
+    Args:
+        stack (ndarray): 3D array of images, stacked along axis=0
+        row (int): row index of the reference pixel to subtract
+        col (int): col index of the reference pixel to subtract
+        window_size (int): size of the group around ref pixel to avg for reference.
+            if window_size=1 or None, only the single pixel location used for output
+        func (str): default=np.mean, numpy function to use on window.
+
+    Raises:
+        ValueError: if window_size is not a positive int, or if ref pixel out of bounds
+    """
+    window_size = window_size or 1
+    if not isinstance(window_size, int) or window_size < 1:
+        raise ValueError("Invalid window_size %s: must be odd positive int" % window_size)
+    elif row > stack.shape[1] or col > stack.shape[2]:
+        raise ValueError(
+            "(%s, %s) out of bounds reference for stack size %s" % (row, col, stack.shape))
+
+    if window_size % 2 == 0:
+        window_size -= 1
+        print("Making window_size an odd number (%s) to get square" % window_size)
+
+    win_size = window_size // 2
+    return func(stack[:,
+                row - win_size:row + win_size + 1,
+                col - win_size:col + win_size + 1], axis=(1, 2))  # yapf: disable
 
 def plot_gps_enu(station=None, station_df=None, days_smooth=12):
     def remove_xticks(ax):

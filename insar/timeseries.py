@@ -16,11 +16,12 @@ import os
 import re
 import datetime
 import numpy as np
-from scipy.ndimage.filters import uniform_filter, uniform_filter1d
+from scipy.ndimage.filters import uniform_filter
 
 from sardem.loading import load_dem_rsc
 from insar.parsers import Sentinel
-from insar import sario, utils, latlon, mask, gps
+from insar import sario, utils, latlon, mask
+import insar.gps
 from insar.log import get_log, log_runtime
 
 SENTINEL_WAVELENGTH = 5.5465763  # cm
@@ -170,39 +171,6 @@ def build_B_matrix(geolist, intlist):
     return B
 
 
-def window_stack(stack, row, col, window_size=3, func=np.mean):
-    """Combines square around (row, col) in 3D stack to a 1D array
-
-    Used to average around a pixel in a stack and produce a timeseries
-
-    Args:
-        stack (ndarray): 3D array of images, stacked along axis=0
-        row (int): row index of the reference pixel to subtract
-        col (int): col index of the reference pixel to subtract
-        window_size (int): size of the group around ref pixel to avg for reference.
-            if window_size=1 or None, only the single pixel location used for output
-        func (str): default=np.mean, numpy function to use on window.
-
-    Raises:
-        ValueError: if window_size is not a positive int, or if ref pixel out of bounds
-    """
-    window_size = window_size or 1
-    if not isinstance(window_size, int) or window_size < 1:
-        raise ValueError("Invalid window_size %s: must be odd positive int" % window_size)
-    elif row > stack.shape[1] or col > stack.shape[2]:
-        raise ValueError(
-            "(%s, %s) out of bounds reference for stack size %s" % (row, col, stack.shape))
-
-    if window_size % 2 == 0:
-        window_size -= 1
-        logger.warning("Making window_size an odd number (%s) to get square", window_size)
-
-    win_size = window_size // 2
-    return func(stack[:,
-                      row - win_size:row + win_size + 1,
-                      col - win_size:col + win_size + 1], axis=(1, 2))  # yapf: disable
-
-
 def shift_stack(stack, ref_row, ref_col, window=3, window_func=np.mean):
     """Subtracts reference pixel group from each layer
 
@@ -219,7 +187,7 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func=np.mean):
     Raises:
         ValueError: if window is not a positive int, or if ref pixel out of bounds
     """
-    means = window_stack(stack, ref_row, ref_col, window, window_func)
+    means = insar.gps.window_stack(stack, ref_row, ref_col, window, window_func)
     return stack - means[:, np.newaxis, np.newaxis]  # pad with axes to broadcast
 
 
@@ -696,7 +664,7 @@ def deramp_stack(int_file_list, unw_ext, order=1):
 def find_reference_location(latlon_image, igram_path=None, mask_stack=None, gps_dir=None):
     ref_row, ref_col = None, None
     logger.info("Searching for gps station within area")
-    stations = gps.stations_within_image(latlon_image, mask_invalid=True)
+    stations = insar.gps.stations_within_image(latlon_image, mask_invalid=True)
     if len(stations) > 0:
         # TODO: pick best station somehow? maybe higher mean correlation?
         logger.info("Station options:")
@@ -772,11 +740,6 @@ def create_igram_masks(igram_path, row_looks=1, col_looks=1):
         col_looks=col_looks,
     )
     return
-
-
-def moving_average(arr, window_size=7):
-    """Takes a 1D array and returns the running average of same size"""
-    return uniform_filter1d(arr, size=window_size, mode='nearest')
 
 
 # TODO: make simple stack averaging work
