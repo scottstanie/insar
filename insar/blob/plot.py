@@ -7,6 +7,53 @@ from insar.blob import utils as blob_utils
 from insar import plotting
 
 
+def on_pick(blobs, patches):
+    def pick_event(event):
+        """Store the index matching the clicked blob to delete"""
+        ax = event.artist.axes
+        for i, artist in enumerate(patches):
+            if event.artist == artist:
+                ax.picked_idx = i
+                ax.picked_object = artist  # Also save circle Artist to remove
+
+        print("Selected blob: %s" % str(blobs[ax.picked_idx]))
+
+    return pick_event
+
+
+def on_press(event):
+    'on button press we will see if the mouse is over us and store some data'
+    # print("on press event", event)
+    # You can either double click or right click to unselect
+    if event.button != 3 and not event.dblclick:
+        return
+
+    ax = event.inaxes
+    if ax:
+        print("Unselecting blob")
+        ax.picked_idx = None
+        ax.picked_object = None
+
+
+def on_key(event):
+    """
+    Function to be bound to the key press event
+    If the key pressed is delete and there is a picked object,
+    remove that object from the canvas
+    """
+    if event.key == u'delete':
+        ax = event.inaxes
+        if ax is not None and ax.picked_object:
+            cur_blob = ax.blobs[ax.picked_idx]
+            print("Deleting blob %s" % str(cur_blob))
+            ax.deleted_idxs.add(ax.picked_idx)
+            ax.picked_idx = None
+
+            ax.picked_object.remove()
+            ax.picked_object = None
+            ax.figure.canvas.draw()
+
+
 def plot_blobs(image=None,
                blobs=None,
                fig=None,
@@ -36,18 +83,43 @@ def plot_blobs(image=None,
     if blob_cmap:
         blob_cm = cm.get_cmap(blob_cmap, len(blobs))
     patches = []
-    for idx, blob in enumerate(blobs):
+    # Draw big blobs first to allow easier clicking on overlaps
+    sorted_blobs = sorted(blobs, key=lambda b: b[2], reverse=True)
+    circle_to_blobs = {}
+    for idx, blob in enumerate(sorted_blobs):
         if blob_cmap:
             color_pct = idx / len(blobs)
             color = blob_cm(color_pct)
-        c = plt.Circle(
-            (blob[1], blob[0]), blob[2], color=color, fill=False, linewidth=2, clip_on=False)
-        patches.append(c)
+        c = plt.Circle((blob[1], blob[0]),
+                       blob[2],
+                       color=color,
+                       fill=False,
+                       linewidth=2,
+                       clip_on=False,
+                       picker=True)
         ax.add_patch(c)
+        circle_to_blobs[c] = blob
+        patches.append(c)
+
+    ax.blobs = sorted_blobs
+    ax.picked_idx = None
+    ax.picked_object = None
+    ax.deleted_idxs = set()
+
+    pick_handler = on_pick(sorted_blobs, patches)
+    fig.canvas.mpl_connect('pick_event', pick_handler)
+    fig.canvas.mpl_connect('button_press_event', on_press)
+    fig.canvas.mpl_connect('key_press_event', on_key)
 
     plt.draw()
     plt.show()
-    return blobs, ax
+
+    if ax.deleted_idxs:
+        print("Deleted %s blobs" % len(ax.deleted_idxs))
+    all_idx = range(len(blobs))
+    remaining = list(set(all_idx) - set(ax.deleted_idxs))
+    remaining_blobs = np.array(sorted_blobs)[remaining]
+    return remaining_blobs, ax
 
 
 def plot_cropped_blob(image=None, blob=None, patch=None, crop_val=None, sigma=0):
@@ -179,3 +251,10 @@ def plot_regions(regions, ax=None, linecolor='k-'):
     for shape in blob_utils.regions_to_shapes(regions):
         xx, yy = shape.convex_hull.exterior.xy
         ax.plot(xx, yy, linecolor)
+
+
+if __name__ == '__main__':
+    npz = np.load('patches/image_1.npz')
+    image = npz['image']
+    real_blobs = npz['real_blobs']
+    plot_blobs(image=image, blobs=real_blobs)

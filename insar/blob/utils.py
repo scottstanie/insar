@@ -302,7 +302,7 @@ def prune_regions(regions, bboxes, overlap_thresh=0.5):
                 eliminated_idxs.add(jdx)
 
     # Now get the non-eliminated indices
-    all_idx = np.arange(len(sorted_bboxes))
+    all_idx = range(len(sorted_bboxes))
     remaining = list(set(all_idx) - set(eliminated_idxs))
     # Converts to np.array to use fancy indexing
     return list(np.array(sorted_regions)[remaining]), np.array(sorted_bboxes)[remaining]
