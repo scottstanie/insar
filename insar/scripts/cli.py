@@ -287,8 +287,9 @@ def blob(context, load, title_prefix, blob_filename, row_start, row_end, col_sta
 
         insar --path /path/to/igrams view_stack
     """
+    extra_args = _handle_args(blobfunc_args)
     print('Extra args to blobfunc:')
-    print(blobfunc_args)
+    print(extra_args)
     igram_path = context['path']
     insar.blob.make_blob_image(
         igram_path,
@@ -300,8 +301,27 @@ def blob(context, load, title_prefix, blob_filename, row_start, row_end, col_sta
         col_start,
         col_end,
         context['verbose'],
-        blobfunc_args,
+        extra_args,
     )
+
+
+def _handle_args(extra_args):
+    """Convert command line args into function-usable strings
+
+    '--num-sigma' gets processed into num_sigma
+    """
+    keys = [arg.lstrip('--').replace('-', '_') for arg in list(extra_args)[::2]]
+    vals = []
+    for val in list(extra_args)[1::2]:
+        # First check for string true/false, then try number
+        if val.lower() in ('true', 'false'):
+            vals.append(val.lower() == 'true')
+        else:
+            try:
+                vals.append(float(val))
+            except ValueError:
+                vals.append(val)
+    return dict(zip(keys, vals))
 
 
 # COMMAND: kml

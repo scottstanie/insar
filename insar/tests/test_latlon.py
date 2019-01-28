@@ -4,7 +4,7 @@ import unittest
 # import tempfile
 # import shutil
 import numpy as np
-# from numpy.testing import assert_array_almost_equal
+from numpy.testing import assert_array_almost_equal
 
 from insar import latlon
 
@@ -98,3 +98,56 @@ class TestLatlonImage(unittest.TestCase):
         self.assertFalse(self.stack_ll[:2, 2].dem_rsc_is_valid)
         self.assertFalse(self.stack_ll[2, 2].dem_rsc_is_valid)
         self.assertFalse(self.stack_ll[:, 2, 2].dem_rsc_is_valid)
+
+    def test_contains_floats(self):
+        self.assertTrue(latlon.contains_floats(3.4))
+        self.assertTrue(latlon.contains_floats((4.5, 3.4)))
+
+        self.assertFalse(latlon.contains_floats(3))
+        self.assertFalse(latlon.contains_floats((3, 4)))
+        self.assertFalse(latlon.contains_floats((3, None)))
+        self.assertFalse(latlon.contains_floats(slice(3, None)))
+        self.assertFalse(latlon.contains_floats((1, slice(3, None, None))))
+
+    def test_nearest_pixel(self):
+        out2 = self.im_ll.nearest_pixel(lon=-4.6)
+        out3 = self.stack_ll.nearest_pixel(lon=-4.6)
+        expected = (None, 1)
+        self.assertEquals(out2, expected)
+        self.assertEquals(out3, expected)
+
+        out2 = self.im_ll.nearest_pixel(lon=-4.6, lat=3.6)
+        out3 = self.stack_ll.nearest_pixel(lon=-4.6, lat=3.6)
+        expected = (1, 1)
+        assert_array_almost_equal(out2, expected)
+        assert_array_almost_equal(out3, expected)
+
+        out2 = self.im_ll.nearest_pixel(lon=np.arange(-4.9, -4.6, .1), lat=3.6)
+        out3 = self.stack_ll.nearest_pixel(lon=np.arange(-4.9, -4.6, .1), lat=3.6)
+        expected = (1, np.array([0, 0, 1, 1]))
+        self.assertEquals(out2[0], expected[0])
+        self.assertEquals(out3[0], expected[0])
+        assert_array_almost_equal(out2[1], expected[1])
+        assert_array_almost_equal(out3[1], expected[1])
+
+        out2 = self.im_ll.nearest_pixel(lon=np.arange(-5.3, -4.8, .1), lat=3.6)
+        out3 = self.stack_ll.nearest_pixel(lon=np.arange(-5.3, -4.8, .1), lat=3.6)
+        expected = (1, np.array([None, 0, 0, 0, 0]))
+        assert_array_almost_equal(out2[1][1:], expected[1][1:])
+        self.assertEquals(out2[1][0], expected[1][0])
+        assert_array_almost_equal(out3[1][1:], expected[1][1:])
+        self.assertEquals(out3[1][0], expected[1][0])
+
+    def test_float_indexing(self):
+        # Get items by their lat, lon (converted to row, col)
+        self.assertEquals(self.im_ll[4.0, -5.0], 0)
+        self.assertEquals(self.stack_ll[0, 4.0, -5.0], 0)
+
+        assert_array_almost_equal(self.stack_ll[:, 4.0, -5.0], [0, 20, 40])
+        assert_array_almost_equal(self.stack_ll[:2, 4.0, -5.0], [0, 20])
+
+        assert_array_almost_equal(self.im_ll[4.0:3.3, -5.0:-4.0], np.array([[0, 1], [4, 5]]))
+        # First two layers, top left 2 box
+
+        assert_array_almost_equal(self.stack_ll[:2, 4.0:3.3, -5.0:-4.0],
+                                  np.array([[[0, 1], [4, 5]], [[20, 21], [24, 25]]]))

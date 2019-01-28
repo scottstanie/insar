@@ -557,10 +557,71 @@ def stitch_same_dates(geo_path=".", output_path=".", reverse=True):
     geos = [insar.parsers.Sentinel(g) for g in glob.glob(os.path.join(geo_path, "S1*SLC*.geo"))]
     # Find the dates that have multiple frames/.geos
     date_counts = collections.Counter([g.date for g in geos])
+    # Now only on overlap, take the first's pixels
+    overlap_idxs = (img1 != 0) & (img2 != 0)
+    new_img[overlap_idxs] = img1[overlap_idxs]
+
+    return new_img
+
+
+def fullpath(path):
+    """Expands ~ and returns an absolute path"""
+    return os.path.abspath(os.path.expanduser(path))
+
+
+def force_symlink(src, dest):
+    """python equivalent to 'ln -f -s': force overwrite """
+    try:
+        os.symlink(fullpath(src), fullpath(dest))
+    except OSError as e:
+        if e.errno == errno.EEXIST:
+            os.remove(fullpath(dest))
+            os.symlink(fullpath(src), fullpath(dest))
+
+
+def rm_if_exists(filename):
+    try:
+        os.remove(filename)
+    except OSError as e:
+        if e.errno != errno.ENOENT:  # errno.ENOENT = no such file or directory
+            raise  # re-raise if different error
+
+
+def stitch_same_dates(geo_path=".", output_path=".", reverse=True):
+    """Combines .geo files of the same date in one directory
+
+    The reverse argument is to specify which order the geos get sorted.
+    If reverse=True, then the later geo is used in the overlapping strip.
+    This seems to work better for some descending path examples.
+    """
+
+    def _group_geos_by_date(geolist):
+        """Groups into sub-lists sharing dates
+        example input:
+        [Sentinel S1B, path 78 from 2017-10-13,
+         Sentinel S1B, path 78 from 2017-10-13,
+         Sentinel S1B, path 78 from 2017-10-25,
+         Sentinel S1B, path 78 from 2017-10-25]
+
+        Output:
+        [(datetime.date(2017, 10, 13),
+          [Sentinel S1B, path 78 from 2017-10-13,
+           Sentinel S1B, path 78 from 2017-10-13]),
+         (datetime.date(2017, 10, 25),
+          [Sentinel S1B, path 78 from 2017-10-25,
+           Sentinel S1B, path 78 from 2017-10-25])]
+
+        """
+        return [(date, list(g)) for date, g in itertools.groupby(geolist, key=lambda x: x.date)]
+
+    geos = [insar.parsers.Sentinel(g) for g in glob.glob(os.path.join(geo_path, "S1*SLC*.geo"))]
+    # Find the dates that have multiple frames/.geos
+    date_counts = collections.Counter([g.date for g in geos])
     dates_duped = set([date for date, count in date_counts.items() if count > 1])
 
-    double_geo_files = sorted(
-        (g for g in geos if g.date in dates_duped), key=lambda g: g.start_time, reverse=reverse)
+    double_geo_files = sorted((g for g in geos if g.date in dates_duped),
+                              key=lambda g: g.start_time,
+                              reverse=reverse)
     grouped_geos = _group_geos_by_date(double_geo_files)
     for date, geolist in grouped_geos:
         print("Stitching geos for %s" % date)

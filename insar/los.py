@@ -17,7 +17,6 @@ from insar.log import get_log
 logger = get_log()
 
 
-
 def find_enu_coeffs(lon, lat, geo_path=None):
     """Find the coefficients for east, north, up components of LOS deformation
 
@@ -498,11 +497,12 @@ def plot_gps_vs_insar():
     print(latlon.grid_corners(**defo_ll.dem_rsc))
     # import pdb
     # pdb.set_trace()
-    insar_row, insar_col = defo_ll.nearest_pixel(lat=lat, lon=lon)
-    print('insar row')
-    print(insar_row)
-    print(insar_col)
-    insar_ts = np.array(defo_ll[:, insar_row, insar_col])
+
+    # insar_row, insar_col = defo_ll.nearest_pixel(lat=lat, lon=lon)
+    # print('insar row')
+    # print(insar_row)
+    # print(insar_col)
+    insar_ts = np.array(defo_ll[:, lat, lon])
 
     plt.plot(geolist, insar_ts, 'rx', label='insar data', ms=5)
     plt.legend()

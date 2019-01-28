@@ -147,7 +147,6 @@ def plot_image_shifted(img,
         img (ndarray): 2D numpy array to imshow
         fig (matplotlib.Figure): Figure to plot image onto
         ax (matplotlib.AxesSubplot): Axes to plot image onto
-            Need to pass `fig` if passing `ax`
         cmap (str): name of colormap to shift
         img_data (dict): rsc_data from load_dem_rsc containing lat/lon
             data about image, used to make axes into lat/lon instead of row/col
@@ -157,6 +156,8 @@ def plot_image_shifted(img,
             see https://matplotlib.org/api/_as_gen/matplotlib.pyplot.imshow.html
         perform_shift (bool): default True. If false, skip cmap shifting step
         colorbar (bool): display colorbar in figure
+    Returns:
+        fig, axes_image
     """
     nrows, ncols = img.shape
     if img_data:
@@ -164,9 +165,11 @@ def plot_image_shifted(img,
     else:
         extent = (0, ncols, nrows, 0)
 
-    if not fig:
+    if not fig and not ax:
         fig = plt.figure()
         ax = fig.gca()
+    elif ax and not fig:
+        fig = ax.figure
     elif fig and not ax:
         ax = fig.gca()
 
@@ -247,6 +250,10 @@ def view_stack(
         # Ignore right/middle click, clicks off image
         if event.button != 1 or not event.inaxes:
             return
+        # Check if the toolbar has zoom or pan active
+        # https://stackoverflow.com/a/20712813
+        if imagefig.canvas.manager.toolbar._active is not None:
+            return
         plt.figure(timefig.number)
         row, col = int(event.ydata), int(event.xdata)
         # Somehow clicked outside image, but in axis
@@ -287,7 +294,7 @@ def animate_stack(stack,
                   label=None,
                   save_title=None,
                   cmap_name='seismic',
-                  shifted='True',
+                  shifted=True,
                   vmin=None,
                   vmax=None,
                   **savekwargs):
@@ -313,7 +320,7 @@ def animate_stack(stack,
             and https://matplotlib.org/api/animation_api.html#writer-classes
 
     Returns:
-        None
+        stack_ani: the animation object
     """
     num_images = stack.shape[0]
     if titles:
@@ -352,6 +359,7 @@ def animate_stack(stack,
 
     if display:
         plt.show()
+    return stack_ani
 
 
 def make_figure_noborder():
@@ -375,7 +383,9 @@ def set_aspect_image(fig, img, height=4):
     fig.set_size_inches(width, height)
 
 
-def save_paper_figure(fig, fname):
+def save_paper_figure(fig, fname, axis_off=True):
     fig.tight_layout()
+    if axis_off:
+        plt.axis('off')
     print('Saving %s' % fname)
     fig.savefig(fname, bbox_inches='tight', transparent=True, dpi=300)

@@ -27,6 +27,6 @@ truth[:len(blobs_real)] = 1
 print('Missed blobs:')
 print(blobs_all[np.where(truth - clusters_3d)[0]])
 f, a = plotting.plot_image_shifted(image)
-blob.plot_blobs(cur_axes=f.gca(), blobs=blobs_all[np.where(truth - clusters_3d)[0]])
+blob.plot_blobs(ax=f.gca(), blobs=blobs_all[np.where(truth - clusters_3d)[0]])
 
 plt.show()

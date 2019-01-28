@@ -1,5 +1,6 @@
 from __future__ import division
 import copy
+from collections import Iterable
 from numpy import sin, cos, sqrt, arctan2, radians
 from xml.etree import ElementTree
 import os
@@ -11,10 +12,54 @@ logger = get_log()
 
 
 class LatlonImage(np.ndarray):
+    """A class wrapping numpy ndarray with lat/lon info from DEM .rsc file data
+
+    Has the ability to index values by [lat, lon] (as well as normal [row, col])
+        lat, lon = 31.456, -102.54
+        A[lat, lon]
+
+    Can also slice:
+        startlat, startlon = 31.456, -102.54
+        endlat, endlon = 31.0, -102.0
+        A[startlat:endlat, startlon:endlon]
+
+    Caveat: remember that high latitudes are the top of the array,
+    so if you want, e.g. N31.5 to N31.0, you need to say the higher latitude first.
+    Pretend you are looking at a map with lat/lon, and just reading
+    out the rows by their lats, columns by their lons
+
+
+    In addition to the ndarray attributes, there are:
+
+    Attributes:
+        filename (str): Name of file where data was loaded from (if from file)
+        dem_rsc_file (str): filename of the dem.rsc file with info (see below)
+        dem_rsc (dict): lat/lon and file infomation about image
+        dem_rsc_is_valid (bool): flag to indicate if the `dem_rsc` applies to image.
+            becomes invalid when, for example, 1D slicing occurs to get one row
+    Keys from the dem_rsc dict which are also attributes:
+        width: number of cols in image (redundant with ncols)
+        file_length: number of rows in image (redundant with nrows)
+        x_first: location of first column
+        y_first: location of first row
+        x_step: size between rows in `x_unit`
+        y_step: size between columns in `y_unit`
+        x_unit (degrees, almost always)
+        y_unit (degrees)
+        z_offset (0)
+        z_scale (1)
+        projection (LL)
+    """
+
     def __new__(cls, data=None, filename=None, dem_rsc_file=None, dem_rsc=None):
         """Can pass in either filenames to load, or 2D arrays/dem_rsc dicts
 
-        https://docs.scipy.org/doc/numpy/user/basics.subclassing.html
+        if __new__() returns an instance of cls, then the new instance’s __init__()
+        is then called
+        Otherwise, the __init__ won't get called:
+        https://docs.scipy.org/doc/numpy/user/basics.subclassing.html#a-brief-python-primer-on-new-and-init
+
+        reference: https://docs.scipy.org/doc/numpy/user/basics.subclassing.html
         """
         # TODO: do we need to check that the rsc info matches the data?
         if data is None and filename is None:
@@ -59,15 +104,26 @@ class LatlonImage(np.ndarray):
         return obj
 
     def __array_finalize__(self, obj):
+        """Called when
+
+        Reference:
+        https://docs.scipy.org/doc/numpy/user/basics.subclassing.html#the-role-of-array-finalize
+
+        Deals with the view casting and new-from-template
+        """
         if obj is None:
             return
         self.filename = getattr(obj, 'filename', None)
         self.dem_rsc_file = getattr(obj, 'dem_rsc_file', None)
         self.dem_rsc = getattr(obj, 'dem_rsc', None)
         self.dem_rsc_is_valid = getattr(obj, 'dem_rsc_is_valid', False)
+        if self.dem_rsc:
+            for k, v in self.dem_rsc.items():
+                setattr(self, k, v)
         self.points = getattr(obj, 'points', None)
 
     def _disable_dem_rsc(self, sliced):
+        """Some slice occurred which makes image data no longer apply"""
         sliced.dem_rsc_is_valid = False
         return sliced
 
@@ -76,8 +132,10 @@ class LatlonImage(np.ndarray):
 
         Will get the right starts and steps to pass to `crop_rsc_data`
         """
-        # import pdb
-        # pdb.set_trace()
+        # import ipdb
+        # ipdb.set_trace()
+        if contains_floats(items):
+            items = self._convert_float_slice(items)
         sliced = super(LatlonImage, self).__getitem__(items)
         # __getitem__ called multiple times: only do extra on first
         if not isinstance(sliced, LatlonImage):
@@ -86,8 +144,11 @@ class LatlonImage(np.ndarray):
         # print(items)
         # print('ndims', sliced.ndim, self.ndim)
 
-        if sliced.ndim < 2 or sliced.ndim > 3:
+        # print('here')
+        # print(sliced, items)
+        if not sliced.dem_rsc_is_valid or sliced.ndim < 2 or sliced.ndim > 3:
             return self._disable_dem_rsc(sliced)
+
         if self.ndim == 2:
             return self._handle_slice2(items, sliced)
         elif self.ndim == 3:
@@ -98,7 +159,7 @@ class LatlonImage(np.ndarray):
         if isinstance(items, slice):
             # This is a slice along rows, all cols
             return sliced
-        elif isinstance(items, tuple):
+        elif isinstance(items, tuple) and all(isinstance(s, slice) for s in items):
             row_slice, col_slice = items
             # try:
             # except (TypeError, ValueError):
@@ -108,7 +169,7 @@ class LatlonImage(np.ndarray):
             # raise ValueError("Can only do 2D slices on %s" % self.__class__.__name__)
         else:
             return self._disable_dem_rsc(sliced)
-        # Why would we need to check for Nones? the crop function seems to handle fine...
+        # do we need to check for Nones? the crop function seems to handle fine...
         # if row_slice == slice(None) or col_slice == slice(None):
         return self._handle_dem_slice(sliced, row_slice, col_slice)
 
@@ -121,12 +182,62 @@ class LatlonImage(np.ndarray):
             return sliced
         elif isinstance(items, tuple):
             # If we did something like A[:, :4, :4], crop the dem, still valid
-            if len(items) == 3:
+            if len(items) == 3 and all(isinstance(s, slice) for s in items[1:]):
                 _, row_slice, col_slice = items
                 return self._handle_dem_slice(sliced, row_slice, col_slice)
             else:
-                # Didn't pass 3 slices... unsure what this would be now
+                # Didn't pass 3 slices...  maybe a list of indexes
                 return self._disable_dem_rsc(sliced)
+
+    def _convert_float_slice(self, slice_items):
+        """Convert lat/lon (float) slicing to row, cols
+
+        Cases to handle:
+            1. 2D image: A[lat, lon]
+            2. 3D stack: A[:, lat, lon] (timeseries at pixel)
+            3. slices within the lat, lon:
+                A[lat, lon1:lon2]
+        """
+        # E.g. (slice(-101.1,100.0,.05), slice(30.0, 31.0, .05))
+        if _is_float(slice_items):
+            raise IndexError("Can't specify only 1 float for lat/lon indexing")
+        # elif isinstance(slice_items, Iterable):
+        if len(slice_items) == 3 and self.ndim == 3:
+            # Something like [:, -101.1, 30.1]
+            dslice = slice_items[0]
+            lat, lon = slice_items[1:]
+        elif len(slice_items) == 2 and self.ndim == 2:
+            # Something like (-101.1, 30.0:30.2:.05)
+            dslice = None
+            lat, lon = slice_items
+        else:
+            raise IndexError(
+                "Invalid lat/lon slices for size %s LatlonImage: %s" % (self.ndim, slice_items))
+
+        if isinstance(lat, slice):
+            # Use class step size if None given
+            lat_start = lat.start or self.first_lat
+            lat_stop = lat.stop or self.last_lat
+            lat_step = lat.step or self.lat_step
+            lat = np.arange(lat_start, lat_stop, lat_step)
+        if isinstance(lon, slice):
+            lon_start = lon.start or self.first_lon
+            lon_stop = lon.stop or self.last_lon
+            lon_step = lon.step or self.lon_step
+            lon = np.arange(lon_start, lon_stop, lon_step)
+
+        print("Slicing lat = %s" % lat)
+        print("Slicing lon = %s" % lon)
+        rows, cols = self.nearest_pixel(lon=lon, lat=lat)
+        print("Row: %s" % rows)
+        print("Col: %s" % cols)
+        # TODO: do I care about converting lat slices to index slices? for now assume continuous list
+        # if these are lists/arrays, we need them to be slices
+        if isinstance(rows, Iterable):
+            rows = slice(min(rows), max(rows) + 1)
+        if isinstance(cols, Iterable):
+            cols = slice(min(cols), max(cols) + 1)
+        return (dslice, rows, cols) if dslice is not None else (rows, cols)
 
     def _handle_dem_slice(self, sliced, row_slice, col_slice):
         # print('sliced out shape', sliced.shape)
@@ -242,6 +353,18 @@ class LatlonImage(np.ndarray):
             return self.x_first + self.x_step * (self.shape[1] - 1)
 
     @property
+    def first_lat(self):
+        """alias to y_first, The latitude of the first row of the image"""
+        if self.dem_rsc_is_valid:
+            return self.y_first
+
+    @property
+    def first_lon(self):
+        """alias to x_first, The longitude of the first column of the image"""
+        if self.dem_rsc_is_valid:
+            return self.x_first
+
+    @property
     def lat_step(self):
         """The latitude increment for each pixel"""
         if self.dem_rsc_is_valid:
@@ -256,18 +379,35 @@ class LatlonImage(np.ndarray):
     def nearest_pixel(self, lon=None, lat=None):
         """Find the nearest row, col to a given lat and/or lon
 
-        Returns (tuple[int, int]): If both given, a pixel (row, col) is returned
+        Args:
+            lon (ndarray[float]): single or array of lons
+            lat (ndarray[float]): single or array of lat
+
+        Returns:
+            tuple[int, int]: If both given, a pixel (row, col) is returned
+            If array passed for either lon or lat, array is returned
             Otherwise if only one, it is (None, col) or (row, None)
         """
+
+        def _check_bounds(idx_arr, bound):
+            int_idxs = idx_arr.round().astype(int)
+            bad_idxs = np.logical_or(int_idxs < 0, int_idxs >= bound)
+            if np.any(bad_idxs):
+                # Need to check for single numbers, shape ()
+                if int_idxs.shape:
+                    # Replaces locations of bad_idxs with none
+                    int_idxs = np.where(bad_idxs, None, int_idxs)
+                else:
+                    int_idxs = None
+            return int_idxs
+
         out_row_col = [None, None]
-        if lon:
-            col_idx = (lon - self.x_first) / self.x_step
-            if col_idx >= 0 and col_idx < self.ncols:
-                out_row_col[1] = int(round(col_idx))
-        if lat:
-            row_idx = (lat - self.y_first) / self.y_step
-            if row_idx >= 0 and row_idx < self.nrows:
-                out_row_col[0] = int(round(row_idx))
+        if lon is not None:
+            col_idx_arr = (np.array(lon) - self.x_first) / self.x_step
+            out_row_col[1] = _check_bounds(col_idx_arr, self.ncols)
+        if lat is not None:
+            row_idx_arr = (np.array(lat) - self.y_first) / self.y_step
+            out_row_col[0] = _check_bounds(row_idx_arr, self.nrows)
 
         return tuple(out_row_col)
 
@@ -299,22 +439,27 @@ class LatlonImage(np.ndarray):
         latlon2 = self.rowcol_to_latlon(*row_col2)
         return latlon_to_dist(latlon1, latlon2)
 
-    def blob_size(self, radius):
-        """Finds the radius of a circles/blobs on the LatlonImage in km
+    def pixel_to_km(self, num_pixels):
+        """Compute the length in km of segment `num_pixels` long
 
-        Can also pass array of radii to get multiple distances
+        Can also pass array to get multiple distances
         """
-        radius = np.array(radius)
-        # Use the center of the image as dummy center for circle
-        # (really only sigma/radius matters)
+        num_pixels = np.array(num_pixels)
+        # Use the center of the image as dummy anchor
+        # (really only length should matter)
         nrows, ncols = self.shape
         midrow, midcol = nrows // 2, ncols // 2
-        return self.distance((midrow, midcol), (midrow + radius, midcol))
+        return self.distance((midrow, midcol), (midrow + num_pixels, midcol))
 
     def km_to_pixels(self, km):
         """Convert a km distance into number of pixels across"""
         deg_per_pixel = self.x_step  # assume x_step = y_step
         return km_to_pixels(km, deg_per_pixel)
+
+    @property
+    def km_per_pixel_sq(self):
+        """Approximate area in one square pixel"""
+        return self.pixel_to_km(1)**2
 
 
 def load_deformation_img(igram_path, n=3, filename='deformation.npy', rsc_filename='dem.rsc'):
@@ -627,9 +772,84 @@ def intersects(box1, box2):
     >>> print(intersects(box2, box1))
     False
     """
+    return intersect_area(box1, box2) > 0
+
+
+def box_area(box):
+    """Returns area of box from format (left, right, bot, top)
+    Example:
+    >>> box1 = (-1, 1, -1, 1)
+    >>> print(box_area(box1))
+    4
+    """
+    left, right, bot, top = box
+    dx = np.clip(right - left, 0, None)
+    dy = np.clip(top - bot, 0, None)
+    return dx * dy
+
+
+def _check_valid_box(box):
+    left, right, bot, top = box
+    if (left > right) or (bot > top):
+        raise ValueError("Box %s must be in form (left, right, bot, top)" % str(box))
+
+
+def intersect_area(box1, box2):
+    """Returns area of overlap of two rectangles
+
+    box = (left, right, bot, top), same as matplotlib `extent` format
+    Example:
+    >>> box1 = (-1, 1, -1, 1)
+    >>> box2 = (-1, 1, 0, 2)
+    >>> print(intersect_area(box1, box2))
+    2
+    >>> box2 = (0, 2, -1, 1)
+    >>> print(intersect_area(box1, box2))
+    2
+    >>> box2 = (4, 6, -1, 1)
+    >>> print(intersect_area(box1, box2))
+    0
+    """
+    _check_valid_box(box1), _check_valid_box(box2)
     left1, right1, bot1, top1 = box1
     left2, right2, bot2, top2 = box2
-    return (intersects1d(left1, right1, left2, right2) and intersects1d(bot1, top1, bot2, top2))
+    intersect_box = (max(left1, left2), min(right1, right2), max(bot1, bot2), min(top1, top2))
+    return box_area(intersect_box)
+
+
+def union_area(box1, box2):
+    """Returns area of union of two rectangles, which is A1 + A2 - intersection
+
+    box = (left, right, bot, top), same as matplotlib `extent` format
+    >>> box1 = (-1, 1, -1, 1)
+    >>> box2 = (-1, 1, 0, 2)
+    >>> print(union_area(box1, box2))
+    6
+    >>> print(union_area(box1, box1) == box_area(box1))
+    True
+    """
+    _check_valid_box(box1), _check_valid_box(box2)
+    A1 = box_area(box1)
+    A2 = box_area(box2)
+    return A1 + A2 - intersect_area(box1, box2)
+
+
+def intersection_over_union(box1, box2):
+    """Returns the IoU critera for pct of overlap area
+
+    box = (left, right, bot, top), same as matplotlib `extent` format
+    >>> box1 = (0, 1, 0, 1)
+    >>> box2 = (0, 2, 0, 2)
+    >>> print(intersection_over_union(box1, box2))
+    0.25
+    >>> print(intersection_over_union(box1, box1))
+    1.0
+    """
+    ua = union_area(box1, box2)
+    if ua == 0:
+        return 0
+    else:
+        return intersect_area(box1, box2) / ua
 
 
 def sort_by_lat(latlon_img_list):
@@ -704,3 +924,21 @@ def stitch_images(image_list):
     # out = np.zero((total_rows, total_cols))
     # img1 = image_list[0]
     # out[:rows, :cols] = img1
+
+
+def _is_float(a):
+    return isinstance(a, float)
+
+
+def contains_floats(slice_items):
+    """Checks possible slice item values for floats"""
+    if _is_float(slice_items):
+        return True
+    elif isinstance(slice_items, Iterable):
+        for item in slice_items:
+            if _is_float(item):
+                return True
+            elif isinstance(item, slice):
+                if _is_float(item.start) or _is_float(item.stop):
+                    return True
+    return False
