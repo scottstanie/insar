@@ -541,12 +541,17 @@ def load_run(run_idx, data_path='.'):
     return run_arrays
 
 
-def plot_run_summary(run_arrays):
+def plot_run_summary(run_arrays=None, image=None, true_d=None, fp=None, misses=None):
     """Takes `run_arrays` from `load_run` and plots the image with detections and misses"""
-    image = run_arrays['image']
-    true_d = run_arrays['td_blobs']
-    fp = run_arrays['fp_blobs']
-    misses = run_arrays['miss_blobs']
+    if image is None:
+        image = run_arrays['image']
+    if true_d is None:
+        true_d = run_arrays['td_blobs']
+    if fp is None:
+        fp = run_arrays['fp_blobs']
+    if misses is None:
+        misses = run_arrays['miss_blobs']
+
     _, ax = blob.plot.plot_blobs(image=image, blobs=true_d, color='green')
     _, ax = blob.plot.plot_blobs(image=image, blobs=fp, color='black', ax=ax)
     _, ax = blob.plot.plot_blobs(image=image, blobs=misses, color='red', ax=ax)

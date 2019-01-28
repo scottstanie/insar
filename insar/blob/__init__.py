@@ -126,7 +126,6 @@ def find_blobs(image,
         blobs = find_blobs_with_bowl_scores(
             image,
             blobs=blobs,
-            sigma_list=sigma_list,
             score_cutoff=bowl_score,
         )
 
@@ -278,17 +277,16 @@ def get_blob_bowl_score(image, blob, sigma=None, patch_size=3):
     return blob_utils.get_center_value(shape_vals, patch_size=patch_size)
 
 
-def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff=.7, **kwargs):
+def find_blobs_with_bowl_scores(image, blobs=None, score_cutoff=.7, **kwargs):
     """Takes the list of blobs found from find_blobs, check for high shape score
 
-    Computes a shape_index at each level gamma*sigma_list, finds blobs that have
+    Computes a shape_index, finds blobs that have
     a |shape_index| > 5/8 (which indicate a bowl shape either up or down.
     Blobs with no corner peak found are discarded (they are valleys or ridges)
 
     Args:
         image (ndarray): input image to compute corners on
         blobs (ndarray): rows are blobs with values: [(r, c, s, ...)]
-        sigma_list (array-like): output of create_sigma_list
         score_cutoff (float): magnitude of shape index to approve of bowl blob
             Default is .7: from [1], Slightly more "bowl"ish, cutoff at 7/8,
             than "trough", at 5/8. Shapes at 5/8 still look "rut" ish, like
@@ -311,16 +309,16 @@ def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff
     # OLD: Find peaks for every sigma in sigma_list
     # score_images, _ = compute_blob_scores(image, sigma_list, find_peaks=False)
 
-    sigma_idxs = blob_utils.find_sigma_idxs(blobs, sigma_list)
+    # sigma_idxs = blob_utils.find_sigma_idxs(blobs, sigma_list)
     # Note: using smaller sigma than blob size seems to work better in bowl scoring
-    sigma_arr = sigma_list[sigma_idxs]
+    # sigma_arr = sigma_list[sigma_idxs]
     # sigma_arr = np.clip(sigma_list[sigma_idxs] / 10, 2, None)
     # sigma_arr = 2 * np.ones(len(blobs))
 
     # import ipdb
     # ipdb.set_trace()
     out_blobs = []
-    for b, sigma in zip(blobs, sigma_arr):
+    # for b, sigma in zip(blobs, sigma_arr):
         # for blob, sigma_idx in zip(blobs, sigma_idxs):
         # OLD WAY: compute scores, then crop. THIS is DIFFERENT than crop, then score for bowlness
         # # Get the peaks that correspond to the current sigma level
@@ -328,6 +326,8 @@ def find_blobs_with_bowl_scores(image, blobs=None, sigma_list=None, score_cutoff
         # # Only examine blob area
         # blob_scores = blob_utils.crop_blob(cur_scores, blob, crop_val=None)
         # center_score = blob_utils.get_center_value(blob_scores)
+    for b in blobs:
+        sigma = blob_utils.sigma_from_blob(blob=b)
         center_score = get_blob_bowl_score(image, b, sigma=sigma)
         if np.abs(center_score) >= score_cutoff:
             out_blobs.append(b)

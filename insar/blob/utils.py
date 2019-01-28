@@ -338,3 +338,18 @@ def gaussian_filter_nan(image, sigma, **kwargs):
     W_filt = gaussian_filter(W, sigma, **kwargs)
 
     return V_filt / W_filt
+
+def sigma_from_blob(blob=None, patch=None):
+    """Back out what the sigma is based on size of patch or blob radius
+
+    Uses the fact that r = sqrt(2)*sigma
+    """
+    if blob is not None:
+        radius = blob[2]
+    elif patch is not None:
+        rows, _ = patch.shape
+        radius = rows // 2
+    else:
+        raise ValueError("Need blob or patch for sigma_from_blob")
+    return radius / np.sqrt(2)
+

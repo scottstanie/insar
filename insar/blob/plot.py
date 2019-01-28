@@ -107,9 +107,9 @@ def plot_blobs(image=None,
     ax.deleted_idxs = set()
 
     pick_handler = on_pick(sorted_blobs, patches)
-    fig.canvas.mpl_connect('pick_event', pick_handler)
-    fig.canvas.mpl_connect('button_press_event', on_press)
-    fig.canvas.mpl_connect('key_press_event', on_key)
+    cid_pick = fig.canvas.mpl_connect('pick_event', pick_handler)
+    cid_press = fig.canvas.mpl_connect('button_press_event', on_press)
+    cid_key = fig.canvas.mpl_connect('key_press_event', on_key)
 
     plt.draw()
     plt.show()
@@ -119,6 +119,11 @@ def plot_blobs(image=None,
     all_idx = range(len(blobs))
     remaining = list(set(all_idx) - set(ax.deleted_idxs))
     remaining_blobs = np.array(sorted_blobs)[remaining]
+
+    fig.canvas.mpl_disconnect(cid_pick)
+    fig.canvas.mpl_disconnect(cid_press)
+    fig.canvas.mpl_disconnect(cid_key)
+
     return remaining_blobs, ax
 
 

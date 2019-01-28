@@ -6,16 +6,6 @@ from insar.blob import utils as blob_utils
 from insar.blob.skblob import shape_index
 
 
-def _sigma_from_patch(patch):
-    """Back out what the sigma is based on size of patch
-
-    Uses the fact that r = sqrt(2)*sigma
-    """
-    rows, _ = patch.shape
-    radius = rows // 2
-    return radius / sqrt(2)
-
-
 def shape_index_stat(patch, accum_func, sigma=None, sigma_scale=None, patch_size='auto'):
     """Finds some state about the shape_index of a patch
 
@@ -35,7 +25,7 @@ def shape_index_stat(patch, accum_func, sigma=None, sigma_scale=None, patch_size
     """
     # If they don't specify one sigma, use patch size
     if sigma is None:
-        sigma = _sigma_from_patch(patch)
+        sigma = blob_utils.sigma_from_blob(patch=patch)
         print('sfp', sigma)
     # if they want to scale down the default (which smooths proportional to the blob sigma)
     if sigma_scale:
