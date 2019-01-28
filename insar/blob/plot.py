@@ -26,12 +26,7 @@ def plot_blobs(image=None,
     if fig and not ax:
         ax = fig.gca()
     if plot_img or not ax:
-        fig, ax_img = plotting.plot_image_shifted(
-            image,
-            fig=fig,
-            ax=ax,
-            **kwargs,
-        )
+        fig, ax_img = plotting.plot_image_shifted(image, fig=fig, ax=ax, **kwargs)
         # ax_img = ax.imshow(image)
         # fig.colorbar(ax_img)
 
@@ -45,12 +40,8 @@ def plot_blobs(image=None,
         if blob_cmap:
             color_pct = idx / len(blobs)
             color = blob_cm(color_pct)
-        c = plt.Circle((blob[1], blob[0]),
-                       blob[2],
-                       color=color,
-                       fill=False,
-                       linewidth=2,
-                       clip_on=False)
+        c = plt.Circle(
+            (blob[1], blob[0]), blob[2], color=color, fill=False, linewidth=2, clip_on=False)
         patches.append(c)
         ax.add_patch(c)
 
