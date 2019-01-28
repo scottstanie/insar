@@ -79,13 +79,14 @@ def plot_blobs(image=None,
 
     if not ax:
         ax = fig.gca()
+    elif not fig:
+        fig = ax.figure
 
     if blob_cmap:
         blob_cm = cm.get_cmap(blob_cmap, len(blobs))
     patches = []
     # Draw big blobs first to allow easier clicking on overlaps
     sorted_blobs = sorted(blobs, key=lambda b: b[2], reverse=True)
-    circle_to_blobs = {}
     for idx, blob in enumerate(sorted_blobs):
         if blob_cmap:
             color_pct = idx / len(blobs)
@@ -98,7 +99,6 @@ def plot_blobs(image=None,
                        clip_on=False,
                        picker=True)
         ax.add_patch(c)
-        circle_to_blobs[c] = blob
         patches.append(c)
 
     ax.blobs = sorted_blobs

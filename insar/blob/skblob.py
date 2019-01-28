@@ -261,6 +261,9 @@ def _compute_sphere_overlap(d, r1, r2):
     return vol
 
 
+def _blob_dist(blob1, blob2):
+    return sqrt(np.sum((blob1[:2] - blob2[:2])**2))
+
 def blob_overlap(blob1, blob2):
     """Finds the overlapping area fraction between two blobs.
 
@@ -276,10 +279,10 @@ def blob_overlap(blob1, blob2):
     Returns:
         f (float): Fraction of overlapped area
     """
-    r1 = blob1[-1]
-    r2 = blob2[-1]
+    r1 = blob1[2]
+    r2 = blob2[2]
 
-    d = sqrt(np.sum((blob1[:-1] - blob2[:-1])**2))
+    d = _blob_dist(blob1, blob2)
     if d > r1 + r2:
         return 0
 
@@ -320,12 +323,12 @@ def intersection_over_union(blob1, blob2, using_sigma=False):
         True
     """
     # extent of the blob is given by sqrt(2)*scale if using sigma
-    r1 = blob1[-1] * sqrt(2) if using_sigma else blob1[-1]
-    r2 = blob2[-1] * sqrt(2) if using_sigma else blob2[-1]
+    r1 = blob1[2] * sqrt(2) if using_sigma else blob1[2]
+    r2 = blob2[2] * sqrt(2) if using_sigma else blob2[2]
 
     a1 = _disk_area(r1)
     a2 = _disk_area(r2)
-    d = sqrt(np.sum((blob1[:-1] - blob2[:-1])**2))
+    d = _blob_dist(blob1, blob2)
     if d > r1 + r2:
         return 0
     elif d <= abs(r1 - r2):  # One inside the other
