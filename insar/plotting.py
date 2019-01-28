@@ -250,6 +250,10 @@ def view_stack(
         # Ignore right/middle click, clicks off image
         if event.button != 1 or not event.inaxes:
             return
+        # Check if the toolbar has zoom or pan active
+        # https://stackoverflow.com/a/20712813
+        if imagefig.canvas.manager.toolbar._active is not None:
+            return
         plt.figure(timefig.number)
         row, col = int(event.ydata), int(event.xdata)
         # Somehow clicked outside image, but in axis
