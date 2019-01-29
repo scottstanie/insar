@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial.qhull import ConvexHull
+from sklearn import manifold
 from insar.blob import utils as blob_utils
 from insar import plotting
 
@@ -264,6 +265,38 @@ def plot_regions(regions, ax=None, linecolor='k-'):
         xx, yy = shape.convex_hull.exterior.xy
         ax.plot(xx, yy, linecolor)
 
+
+def plot_tsne(X, y_idxs=None, n_components=2, perplexities=(5,), colors=('r', 'g')):
+    fig, axes = plt.subplots(1, len(perplexities))
+    Y_list = []
+    for pidx, p in enumerate(perplexities):
+        tsne = manifold.TSNE(n_components=n_components, perplexity=p, init='random')
+        Y = tsne.fit_transform(X)
+        Y_list.append(Y)
+
+        ax = axes.ravel()[pidx]
+        if y_idxs is not None:
+            for j, idxs in enumerate(y_idxs):
+                ax.scatter(Y[idxs, 0], Y[idxs, 1], c=colors[j])
+        else:
+            ax.scatter(Y[:, 0], Y[:, 1])
+        ax.set_title('perplexity=%s' % p)
+
+    return Y_list
+
+def plot_scores(score_arr, nrows=1, y_idxs=None):
+    n_scores = score_arr.shape[1]
+    ncols = np.ceil(n_scores / nrows).astype(int)
+    fix, axes = plt.subplots(nrows, ncols, squeeze=False)
+
+    if y_idxs is None:
+        y_idxs = np.arange(len(score_arr))
+
+    for idx, ax in enumerate(axes.ravel()):
+        for y_idx, yy in enumerate(y_idxs):
+            ax.hist(score_arr[yy, idx], alpha=0.5, label=y_idx)
+        ax.set_title(idx)
+        ax.legend()
 
 if __name__ == '__main__':
     npz = np.load('patches/image_1.npz')

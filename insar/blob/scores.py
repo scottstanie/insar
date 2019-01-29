@@ -26,7 +26,7 @@ def shape_index_stat(patch, accum_func, sigma=None, sigma_scale=None, patch_size
     # If they don't specify one sigma, use patch size
     if sigma is None:
         sigma = blob_utils.sigma_from_blob(patch=patch)
-        print('sfp', sigma)
+        # print('sfp', sigma)
     # if they want to scale down the default (which smooths proportional to the blob sigma)
     if sigma_scale:
         sigma /= sigma_scale
@@ -40,7 +40,7 @@ def shape_index_stat(patch, accum_func, sigma=None, sigma_scale=None, patch_size
         psize = patch_size
     if not isinstance(psize, int):
         raise ValueError('patch_size must be int')
-    print('psize', psize)
+    # print('psize', psize)
 
     # For all these functions, grab the image of shape indexes to use
     shape_index_arr = shape_index(patch, sigma=sigma)
@@ -48,41 +48,88 @@ def shape_index_stat(patch, accum_func, sigma=None, sigma_scale=None, patch_size
 
 
 def shape_index_center(patch, patch_size=3, sigma=None):
-    """Finds the mean shape_index of a 3x3 patch around center pixel"""
+    """Finds the mean shape_index of a 3x3 patch around center pixel
+    sigma=proportional to the patch size computed with sigma_from_patch"""
     return shape_index_stat(patch, np.mean, sigma=sigma, patch_size=patch_size)
 
 
-def shape_index_variance_small(patch, sigma=3, patch_size=3):
-    """Smooth by a small sized filter, look in a small window at variance"""
-    return shape_index_stat(patch, np.var, sigma=sigma, patch_size=patch_size)
+def shape_index_center_sigma1(patch):
+    """Finds the mean shape_index of a 3x3 patch around center pixel, sigma=1"""
+    return shape_index_stat(patch, np.mean, sigma=1, patch_size=3)
 
 
-def shape_index_variance_full(patch, sigma_scale=None, patch_size='full'):
-    """Smooth over a large sigma equal to blob sigma, take variance over all"""
-    return shape_index_stat(patch, np.var, patch_size=patch_size)
+def shape_index_center_sigma3(patch):
+    """Finds the mean shape_index of a 3x3 patch around center pixel, sigma=3"""
+    return shape_index_stat(patch, np.mean, sigma=3, patch_size=3)
 
 
-def shape_index_ptp_small(patch, sigma=None, sigma_scale=None):
-    """Look in a small window for large changes in the shape index peak-to-peak"""
-    return shape_index_stat(patch, np.ptp, sigma=sigma, sigma_scale=sigma_scale, patch_size=3)
+def shape_index_variance_patch3_sigma3(patch):
+    """Smooth by a small sigma=3, look in a patch=3 at variance"""
+    return shape_index_stat(patch, np.var, sigma=3, patch_size=3)
 
 
-def shape_index_ptp_full(patch, sigma=None, sigma_scale=None):
+def shape_index_variance_patch_full_sigma3(patch):
+    """Smooth by a small sigma=3, look at entire patch for variance"""
+    return shape_index_stat(patch, np.var, sigma=3, patch_size='full')
+
+
+def shape_index_variance_patch_full(patch):
+    """Smooth over a large sigma equal to blob sigma, take variance over all patch"""
+    return shape_index_stat(patch, np.var, sigma=None, patch_size='full')
+
+
+def shape_index_ptp_patch3(patch):
+    """Check peak-to-peak in patch=3, smoothing with sigma proportional"""
+    return shape_index_stat(patch, np.ptp, sigma=None, patch_size=3)
+
+
+def shape_index_ptp_patch_full(patch):
     """Look in a total patch for large changes in the shape index peak-to-peak"""
-    return shape_index_stat(patch, np.ptp, sigma=sigma, sigma_scale=sigma_scale, patch_size='full')
+    return shape_index_stat(patch, np.ptp, sigma=None, patch_size='full')
 
 
-def max_gradient(patch):
+def max_gradient(patch, sigma=.5):
+    p = blob_utils.gaussian_filter_nan(patch, sigma=sigma)
     imy = np.abs(ndi.sobel(patch, axis=0, mode='nearest'))
     imx = np.abs(ndi.sobel(patch, axis=1, mode='nearest'))
     return max(np.max(imx), np.max(imy))
 
 
+def max_gradient_sigma3(patch):
+    return max_gradient(patch, sigma=3)
+
+
 FUNC_LIST = [
     shape_index_center,
-    shape_index_variance_small,
-    shape_index_variance_full,
-    shape_index_ptp_small,
-    shape_index_ptp_full,
+    shape_index_center_sigma1,
+    shape_index_center_sigma3,
+    shape_index_variance_patch3_sigma3,
+    shape_index_variance_patch_full_sigma3,
+    shape_index_variance_patch_full,
+    shape_index_ptp_patch3,
+    shape_index_ptp_patch_full,
+    max_gradient,
+    max_gradient_sigma3,
 ]
 
+
+def analyze_patches(patch_list, funcs=FUNC_LIST, *args, **kwargs):
+    """Get scores from functions on a series of patches
+
+    Runs each function in `funcs` over each `patch` to get stats on it
+    Each function must have a signature func(patch, *args, **kwargs),
+        and return a single float number
+    Args:
+        patch_list:
+        funcs:
+        *args:
+        **kwargs:
+
+    Returns:
+        ndarray: size (p, N) where p = num patches, N = len(funcs)
+            rows are scores on one patch
+    """
+    results = []
+    for patch in patch_list:
+        results.append([func(patch, *args, **kwargs) for func in funcs])
+    return np.array(results)

@@ -457,7 +457,9 @@ def simulate_detections(num_sims,
                         min_blobs=20,
                         max_blobs=60,
                         max_ecc=0.4,
-                        noise_sigma=0.5):
+                        noise_sigma=0.5,
+                        **kwargs):
+    @log_runtime
     def run(run_idx):
         finding_params = {
             'positive': True,
@@ -469,9 +471,13 @@ def simulate_detections(num_sims,
             'num_sigma': 70,
             'sigma_bins': 3,
             'log_scale': True,
+            # 'bowl_score': 0,
             # 'bowl_score': .7,
             'bowl_score': 5 / 8,
         }
+        finding_params.update(kwargs)
+        print("Using the following finding_params:")
+        print(finding_params)
 
         if num_blobs is None:
             nblobs = np.random.randint(min_blobs, max_blobs)
@@ -552,6 +558,28 @@ def load_run(run_idx, data_path='.'):
     }
     return run_arrays
 
+def load_run_blob_type(data_path='.', patch_type='fp'):
+    if patch_type in ('fp', 'false_positives'):
+        fname_search = 'false_positive*.npz'
+    elif patch_type in ('td', 'true_detections'):
+        fname_search = 'true_detections*.npz'
+    elif patch_type in ('miss', 'misses'):
+        fname_search = 'misses*.npz'
+    else:
+        raise ValueError("patch_type must be 'td', 'fp', 'miss")
+
+    file_list = glob.glob(os.path.join(data_path, fname_search))
+    blobs = np.empty((0, 4))
+    blob_patches = []
+    for f in file_list:
+        npz = np.load(f)
+        new_blobs = npz["blobs"]
+        new_patches = [npz[key] for key in npz.keys() if key.startswith('arr')]
+        if new_blobs.size:
+            blobs = np.concatenate((blobs, new_blobs))
+            blob_patches.extend(new_patches)
+
+    return blobs, blob_patches
 
 def plot_run_summary(run_arrays=None, image=None, true_d=None, fp=None, misses=None):
     """Takes `run_arrays` from `load_run` and plots the image with detections and misses"""
@@ -621,28 +649,6 @@ def plot_run_patches(run_arrs, keys=('td', 'fp', 'miss'), sigma=0):
                 patch = blob_utils.gaussian_filter_nan(patch, sigma=sigma)
             blob.plot.plot_cropped_blob(patch=patch, )
             plt.suptitle(full_key)
-
-
-def analyze_patches(patch_list, funcs=scores.FUNC_LIST, *args, **kwargs):
-    """Get scores from functions on a series of patches
-
-    Runs each function in `funcs` over each `patch` to get stats on it
-    Each function must have a signature func(patch, *args, **kwargs),
-        and return a single float number
-    Args:
-        patch_list:
-        funcs:
-        *args:
-        **kwargs:
-
-    Returns:
-        ndarray: size (p, N) where p = num patches, N = len(funcs)
-            rows are scores on one patch
-    """
-    results = []
-    for patch in patch_list:
-        results.append([func(patch, *args, **kwargs) for func in funcs])
-    return np.array(results)
 
 
 def simulation_results(outfile):
