@@ -1,5 +1,6 @@
 # coding: utf-8
 import os
+import sys
 from collections import defaultdict
 import glob
 import numpy as np
@@ -198,10 +199,21 @@ def demo_ghost_blobs(num_blobs=10,
     print("precision: ", precision)
     print("recall: ", recall)
 
-    _, ax = blob.plot.plot_blobs(image=out, blobs=true_d, color='green')
-    _, ax = blob.plot.plot_blobs(image=out, blobs=fp, color='black', ax=ax)
-    _, ax = blob.plot.plot_blobs(image=out, blobs=misses, color='red', ax=ax)
+    plot_blob_results(out, true_d=true_d, fp=fp, misses=misses, delete=False)
+
     return out, sigma_list, real_blobs, detected, fp, misses
+
+
+def plot_blob_results(image, true_d=None, fp=None, misses=None, delete=False):
+    ax = None
+    if true_d is not None:
+        fixed, ax = blob.plot.plot_blobs(image=image, blobs=true_d, color='green', delete=delete)
+    if fp is not None:
+        fixed, ax = blob.plot.plot_blobs(image=image, blobs=fp, color='black', ax=ax, delete=delete)
+    if misses is not None:
+        fixed, ax = blob.plot.plot_blobs(
+            image=image, blobs=misses, color='red', ax=ax, delete=delete)
+    return fixed, ax
 
 
 def make_delta(shape, row=None, col=None):
@@ -505,8 +517,8 @@ def simulate_detections(num_sims,
 def record_blob_patches(fname, image, blobs):
     print("Recording %s" % fname)
     patches = []
-    for blob in blobs:
-        patch = blob_utils.crop_blob(image, blob)
+    for b in blobs:
+        patch = blob_utils.crop_blob(image, b)
         patches.append(patch)
     np.savez(fname, *patches, blobs=blobs)
 
@@ -552,10 +564,52 @@ def plot_run_summary(run_arrays=None, image=None, true_d=None, fp=None, misses=N
     if misses is None:
         misses = run_arrays['miss_blobs']
 
-    _, ax = blob.plot.plot_blobs(image=image, blobs=true_d, color='green')
-    _, ax = blob.plot.plot_blobs(image=image, blobs=fp, color='black', ax=ax)
-    _, ax = blob.plot.plot_blobs(image=image, blobs=misses, color='red', ax=ax)
+    _, ax = plot_blob_results(image, true_d=true_d, fp=fp, misses=misses, delete=False)
     return ax
+
+
+def correct_run(run_idx=None, data_path='.'):
+    """Takes `run_arrays` from `load_run` and plots the image with detections and misses"""
+    run_arrays = load_run(run_idx, data_path=data_path)
+    image = run_arrays['image']
+    true_d = run_arrays['td_blobs']
+    fp = run_arrays['fp_blobs']
+    misses = run_arrays['miss_blobs']
+
+    len_blobs_real = len(misses) + len(true_d)
+    len_detected = len(true_d) + len(fp)
+    print("Old precision: %.3f" % (len(true_d) / len_detected))
+    print("Old recall: %.3f" % (len(true_d) / len_blobs_real))
+
+    print("FIRST SHOWING RESULTS: no delete handling")
+    plot_blob_results(image, true_d=true_d, fp=fp, misses=misses, delete=False)
+
+    _, ax = blob.plot.plot_blobs(image=image, blobs=true_d, color='green', delete=False)
+    fp_fix, ax = blob.plot.plot_blobs(image=image, blobs=fp, color='black', delete=True)
+    # plt.show(block=True)
+
+    # The misses we just want to get rid of if they are bad
+    misses_fix, ax = blob.plot.plot_blobs(image=image, blobs=misses, color='red', delete=True)
+    plt.show(block=True)
+
+    # Now add the bad false pisitives into the true_d array
+    fp_wrongs = [b for b in fp if b not in fp_fix]
+    if fp_wrongs:
+        true_d_fix = np.concatenate((true_d, fp_wrongs), axis=0)
+    else:
+        true_d_fix = true_d
+
+    td_fname = os.path.join(data_path, 'true_detections_%s_fix' % run_idx)
+    fp_fname = os.path.join(data_path, 'false_positives_%s_fix' % run_idx)
+    miss_fname = os.path.join(data_path, 'misses_%s_fix' % run_idx)
+    record_blob_patches(fp_fname, image, fp_fix)
+    record_blob_patches(miss_fname, image, misses_fix)
+    record_blob_patches(td_fname, image, true_d_fix)
+
+    len_blobs_real = len(misses_fix) + len(true_d_fix)
+    len_detected = len(true_d_fix) + len(fp_fix)
+    print("New precision: %.3f" % (len(true_d_fix) / len_detected))
+    print("New recall: %.3f" % (len(true_d_fix) / len_blobs_real))
 
 
 def plot_run_patches(run_arrs, keys=('td', 'fp', 'miss'), sigma=0):
@@ -569,18 +623,17 @@ def plot_run_patches(run_arrs, keys=('td', 'fp', 'miss'), sigma=0):
             plt.suptitle(full_key)
 
 
-
 def analyze_patches(patch_list, funcs=scores.FUNC_LIST, *args, **kwargs):
     """Get scores from functions on a series of patches
-    
+
     Runs each function in `funcs` over each `patch` to get stats on it
     Each function must have a signature func(patch, *args, **kwargs),
         and return a single float number
     Args:
-        patch_list: 
-        funcs: 
-        *args: 
-        **kwargs: 
+        patch_list:
+        funcs:
+        *args:
+        **kwargs:
 
     Returns:
         ndarray: size (p, N) where p = num patches, N = len(funcs)
@@ -663,11 +716,17 @@ def igarss_fig():
     image_cube = blob.skblob.create_gl_cube(out, sigma_list=sigma_list)
 
     _, ax = blob.plot.plot_blobs(
-        image=out,
-        blobs=blob.find_edge_blobs(blobs, out.shape)[0],
-        ax=fig.gca(),
-        color='blue')
+        image=out, blobs=blob.find_edge_blobs(blobs, out.shape)[0], ax=fig.gca(), color='blue')
 
     plt.imshow(image_cube[:, :, 30], cmap='jet', vmin=-1.4, vmax=1.3)
     plt.imshow(image_cube[:, :, 10], cmap='jet', vmin=-1.4, vmax=1.3)
     return out, blobs, sigma_list, image_cube, fig
+
+
+if __name__ == '__main__':
+    run_idx = int(sys.argv[1])
+    try:
+        patch_dir = sys.argv[2]
+    except IndexError:
+        patch_dir = 'patches'
+    correct_run(run_idx, patch_dir)

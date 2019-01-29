@@ -61,6 +61,7 @@ def plot_blobs(image=None,
                color='blue',
                blob_cmap=None,
                plot_img=False,
+               delete=False,
                **kwargs):
     """Takes the blob results from find_blobs and overlays on image
 
@@ -101,6 +102,11 @@ def plot_blobs(image=None,
         ax.add_patch(c)
         patches.append(c)
 
+    remaining_blobs = blobs
+    plt.draw()
+    if delete is False:
+        return blobs, ax
+
     ax.blobs = sorted_blobs
     ax.picked_idx = None
     ax.picked_object = None
@@ -111,14 +117,15 @@ def plot_blobs(image=None,
     cid_press = fig.canvas.mpl_connect('button_press_event', on_press)
     cid_key = fig.canvas.mpl_connect('key_press_event', on_key)
 
-    plt.draw()
     plt.show()
 
     if ax.deleted_idxs:
         print("Deleted %s blobs" % len(ax.deleted_idxs))
-    all_idx = range(len(blobs))
-    remaining = list(set(all_idx) - set(ax.deleted_idxs))
-    remaining_blobs = np.array(sorted_blobs)[remaining]
+        all_idx = range(len(blobs))
+        remaining = list(set(all_idx) - set(ax.deleted_idxs))
+        remaining_blobs = np.array(sorted_blobs)[remaining]
+    else:
+        remaining_blobs = blobs
 
     fig.canvas.mpl_disconnect(cid_pick)
     fig.canvas.mpl_disconnect(cid_press)
