@@ -28,7 +28,8 @@ def blob_log(image=None,
              prune_edges=True,
              border_size=2,
              positive=True,
-             log_scale=False):
+             log_scale=False,
+             verbose=0):
     """Finds blobs in the given grayscale image.
 
     Blobs are found using the Laplacian of Gaussian (LoG) method [1]_.
@@ -73,6 +74,8 @@ def blob_log(image=None,
         If set intermediate values of standard deviations are interpolated
         using a logarithmic scale . If not, linear
         interpolation is used.
+    verbose (bool or int): level of verbose printing while blob finding
+        0 or False means no printing, 1 prints out more local max steps, 2 more
 
     Returns:
     A (n, image.ndim + 1) ndarray:
@@ -136,23 +139,26 @@ def blob_log(image=None,
 
     # Multiply each sigma by sqrt(2) to convert sigma to a circle radius
     lm = lm * np.array([1, 1, np.sqrt(2)])
-    # print('initial local max lm:')
-    # print(lm)
-    # print(lm.shape)
+    if verbose > 2:
+        print('initial local max lm:')
+        print(lm)
+        print(lm.shape)
     # Now remove first the spatial border blobs
     if border_size > 0:
         lm = prune_border_blobs(image.shape, lm, border_size)
-    # print('lm post prune_border_blobs:')
-    # print(lm)
-    # print(lm.shape)
-    # return lm
+    if verbose > 1:
+        print('lm post prune_border_blobs:')
+        print(lm)
+        print(lm.shape)
+
     # Next remove blobs that look like edges
-    smoothed_image = gaussian_filter(image, sigma=3)
+    smoothed_image = gaussian_filter(image, sigma=3, mode='constant')
     if prune_edges:
-        lm = prune_edge_extrema(smoothed_image, lm, positive=positive)
-    # print('lm post prune_edge_extrema:')
-    # print(lm)
-    # print(lm.shape)
+        lm = prune_edge_extrema(smoothed_image, lm, positive=positive, smooth=True)
+    if verbose > 0:
+        print('lm post prune_edge_extrema:')
+        print(lm)
+        print(lm.shape)
     return prune_overlap_blobs(lm, overlap, sigma_bins=sigma_bins)
 
 
@@ -263,6 +269,7 @@ def _compute_sphere_overlap(d, r1, r2):
 
 def _blob_dist(blob1, blob2):
     return sqrt(np.sum((blob1[:2] - blob2[:2])**2))
+
 
 def blob_overlap(blob1, blob2):
     """Finds the overlapping area fraction between two blobs.
@@ -437,12 +444,15 @@ def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True, smooth=T
     # Removing [  0., 131., 29.47353778, 1.70626337] for dist_to_extreme=1.199
 
     out_blobs = []
-    # import ipdb; ipdb.set_trace()
+    import ipdb
     for b in blobs:
+        # if b[0] == 81:
+            # ipdb.set_trace()
         if smooth:
             # Use 1/4 of the radius (ad hoc value) or 3 (to not wash out tiny blobs)
             radius = b[2]
-            sigma = np.clip(radius / 3, 3, None)
+            # sigma = np.clip(radius / 3, 3, None)
+            sigma = radius / sqrt(2)
         else:
             sigma = 0
         dist_to_extreme = get_dist_to_extreme(image, b, positive=positive, sigma=sigma)
@@ -472,8 +482,7 @@ def get_dist_to_extreme(image, blob, positive=True, sigma=0):
     """
     patch = blob_utils.crop_blob(image, blob, crop_val=None)
     if sigma > 0:
-        patch = gaussian_filter(patch, sigma=sigma)
-
+        patch = blob_utils.gaussian_filter_nan(patch, sigma=sigma, mode='constant')
 
     # Remove any bias to just look at peak difference
     if positive:
@@ -698,6 +707,7 @@ def _get_high_intensity_peaks(image, mask, num_peaks):
     # Higest peak first
     return coord[::-1]
 
+
 def shape_index(image, sigma=1, mode='nearest', cval=0, eps=1e-16):
     """Compute the shape index.
 
@@ -774,4 +784,3 @@ def shape_index(image, sigma=1, mode='nearest', cval=0, eps=1e-16):
     out = (2.0 / np.pi) * np.arctan(arg)
     # import ipdb; ipdb.set_trace()
     return out
-

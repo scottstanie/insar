@@ -6,7 +6,6 @@ import glob
 import numpy as np
 import scipy.ndimage as nd
 from scipy.stats import multivariate_normal
-from scipy.ndimage import gaussian_filter
 from skimage import feature, transform
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
@@ -246,7 +245,7 @@ def make_gaussian(
         noise_sigma=0,
 ):
     delta = make_delta(shape, row, col)
-    out = nd.gaussian_filter(delta, sigma) * sigma**2
+    out = nd.gaussian_filter(delta, sigma, mode='constant') * sigma**2
     normed = _normalize_gaussian(out, normalize=normalize, amp=amp)
     if noise_sigma > 0:
         normed += make_noise(shape, noise_sigma)
@@ -558,6 +557,7 @@ def load_run(run_idx, data_path='.'):
     }
     return run_arrays
 
+
 def load_run_blob_type(data_path='.', patch_type='fp'):
     if patch_type in ('fp', 'false_positives'):
         fname_search = 'false_positive*.npz'
@@ -580,6 +580,7 @@ def load_run_blob_type(data_path='.', patch_type='fp'):
             blob_patches.extend(new_patches)
 
     return blobs, blob_patches
+
 
 def plot_run_summary(run_arrays=None, image=None, true_d=None, fp=None, misses=None):
     """Takes `run_arrays` from `load_run` and plots the image with detections and misses"""

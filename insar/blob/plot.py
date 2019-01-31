@@ -284,18 +284,21 @@ def plot_tsne(X, y_idxs=None, n_components=2, perplexities=(5,), colors=('r', 'g
 
     return Y_list
 
-def plot_scores(score_arr, nrows=1, y_idxs=None):
+def plot_scores(score_arr, nrows=1, y_idxs=None, titles=None):
     n_scores = score_arr.shape[1]
     ncols = np.ceil(n_scores / nrows).astype(int)
     fix, axes = plt.subplots(nrows, ncols, squeeze=False)
 
     if y_idxs is None:
         y_idxs = np.arange(len(score_arr))
+    if titles is None:
+        titles = np.range(n_scores).astype(int)
 
-    for idx, ax in enumerate(axes.ravel()):
+    for idx in  range(n_scores):
+        ax = axes.ravel()[idx]
         for y_idx, yy in enumerate(y_idxs):
-            ax.hist(score_arr[yy, idx], alpha=0.5, label=y_idx)
-        ax.set_title(idx)
+            ax.hist(score_arr[yy, idx], bins=50, alpha=0.5, label=y_idx)
+        ax.set_title(titles[idx])
         ax.legend()
 
 if __name__ == '__main__':

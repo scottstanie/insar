@@ -308,7 +308,7 @@ def prune_regions(regions, bboxes, overlap_thresh=0.5):
     return list(np.array(sorted_regions)[remaining]), np.array(sorted_bboxes)[remaining]
 
 
-def gaussian_filter_nan(image, sigma, **kwargs):
+def gaussian_filter_nan(image, sigma, mode='constant', **kwargs):
     """Apply a gaussian filter to an image with NaNs (avoiding all nans)
 
     The scipy.ndimage `gaussian_filter` will make the output all NaNs if
@@ -326,7 +326,7 @@ def gaussian_filter_nan(image, sigma, **kwargs):
 
     """
     if np.sum(np.isnan(image)) == 0:
-        return gaussian_filter(image, sigma=sigma, **kwargs)
+        return gaussian_filter(image, sigma=sigma, mode=mode, **kwargs)
 
     V = image.copy()
     nan_idxs = np.isnan(image)
@@ -338,6 +338,7 @@ def gaussian_filter_nan(image, sigma, **kwargs):
     W_filt = gaussian_filter(W, sigma, **kwargs)
 
     return V_filt / W_filt
+
 
 def sigma_from_blob(blob=None, patch=None):
     """Back out what the sigma is based on size of patch or blob radius
@@ -352,4 +353,3 @@ def sigma_from_blob(blob=None, patch=None):
     else:
         raise ValueError("Need blob or patch for sigma_from_blob")
     return radius / np.sqrt(2)
-

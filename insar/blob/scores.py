@@ -47,10 +47,10 @@ def shape_index_stat(patch, accum_func, sigma=None, sigma_scale=None, patch_size
     return blob_utils.get_center_value(shape_index_arr, patch_size=psize, accum_func=accum_func)
 
 
-def shape_index_center(patch, patch_size=3, sigma=None):
+def shape_index_center(patch):
     """Finds the mean shape_index of a 3x3 patch around center pixel
     sigma=proportional to the patch size computed with sigma_from_patch"""
-    return shape_index_stat(patch, np.mean, sigma=sigma, patch_size=patch_size)
+    return shape_index_stat(patch, np.mean, sigma=None, patch_size=3)
 
 
 def shape_index_center_sigma1(patch):
@@ -61,6 +61,15 @@ def shape_index_center_sigma1(patch):
 def shape_index_center_sigma3(patch):
     """Finds the mean shape_index of a 3x3 patch around center pixel, sigma=3"""
     return shape_index_stat(patch, np.mean, sigma=3, patch_size=3)
+
+
+def shape_index_center_min_sigma3(patch):
+    """Finds the min shape_index of a 3x3 patch around center pixel, sigma=3"""
+    return shape_index_stat(patch, lambda x:np.min(np.mean(x)), sigma=3, patch_size=3)
+
+def shape_index_center_min_sigma1(patch):
+    """Finds the min shape_index of a 3x3 patch around center pixel, sigma=3"""
+    return shape_index_stat(patch, lambda x:np.min(np.mean(x)), sigma=1, patch_size=1)
 
 
 def shape_index_variance_patch3_sigma3(patch):
@@ -103,6 +112,8 @@ FUNC_LIST = [
     shape_index_center,
     shape_index_center_sigma1,
     shape_index_center_sigma3,
+    shape_index_center_min_sigma3,
+    shape_index_center_min_sigma1,
     shape_index_variance_patch3_sigma3,
     shape_index_variance_patch_full_sigma3,
     shape_index_variance_patch_full,
@@ -111,6 +122,8 @@ FUNC_LIST = [
     max_gradient,
     max_gradient_sigma3,
 ]
+
+FUNC_LIST_NAMES = [f.__name__ for f in FUNC_LIST]
 
 
 def analyze_patches(patch_list, funcs=FUNC_LIST, *args, **kwargs):

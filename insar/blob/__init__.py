@@ -5,7 +5,7 @@ import os
 import multiprocessing
 import numpy as np
 from insar.log import get_log
-from insar.blob import skblob, plot, utils
+from insar.blob import skblob, plot, utils, scores
 from insar.blob import utils as blob_utils
 from skimage import feature
 from insar import latlon, plotting
@@ -319,13 +319,13 @@ def find_blobs_with_bowl_scores(image, blobs=None, score_cutoff=.7, **kwargs):
     # ipdb.set_trace()
     out_blobs = []
     # for b, sigma in zip(blobs, sigma_arr):
-        # for blob, sigma_idx in zip(blobs, sigma_idxs):
-        # OLD WAY: compute scores, then crop. THIS is DIFFERENT than crop, then score for bowlness
-        # # Get the peaks that correspond to the current sigma level
-        # cur_scores = score_images[sigma_idx]
-        # # Only examine blob area
-        # blob_scores = blob_utils.crop_blob(cur_scores, blob, crop_val=None)
-        # center_score = blob_utils.get_center_value(blob_scores)
+    # for blob, sigma_idx in zip(blobs, sigma_idxs):
+    # OLD WAY: compute scores, then crop. THIS is DIFFERENT than crop, then score for bowlness
+    # # Get the peaks that correspond to the current sigma level
+    # cur_scores = score_images[sigma_idx]
+    # # Only examine blob area
+    # blob_scores = blob_utils.crop_blob(cur_scores, blob, crop_val=None)
+    # center_score = blob_utils.get_center_value(blob_scores)
     for b in blobs:
         sigma = blob_utils.sigma_from_blob(blob=b)
         center_score = get_blob_bowl_score(image, b, sigma=sigma)
