@@ -471,10 +471,14 @@ def run_inversion(igram_path,
     return (geolist, phi_arr, deformation)
 
 
-def save_deformation(igram_path, deformation, geolist):
+def save_deformation(igram_path,
+                     deformation,
+                     geolist,
+                     defo_name='deformation.npy',
+                     geolist_name='geolist.npy'):
     """Saves deformation ndarray and geolist dates as .npy file"""
-    np.save(os.path.join(igram_path, 'deformation.npy'), deformation)
-    np.save(os.path.join(igram_path, 'geolist.npy'), geolist)
+    np.save(os.path.join(igram_path, defo_name), deformation)
+    np.save(os.path.join(igram_path, geolist_name), geolist)
 
 
 def load_deformation(igram_path, filename='deformation.npy'):
