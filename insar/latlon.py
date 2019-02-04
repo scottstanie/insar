@@ -202,15 +202,15 @@ class LatlonImage(np.ndarray):
         if _is_float(slice_items):
             raise IndexError("Can't specify only 1 float for lat/lon indexing")
         # elif isinstance(slice_items, Iterable):
-        if len(slice_items) == 3 and self.ndim == 3:
-            # Something like [:, -101.1, 30.1]
-            dslice = slice_items[0]
-            lat, lon = slice_items[1:]
-        elif len(slice_items) == 2:
-            if self.ndim == 2 or (len(slice_items) == 3 and slice_items[0] is Ellipsis):
-                # Something like (-101.1, 30.0:30.2:.05) or (..., 101.1, 30.0)
-                dslice = None
-                lat, lon = slice_items[-2:]
+        if len(slice_items) == 3:
+            if self.ndim == 3 or slice_items[0] is Ellipsis:
+                # Something like [:, -101.1, 30.1] or [..., -101.1, 30.0]
+                dslice = slice_items[0]
+                lat, lon = slice_items[1:]
+        elif len(slice_items) == 2 and self.ndim == 2:
+            # Something like (-101.1, 30.0:30.2:.05) or (..., 101.1, 30.0)
+            dslice = None
+            lat, lon = slice_items
         else:
             raise IndexError(
                 "Invalid lat/lon slices for size %s LatlonImage: %s" % (self.ndim, slice_items))
