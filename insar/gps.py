@@ -57,6 +57,18 @@ def stations_within_image(image_ll, mask_invalid=True):
     return good_stations
 
 
+def plot_stations(image_ll, mask_invalid=True):
+    stations = stations_within_image(image_ll, mask_invalid=mask_invalid)
+    # TODO: maybe just plot_image_shifted
+    fig, ax = plt.subplots()
+    axim = ax.imshow(image_ll, extent=image_ll.extent)
+    fig.colorbar(axim)
+
+    for name, lon, lat in stations:
+        ax.plot(lon, lat, 'X', markersize=15, label=name)
+    plt.legend()
+
+
 def find_stations_with_data(gps_dir=None):
     # Now also get gps station list
     if not gps_dir:
@@ -122,8 +134,8 @@ def window_stack(stack, row, col, window_size=3, func=np.mean):
     if not isinstance(window_size, int) or window_size < 1:
         raise ValueError("Invalid window_size %s: must be odd positive int" % window_size)
     elif row > stack.shape[1] or col > stack.shape[2]:
-        raise ValueError(
-            "(%s, %s) out of bounds reference for stack size %s" % (row, col, stack.shape))
+        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (row, col,
+                                                                                 stack.shape))
 
     if window_size % 2 == 0:
         window_size -= 1
@@ -133,6 +145,7 @@ def window_stack(stack, row, col, window_size=3, func=np.mean):
     return func(stack[:,
                 row - win_size:row + win_size + 1,
                 col - win_size:col + win_size + 1], axis=(1, 2))  # yapf: disable
+
 
 def plot_gps_enu(station=None, station_df=None, days_smooth=12):
     def remove_xticks(ax):
