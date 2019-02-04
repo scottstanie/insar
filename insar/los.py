@@ -18,7 +18,7 @@ logger = get_log()
 
 
 def find_enu_coeffs(lon, lat, geo_path=None):
-    """Find the coefficients for east, north, up components of LOS deformation
+    """For arbitrary lat/lon, find the coefficients for ENU components of LOS vector
 
     Args:
         lon (float): longitude of point to get LOS vector
@@ -44,7 +44,7 @@ def find_enu_coeffs(lon, lat, geo_path=None):
 
 
 def find_east_up_coeffs(geo_path):
-    """Find the coefficients for east and up components for LOS deformation
+    """Find the coefficients for east and up components for LOS vector at midpoint of scene
 
     Args:
         geo_path (str): path to the directory with the sentinel

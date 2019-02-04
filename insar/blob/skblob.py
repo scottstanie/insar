@@ -199,7 +199,7 @@ def create_gl_cube(image, sigma_list=None, min_sigma=1, max_sigma=50, num_sigma=
     # Run each convolution in a separate process
     pool = multiprocessing.Pool()
     for s in sigma_list:
-        filtered.append(pool.apply_async(gaussian_laplace, args=(image, s)))
+        filtered.append(pool.apply_async(gaussian_laplace, args=(image, s), kwds={'mode': 'reflect'}))
     # Include -s**2 for scale invariance, searches for positive signal
     return np.stack([-s**2 * res.get() for res, s in zip(filtered, sigma_list)], axis=-1)
     # Old way:
@@ -482,7 +482,7 @@ def get_dist_to_extreme(image, blob, positive=True, sigma=0):
     """
     patch = blob_utils.crop_blob(image, blob, crop_val=None)
     if sigma > 0:
-        patch = blob_utils.gaussian_filter_nan(patch, sigma=sigma, mode='constant')
+        patch = blob_utils.gaussian_filter_nan(patch, sigma=sigma, mode='nearest')
 
     # Remove any bias to just look at peak difference
     if positive:
@@ -660,6 +660,7 @@ def peak_local_max(image,
         return np.empty((0, 2), np.int)
 
     # Non maximum filter
+    # Note: constant here is fine since we're looking for extreme values
     if footprint is not None:
         image_max = maximum_filter(image, footprint=footprint, mode='constant')
     else:

@@ -206,10 +206,11 @@ class LatlonImage(np.ndarray):
             # Something like [:, -101.1, 30.1]
             dslice = slice_items[0]
             lat, lon = slice_items[1:]
-        elif len(slice_items) == 2 and self.ndim == 2:
-            # Something like (-101.1, 30.0:30.2:.05)
-            dslice = None
-            lat, lon = slice_items
+        elif len(slice_items) == 2:
+            if self.ndim == 2 or (len(slice_items) == 3 and slice_items[0] is Ellipsis):
+                # Something like (-101.1, 30.0:30.2:.05) or (..., 101.1, 30.0)
+                dslice = None
+                lat, lon = slice_items[-2:]
         else:
             raise IndexError(
                 "Invalid lat/lon slices for size %s LatlonImage: %s" % (self.ndim, slice_items))

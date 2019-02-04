@@ -457,6 +457,9 @@ def simulate_detections(num_sims,
                         max_blobs=60,
                         max_ecc=0.4,
                         noise_sigma=0.5,
+                        min_amp=1,
+                        max_amp=15,
+                        amp_scale=25,
                         **kwargs):
     @log_runtime
     def run(run_idx):
@@ -481,7 +484,13 @@ def simulate_detections(num_sims,
         if num_blobs is None:
             nblobs = np.random.randint(min_blobs, max_blobs)
         real_blobs, out = generate_blobs(
-            nblobs, max_amp=15, amp_scale=25, noise_sigma=noise_sigma, max_ecc=max_ecc)
+            nblobs,
+            min_amp=min_amp,
+            max_amp=max_amp,
+            amp_scale=amp_scale,
+            noise_sigma=noise_sigma,
+            max_ecc=max_ecc,
+        )
         # Make sure to remove overlap same as the finding
         overlap = 0.5
         real_blobs = blob.skblob.prune_overlap_blobs(
