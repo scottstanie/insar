@@ -1,6 +1,7 @@
 # coding: utf-8
 import os
 import sys
+import itertools
 from collections import defaultdict
 import glob
 import numpy as np
@@ -74,9 +75,8 @@ def generate_blobs(num_blobs,
         # print(np.vstack((a_arr, b_arr)).T)
 
     if overlap is not None and overlap > 0:
-        # Make sure to remove overlap same as the finding
-        overlap = 0.1
-        blobs = blob.skblob.prune_overlap_blobs(blobs, overlap, sigma_bins=sigma_bins)
+        blobs = prune_nonzero_overlap(blobs, overlap)
+
     out = np.zeros(imsize)
     for idx, (row, col, sigma, amp) in enumerate(blobs):
         if max_ecc > 0:
@@ -467,7 +467,7 @@ def simulate_detections(num_sims,
                         max_blobs=60,
                         max_ecc=0.4,
                         noise_sigma=0.5,
-                        min_amp=1,
+                        min_amp=2,
                         max_amp=15,
                         amp_scale=25,
                         random_seed=None,
@@ -687,6 +687,19 @@ def simulation_results(outfile):
     ax = df_grouped['precision'].plot(y='mean', use_index=True, label='mean precision')
     ax = df_grouped['recall'].plot(y='mean', use_index=True, ax=ax, label='mean recall')
     return df, ax
+
+
+def split_pos_neg(blobs):
+    return np.array([b for b in blobs if b[3] > 0]), np.array([b for b in blobs if b[3] < 0])
+
+
+def prune_nonzero_overlap(blobs, overlap=0.1):
+    pruned = np.empty((0, 4))
+    for bs in split_pos_neg(blobs):
+        out = blob.skblob.prune_overlap_blobs(bs, overlap, sigma_bins=1)
+        if out.size:
+            pruned = np.vstack((pruned, out))
+    return pruned
 
 
 def make_stack(shape=(501, 501), max_amp=3, cmap='jet'):

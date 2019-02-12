@@ -392,7 +392,9 @@ def prune_overlap_blobs(blobs_array, overlap, sigma_bins=1):
     if not blobs_array.size:
         return blobs_array
 
-    sigma = blobs_array[:, -1].max()
+    # Note: changed from blobs_array[:, -1] to blobs_array[:, 2]- assuming we have
+    # only 2d blobs, but it may be passed a blobs_array with amplitude (N, 4)
+    sigma = blobs_array[:, 2].max()
     max_distance = 2 * sigma * sqrt(blobs_array.shape[1] - 1)
     tree = spatial.cKDTree(blobs_array[:, :-1])
     pairs = np.array(list(tree.query_pairs(max_distance)))
@@ -406,7 +408,7 @@ def prune_overlap_blobs(blobs_array, overlap, sigma_bins=1):
             blob1, blob2 = blobs_array[i], blobs_array[j]
             if blob_overlap(blob1, blob2) > overlap:
                 # kill the smaller blob if enough overlap
-                if blob1[-1] > blob2[-1]:
+                if blob1[2] > blob2[2]:
                     keep_idxs[j] = False
                 else:
                     keep_idxs[i] = False
