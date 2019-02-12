@@ -460,6 +460,7 @@ def simulate_detections(num_sims,
                         min_amp=1,
                         max_amp=15,
                         amp_scale=25,
+                        random_seed=None,
                         **kwargs):
     @log_runtime
     def run(run_idx):
@@ -492,9 +493,12 @@ def simulate_detections(num_sims,
             max_ecc=max_ecc,
         )
         # Make sure to remove overlap same as the finding
-        overlap = 0.5
+        overlap = 0.1
         real_blobs = blob.skblob.prune_overlap_blobs(
-            real_blobs, overlap, sigma_bins=finding_params['sigma_bins'])
+            # real_blobs, overlap, sigma_bins=finding_params['sigma_bins'])
+            real_blobs,
+            overlap,
+            sigma_bins=1)
 
         # print("Finding blobs in synthetic images")
         detected, sigma_list = blob.find_blobs(out, **finding_params)
@@ -515,6 +519,9 @@ def simulate_detections(num_sims,
             img_fname = os.path.join(patch_dir, 'image_%s' % run_idx)
             np.savez(img_fname, image=out, real_blobs=real_blobs)
         return precision, recall, len(real_blobs)
+
+    if random_seed is not None:
+        np.random.seed(random_seed)
 
     total_precision, total_recall = 0, 0
     with open(os.path.join(patch_dir, result_file), 'w') as f:
@@ -591,8 +598,16 @@ def load_run_blob_type(data_path='.', patch_type='fp'):
     return blobs, blob_patches
 
 
-def plot_run_summary(run_arrays=None, image=None, true_d=None, fp=None, misses=None):
+def plot_run_summary(run_arrays=None,
+                     image=None,
+                     true_d=None,
+                     fp=None,
+                     misses=None,
+                     data_path=None,
+                     run_idx=None):
     """Takes `run_arrays` from `load_run` and plots the image with detections and misses"""
+    if data_path is not None and run_idx is not None:
+        run_arrays = load_run(run_idx, data_path=data_path)
     if image is None:
         image = run_arrays['image']
     if true_d is None:
