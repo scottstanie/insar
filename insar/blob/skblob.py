@@ -446,7 +446,6 @@ def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True, smooth=T
     # Removing [  0., 131., 29.47353778, 1.70626337] for dist_to_extreme=1.199
 
     out_blobs = []
-    import ipdb
     for b in blobs:
         # if b[0] == 81:
             # ipdb.set_trace()

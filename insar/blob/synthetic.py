@@ -28,15 +28,16 @@ def generate_blobs(num_blobs,
                    max_sigma=80,
                    mean_sigma=10,
                    max_amp=5,
-                   mean_amp=3,
                    min_amp=1,
                    max_ecc=0.5,
                    amp_scale=3,
                    noise_sigma=1,
-                   overlap=0.1,
+                   overlap=0.01,
                    sigma_bins=1):
     # end columns are (x, y, sigma, Amplitude)
     # Uniformly spread blobs: first make size they lie within (pad, max-pad)
+    # Note: 1.2 factor since we will prune some
+    num_blobs = int(1.1 * num_blobs)
     rand_xy = np.random.rand(num_blobs, 2)
     rand_xy *= np.array([imsize[0] - 2 * border_pad, imsize[1] - 2 * border_pad])
     rand_xy += border_pad
@@ -59,6 +60,13 @@ def generate_blobs(num_blobs,
 
     blobs = np.stack([rand_xy[:, 1], rand_xy[:, 0], sigmas, amplitudes], axis=1)
 
+    if overlap is not None and overlap > 0:
+        blobs = prune_nonzero_overlap(blobs, overlap)
+        blobs = prune_annihilated_blobs(blobs, max_overlap=overlap, min_ratio=2)
+
+    # update to find new length
+    num_blobs = len(blobs)
+
     if max_ecc > 0:  # Noncircular allowed
         if max_ecc > 0.99:
             print("WARNING: max_ecc must be 0.99 or less")
@@ -73,9 +81,6 @@ def generate_blobs(num_blobs,
         # a_arr = ecc_arr * b_arr
         theta_arr = np.random.randint(0, 180, size=(num_blobs, ))
         # print(np.vstack((a_arr, b_arr)).T)
-
-    if overlap is not None and overlap > 0:
-        blobs = prune_nonzero_overlap(blobs, overlap)
 
     out = np.zeros(imsize)
     for idx, (row, col, sigma, amp) in enumerate(blobs):
@@ -471,6 +476,7 @@ def simulate_detections(num_sims,
                         max_amp=15,
                         amp_scale=25,
                         random_seed=None,
+                        overlap=0.01,
                         **kwargs):
     @log_runtime
     def run(run_idx):
@@ -494,7 +500,6 @@ def simulate_detections(num_sims,
 
         if num_blobs is None:
             nblobs = np.random.randint(min_blobs, max_blobs)
-        overlap = .1
         real_blobs, out = generate_blobs(
             nblobs,
             min_amp=min_amp,
@@ -502,7 +507,7 @@ def simulate_detections(num_sims,
             amp_scale=amp_scale,
             noise_sigma=noise_sigma,
             max_ecc=max_ecc,
-            overlap=0.1,
+            overlap=overlap,
         )
 
         # print("Finding blobs in synthetic images")
@@ -690,16 +695,66 @@ def simulation_results(outfile):
 
 
 def split_pos_neg(blobs):
+    """Splits blob array into the positive sign and negative sign blobs"""
     return np.array([b for b in blobs if b[3] > 0]), np.array([b for b in blobs if b[3] < 0])
 
 
-def prune_nonzero_overlap(blobs, overlap=0.1):
+def prune_nonzero_overlap(blobs, overlap=0.01, min_ratio=3):
+    """Get rid of same-sign blobs that are overlapped (meaning merged)
+
+    Treats positive and negative separately.
+    More conservative overlap and min_ratio numbers than the opposite sign case
+
+    Args:
+        blobs:
+        overlap:
+
+    Returns:
+        pruned: same as blobs, fewer rows
+
+    """
     pruned = np.empty((0, 4))
     for bs in split_pos_neg(blobs):
-        out = blob.skblob.prune_overlap_blobs(bs, overlap, sigma_bins=1)
+        out = prune_annihilated_blobs(bs, min_ratio=min_ratio, max_overlap=overlap, keep_on='sigma')
+        # out = blob.skblob.prune_overlap_blobs(bs, overlap, sigma_bins=1)
         if out.size:
             pruned = np.vstack((pruned, out))
     return pruned
+
+
+def _sigma_ratio(b1, b2):
+    return max(b1[2], b2[2]) / min(b1[2], b2[2])
+
+
+def prune_annihilated_blobs(blobs, min_ratio=2, max_overlap=0.5, keep_on='amplitude'):
+    """Look for similar size blobs of opposite sign with large overlap
+
+    Args:
+        blobs:
+
+    Returns:
+
+    """
+    if keep_on == 'amplitude':
+        keep_idx = 3
+    elif keep_on == 'sigma':
+        keep_idx = 2
+    else:
+        raise ValueError('keep_on must be amplitude or sigma')
+
+    out = []
+    good_blob_idxs = np.ones((blobs.shape[0], )).astype(bool)
+    for i, j in itertools.combinations(range(len(blobs)), 2):
+        b1, b2 = blobs[i], blobs[j]
+        sigma_ratio = _sigma_ratio(b1, b2)
+        if sigma_ratio < min_ratio and blob.skblob.blob_overlap(b1, b2) > max_overlap:
+            # Keep
+            if b1[keep_idx] > b2[keep_idx]:
+                good_blob_idxs[i] = False
+            else:
+                good_blob_idxs[j] = False
+
+    return blobs[good_blob_idxs]
 
 
 def make_stack(shape=(501, 501), max_amp=3, cmap='jet'):
