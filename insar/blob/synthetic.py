@@ -31,7 +31,9 @@ def generate_blobs(num_blobs,
                    min_amp=1,
                    max_ecc=0.5,
                    amp_scale=3,
-                   noise_sigma=1):
+                   noise_sigma=1,
+                   overlap=0.1,
+                   sigma_bins=1):
     # end columns are (x, y, sigma, Amplitude)
     # Uniformly spread blobs: first make size they lie within (pad, max-pad)
     rand_xy = np.random.rand(num_blobs, 2)
@@ -71,6 +73,10 @@ def generate_blobs(num_blobs,
         theta_arr = np.random.randint(0, 180, size=(num_blobs, ))
         # print(np.vstack((a_arr, b_arr)).T)
 
+    if overlap is not None and overlap > 0:
+        # Make sure to remove overlap same as the finding
+        overlap = 0.1
+        blobs = blob.skblob.prune_overlap_blobs(blobs, overlap, sigma_bins=sigma_bins)
     out = np.zeros(imsize)
     for idx, (row, col, sigma, amp) in enumerate(blobs):
         if max_ecc > 0:
@@ -182,12 +188,16 @@ def demo_ghost_blobs(num_blobs=10,
     }
     if out is None or real_blobs is None:
         print("Generating %s blobs" % num_blobs)
-        real_blobs, out = generate_blobs(
-            num_blobs, max_amp=15, amp_scale=25, noise_sigma=noise_sigma, max_ecc=max_ecc)
-        # Make sure to remove overlap same as the finding
         overlap = 0.5
-        real_blobs = blob.skblob.prune_overlap_blobs(
-            real_blobs, overlap, sigma_bins=finding_params['sigma_bins'])
+        real_blobs, out = generate_blobs(
+            num_blobs,
+            max_amp=15,
+            amp_scale=25,
+            noise_sigma=noise_sigma,
+            max_ecc=max_ecc,
+            overlap=overlap,
+            sigma_bins=finding_params['sigma_bins'],
+        )
 
     print("Finding blobs in synthetic images")
     detected, sigma_list = blob.find_blobs(out, **finding_params)
@@ -484,6 +494,7 @@ def simulate_detections(num_sims,
 
         if num_blobs is None:
             nblobs = np.random.randint(min_blobs, max_blobs)
+        overlap = .1
         real_blobs, out = generate_blobs(
             nblobs,
             min_amp=min_amp,
@@ -491,14 +502,8 @@ def simulate_detections(num_sims,
             amp_scale=amp_scale,
             noise_sigma=noise_sigma,
             max_ecc=max_ecc,
+            overlap=0.1,
         )
-        # Make sure to remove overlap same as the finding
-        overlap = 0.1
-        real_blobs = blob.skblob.prune_overlap_blobs(
-            # real_blobs, overlap, sigma_bins=finding_params['sigma_bins'])
-            real_blobs,
-            overlap,
-            sigma_bins=1)
 
         # print("Finding blobs in synthetic images")
         detected, sigma_list = blob.find_blobs(out, **finding_params)
