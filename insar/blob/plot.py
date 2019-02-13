@@ -266,7 +266,7 @@ def plot_regions(regions, ax=None, linecolor='k-'):
         ax.plot(xx, yy, linecolor)
 
 
-def plot_tsne(X, y_idxs=None, n_components=2, perplexities=(5,), colors=('r', 'g')):
+def plot_tsne(X, y_idxs=None, n_components=2, perplexities=(5, ), colors=('r', 'g')):
     fig, axes = plt.subplots(1, len(perplexities))
     Y_list = []
     for pidx, p in enumerate(perplexities):
@@ -284,6 +284,7 @@ def plot_tsne(X, y_idxs=None, n_components=2, perplexities=(5,), colors=('r', 'g
 
     return Y_list
 
+
 def plot_scores(score_arr, nrows=1, y_idxs=None, titles=None):
     n_scores = score_arr.shape[1]
     ncols = np.ceil(n_scores / nrows).astype(int)
@@ -294,12 +295,13 @@ def plot_scores(score_arr, nrows=1, y_idxs=None, titles=None):
     if titles is None:
         titles = np.range(n_scores).astype(int)
 
-    for idx in  range(n_scores):
+    for idx in range(n_scores):
         ax = axes.ravel()[idx]
         for y_idx, yy in enumerate(y_idxs):
             ax.hist(score_arr[yy, idx], bins=50, alpha=0.5, label=y_idx)
         ax.set_title(titles[idx])
         ax.legend()
+
 
 if __name__ == '__main__':
     npz = np.load('patches/image_1.npz')

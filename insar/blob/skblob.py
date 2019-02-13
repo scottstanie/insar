@@ -199,7 +199,8 @@ def create_gl_cube(image, sigma_list=None, min_sigma=1, max_sigma=50, num_sigma=
     # Run each convolution in a separate process
     pool = multiprocessing.Pool()
     for s in sigma_list:
-        filtered.append(pool.apply_async(gaussian_laplace, args=(image, s), kwds={'mode': 'reflect'}))
+        filtered.append(
+            pool.apply_async(gaussian_laplace, args=(image, s), kwds={'mode': 'reflect'}))
     # Include -s**2 for scale invariance, searches for positive signal
     return np.stack([-s**2 * res.get() for res, s in zip(filtered, sigma_list)], axis=-1)
     # Old way:
@@ -448,12 +449,13 @@ def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True, smooth=T
     out_blobs = []
     for b in blobs:
         # if b[0] == 81:
-            # ipdb.set_trace()
+        # ipdb.set_trace()
         if smooth:
+            sigma = 3
             # Use 1/4 of the radius (ad hoc value) or 3 (to not wash out tiny blobs)
-            radius = b[2]
-            # sigma = np.clip(radius / 3, 3, None)
-            sigma = radius / sqrt(2)
+            # radius = b[2]
+            # sigma = np.clip(radius / 4, 3, None)
+            # sigma = radius / sqrt(2)
         else:
             sigma = 0
         dist_to_extreme = get_dist_to_extreme(image, b, positive=positive, sigma=sigma)
@@ -468,7 +470,7 @@ def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True, smooth=T
         return np.empty((0, blobs.shape[1]))
 
 
-def get_dist_to_extreme(image, blob, positive=True, sigma=0):
+def get_dist_to_extreme(image=None, blob=None, positive=True, sigma=0, patch=None):
     """Finds how far from center a blob's extreme point is that caused the result
 
     Assumes blob[2] is radius, not sigma, to pass to indexes_within_circle
@@ -481,7 +483,8 @@ def get_dist_to_extreme(image, blob, positive=True, sigma=0):
     sigma (float): optional: used to smooth image before finding the
         extreme value
     """
-    patch = blob_utils.crop_blob(image, blob, crop_val=None)
+    if patch is None:
+        patch = blob_utils.crop_blob(image, blob, crop_val=None)
     if sigma > 0:
         patch = blob_utils.gaussian_filter_nan(patch, sigma=sigma, mode='nearest')
 
