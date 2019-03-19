@@ -429,7 +429,7 @@ def run_inversion(igram_path,
         # TODO: maybe i need to search for masks? dont wanna pick a garbage one by accident
         latlon_image = latlon.LatlonImage(
             data=unw_stack[0], dem_rsc_file=os.path.join(igram_path, 'dem.rsc'))
-        find_reference_location(latlon_image, igram_path, mask_stack, gps_dir=None)
+        ref_row, ref_col = find_reference_location(latlon_image, igram_path, mask_stack, gps_dir=None)
     else:
         ref_row, ref_col = reference
 
