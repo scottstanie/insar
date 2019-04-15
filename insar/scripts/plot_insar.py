@@ -35,7 +35,9 @@ def plot_image(img, title=None, colorbar=True, alpha=0.6):
     if title:
         axes.set_title(title)
 
-    plt.show()
+    print('h')
+    plt.show(block=True)
+    print('i')
 
 
 if __name__ == '__main__':

@@ -23,24 +23,25 @@ def read_station_df(gps_dir=None, header=None):
     return df
 
 
-def station_lonlat(station_name):
-    df = read_station_df()
+def station_lonlat(station_name, gps_dir=None):
+    df = read_station_df(gps_dir=gps_dir)
     name, lat, lon, alt = df[df['name'] == station_name].iloc[0]
     return lon, lat
 
 
-def stations_within_image(image_ll, mask_invalid=True):
+def stations_within_image(image_ll, mask_invalid=True, gps_dir=None):
     """Given a LatlonImage, find gps stations contained in area
 
     Args:
         image_ll (LatlonImage): LatlonImage of area with data
         mask_invalid (bool): Default true. if true, don't return stations
             where the image value is NaN or exactly 0
+        gps_dir (str): custom directory to pass to read_station_df
 
     Returns:
         ndarray: Nx3, with columns ['name', 'lon', 'lat']
     """
-    df = read_station_df()
+    df = read_station_df(gps_dir=gps_dir)
     station_lon_lat_arr = df[['lon', 'lat']].values
     contains_bools = image_ll.contains(station_lon_lat_arr)
     candidates = df[contains_bools][['name', 'lon', 'lat']].values
@@ -70,11 +71,14 @@ def plot_stations(image_ll, mask_invalid=True):
 
 
 def find_stations_with_data(gps_dir=None):
+    """
+        gps_dir (str): custom directory to pass to read_station_df
+    """
     # Now also get gps station list
     if not gps_dir:
         gps_dir = GPS_DIR
 
-    all_station_data = read_station_df()
+    all_station_data = read_station_df(gps_dir=gps_dir)
     station_data_list = find_station_data_files(gps_dir)
     stations_with_data = [
         tup for tup in all_station_data.to_records(index=False) if tup[0] in station_data_list

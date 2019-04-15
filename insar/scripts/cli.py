@@ -267,6 +267,33 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
     )
 
 
+# COMMAND: plot
+@cli.command('plot')
+@click.argument("filename")
+@click.option("--downsample", default=1, help="Amount to downsample image")
+@click.option("--cmap", default='dismph', help="Colormap for image display.")
+@click.option("--title", help="Title for image plot")
+@click.option("--alpha", default=0.6, help="Transparency for background magnitude (if plotting insar)")
+@click.option("--colorbar/--no-colorbar", default=True, help="Display colorbar on figure")
+@click.pass_obj
+def plot(context, filename, downsample, cmap, title, alpha, colorbar):
+    """Quick plot of a single InSAR file.
+
+    filename: Name of InSAR file to plot (possible extensions: .int, .cor, .unw, .geo,...)"
+
+    Can downsample for easier viewing.
+    Requires a .dem.rsc file to also be in same directory
+
+    If not using the current directory, use the --path option:
+
+        insar --path /path/to/igrams <filename>
+
+    """
+    from .plot_insar import plot_image
+    img = insar.sario.load(filename, downsample=downsample)
+    plot_image(img, title=title, colorbar=colorbar, alpha=alpha)
+
+
 # COMMAND: blob
 @cli.command(context_settings=dict(ignore_unknown_options=True))
 @click.option('--load/--no-load', default=True, help='Load last calculated blobs')

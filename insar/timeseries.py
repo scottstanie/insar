@@ -668,7 +668,7 @@ def deramp_stack(int_file_list, unw_ext, order=1):
 def find_reference_location(latlon_image, igram_path=None, mask_stack=None, gps_dir=None):
     ref_row, ref_col = None, None
     logger.info("Searching for gps station within area")
-    stations = insar.gps.stations_within_image(latlon_image, mask_invalid=True)
+    stations = insar.gps.stations_within_image(latlon_image, mask_invalid=True, gps_dir=gps_dir)
     if len(stations) > 0:
         # TODO: pick best station somehow? maybe higher mean correlation?
         logger.info("Station options:")
