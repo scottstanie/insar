@@ -25,4 +25,4 @@ if __name__ == '__main__':
     in_rsc_path = os.path.join(inpath, 'elevation.dem.rsc')
     with open('elevation_small.dem.rsc', 'w') as f:
         print("Writing elevation_small.dem.rsc")
-        f.write(upsample_dem_rsc(rate=(1 / downsample), rsc_filepath=in_rsc_path))
+        f.write(upsample_dem_rsc(rate=(1 / downsample), rsc_filename=in_rsc_path))

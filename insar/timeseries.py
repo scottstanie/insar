@@ -113,7 +113,7 @@ def run_inversion(igram_path,
     num_patches = int(np.ceil(dphi_columns.nbytes / max_bytes)) + 1
     geo_mask_patches = np.array_split(geo_mask_columns, num_patches, axis=1)
     for idx, columns in enumerate(np.array_split(dphi_columns, num_patches, axis=1)):
-        logger.info("Inverting patch %s out of %s" % (idx, num_patches))
+        logger.info("Inverting patch %s out of %s" % (idx + 1, num_patches))
         geo_mask_patch = geo_mask_patches[idx]
         varr = invert_sbas(
             columns,
@@ -294,8 +294,11 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func=np.mean):
     Raises:
         ValueError: if window is not a positive int, or if ref pixel out of bounds
     """
-    means = insar.gps.window_stack(stack, ref_row, ref_col, window, window_func)
-    return stack - means[:, np.newaxis, np.newaxis]  # pad with axes to broadcast
+    for idx, layer in enumerate(stack):
+        stack[idx] -= np.mean(layer)
+    return stack
+    # means = insar.gps.window_stack(stack, ref_row, ref_col, window, window_func)
+    # return stack - means[:, np.newaxis, np.newaxis]  # pad with axes to broadcast
 
 
 def _create_diff_matrix(n, order=1):

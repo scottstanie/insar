@@ -57,8 +57,9 @@ def find_files(directory, search_term):
     return glob.glob(os.path.join(directory, search_term))
 
 
-def find_rsc_file(filename, verbose=False):
-    basepath = os.path.split(os.path.abspath(filename))[0]
+def find_rsc_file(filename=None, basepath=None, verbose=False):
+    if filename:
+        basepath = os.path.split(os.path.abspath(filename))[0]
     # Should be just elevation.dem.rsc (for .geo folder) or dem.rsc (for igrams)
     possible_rscs = find_files(basepath, '*.rsc')
     if verbose:

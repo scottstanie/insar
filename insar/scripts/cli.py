@@ -410,7 +410,7 @@ def mask(context, imagefile, dem, output):
 def avg_stack(context, ref_row, ref_col):
     """Perform simple igram stack average to get a linear trend
 
-    If .unw files are not in the current directory, user the --path option:
+    If .unw files are not in the current directory, use the --path option:
 
         insar --path /path/to/igrams view_stack
 
@@ -424,19 +424,42 @@ def avg_stack(context, ref_row, ref_col):
     insar.timeseries.avg_stack(context['path'], ref_row, ref_col)
 
 
+# COMMAND: dem-rate
+@cli.command('dem-rate')
+@click.option("--rsc_file", help="name of .rsc file")
+@click.pass_obj
+def dem_rate(context, rsc_file):
+    """Print the upsample rate of a dem
+
+    If file is not in the current directory, use the --path option:
+
+        insar --path /path/to/igrams dem-rate
+
+    """
+    # full_file = os.path.join(context['path'], rsc_file)
+    if rsc_file is None:
+        rsc_file = insar.sario.find_rsc_file(basepath=context['path'])
+    uprate = sardem.utils.calc_upsample_rate(rsc_filename=rsc_file)
+
+    click.echo("%s has %.2f times the default spacing" % (rsc_file, uprate))
+
+    default_spacing = 30.0
+    click.echo("This is equal to %.2f meter spacing between pixels" % (default_spacing / uprate))
+
+
 # ###################################
 # Preprocessing subgroup of commands:
 # ###################################
 @cli.group()
-@click.pass_context
+@click.pass_obj
 def preproc(ctx):
     """Extra commands for preprocessing steps"""
 
 
 @preproc.command()
-@click.pass_context
+@click.pass_obj
 def unzip(context):
-    insar.scripts.preproc.unzip_sentinel_files(context.obj['path'])
+    insar.scripts.preproc.unzip_sentinel_files(context['path'])
 
 
 @preproc.command('tiles')
@@ -445,7 +468,7 @@ def unzip(context):
     '--path-num', type=int, help="Relative orbit/path to use (None uses all within data-path)")
 @click.option('--tile-size', default=0.5, help="degrees of tile size to aim for")
 @click.option('--overlap', default=0.1, help="Overlap of adjacent tiles (in deg)")
-@click.pass_context
+@click.pass_obj
 def tiles(context, data_path, path_num, tile_size, overlap):
     """Use make_tiles to create a directory structure
 
@@ -465,18 +488,18 @@ def tiles(context, data_path, path_num, tile_size, overlap):
         path_num=path_num,
         tile_size=tile_size,
         overlap=overlap,
-        verbose=context.obj['verbose'])
+        verbose=context['verbose'])
 
 
 @preproc.command('intmask')
-@click.pass_context
+@click.pass_obj
 def intmask(context):
     """Create masks for .int files where invalid
 
     This step is run in `process.ps_sbas_igrams`, but can be
     run separately to inspect
     """
-    igram_path = context.obj['path']
+    igram_path = context['path']
     row_looks, col_looks = insar.utils.find_looks_taken(igram_path)
     insar.timeseries.create_igram_masks(
         igram_path,
