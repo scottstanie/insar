@@ -30,6 +30,113 @@ PHASE_TO_CM = SENTINEL_WAVELENGTH / (-4 * np.pi)
 logger = get_log()
 
 
+@log_runtime
+def run_inversion(igram_path,
+                  reference=(None, None),
+                  window=None,
+                  constant_vel=False,
+                  alpha=0,
+                  difference=False,
+                  deramp=True,
+                  masking=True,
+                  verbose=False):
+    """Runs SBAS inversion on all unwrapped igrams
+
+    Args:
+        igram_path (str): path to the directory containing `intlist`,
+            the .int filenames, the .unw files, and the dem.rsc file
+        reference (tuple[int, int]): row and col index of the reference pixel to subtract
+        window (int): size of the group around ref pixel to avg for reference.
+            if window=1 or None, only the single pixel used to shift the group.
+        constant_vel (bool): force solution to have constant velocity
+            mutually exclusive with `alpha` option
+        alpha (float): nonnegative Tikhonov regularization parameter.
+            See https://en.wikipedia.org/wiki/Tikhonov_regularization
+        difference (bool): for regularization, penalize differences in velocity
+            Used to make a smoother final solution
+        deramp (bool): Fits plane to each igram and subtracts (to remove orbital error)
+        masking (bool): flag to load stack of .int.mask files to mask invalid areas
+        verbose (bool): print extra timing and debug info
+
+    Returns:
+        geolist (list[datetime]): dates of each SAR acquisition from read_geolist
+        phi_arr (ndarray): absolute phases of every pixel at each time
+        deformation (ndarray): matrix of deformations at each pixel and time
+        varr (ndarray): array of volocities solved for from SBAS inversion
+    """
+    if verbose:
+        logger.setLevel(10)  # DEBUG
+
+    intlist = read_intlist(filepath=igram_path)
+    geolist = read_geolist(filepath=igram_path)
+
+    # Prepare B matrix and timediffs used for each pixel inversion
+    B = build_B_matrix(geolist, intlist)
+    timediffs = find_time_diffs(geolist)
+    if B.shape[1] != len(timediffs):
+        raise ValueError("Shapes of B {} and timediffs {} not compatible".format(
+            B.shape, timediffs.shape))
+
+    logger.debug("Reading unw stack")
+    unw_stack, mask_stack, geo_mask_columns = load_unw_masked_stack(
+        igram_path,
+        num_timediffs=len(timediffs),
+        unw_ext='.unw',
+        deramp=deramp,
+        masking=masking,
+    )
+
+    # TODO: Process the correlation, mask very bad corr pixels in the igrams
+
+    # Use the given reference, or find one on based on max correlation
+    if any(r is None for r in reference):
+        # Make a latlon image to check for gps data containment
+        # TODO: maybe i need to search for masks? dont wanna pick a garbage one by accident
+        latlon_image = latlon.LatlonImage(
+            data=unw_stack[0], dem_rsc_file=os.path.join(igram_path, 'dem.rsc'))
+        ref_row, ref_col = find_reference_location(latlon_image, igram_path, mask_stack, gps_dir=None)
+    else:
+        ref_row, ref_col = reference
+
+    logger.info("Starting shift_stack")
+    unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
+    logger.info("Shifting stack complete")
+
+    # Possible todo: process as blocks with view_as_blocks(stack, (num_stack, 4, 4))
+    # from skimage.util.shape import view_as_blocks
+    # Might need to save as separate blocks to get loading right
+
+    dphi_columns = stack_to_cols(unw_stack)
+
+    phi_arr_list = []
+    max_bytes = 500e6
+    num_patches = int(np.ceil(dphi_columns.nbytes / max_bytes)) + 1
+    geo_mask_patches = np.array_split(geo_mask_columns, num_patches, axis=1)
+    for idx, columns in enumerate(np.array_split(dphi_columns, num_patches, axis=1)):
+        logger.info("Inverting patch %s out of %s" % (idx, num_patches))
+        geo_mask_patch = geo_mask_patches[idx]
+        varr = invert_sbas(
+            columns,
+            B,
+            geo_mask_columns=geo_mask_patch,
+            constant_vel=constant_vel,
+            alpha=alpha,
+            difference=difference,
+        )
+        phi_arr_list.append(integrate_velocities(varr, timediffs))
+
+    phi_arr = np.ma.hstack(phi_arr_list)
+
+    # Multiple by wavelength ratio to go from phase to cm
+    deformation = PHASE_TO_CM * phi_arr
+
+    num_ints, rows, cols = unw_stack.shape
+    # Now reshape all outputs that should be in stack form
+    phi_arr = cols_to_stack(phi_arr, rows, cols)
+    deformation = cols_to_stack(deformation, rows, cols).filled(np.NaN)
+    return (geolist, phi_arr, deformation)
+
+
 def _parse(datestr):
     return datetime.datetime.strptime(datestr, "%Y%m%d").date()
 
@@ -365,112 +472,6 @@ def cols_to_stack(columns, rows, cols):
     return columns.reshape((-1, rows, cols))
 
 
-@log_runtime
-def run_inversion(igram_path,
-                  reference=(None, None),
-                  window=None,
-                  constant_vel=False,
-                  alpha=0,
-                  difference=False,
-                  deramp=True,
-                  masking=True,
-                  verbose=False):
-    """Runs SBAS inversion on all unwrapped igrams
-
-    Args:
-        igram_path (str): path to the directory containing `intlist`,
-            the .int filenames, the .unw files, and the dem.rsc file
-        reference (tuple[int, int]): row and col index of the reference pixel to subtract
-        window (int): size of the group around ref pixel to avg for reference.
-            if window=1 or None, only the single pixel used to shift the group.
-        constant_vel (bool): force solution to have constant velocity
-            mutually exclusive with `alpha` option
-        alpha (float): nonnegative Tikhonov regularization parameter.
-            See https://en.wikipedia.org/wiki/Tikhonov_regularization
-        difference (bool): for regularization, penalize differences in velocity
-            Used to make a smoother final solution
-        deramp (bool): Fits plane to each igram and subtracts (to remove orbital error)
-        masking (bool): flag to load stack of .int.mask files to mask invalid areas
-        verbose (bool): print extra timing and debug info
-
-    Returns:
-        geolist (list[datetime]): dates of each SAR acquisition from read_geolist
-        phi_arr (ndarray): absolute phases of every pixel at each time
-        deformation (ndarray): matrix of deformations at each pixel and time
-        varr (ndarray): array of volocities solved for from SBAS inversion
-    """
-    if verbose:
-        logger.setLevel(10)  # DEBUG
-
-    intlist = read_intlist(filepath=igram_path)
-    geolist = read_geolist(filepath=igram_path)
-
-    # Prepare B matrix and timediffs used for each pixel inversion
-    B = build_B_matrix(geolist, intlist)
-    timediffs = find_time_diffs(geolist)
-    if B.shape[1] != len(timediffs):
-        raise ValueError("Shapes of B {} and timediffs {} not compatible".format(
-            B.shape, timediffs.shape))
-
-    logger.debug("Reading unw stack")
-    unw_stack, mask_stack, geo_mask_columns = load_unw_masked_stack(
-        igram_path,
-        num_timediffs=len(timediffs),
-        unw_ext='.unw',
-        deramp=deramp,
-        masking=masking,
-    )
-
-    # TODO: Process the correlation, mask very bad corr pixels in the igrams
-
-    # Use the given reference, or find one on based on max correlation
-    if any(r is None for r in reference):
-        # Make a latlon image to check for gps data containment
-        # TODO: maybe i need to search for masks? dont wanna pick a garbage one by accident
-        latlon_image = latlon.LatlonImage(
-            data=unw_stack[0], dem_rsc_file=os.path.join(igram_path, 'dem.rsc'))
-        ref_row, ref_col = find_reference_location(latlon_image, igram_path, mask_stack, gps_dir=None)
-    else:
-        ref_row, ref_col = reference
-
-    unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
-    logger.debug("Shifting stack complete")
-
-    # Possible todo: process as blocks with view_as_blocks(stack, (num_stack, 4, 4))
-    # from skimage.util.shape import view_as_blocks
-    # Might need to save as separate blocks to get loading right
-
-    dphi_columns = stack_to_cols(unw_stack)
-
-    phi_arr_list = []
-    max_bytes = 500e6
-    num_patches = int(np.ceil(dphi_columns.nbytes / max_bytes)) + 1
-    geo_mask_patches = np.array_split(geo_mask_columns, num_patches, axis=1)
-    for idx, columns in enumerate(np.array_split(dphi_columns, num_patches, axis=1)):
-        logger.info("Inverting patch %s out of %s" % (idx, num_patches))
-        geo_mask_patch = geo_mask_patches[idx]
-        varr = invert_sbas(
-            columns,
-            B,
-            geo_mask_columns=geo_mask_patch,
-            constant_vel=constant_vel,
-            alpha=alpha,
-            difference=difference,
-        )
-        phi_arr_list.append(integrate_velocities(varr, timediffs))
-
-    phi_arr = np.ma.hstack(phi_arr_list)
-
-    # Multiple by wavelength ratio to go from phase to cm
-    deformation = PHASE_TO_CM * phi_arr
-
-    num_ints, rows, cols = unw_stack.shape
-    # Now reshape all outputs that should be in stack form
-    phi_arr = cols_to_stack(phi_arr, rows, cols)
-    deformation = cols_to_stack(deformation, rows, cols).filled(np.NaN)
-    return (geolist, phi_arr, deformation)
-
-
 def save_deformation(igram_path,
                      deformation,
                      geolist,
@@ -574,6 +575,7 @@ def load_unw_masked_stack(igram_path, num_timediffs=None, unw_ext='.unw', deramp
         num_ints, rows, cols = unw_stack.shape
         geo_mask_columns = np.full((num_timediffs, rows * cols), False)
 
+    logger.info("Finished loading unw_stack")
     return unw_stack, mask_stack, geo_mask_columns
 
 
