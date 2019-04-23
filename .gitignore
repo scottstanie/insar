@@ -1,10 +1,19 @@
 *.pyc
 *.swp
 
+
 # Don't add huge DEM data files
 *.hgt
 *.dem
 *.dem.rsc
+
+# SAR files
+*.rsc
+*.geo
+*.int
+*.unw
+*.unwflat
+*.npy
 
 # Directories for setup.py
 build

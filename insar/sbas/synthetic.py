@@ -1,17 +1,20 @@
-import numpy as np
+import argparse
 import itertools
 from collections import OrderedDict
+from datetime import datetime
+import numpy as np
+import matplotlib.pyplot as plt
 from insar import timeseries, mask, sario
 import sardem.loading
-from datetime import datetime
 
 
 class IgramMaker:
-    def __init__(self, num_days=5, shape=(4, 4)):
+    def __init__(self, num_days=5, shape=(4, 4), constant_vel=False):
         # 5 geos made so that the most igrams any date can make is
         # n-1 = 4 igrams (but 10 total igrams among all)
         self.num_days = num_days
         self.shape = shape
+        self.constant_vel = constant_vel
 
     def save_dem_rsc(self):
         rsc_dict = OrderedDict([('width', 2), ('file_length', 3),
@@ -130,15 +133,55 @@ class IgramMaker:
         # columns_with_masks = np.ma.count_masked(columns_masked, axis=0)
         B = timeseries.build_B_matrix(geo_date_list, igram_date_list)
 
-        varr = timeseries.invert_sbas(columns_masked, B, geo_mask_columns)
+        varr = timeseries.invert_sbas(columns_masked,
+                                      B,
+                                      geo_mask_columns,
+                                      constant_vel=self.constant_vel)
         phi_hat = timeseries.integrate_velocities(varr, timediffs)
         phi_hat = timeseries.cols_to_stack(phi_hat, *geo_list[0].shape)
-        return phi_hat, truth_geos
+        return geo_date_list, phi_hat, truth_geos
+
+
+def plot_results(geo_date_list, phi_hat, truth_geos, max_row=2, max_col=2):
+    fig, axes = plt.subplots(max_row, max_col)
+    for ridx in range(max_row):
+        for cidx in range(max_col):
+            print("Row, col", ridx, cidx)
+            print('truth:', truth_geos[:, ridx, cidx])
+            print('est:', phi_hat[:, ridx, cidx])
+            axes[ridx, cidx].plot(geo_date_list,
+                                  truth_geos[:, ridx, cidx],
+                                  marker='o',
+                                  linestyle='dashed',
+                                  linewidth=1,
+                                  markersize=4)
+            axes[ridx, cidx].plot(geo_date_list,
+                                  phi_hat[:, ridx, cidx],
+                                  marker='o',
+                                  linestyle='dashed',
+                                  linewidth=1,
+                                  markersize=4)
+
+    plt.show(block=True)
 
 
 if __name__ == "__main__":
-    igram_maker = IgramMaker()
-    phi_hat, truth_geos = igram_maker.run_inversion()
-    print(phi_hat.astype(int))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--constant-vel", action="store_true", default=False)
+    parser.add_argument("--plot-rows", default=4)
+    parser.add_argument("--plot-cols", default=4)
+    args = parser.parse_args()
+
+    igram_maker = IgramMaker(constant_vel=args.constant_vel)
+    geo_date_list, phi_hat, truth_geos = igram_maker.run_inversion()
+
+    # print(phi_hat.astype(int))
     normed_truth = np.abs(np.ma.masked_equal(truth_geos, 0)) - 1
-    print(normed_truth.astype(int))
+    # print(normed_truth.astype(int))
+    plot_results(
+        geo_date_list,
+        phi_hat,
+        normed_truth,
+        max_row=args.plot_rows,
+        max_col=args.plot_cols,
+    )
