@@ -300,9 +300,10 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func=np.mean):
         ValueError: if window is not a positive int, or if ref pixel out of bounds
     """
     for idx, layer in enumerate(stack):
-        stack[idx] -= np.mean(layer)
+        stack[idx] -= np.mean(layer[ref_row - window:ref_row + window + 1,
+                                    ref_col - window:ref_col + window + 1])  # yapf: disable
     return stack
-    # means = insar.gps.window_stack(stack, ref_row, ref_col, window, window_func)
+    # means = insar.utils.window_stack(stack, ref_row, ref_col, window, window_func)
     # return stack - means[:, np.newaxis, np.newaxis]  # pad with axes to broadcast
 
 
