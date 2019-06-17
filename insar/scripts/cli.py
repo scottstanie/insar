@@ -320,6 +320,18 @@ def view_masks(context, downsample):
 # COMMAND: blob
 @cli.command(context_settings=dict(ignore_unknown_options=True))
 @click.option('--load/--no-load', default=True, help='Load last calculated blobs')
+@click.option(
+    '--positive',
+    is_flag=True,
+    default=True,
+    help="Search for positive (uplift) blobs "
+    "(default True)")
+@click.option(
+    '--negative',
+    is_flag=True,
+    default=True,
+    help="Search for negative (subsidence) blobs "
+    "(default True)")
 @click.option('--title-prefix', default='')
 @click.option('--blob-filename', default='blobs.npy', help='File to save found blobs')
 @click.option('--row-start', default=0)
@@ -328,8 +340,8 @@ def view_masks(context, downsample):
 @click.option('--col-end', default=-1)
 @click.argument('blobfunc_args', nargs=-1, type=click.UNPROCESSED)
 @click.pass_obj
-def blob(context, load, title_prefix, blob_filename, row_start, row_end, col_start, col_end,
-         blobfunc_args, **kwargs):
+def blob(context, load, positive, negative, title_prefix, blob_filename, row_start, row_end,
+         col_start, col_end, blobfunc_args, **kwargs):
     """Find and view blobs in deformation
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
@@ -337,6 +349,7 @@ def blob(context, load, title_prefix, blob_filename, row_start, row_end, col_sta
 
         insar --path /path/to/igrams view_stack
     """
+    import insar.blob
     extra_args = _handle_args(blobfunc_args)
     print('Extra args to blobfunc:')
     print(extra_args)
@@ -344,6 +357,8 @@ def blob(context, load, title_prefix, blob_filename, row_start, row_end, col_sta
     insar.blob.make_blob_image(
         igram_path,
         load,
+        positive,
+        negative,
         title_prefix,
         blob_filename,
         row_start,
@@ -396,15 +411,31 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output):
         insar kml 20180420_20180502.tif --rsc dem.rsc -t "My igram" -d "Kiluea eruption" -o out.kml
 
     """
+
+    def _save_npy_file(imgfile, new_filename):
+        image = insar.sario.load(imgfile)
+        if image.ndim > 2:
+            # For 3D stack, assume we just want the final image
+            image = image[-1]
+        # Normalize to be between 0 and 1
+        image = (image - np.min(image)) / np.ptp(image)
+        insar.sario.save(new_filename, image)
+
     if geojson:
         with open(geojson) as f:
             gj_dict = json.load(f)
     else:
         gj_dict = None
+
     rsc_data = insar.sario.load(rsc) if rsc else None
+    # Check if imgfile is a .npy saved matrix
+    if imgfile.endswith(".npy"):
+        new_filename = imgfile.replace(".npy", ".png")
+        _save_npy_file(imgfile, new_filename)
+
     kml_string = insar.kml.create_kml(
         rsc_data=rsc_data,
-        img_filename=imgfile,
+        img_filename=new_filename,
         gj_dict=gj_dict,
         title=title,
         desc=desc,
