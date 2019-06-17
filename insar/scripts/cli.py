@@ -7,6 +7,8 @@ import click
 import insar
 import sardem
 import numpy as np
+import matplotlib.pyplot as plt
+from .plot_insar import plot_image
 
 
 # Main entry point:
@@ -275,8 +277,7 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
 @click.option("--title", help="Title for image plot")
 @click.option("--alpha", default=0.6, help="Transparency for background magnitude (if plotting insar)")
 @click.option("--colorbar/--no-colorbar", default=True, help="Display colorbar on figure")
-@click.pass_obj
-def plot(context, filename, downsample, cmap, title, alpha, colorbar):
+def plot(filename, downsample, cmap, title, alpha, colorbar):
     """Quick plot of a single InSAR file.
 
     filename: Name of InSAR file to plot (possible extensions: .int, .cor, .unw, .geo,...)"
@@ -289,9 +290,24 @@ def plot(context, filename, downsample, cmap, title, alpha, colorbar):
         insar --path /path/to/igrams <filename>
 
     """
-    from .plot_insar import plot_image
     img = insar.sario.load(filename, downsample=downsample)
     plot_image(img, title=title, colorbar=colorbar, alpha=alpha)
+
+
+# COMMAND: view-masks
+@cli.command('view-masks')
+@click.option("--downsample", default=1, help="Amount to downsample image")
+@click.pass_obj
+def view_masks(context, downsample):
+    geo_file_names = insar.timeseries.read_geolist(filepath=context['path'], fnames_only=True)
+    geo_mask_file_names = [n + '.mask.npy' for n in geo_file_names]
+    geo_masks = np.ma.array(insar.sario.load_stack(file_list=geo_mask_file_names, downsample=downsample))
+    composite_mask = np.sum(geo_masks.astype(int), axis=0)
+    plt.figure()
+    plt.imshow(composite_mask, cmap='jet')
+    plt.title("Number of SAR .geo dates masked")
+    plt.colorbar()
+    plt.show(block=True)
 
 
 # COMMAND: blob

@@ -191,7 +191,8 @@ def convert_to_tif(max_height=None, **kwargs):
     """
     # Default name by ps_sbas_igrams
     igram_rsc = sardem.loading.load_dem_rsc('dem.rsc')
-    convert_cmd = """for i in ./*.int ; do dismphfile "$i" {igram_width} ; \
+    # "shopt -s nullglob" skips the for-loop when nothing matches
+    convert_cmd = """shopt -s nullglob; for i in ./*.int ; do dismphfile "$i" {igram_width} ; \
  mv dismph.tif `echo "$i" | sed 's/int$/tif/'` ; done""".format(igram_width=igram_rsc['width'])
     logger.info(convert_cmd)
     subprocess.check_call(convert_cmd, shell=True)
