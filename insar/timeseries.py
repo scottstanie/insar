@@ -38,7 +38,7 @@ def run_inversion(igram_path,
                   alpha=0,
                   difference=False,
                   deramp=True,
-                  force_deramp=False,
+                  deramp_order=1,
                   masking=True,
                   verbose=False):
     """Runs SBAS inversion on all unwrapped igrams
@@ -56,7 +56,8 @@ def run_inversion(igram_path,
         difference (bool): for regularization, penalize differences in velocity
             Used to make a smoother final solution
         deramp (bool): Fits plane to each igram and subtracts (to remove orbital error)
-        force_deramp (bool): Reprocess the deramping step, even if it ran once and saved
+        deramp_order (int): order of polynomial to use when removing phase
+            from unwrapped igram
         masking (bool): flag to load stack of .int.mask files to mask invalid areas
         verbose (bool): print extra timing and debug info
 
@@ -85,7 +86,7 @@ def run_inversion(igram_path,
         num_timediffs=len(timediffs),
         unw_ext='.unw',
         deramp=deramp,
-        force_deramp=force_deramp,
+        deramp_order=deramp_order,
         masking=masking,
     )
 
@@ -544,19 +545,21 @@ def load_unw_masked_stack(igram_path,
                           num_timediffs=None,
                           unw_ext='.unw',
                           deramp=True,
-                          force_deramp=False,
+                          deramp_order=1,
                           masking=True):
 
     int_file_names = read_intlist(igram_path, parse=False)
     if deramp:
         # Deramp each .unw file
-        # For larger areas, use quadratic ramp. Otherwise, linear
-        max_linear = 20  # km
+        # TODO: do I ever really want 2nd order?
+        # # For larger areas, use quadratic ramp. Otherwise, linear
+        # max_linear = 20  # km
+        # order = 1 if (width < max_linear or height < max_linear) else 2
+
         width, height = latlon.grid_size(**load_dem_rsc(os.path.join(igram_path, 'dem.rsc')))
-        order = 1 if (width < max_linear or height < max_linear) else 2
         logger.info("Dem size %.2f by %.2f km: using order %s surface to deramp", width, height,
-                    order)
-        unw_stack = deramp_stack(int_file_names, unw_ext, order=order, force=force_deramp)
+                    deramp_order)
+        unw_stack = deramp_stack(int_file_names, unw_ext, order=deramp_order)
     else:
         unw_file_names = [f.replace('.int', unw_ext) for f in int_file_names]
         unw_stack = sario.load_stack(file_list=unw_file_names)
@@ -649,7 +652,7 @@ def remove_ramp(z, order=1):
         return z - z_fit
 
 
-def deramp_stack(int_file_list, unw_ext, order=1, force=False):
+def deramp_stack(int_file_list, unw_ext, order=1):
     """Handles removing linear ramps for all files in a stack
 
     Saves the files to a ".unwflat" version
@@ -659,7 +662,6 @@ def deramp_stack(int_file_list, unw_ext, order=1, force=False):
         unw_ext (str): file extension of unwrapped igrams (usually .unw)
         order (int): order of polynomial surface to use to deramp
             1 is linear, 2 is quadratic
-        force (bool): force a reprocessing of the deramping function
     """
     logger.info("Removing any ramp from each stack layer")
     # Get file names to save results/ check if we deramped already
@@ -669,8 +671,8 @@ def deramp_stack(int_file_list, unw_ext, order=1, force=False):
     unw_file_names = [f for f in unw_file_names if flat_ext not in f]
     flat_file_names = [filename.replace(unw_ext, flat_ext) for filename in unw_file_names]
 
-    if force or not all(os.path.exists(f) for f in flat_file_names):
-        logger.info("Removing and saving files.")
+    if not all(os.path.exists(f) for f in flat_file_names):
+        logger.info("Deramped files don't exist: Creating %s files and and saving." % flat_ext)
         nrows, ncols = sario.load(unw_file_names[0]).shape
         out_stack = np.empty((len(unw_file_names), nrows, ncols), dtype=sario.FLOAT_32_LE)
         # Shape of sario.load_stack with return_amp is (nlayers, 2, nrows, ncols)
@@ -683,7 +685,7 @@ def deramp_stack(int_file_list, unw_ext, order=1, force=False):
             out_stack[idx] = r
         return out_stack
     else:
-        logger.info("Loading previous deramped files.")
+        logger.info("Loading previous %s deramped files." % flat_ext)
         return sario.load_stack(file_list=flat_file_names)
 
 
@@ -735,7 +737,7 @@ def find_coherent_patch(correlations, window=11):
         >>> print(find_coherent_patch(corrs, window=3))
         (3, 3)
     """
-    correlations = correlations.view(np.ma.MaskedArray)  # Force to ma
+    correlations = correlations.view(np.ma.MaskedArray)  # Force to be type np.ma
     if correlations.ndim == 2:
         mean_stack = correlations
     elif correlations.ndim == 3:

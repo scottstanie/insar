@@ -210,6 +210,7 @@ def run_sbas_inversion(ref_row=None,
                        alpha=0,
                        constant_vel=False,
                        difference=False,
+                       deramp_order=1,
                        **kwargs):
     """10. Perofrm SBAS inversion, save the deformation as .npy
 
@@ -222,6 +223,7 @@ def run_sbas_inversion(ref_row=None,
         alpha=alpha,
         constant_vel=constant_vel,
         difference=difference,
+        deramp_order=deramp_order,
         verbose=kwargs['verbose'])
     logger.info("Saving deformation.npy and geolist.npy")
     np.save('deformation.npy', deformation)

@@ -107,12 +107,17 @@ def parse_steps(ctx, param, value):
     "--max-height",
     default=10,
     help="Maximum height/max absolute phase for converting .unw files to .tif"
-    "(used for contour_interval option to dishgt)")
+    " (used for contour_interval option to dishgt)")
 @click.option('--window', default=3, help="Window size for .unw stack reference")
 @click.option(
     '--constant-vel', is_flag=True, help="Use a constant velocity for SBAS inversion solution")
 @click.option('--alpha', default=0.0, help="Regularization parameter for SBAS inversion")
 @click.option('--difference', is_flag=True, help="Use velocity differences for regularization")
+@click.option(
+    '--deramp-order',
+    default=1,
+    help="Order of 2D polynomial to use to remove residual phase from unwrapped interferograms"
+    " (default is 1, linear ramp)")
 @click.option(
     "--ref-row",
     type=int,
@@ -275,7 +280,8 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
 @click.option("--downsample", default=1, help="Amount to downsample image")
 @click.option("--cmap", default='dismph', help="Colormap for image display.")
 @click.option("--title", help="Title for image plot")
-@click.option("--alpha", default=0.6, help="Transparency for background magnitude (if plotting insar)")
+@click.option(
+    "--alpha", default=0.6, help="Transparency for background magnitude (if plotting insar)")
 @click.option("--colorbar/--no-colorbar", default=True, help="Display colorbar on figure")
 def plot(filename, downsample, cmap, title, alpha, colorbar):
     """Quick plot of a single InSAR file.
@@ -301,7 +307,8 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
 def view_masks(context, downsample):
     geo_file_names = insar.timeseries.read_geolist(filepath=context['path'], fnames_only=True)
     geo_mask_file_names = [n + '.mask.npy' for n in geo_file_names]
-    geo_masks = np.ma.array(insar.sario.load_stack(file_list=geo_mask_file_names, downsample=downsample))
+    geo_masks = np.ma.array(
+        insar.sario.load_stack(file_list=geo_mask_file_names, downsample=downsample))
     composite_mask = np.sum(geo_masks.astype(int), axis=0)
     plt.figure()
     plt.imshow(composite_mask, cmap='jet')
