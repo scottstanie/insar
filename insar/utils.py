@@ -455,6 +455,39 @@ def sliding_window_view(x, shape, step=None):
     return view
 
 
+def window_stack(stack, row, col, window_size=3, func=np.mean):
+    """Combines square around (row, col) in 3D stack to a 1D array
+
+    Used to average around a pixel in a stack and produce a timeseries
+
+    Args:
+        stack (ndarray): 3D array of images, stacked along axis=0
+        row (int): row index of the reference pixel to subtract
+        col (int): col index of the reference pixel to subtract
+        window_size (int): size of the group around ref pixel to avg for reference.
+            if window_size=1 or None, only the single pixel location used for output
+        func (str): default=np.mean, numpy function to use on window.
+
+    Raises:
+        ValueError: if window_size is not a positive int, or if ref pixel out of bounds
+    """
+    window_size = window_size or 1
+    if not isinstance(window_size, int) or window_size < 1:
+        raise ValueError("Invalid window_size %s: must be odd positive int" % window_size)
+    elif row > stack.shape[1] or col > stack.shape[2]:
+        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (row, col,
+                                                                                 stack.shape))
+
+    if window_size % 2 == 0:
+        window_size -= 1
+        print("Making window_size an odd number (%s) to get square" % window_size)
+
+    win_size = window_size // 2
+    return func(stack[:,
+                row - win_size:row + win_size + 1,
+                col - win_size:col + win_size + 1], axis=(1, 2))  # yapf: disable
+
+
 # Randoms using the sentinelapi
 def find_slc_products(api, gj_obj, date_start, date_end, area_relation='contains'):
     """Query for Sentinel 1 SCL products with common options
@@ -619,9 +652,8 @@ def stitch_same_dates(geo_path=".", output_path=".", reverse=True):
     date_counts = collections.Counter([g.date for g in geos])
     dates_duped = set([date for date, count in date_counts.items() if count > 1])
 
-    double_geo_files = sorted((g for g in geos if g.date in dates_duped),
-                              key=lambda g: g.start_time,
-                              reverse=reverse)
+    double_geo_files = sorted(
+        (g for g in geos if g.date in dates_duped), key=lambda g: g.start_time, reverse=reverse)
     grouped_geos = _group_geos_by_date(double_geo_files)
     for date, geolist in grouped_geos:
         print("Stitching geos for %s" % date)
