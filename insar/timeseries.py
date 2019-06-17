@@ -97,7 +97,8 @@ def run_inversion(igram_path,
         # TODO: maybe i need to search for masks? dont wanna pick a garbage one by accident
         latlon_image = latlon.LatlonImage(
             data=unw_stack[0], dem_rsc_file=os.path.join(igram_path, 'dem.rsc'))
-        ref_row, ref_col = find_reference_location(latlon_image, igram_path, mask_stack, gps_dir=None)
+        ref_row, ref_col = find_reference_location(
+            latlon_image, igram_path, mask_stack, gps_dir=None)
     else:
         ref_row, ref_col = reference
 
@@ -539,8 +540,12 @@ def matrix_indices(shape, flatten=True):
         return row_block, col_block
 
 
-def load_unw_masked_stack(igram_path, num_timediffs=None, unw_ext='.unw', deramp=True,
-                          force_deramp=False, masking=True):
+def load_unw_masked_stack(igram_path,
+                          num_timediffs=None,
+                          unw_ext='.unw',
+                          deramp=True,
+                          force_deramp=False,
+                          masking=True):
 
     int_file_names = read_intlist(igram_path, parse=False)
     if deramp:
