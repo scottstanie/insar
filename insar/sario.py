@@ -367,7 +367,7 @@ def load_stack(file_list=None, directory=None, file_ext=None, **kwargs):
             file_list = sorted(find_files(directory, "*" + file_ext))
 
     # Test load to get shape
-    test = load(file_list[0])
+    test = load(file_list[0], **kwargs)
     nrows, ncols = test.shape
     dtype = test.dtype
     out = np.empty((len(file_list), nrows, ncols), dtype=dtype)

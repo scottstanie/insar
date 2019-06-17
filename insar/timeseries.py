@@ -38,6 +38,7 @@ def run_inversion(igram_path,
                   alpha=0,
                   difference=False,
                   deramp=True,
+                  force_deramp=False,
                   masking=True,
                   verbose=False):
     """Runs SBAS inversion on all unwrapped igrams
@@ -55,6 +56,7 @@ def run_inversion(igram_path,
         difference (bool): for regularization, penalize differences in velocity
             Used to make a smoother final solution
         deramp (bool): Fits plane to each igram and subtracts (to remove orbital error)
+        force_deramp (bool): Reprocess the deramping step, even if it ran once and saved
         masking (bool): flag to load stack of .int.mask files to mask invalid areas
         verbose (bool): print extra timing and debug info
 
@@ -83,6 +85,7 @@ def run_inversion(igram_path,
         num_timediffs=len(timediffs),
         unw_ext='.unw',
         deramp=deramp,
+        force_deramp=force_deramp,
         masking=masking,
     )
 
@@ -98,7 +101,7 @@ def run_inversion(igram_path,
     else:
         ref_row, ref_col = reference
 
-    logger.info("Starting shift_stack")
+    logger.info("Starting shift_stack: using %s, %s as ref_row, ref_col", ref_row, ref_col)
     unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
     logger.info("Shifting stack complete")
 
@@ -266,7 +269,7 @@ def build_B_matrix(geolist, intlist):
     B = np.zeros_like(A)
 
     for j, row in enumerate(A):
-        # if no -1 entry, start at index 0. Otherwise, add 1 so exclude the -1 index
+        # if no -1 entry, start at index 0. Otherwise, add 1 to exclude the -1 index
         start_idx = list(row).index(-1) + 1 if (-1 in row) else 0
         # End index is inclusive of the +1
         end_idx = np.where(row == 1)[0][0] + 1  # +1 will always exist in row
@@ -537,7 +540,7 @@ def matrix_indices(shape, flatten=True):
 
 
 def load_unw_masked_stack(igram_path, num_timediffs=None, unw_ext='.unw', deramp=True,
-                          masking=True):
+                          force_deramp=False, masking=True):
 
     int_file_names = read_intlist(igram_path, parse=False)
     if deramp:
@@ -548,7 +551,7 @@ def load_unw_masked_stack(igram_path, num_timediffs=None, unw_ext='.unw', deramp
         order = 1 if (width < max_linear or height < max_linear) else 2
         logger.info("Dem size %.2f by %.2f km: using order %s surface to deramp", width, height,
                     order)
-        unw_stack = deramp_stack(int_file_names, unw_ext, order=order)
+        unw_stack = deramp_stack(int_file_names, unw_ext, order=order, force=force_deramp)
     else:
         unw_file_names = [f.replace('.int', unw_ext) for f in int_file_names]
         unw_stack = sario.load_stack(file_list=unw_file_names)
@@ -562,6 +565,8 @@ def load_unw_masked_stack(igram_path, num_timediffs=None, unw_ext='.unw', deramp
             row_looks, col_looks = utils.find_looks_taken(igram_path)
             create_igram_masks(igram_path, row_looks=row_looks, col_looks=col_looks)
 
+        # Note: using .geo masks as well as .int masks since valid data in one
+        # .geo produces non-zero igram, but it is still garbage
         logger.info("Reading geoload masks into columns")
         geo_file_names = read_geolist(filepath=igram_path, fnames_only=True)
         geo_mask_file_names = [n + '.mask.npy' for n in geo_file_names]
@@ -639,10 +644,17 @@ def remove_ramp(z, order=1):
         return z - z_fit
 
 
-def deramp_stack(int_file_list, unw_ext, order=1):
+def deramp_stack(int_file_list, unw_ext, order=1, force=False):
     """Handles removing linear ramps for all files in a stack
 
     Saves the files to a ".unwflat" version
+
+    Args:
+        inf_file_list (list[str]): names of .int files
+        unw_ext (str): file extension of unwrapped igrams (usually .unw)
+        order (int): order of polynomial surface to use to deramp
+            1 is linear, 2 is quadratic
+        force (bool): force a reprocessing of the deramping function
     """
     logger.info("Removing any ramp from each stack layer")
     # Get file names to save results/ check if we deramped already
@@ -652,7 +664,7 @@ def deramp_stack(int_file_list, unw_ext, order=1):
     unw_file_names = [f for f in unw_file_names if flat_ext not in f]
     flat_file_names = [filename.replace(unw_ext, flat_ext) for filename in unw_file_names]
 
-    if not all(os.path.exists(f) for f in flat_file_names):
+    if force or not all(os.path.exists(f) for f in flat_file_names):
         logger.info("Removing and saving files.")
         nrows, ncols = sario.load(unw_file_names[0]).shape
         out_stack = np.empty((len(unw_file_names), nrows, ncols), dtype=sario.FLOAT_32_LE)

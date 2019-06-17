@@ -7,7 +7,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import uniform_filter1d
 
-from insar import los, timeseries, latlon, kml
+import insar.los
+import insar.timeseries
+import insar.latlon
+import insar.kml
 
 GPS_DIR = os.environ.get('GPS_DIR', '/data1/scott/pecos/gps_station_data')
 
@@ -170,19 +173,19 @@ def plot_gps_enu(station=None, station_df=None, days_smooth=12):
     dts = station_df['dt']
     axes[0].plot(dts, east_mm, 'b.')
     axes[0].set_ylabel('east (cm)')
-    axes[0].plot(dts, timeseries.moving_average(east_mm, days_smooth), 'r-')
+    axes[0].plot(dts, insar.timeseries.moving_average(east_mm, days_smooth), 'r-')
     axes[0].grid(True)
     remove_xticks(axes[0])
 
     axes[1].plot(dts, north_mm, 'b.')
     axes[1].set_ylabel('north (cm)')
-    axes[1].plot(dts, timeseries.moving_average(north_mm, days_smooth), 'r-')
+    axes[1].plot(dts, insar.timeseries.moving_average(north_mm, days_smooth), 'r-')
     axes[1].grid(True)
     remove_xticks(axes[1])
 
     axes[2].plot(dts, up_mm, 'b.')
     axes[2].set_ylabel('up (cm)')
-    axes[2].plot(dts, timeseries.moving_average(up_mm, days_smooth), 'r-')
+    axes[2].plot(dts, insar.timeseries.moving_average(up_mm, days_smooth), 'r-')
     axes[2].grid(True)
     remove_xticks(axes[2])
 
@@ -195,11 +198,11 @@ def load_gps_los_data(insar_dir, station_name=None, to_cm=True, zero_start=True)
     Returns the timeseries, and the datetimes of the points
     """
     lon, lat = station_lonlat(station_name)
-    enu_coeffs = los.find_enu_coeffs(lon, lat, insar_dir)
+    enu_coeffs = insar.los.find_enu_coeffs(lon, lat, insar_dir)
 
     df = load_gps_station_df(station_name)
     enu_data = df[['east', 'north', 'up']].T
-    los_gps_data = los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
+    los_gps_data = insar.los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
 
     if to_cm:
         print("Converting GPS to cm:")
@@ -228,14 +231,14 @@ def find_insar_ts(insar_dir, station_name, defo_name='deformation.npy'):
     Returns the timeseries, and the datetimes of points for plotting
     """
     igrams_dir = os.path.join(insar_dir, 'igrams')
-    geolist, deformation_stack = timeseries.load_deformation(igrams_dir, filename=defo_name)
-    defo_img = latlon.load_deformation_img(igrams_dir, filename=defo_name)
+    geolist, deformation_stack = insar.timeseries.load_deformation(igrams_dir, filename=defo_name)
+    defo_img = insar.latlon.load_deformation_img(igrams_dir, filename=defo_name)
 
     lon, lat = station_lonlat(station_name)
     insar_row, insar_col = defo_img.nearest_pixel(lat=lat, lon=lon)
     # import pdb
     # pdb.set_trace()
-    insar_ts = timeseries.window_stack(
+    insar_ts = insar.timeseries.window_stack(
         deformation_stack, insar_row, insar_col, window_size=5, func=np.mean)
     return geolist, insar_ts
 
@@ -245,18 +248,18 @@ def plot_gps_vs_insar():
 
     # station_name = 'TXKM'
     # los_dir = '/data4/scott/delaware-basin/test2/N31.4W103.7/'
-    # lla, xyz = los.read_los_output(os.path.join(los_dir, 'extra_files/los_vectors.txt'))
-    # enu_coeffs = los.find_enu_coeffs(-102.894010019, 31.557733084, insar_dir)
+    # lla, xyz = insar.los.read_los_output(os.path.join(los_dir, 'extra_files/los_vectors.txt'))
+    # enu_coeffs = insar.los.find_enu_coeffs(-102.894010019, 31.557733084, insar_dir)
 
     # lon, lat = station_lonlat(station_name)
     # df = load_gps_station_df(station_name)
     # enu_data = df[['east', 'north', 'up']].T
     # los_gps_data = project_enu_to_los(enu_data, los_vec, lat, lon)
-    # los_gps_data = los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
+    # los_gps_data = insar.los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
 
     defo_name = 'deformation.npy'
     igrams_dir = os.path.join(insar_dir, 'igrams')
-    defo_img = latlon.load_deformation_img(igrams_dir, filename=defo_name)
+    defo_img = insar.latlon.load_deformation_img(igrams_dir, filename=defo_name)
     station_list = stations_within_image(defo_img)
     for station_name, lon, lat in station_list:
         plt.figure()
@@ -266,7 +269,7 @@ def plot_gps_vs_insar():
         plt.plot(gps_dts, los_gps_data, 'b.', label='gps data: %s' % station_name)
 
         days_smooth = 60
-        los_gps_data_smooth = timeseries.moving_average(los_gps_data, days_smooth)
+        los_gps_data_smooth = insar.timeseries.moving_average(los_gps_data, days_smooth)
         plt.plot(
             gps_dts,
             los_gps_data_smooth,
@@ -279,7 +282,7 @@ def plot_gps_vs_insar():
         plt.plot(geolist, insar_ts, 'rx', label='insar data', ms=5)
 
         days_smooth = 5
-        insar_ts_smooth = timeseries.moving_average(insar_ts, days_smooth)
+        insar_ts_smooth = insar.timeseries.moving_average(insar_ts, days_smooth)
         plt.plot(
             geolist, insar_ts_smooth, 'r', label='%s day smoothed insar' % days_smooth, linewidth=3)
 
@@ -291,7 +294,7 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
     insar_dir = '/data1/scott/pecos/path85/N31.4W103.7'
 
     igrams_dir = os.path.join(insar_dir, 'igrams')
-    defo_img = latlon.load_deformation_img(igrams_dir, filename=defo_name)
+    defo_img = insar.latlon.load_deformation_img(igrams_dir, filename=defo_name)
     station_list = stations_within_image(defo_img)
 
     stat1, lon1, lat1 = station_list[0]
@@ -337,7 +340,7 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
     plt.plot(gps_dts, gps_diff_ts, 'b.', label='gps data: %s' % stat1)
 
     days_smooth = 60
-    los_gps_data_smooth = timeseries.moving_average(gps_diff_ts, days_smooth)
+    los_gps_data_smooth = insar.timeseries.moving_average(gps_diff_ts, days_smooth)
     plt.plot(
         gps_dts,
         los_gps_data_smooth,
@@ -353,7 +356,7 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
     plt.plot(geolist, insar_diff, 'r', label='insar data difference', ms=5)
 
     days_smooth = 5
-    insar_diff_smooth = timeseries.moving_average(insar_diff, days_smooth)
+    insar_diff_smooth = insar.timeseries.moving_average(insar_diff, days_smooth)
     plt.plot(
         geolist,
         insar_diff_smooth,
@@ -369,7 +372,7 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
 
 def save_station_points_kml(station_iter):
     for name, lat, lon, alt in station_iter:
-        kml.create_kml(
+        insar.kml.create_kml(
             title=name,
             desc='GPS station location',
             lon_lat=(lon, lat),

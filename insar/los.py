@@ -10,7 +10,8 @@ import subprocess
 # from scipy import interpolate
 import sardem.loading
 
-from insar import latlon, timeseries
+import insar.latlon
+import insar.timeseries
 import matplotlib.pyplot as plt
 
 from insar.log import get_log
@@ -64,7 +65,7 @@ def find_east_up_coeffs(geo_path):
     # rsc_data = sardem.loading.load_dem_rsc(os.path.join(geo_path, 'dem.rsc'), lower=True)
     rsc_data = sardem.loading.load_dem_rsc(os.path.join(geo_path, 'elevation.dem.rsc'), lower=True)
 
-    midpoint = latlon.grid_midpoint(**rsc_data)
+    midpoint = insar.latlon.grid_midpoint(**rsc_data)
     # The path to each orbit's .db files assumed in same directory as elevation.dem.rsc
 
     los_file = os.path.realpath(os.path.join(geo_path, 'los_vectors.txt'))
@@ -359,7 +360,7 @@ def project_enu_to_los(enu, los_vec=None, lat=None, lon=None, enu_coeffs=None):
 
 
 def corner_los_vectors(rsc_data, db_path, los_output_file):
-    grid_corners = latlon.grid_corners(**rsc_data)
+    grid_corners = insar.latlon.grid_corners(**rsc_data)
     # clear the output file:
     open(los_output_file, 'w').close()
     db_files_used = []
@@ -376,7 +377,7 @@ def check_corner_differences(rsc_data, db_path, los_file):
     Used to see if east, north, and up components vary too much for a single value
     to be used to solve for east + vertical part from LOS components
     """
-    grid_corners = latlon.grid_corners(**rsc_data)
+    grid_corners = insar.latlon.grid_corners(**rsc_data)
     # clear the output file:
     open(los_file, 'w').close()
     for p in grid_corners:
@@ -413,8 +414,8 @@ def find_vertical_def(asc_path, desc_path):
     asc_igram_path = os.path.join(asc_path, 'igrams')
     desc_igram_path = os.path.join(desc_path, 'igrams')
 
-    asc_geolist, asc_deform = timeseries.load_deformation(asc_igram_path)
-    desc_geolist, desc_deform = timeseries.load_deformation(desc_igram_path)
+    asc_geolist, asc_deform = insar.timeseries.load_deformation(asc_igram_path)
+    desc_geolist, desc_deform = insar.timeseries.load_deformation(desc_igram_path)
 
     print(asc_igram_path, asc_deform.shape)
     print(desc_igram_path, desc_deform.shape)
@@ -490,11 +491,11 @@ def plot_gps_vs_insar():
     plt.plot(gps_dts, los_gps_data, 'b.', label='gps data: %s' % stationname)
 
     igrams_dir = os.path.join(insar_dir, 'igrams')
-    geolist, deformation = timeseries.load_deformation(igrams_dir)
-    defo_ll = latlon.LatlonImage(data=deformation, dem_rsc_file=os.path.join(igrams_dir, 'dem.rsc'))
+    geolist, deformation = insar.timeseries.load_deformation(igrams_dir)
+    defo_ll = insar.latlon.LatlonImage(data=deformation, dem_rsc_file=os.path.join(igrams_dir, 'dem.rsc'))
 
     print('lon', lon, 'lat', lat, type(lat))
-    print(latlon.grid_corners(**defo_ll.dem_rsc))
+    print(insar.latlon.grid_corners(**defo_ll.dem_rsc))
     # import pdb
     # pdb.set_trace()
 
@@ -513,8 +514,8 @@ def plot_gps_vs_insar():
 # def interpolate_coeffs(rsc_data, nrows, ncols, east_up):
 #     # This will be if we want to solve the exact coefficients
 #     # Make grid to interpolate one
-#     grid_corners = latlon.grid_corners(**rsc_data)
-#     xx, yy = latlon.grid(sparse=True, **rsc_data)
+#     grid_corners = insar.latlon.grid_corners(**rsc_data)
+#     xx, yy = insar.latlon.grid(sparse=True, **rsc_data)
 #     interpolated_east_up = np.empty((2, nrows, ncols))
 #     for idx in (0, 1):
 #         component = east_up[:, idx]
