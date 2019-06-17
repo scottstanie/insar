@@ -37,7 +37,10 @@ def save_int_masks(igram_fnames,
                    row_looks=1,
                    col_looks=1,
                    verbose=False):
-    """Assumes save_geo_masks already run"""
+    """Creates igram masks by taking the logical-or of the two .geo files
+    
+    Assumes save_geo_masks already run
+    """
     geomask_list = []
     for cur_date in geo_date_list:
         geoname = os.path.join(geo_path, '*{}*.geo'.format(cur_date.strftime('%Y%m%d')))

@@ -322,7 +322,7 @@ def save(filename, array):
         # from PIL import Image
         # im = Image.fromarray(array)
         # im.save(filename)
-        plt.imsave(filename, array, cmap='gray', vmin=0, vmax=1, format=ext.strip('.'))
+        plt.imsave(filename, array, cmap='jet', vmin=0, vmax=1, format=ext.strip('.'))
 
     elif (ext in COMPLEX_EXTS + REAL_EXTS + ELEVATION_EXTS) and (ext not in STACKED_FILES):
         # If machine order is big endian, need to byteswap (TODO: test on big-endian)

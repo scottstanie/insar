@@ -4,11 +4,13 @@ from __future__ import print_function
 import os
 import multiprocessing
 import numpy as np
-from insar.log import get_log
-from insar.blob import skblob, plot, utils, scores
-from insar.blob import utils as blob_utils
+# import insar.blob.plot as plot
+from . import skblob
+from . import plot  # , scores
+from . import utils as blob_utils
 from skimage import feature
 from insar import latlon, plotting
+from insar.log import get_log
 
 logger = get_log()
 BLOB_KWARG_DEFAULTS = {'threshold': 1, 'min_sigma': 3, 'max_sigma': 40}
@@ -132,14 +134,14 @@ def find_blobs(image,
     return blobs, sigma_list
 
 
-def _make_blobs(image, extra_args, verbose=False):
+def _make_blobs(image, extra_args, positive=True, negative=True, verbose=False):
     blob_kwargs = BLOB_KWARG_DEFAULTS.copy()
     blob_kwargs.update(extra_args)
     logger.info("Using the following blob function settings:")
     logger.info(blob_kwargs)
 
-    logger.info("Finding neg blobs")
-    blobs, _ = find_blobs(image, positive=True, negative=True, **blob_kwargs)
+    logger.info("Finding blobs: positive %s, negative %s" % (positive, negative))
+    blobs, _ = find_blobs(image, positive=positive, negative=negative, **blob_kwargs)
 
     logger.info("Blobs found:")
     if verbose:
@@ -149,6 +151,8 @@ def _make_blobs(image, extra_args, verbose=False):
 
 def make_blob_image(igram_path=".",
                     load=True,
+                    positive=True,
+                    negative=True,
                     title_prefix='',
                     blob_filename='blobs.npy',
                     row_start=0,
@@ -180,7 +184,7 @@ def make_blob_image(igram_path=".",
         print("Loading %s" % blob_filename)
         blobs = np.load(blob_filename)
     else:
-        blobs = _make_blobs(image, blobfunc_args)
+        blobs = _make_blobs(image, blobfunc_args, positive=positive, negative=negative)
         print("Saving %s" % blob_filename)
         np.save(blob_filename, blobs)
 
@@ -261,8 +265,9 @@ def compute_blob_scores(image,
         jobs = []
         for layer in score_imgs:
             jobs.append(
-                pool.apply_async(skblob.peak_local_max, (layer, ),
-                                 {'threshold_rel': threshold_rel}))
+                pool.apply_async(skblob.peak_local_max, (layer, ), {
+                    'threshold_rel': threshold_rel
+                }))
         peaks = [result.get() for result in jobs]
     else:
         peaks = None
