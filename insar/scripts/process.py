@@ -163,8 +163,10 @@ def run_ps_sbas_igrams(rate=1, looks=None, **kwargs):
     looks = looks or rate
     logger.info("Running ps_sbas_igrams.py")
     ps_sbas_cmd = "/usr/bin/env python ~/sentinel/ps_sbas_igrams.py \
-sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
-        rsc_file=elevation_dem_rsc_file, xsize=xsize, ysize=ysize, looks=looks)
+sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(rsc_file=elevation_dem_rsc_file,
+                                                         xsize=xsize,
+                                                         ysize=ysize,
+                                                         looks=looks)
     logger.info(ps_sbas_cmd)
     subprocess.check_call(ps_sbas_cmd, shell=True)
 
@@ -180,8 +182,9 @@ def run_snaphu(lowpass=None, **kwargs):
     # TODO: probably shouldn't call these like this? idk alternative right now
     igram_rsc = sardem.loading.load_dem_rsc('dem.rsc')
     snaphu_script = os.path.join(SCRIPTS_DIR, 'run_snaphu.sh')
-    snaphu_cmd = '{filepath} {width} {lowpass}'.format(
-        filepath=snaphu_script, width=igram_rsc['width'], lowpass=lowpass)
+    snaphu_cmd = '{filepath} {width} {lowpass}'.format(filepath=snaphu_script,
+                                                       width=igram_rsc['width'],
+                                                       lowpass=lowpass)
     logger.info(snaphu_cmd)
     subprocess.check_call(snaphu_cmd, shell=True)
 
@@ -200,8 +203,8 @@ def convert_to_tif(max_height=None, **kwargs):
     subprocess.check_call(convert_cmd, shell=True)
 
     snaphu_script = os.path.join(SCRIPTS_DIR, 'convert_snaphu.py')
-    snaphu_cmd = 'python {filepath} --max-height {hgt}'.format(
-        filepath=snaphu_script, hgt=max_height)
+    snaphu_cmd = 'python {filepath} --max-height {hgt}'.format(filepath=snaphu_script,
+                                                               hgt=max_height)
     logger.info(snaphu_cmd)
     subprocess.check_call(snaphu_cmd, shell=True)
 
@@ -218,15 +221,14 @@ def run_sbas_inversion(ref_row=None,
 
     Assumes we are in the directory with all .unw files"""
     igram_path = os.path.realpath(os.getcwd())
-    geolist, phi_arr, deformation = insar.timeseries.run_inversion(
-        igram_path,
-        reference=(ref_row, ref_col),
-        window=window,
-        alpha=alpha,
-        constant_vel=constant_vel,
-        difference=difference,
-        deramp_order=deramp_order,
-        verbose=kwargs['verbose'])
+    geolist, phi_arr, deformation = insar.timeseries.run_inversion(igram_path,
+                                                                   reference=(ref_row, ref_col),
+                                                                   window=window,
+                                                                   alpha=alpha,
+                                                                   constant_vel=constant_vel,
+                                                                   difference=difference,
+                                                                   deramp_order=deramp_order,
+                                                                   verbose=kwargs['verbose'])
     logger.info("Saving deformation.npy and geolist.npy")
     np.save('deformation.npy', deformation)
     np.save('geolist.npy', geolist)
@@ -266,3 +268,44 @@ def main(working_dir, kwargs):
         ret = curfunc(**kwargs)
         if ret:  # Option to have step give non-zero return to halt things
             return ret
+
+
+# IF we want to return the step to remove bad .geo files that are mostly zeros:
+# def _check_and_move(fp, zero_threshold, test, mv_dir):
+#     """Wrapper func for clean_files multiprocessing"""
+#     logger.debug("Checking {}".format(fp))
+#     pct = percent_zero(filepath=fp)
+#     if pct > zero_threshold:
+#         logger.info("Moving {} for having {:.2f}% zeros to {}".format(fp, 100 * pct, mv_dir))
+#         if not test:
+#             shutil.move(fp, mv_dir)
+#
+#
+# @log_runtime
+# def clean_files(ext, path=".", zero_threshold=0.50, test=True):
+#     """Move files of type ext from path with a high pct of zeros
+#
+#     Args:
+#         ext (str): file extension to open. Must be loadable by sario.load
+#         path (str): path of directory to search
+#         zero_threshold (float): between 0 and 1, threshold to delete files
+#             if they contain greater ratio of zeros
+#         test (bool): If true, doesn't delete files, just lists
+#     """
+#
+#     file_glob = os.path.join(path, "*{}".format(ext))
+#     logger.info("Searching {} for files with zero threshold {}".format(file_glob, zero_threshold))
+#
+#     # Make a folder to store the bad geos
+#     mv_dir = os.path.join(path, 'bad_{}'.format(ext.replace('.', '')))
+#     mkdir_p(mv_dir) if not test else logger.info("Test mode: not moving files.")
+#
+#     max_procs = mp.cpu_count() // 2
+#     pool = mp.Pool(processes=max_procs)
+#     results = [
+#         pool.apply_async(_check_and_move, (fp, zero_threshold, test, mv_dir))
+#         for fp in glob.glob(file_glob)
+#     ]
+#     # Now ask for results so processes launch
+#     [res.get() for res in results]
+#     pool.close()

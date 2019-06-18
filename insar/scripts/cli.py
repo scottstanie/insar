@@ -456,7 +456,7 @@ def mask(context, imagefile, dem, output):
     """Mask an image where some elevation.dem is zero
     """
     image = apertools.sario.load(imagefile)
-    out_image = apertools.utils.mask_int(image, dem_file=dem, dem=None)
+    out_image = insar.mask.mask_int(image, dem_file=dem, dem=None)
     apertools.sario.save(output, out_image)
 
 
