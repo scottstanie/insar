@@ -185,46 +185,6 @@ def percent_zero(filepath=None, arr=None):
     return (np.sum(arr == 0) / arr.size)
 
 
-def _check_and_move(fp, zero_threshold, test, mv_dir):
-    """Wrapper func for clean_files multiprocessing"""
-    logger.debug("Checking {}".format(fp))
-    pct = percent_zero(filepath=fp)
-    if pct > zero_threshold:
-        logger.info("Moving {} for having {:.2f}% zeros to {}".format(fp, 100 * pct, mv_dir))
-        if not test:
-            shutil.move(fp, mv_dir)
-
-
-@log_runtime
-def clean_files(ext, path=".", zero_threshold=0.50, test=True):
-    """Move files of type ext from path with a high pct of zeros
-
-    Args:
-        ext (str): file extension to open. Must be loadable by sario.load
-        path (str): path of directory to search
-        zero_threshold (float): between 0 and 1, threshold to delete files
-            if they contain greater ratio of zeros
-        test (bool): If true, doesn't delete files, just lists
-    """
-
-    file_glob = os.path.join(path, "*{}".format(ext))
-    logger.info("Searching {} for files with zero threshold {}".format(file_glob, zero_threshold))
-
-    # Make a folder to store the bad geos
-    mv_dir = os.path.join(path, 'bad_{}'.format(ext.replace('.', '')))
-    mkdir_p(mv_dir) if not test else logger.info("Test mode: not moving files.")
-
-    max_procs = mp.cpu_count() // 2
-    pool = mp.Pool(processes=max_procs)
-    results = [
-        pool.apply_async(_check_and_move, (fp, zero_threshold, test, mv_dir))
-        for fp in glob.glob(file_glob)
-    ]
-    # Now ask for results so processes launch
-    [res.get() for res in results]
-    pool.close()
-
-
 def offset(img_info1, img_info2, axis=None):
     """Calculates how many pixels two images are offset
 
@@ -475,8 +435,8 @@ def window_stack(stack, row, col, window_size=3, func=np.mean):
     if not isinstance(window_size, int) or window_size < 1:
         raise ValueError("Invalid window_size %s: must be odd positive int" % window_size)
     elif row > stack.shape[1] or col > stack.shape[2]:
-        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (row, col,
-                                                                                 stack.shape))
+        raise ValueError("(%s, %s) out of bounds reference for stack size %s" %
+                         (row, col, stack.shape))
 
     if window_size % 2 == 0:
         window_size -= 1
@@ -502,12 +462,11 @@ def find_slc_products(api, gj_obj, date_start, date_end, area_relation='contains
     """
     # area_relation : 'Intersection', 'Contains', 'IsWithin'
     # contains means that the Sentinel footprint completely contains your geojson object
-    return api.query(
-        gj_obj,
-        date=(date_start, date_end),
-        platformname='Sentinel-1',
-        producttype='SLC',
-        area_relation=area_relation)
+    return api.query(gj_obj,
+                     date=(date_start, date_end),
+                     platformname='Sentinel-1',
+                     producttype='SLC',
+                     area_relation=area_relation)
 
 
 def show_titles(products):
@@ -652,8 +611,9 @@ def stitch_same_dates(geo_path=".", output_path=".", reverse=True):
     date_counts = collections.Counter([g.date for g in geos])
     dates_duped = set([date for date, count in date_counts.items() if count > 1])
 
-    double_geo_files = sorted(
-        (g for g in geos if g.date in dates_duped), key=lambda g: g.start_time, reverse=reverse)
+    double_geo_files = sorted((g for g in geos if g.date in dates_duped),
+                              key=lambda g: g.start_time,
+                              reverse=reverse)
     grouped_geos = _group_geos_by_date(double_geo_files)
     for date, geolist in grouped_geos:
         print("Stitching geos for %s" % date)
@@ -676,13 +636,3 @@ def stitch_same_dates(geo_path=".", output_path=".", reverse=True):
         insar.sario.save(new_name, stitched_img)
 
     return grouped_geos
-
-
-def mask_int(image, dem_file=None, dem=None):
-    """Masks image from the zeros of a dem"""
-    if dem_file:
-        dem = insar.sario.load(dem_file)
-
-    mask = imresize((dem == 0).astype(float), image.shape)
-    intmask = np.ma.array(image, mask=mask)
-    return intmask.filled(0)

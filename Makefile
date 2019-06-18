@@ -2,7 +2,7 @@
 
 test:
 	@echo "Running doctests and unittests: nose must be installed"
-	nosetests -v --with-doctest --where insar
+	nosetests -v --logging-level=INFO --with-doctest --where insar
 
 
 REPO?=pypi

@@ -14,13 +14,12 @@ from .plot_insar import plot_image
 # Main entry point:
 @click.group()
 @click.option('--verbose', is_flag=True)
-@click.option(
-    '--path',
-    type=click.Path(exists=False, file_okay=False, writable=True),
-    default='.',
-    help="Path of interest for command. "
-    "Will search for files path or change directory, "
-    "depending on command.")
+@click.option('--path',
+              type=click.Path(exists=False, file_okay=False, writable=True),
+              default='.',
+              help="Path of interest for command. "
+              "Will search for files path or change directory, "
+              "depending on command.")
 @click.pass_context
 def cli(ctx, verbose, path):
     """Command line tools for processing insar."""
@@ -51,66 +50,59 @@ def parse_steps(ctx, param, value):
 
 
 @cli.command()
-@click.option(
-    "--start",
-    type=click.IntRange(min=1, max=len(insar.scripts.process.STEPS)),
-    help="Choose which step to start on, then run all after. Steps: {}".format(
-        insar.scripts.process.STEP_LIST),
-    default=1)
-@click.option(
-    "--step",
-    callback=parse_steps,
-    help="Run a one or a range of steps and exit. "
-    "Examples:\n--step 4,5,7\n--step 3-6\n--step 1,9-10",
-    required=False)
+@click.option("--start",
+              type=click.IntRange(min=1, max=len(insar.scripts.process.STEPS)),
+              help="Choose which step to start on, then run all after. Steps: {}".format(
+                  insar.scripts.process.STEP_LIST),
+              default=1)
+@click.option("--step",
+              callback=parse_steps,
+              help="Run a one or a range of steps and exit. "
+              "Examples:\n--step 4,5,7\n--step 3-6\n--step 1,9-10",
+              required=False)
 @click.argument("left_lon", type=float, required=False)
 @click.argument("top_lat", type=float, required=False)
 @click.argument("dlon", type=float, required=False)
 @click.argument("dlat", type=float, required=False)
 @click.option('--geojson', '-g', help="Filename containing the geojson object for DEM bounds")
-@click.option(
-    "--sentinel-path",
-    envvar="SENTINEL_PATH",
-    default="~/sentinel/",
-    help="(default=~/sentinel/) Directory containing sentinel scripts.")
-@click.option(
-    "--rate", "-r", default=1, help="Rate at which to upsample DEM (default=1, no upsampling)")
-@click.option(
-    "--unzip/--no-unzip",
-    help="Pass to sentinel_stack whether to unzip Sentinel files",
-    default=True)
-@click.option(
-    "--cleanup/--no-cleanup",
-    help="Rename .geos and cleanup directory to `extra_files` after .geo processing",
-    default=True)
-@click.option(
-    "--max-temporal",
-    type=int,
-    default=500,
-    help="Maximum temporal baseline for igrams (fed to sbas_list)")
-@click.option(
-    "--max-spatial",
-    type=int,
-    default=500,
-    help="Maximum spatial baseline for igrams (fed to sbas_list)")
-@click.option(
-    "--looks",
-    type=int,
-    help="Number of looks to perform on .geo files to shrink down .int, "
-    "Default is the upsampling rate, makes the igram size=original DEM size")
-@click.option(
-    "--lowpass",
-    type=int,
-    default=1,
-    help="Size of lowpass filter to use on igrams before unwrapping")
-@click.option(
-    "--max-height",
-    default=10,
-    help="Maximum height/max absolute phase for converting .unw files to .tif"
-    " (used for contour_interval option to dishgt)")
+@click.option("--sentinel-path",
+              envvar="SENTINEL_PATH",
+              default="~/sentinel/",
+              help="(default=~/sentinel/) Directory containing sentinel scripts.")
+@click.option("--rate",
+              "-r",
+              default=1,
+              help="Rate at which to upsample DEM (default=1, no upsampling)")
+@click.option("--unzip/--no-unzip",
+              help="Pass to sentinel_stack whether to unzip Sentinel files",
+              default=True)
+@click.option("--cleanup/--no-cleanup",
+              help="Rename .geos and cleanup directory to `extra_files` after .geo processing",
+              default=True)
+@click.option("--max-temporal",
+              type=int,
+              default=500,
+              help="Maximum temporal baseline for igrams (fed to sbas_list)")
+@click.option("--max-spatial",
+              type=int,
+              default=500,
+              help="Maximum spatial baseline for igrams (fed to sbas_list)")
+@click.option("--looks",
+              type=int,
+              help="Number of looks to perform on .geo files to shrink down .int, "
+              "Default is the upsampling rate, makes the igram size=original DEM size")
+@click.option("--lowpass",
+              type=int,
+              default=1,
+              help="Size of lowpass filter to use on igrams before unwrapping")
+@click.option("--max-height",
+              default=10,
+              help="Maximum height/max absolute phase for converting .unw files to .tif"
+              " (used for contour_interval option to dishgt)")
 @click.option('--window', default=3, help="Window size for .unw stack reference")
-@click.option(
-    '--constant-vel', is_flag=True, help="Use a constant velocity for SBAS inversion solution")
+@click.option('--constant-vel',
+              is_flag=True,
+              help="Use a constant velocity for SBAS inversion solution")
 @click.option('--alpha', default=0.0, help="Regularization parameter for SBAS inversion")
 @click.option('--difference', is_flag=True, help="Use velocity differences for regularization")
 @click.option(
@@ -118,14 +110,12 @@ def parse_steps(ctx, param, value):
     default=1,
     help="Order of 2D polynomial to use to remove residual phase from unwrapped interferograms"
     " (default is 1, linear ramp)")
-@click.option(
-    "--ref-row",
-    type=int,
-    help="Row number of pixel to use as unwrapping reference for SBAS inversion")
-@click.option(
-    "--ref-col",
-    type=int,
-    help="Column number of pixel to use as unwrapping reference for SBAS inversion")
+@click.option("--ref-row",
+              type=int,
+              help="Row number of pixel to use as unwrapping reference for SBAS inversion")
+@click.option("--ref-col",
+              type=int,
+              help="Column number of pixel to use as unwrapping reference for SBAS inversion")
 @click.pass_obj
 def process(context, **kwargs):
     """Process stack of Sentinel interferograms.
@@ -150,26 +140,24 @@ def process(context, **kwargs):
 
 # COMMAND: animate
 @cli.command()
-@click.option(
-    "--pause",
-    '-p',
-    default=200,
-    help="For --animate, time in milliseconds to pause"
-    " between stack layers (default 200).")
-@click.option(
-    "--save", '-s', help="If you want to save the animation as a movie,"
-    " title to save file as.")
-@click.option(
-    "--display/--no-display",
-    help="Pop up matplotlib figure to view (instead of just saving)",
-    default=True)
+@click.option("--pause",
+              '-p',
+              default=200,
+              help="For --animate, time in milliseconds to pause"
+              " between stack layers (default 200).")
+@click.option("--save",
+              '-s',
+              help="If you want to save the animation as a movie,"
+              " title to save file as.")
+@click.option("--display/--no-display",
+              help="Pop up matplotlib figure to view (instead of just saving)",
+              default=True)
 @click.option("--cmap", default='seismic', help="Colormap for image display.")
 @click.option("--shifted/--no-shifted", default=True, help="Shift colormap to be 0 centered.")
 @click.option("--file-ext", help="If not loading deformation.npy, the extension of files to load")
-@click.option(
-    "--intlist/--no-intlist",
-    default=False,
-    help="If loading other file type, also load `intlist` file  for titles")
+@click.option("--intlist/--no-intlist",
+              default=False,
+              help="If loading other file type, also load `intlist` file  for titles")
 @click.option("--db/--no-db", help="Use dB scale for images (default false)", default=False)
 @click.option("--vmax", type=float, help="Maximum value for imshow")
 @click.option("--vmin", type=float, help="Minimum value for imshow")
@@ -226,11 +214,10 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
 @click.option('--row-end', default=-1)
 @click.option('--col-start', default=0)
 @click.option('--col-end', default=-1)
-@click.option(
-    "--rowcol",
-    help="Use row,col for legened entries (instead of default lat,lon)",
-    is_flag=True,
-    default=False)
+@click.option("--rowcol",
+              help="Use row,col for legened entries (instead of default lat,lon)",
+              is_flag=True,
+              default=False)
 @click.pass_obj
 def view_stack(context, filename, cmap, label, title, row_start, row_end, col_start, col_end,
                rowcol):
@@ -280,8 +267,9 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
 @click.option("--downsample", default=1, help="Amount to downsample image")
 @click.option("--cmap", default='dismph', help="Colormap for image display.")
 @click.option("--title", help="Title for image plot")
-@click.option(
-    "--alpha", default=0.6, help="Transparency for background magnitude (if plotting insar)")
+@click.option("--alpha",
+              default=0.6,
+              help="Transparency for background magnitude (if plotting insar)")
 @click.option("--colorbar/--no-colorbar", default=True, help="Display colorbar on figure")
 def plot(filename, downsample, cmap, title, alpha, colorbar):
     """Quick plot of a single InSAR file.
@@ -320,18 +308,16 @@ def view_masks(context, downsample):
 # COMMAND: blob
 @cli.command(context_settings=dict(ignore_unknown_options=True))
 @click.option('--load/--no-load', default=True, help='Load last calculated blobs')
-@click.option(
-    '--positive',
-    is_flag=True,
-    default=True,
-    help="Search for positive (uplift) blobs "
-    "(default True)")
-@click.option(
-    '--negative',
-    is_flag=True,
-    default=True,
-    help="Search for negative (subsidence) blobs "
-    "(default True)")
+@click.option('--positive',
+              is_flag=True,
+              default=True,
+              help="Search for positive (uplift) blobs "
+              "(default True)")
+@click.option('--negative',
+              is_flag=True,
+              default=True,
+              help="Search for negative (subsidence) blobs "
+              "(default True)")
 @click.option('--title-prefix', default='')
 @click.option('--blob-filename', default='blobs.npy', help='File to save found blobs')
 @click.option('--row-start', default=0)
@@ -392,10 +378,9 @@ def _handle_args(extra_args):
 # COMMAND: kml
 @cli.command()
 @click.argument("imgfile", required=False)
-@click.option(
-    "--shape",
-    default="box",
-    help="kml shape: use 'box' for image overlay, 'polygon' for geojson square")
+@click.option("--shape",
+              default="box",
+              help="kml shape: use 'box' for image overlay, 'polygon' for geojson square")
 @click.option("--rsc", help=".rsc file containing lat/lon start and steps")
 @click.option("--geojson", "-g", help="Optional: if making shape from .geojson, file to specify")
 @click.option("--title", "-t", help="Title of the KML object once loaded.")
@@ -455,7 +440,7 @@ def mask(context, imagefile, dem, output):
     """Mask an image where some elevation.dem is zero
     """
     image = insar.sario.load(imagefile)
-    out_image = insar.utils.mask_int(image, dem_file=dem, dem=None)
+    out_image = insar.mask.mask_int(image, dem_file=dem, dem=None)
     insar.sario.save(output, out_image)
 
 
@@ -518,8 +503,9 @@ def unzip(context):
 
 @preproc.command('tiles')
 @click.argument('data-path')
-@click.option(
-    '--path-num', type=int, help="Relative orbit/path to use (None uses all within data-path)")
+@click.option('--path-num',
+              type=int,
+              help="Relative orbit/path to use (None uses all within data-path)")
 @click.option('--tile-size', default=0.5, help="degrees of tile size to aim for")
 @click.option('--overlap', default=0.1, help="Overlap of adjacent tiles (in deg)")
 @click.pass_obj
@@ -537,12 +523,11 @@ def tiles(context, data_path, path_num, tile_size, overlap):
     N28.8W102.0.geojson
     ...
     """
-    insar.scripts.preproc.create_tile_directories(
-        data_path,
-        path_num=path_num,
-        tile_size=tile_size,
-        overlap=overlap,
-        verbose=context['verbose'])
+    insar.scripts.preproc.create_tile_directories(data_path,
+                                                  path_num=path_num,
+                                                  tile_size=tile_size,
+                                                  overlap=overlap,
+                                                  verbose=context['verbose'])
 
 
 @preproc.command('intmask')

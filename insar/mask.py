@@ -147,3 +147,13 @@ def solve_bad_columns(A, bad_col_idxs, b_masked, geo_mask_columns, out_final):
         out_final[:, [idx]] = utils.atleast_2d(sol)
 
     return out_final
+
+
+def mask_int(image, dem_file=None, dem=None):
+    """Masks image from the zeros of a dem"""
+    if dem_file:
+        dem = insar.sario.load(dem_file)
+
+    mask = imresize((dem == 0).astype(float), image.shape)
+    intmask = np.ma.array(image, mask=mask)
+    return intmask.filled(0)
