@@ -6,9 +6,9 @@ import os
 import re
 import numpy as np
 import matplotlib.pyplot as plt
-import insar.geojson
-from insar import latlon, parsers, sario, plotting
-from insar.log import get_log
+import apertools.geojson
+from apertools import latlon, parsers, sario, plotting
+from apertools.log import get_log
 
 logger = get_log()
 
@@ -86,12 +86,12 @@ class Tile(object):
             height (float): height of the tile (size in lat)
             width (float): width of the tile (lon size)
         """
-        corners = insar.geojson.corner_coords(
+        corners = apertools.geojson.corner_coords(
             bot_corner=(self.lon, self.lat),
             dlon=self.width,
             dlat=self.height,
         )
-        return insar.geojson.corners_to_geojson(corners)
+        return apertools.geojson.corners_to_geojson(corners)
 
     @property
     def geojson(self):
@@ -240,11 +240,11 @@ class TileGrid(object):
 
     def _log_tile_info(self):
         logger.info("Tiles in (lon, lat) directions: (%d, %d)", *self.num_tiles)
-        logger.info(
-            "Dimensions of tile in (lon, lat) directions: ({:.2f}, {:.2f})".format(*self.tile_dims))
+        logger.info("Dimensions of tile in (lon, lat) directions: ({:.2f}, {:.2f})".format(
+            *self.tile_dims))
         logger.info("Total number of tiles: %d", np.prod(self.num_tiles))
-        logger.info(
-            "Total area covered in (lon, lat): ({:.2f}, {:.2f})".format(*self.total_width_height))
+        logger.info("Total area covered in (lon, lat): ({:.2f}, {:.2f})".format(
+            *self.total_width_height))
         logger.info("Total extent covered: {:.2f} {:.2f} {:.2f} {:.2f} ".format(*self.extent))
 
 

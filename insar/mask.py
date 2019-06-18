@@ -1,7 +1,7 @@
 import os
 import glob
 import numpy as np
-from insar import sario, utils
+from apertools import sario, utils
 
 
 def save_geo_masks(geo_dir=None, geo_filename=None, row_looks=1, col_looks=1):

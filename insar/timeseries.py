@@ -19,10 +19,11 @@ import numpy as np
 from scipy.ndimage.filters import uniform_filter
 
 from sardem.loading import load_dem_rsc
-from insar.parsers import Sentinel
-from insar import sario, utils, latlon, mask
-import insar.gps
-from insar.log import get_log, log_runtime
+from apertools.parsers import Sentinel
+from apertools import sario, utils, latlon
+from insar import mask
+import apertools.gps
+from apertools.log import get_log, log_runtime
 
 SENTINEL_WAVELENGTH = 5.5465763  # cm
 PHASE_TO_CM = SENTINEL_WAVELENGTH / (-4 * np.pi)
@@ -303,7 +304,7 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func=np.mean):
         stack[idx] -= np.mean(layer[ref_row - window:ref_row + window + 1,
                                     ref_col - window:ref_col + window + 1])  # yapf: disable
     return stack
-    # means = insar.utils.window_stack(stack, ref_row, ref_col, window, window_func)
+    # means = apertools.utils.window_stack(stack, ref_row, ref_col, window, window_func)
     # return stack - means[:, np.newaxis, np.newaxis]  # pad with axes to broadcast
 
 
@@ -693,7 +694,7 @@ def deramp_stack(int_file_list, unw_ext, order=1):
 def find_reference_location(latlon_image, igram_path=None, mask_stack=None, gps_dir=None):
     ref_row, ref_col = None, None
     logger.info("Searching for gps station within area")
-    stations = insar.gps.stations_within_image(latlon_image, mask_invalid=True, gps_dir=gps_dir)
+    stations = apertools.gps.stations_within_image(latlon_image, mask_invalid=True, gps_dir=gps_dir)
     if len(stations) > 0:
         # TODO: pick best station somehow? maybe higher mean correlation?
         logger.info("Station options:")
