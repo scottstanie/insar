@@ -14,8 +14,8 @@ import os.path
 from os.path import abspath, dirname
 
 import sardem.loading
-import insar.sario
-from insar.log import get_log
+import apertools.sario
+from apertools.log import get_log
 
 UNWRAPPED_EXT = '.unw'
 logger = get_log()
@@ -57,9 +57,9 @@ def main():
         sys.exit(1)
     elif args.path:
         dir_path = args.path
-        files_to_convert = insar.sario.find_files(dir_path, '*.unw')
+        files_to_convert = apertools.sario.find_files(dir_path, '*.unw')
     elif args.file:
-        file_ext = insar.sario.get_file_ext(args.file)
+        file_ext = apertools.sario.get_file_ext(args.file)
         if file_ext != UNWRAPPED_EXT:
             logger.error("Must be a .unw file to convert: %s", args.file)
         files_to_convert = [args.file]
@@ -67,7 +67,7 @@ def main():
     else:
         logger.info("Searching in current directory for .unw files.")
         dir_path = './'
-        files_to_convert = insar.sario.find_files(dir_path, '*.unw')
+        files_to_convert = apertools.sario.find_files(dir_path, '*.unw')
 
     dem_rsc_file = os.path.join(dir_path, 'dem.rsc')
     rsc_data = sardem.loading.load_dem_rsc(dem_rsc_file)

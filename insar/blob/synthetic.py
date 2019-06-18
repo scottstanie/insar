@@ -17,7 +17,7 @@ from insar import blob
 import insar.blob.scores as scores
 import insar.blob.utils as blob_utils
 import ipdb
-from insar.log import log_runtime
+from apertools.log import log_runtime
 
 
 @log_runtime
@@ -164,8 +164,7 @@ def calc_detection_stats(blobs_real, detected, min_iou=0.5, verbose=True):
     precision = len(true_detects) / len(detected)
     recall = len(true_detects) / len(blobs_real)
 
-    if 2 * len(true_detects) + len(false_positives) + len(misses) != len(blobs_real) + len(
-            detected):
+    if 2 * len(true_detects) + len(false_positives) + len(misses) != len(blobs_real) + len(detected):
         print('CAUTION: weird num of true + fp + miss')
     return np.array(true_detects), np.array(false_positives), misses, precision, recall
 

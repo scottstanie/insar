@@ -3,8 +3,8 @@
 from __future__ import print_function
 import collections
 import itertools
-import insar.utils
-import insar.latlon
+import apertools.utils
+import apertools.latlon
 import numpy as np
 import skimage
 from scipy.ndimage import gaussian_filter
@@ -171,7 +171,7 @@ def sort_blobs_by_val(blobs, image, positive=True):
         reverse = False
         func = np.min
     blob_vals = get_blob_stats(blobs, image, accum_func=func)
-    blobs_with_mags = np.hstack((blobs, insar.utils.force_column(blob_vals)))
+    blobs_with_mags = np.hstack((blobs, apertools.utils.force_column(blob_vals)))
     # Sort rows based on the 4th column, blob_mag, and in reverse order
     return _sort_by_col(blobs_with_mags, 3, reverse=reverse)
 
@@ -194,7 +194,7 @@ def blobs_to_latlon(blobs, blob_info):
     blobs_latlon = []
     for blob in blobs:
         row, col, r = blob[:3]
-        lat, lon = insar.latlon.rowcol_to_latlon(row, col, blob_info)
+        lat, lon = apertools.latlon.rowcol_to_latlon(row, col, blob_info)
         new_radius = r * blob_info['x_step']
         blobs_latlon.append((lat, lon, new_radius) + tuple(blob[3:]))
 
@@ -209,7 +209,7 @@ def blobs_to_rowcol(blobs, blob_info):
     blobs_rowcol = []
     for blob in blobs:
         lat, lon, r, val = blob
-        lat, lon = insar.latlon.latlon_to_rowcol(lat, lon, blob_info)
+        lat, lon = apertools.latlon.latlon_to_rowcol(lat, lon, blob_info)
         old_radius = r / blob_info['x_step']
         blobs_rowcol.append((lat, lon, old_radius, val))
 
@@ -280,7 +280,7 @@ def prune_regions(regions, bboxes, overlap_thresh=0.5):
     # bb = [cv_bbox_to_extent(b) for b in bboxes]
     sorted_bbox_regions = sorted(
         zip(bboxes, regions),
-        key=lambda tup: insar.latlon.box_area(cv_bbox_to_extent(tup[0])),
+        key=lambda tup: apertools.latlon.box_area(cv_bbox_to_extent(tup[0])),
         reverse=True)
     # Break apart again
     sorted_bboxes, sorted_regions = zip(*sorted_bbox_regions)
@@ -297,8 +297,8 @@ def prune_regions(regions, bboxes, overlap_thresh=0.5):
             if jdx in eliminated_idxs:
                 continue
             bsmall = cv_bbox_to_extent(sbox)
-            if (insar.latlon.intersect_area(bbig, bsmall) /
-                    insar.latlon.box_area(bsmall)) > overlap_thresh:
+            if (apertools.latlon.intersect_area(bbig, bsmall) /
+                    apertools.latlon.box_area(bsmall)) > overlap_thresh:
                 eliminated_idxs.add(jdx)
 
     # Now get the non-eliminated indices

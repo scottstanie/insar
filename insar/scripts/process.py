@@ -21,12 +21,14 @@ import glob
 import numpy as np
 from click import BadOptionUsage
 
-import insar
 import sardem
 import eof
-from insar.log import get_log, log_runtime
-from insar.utils import mkdir_p, force_symlink
-from insar.parsers import Sentinel
+import apertools.los
+import apertools.utils
+from apertools.log import get_log, log_runtime
+from apertools.utils import mkdir_p, force_symlink
+from apertools.parsers import Sentinel
+import insar.timeseries
 
 logger = get_log()
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -72,7 +74,7 @@ def run_sentinel_stack(sentinel_path="~/sentinel/", unzip=True, **kwargs):
 
 def record_los_vectors(path=".", **kwargs):
     """4. With .geos processed, record the ENU LOS vector from DEM center to sat"""
-    enu_coeffs = insar.los.find_east_up_coeffs(path)
+    enu_coeffs = apertools.los.find_east_up_coeffs(path)
     np.save("los_enu_midpoint_vector.npy", enu_coeffs)
 
 
@@ -116,10 +118,10 @@ def prep_igrams_dir(cleanup=False, **kwargs):
         new_dir = 'extra_files'
         _reorganize_files(new_dir)
         # For now, leave out the "bad_geo" making
-        # insar.utils.clean_files(".geo", path=".", zero_threshold=0.50, test=False)
+        # apertools.utils.clean_files(".geo", path=".", zero_threshold=0.50, test=False)
 
         # Now stitch together duplicate dates of .geos
-        insar.utils.stitch_same_dates(geo_path="extra_files/", output_path=".")
+        apertools.utils.stitch_same_dates(geo_path="extra_files/", output_path=".")
 
     num_geos = _find_num_geos()
     if num_geos < 2:  # Can't make igrams

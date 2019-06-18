@@ -2,10 +2,10 @@ import os
 import json
 import subprocess
 
-import insar.utils
-import insar.tile
-import insar.timeseries
-from insar.log import get_log
+import apertools.utils
+import apertools.tile
+import apertools.timeseries
+from apertools.log import get_log
 
 logger = get_log()
 
@@ -57,7 +57,7 @@ def create_tile_directories(data_path, path_num=None, tile_size=0.5, overlap=0.1
 
     # new_dirs = []
     for tile in tile_grid:
-        insar.utils.mkdir_p(tile.name)
+        apertools.utils.mkdir_p(tile.name)
         filename = os.path.join(tile.name, '{}.geojson'.format(tile.name))
         _write_geojson(filename, tile.geojson)
         # new_dirs.append(tile.name)
@@ -79,6 +79,6 @@ def symlink_sentinels(tile, sentinel_list, verbose=False):
             dest = os.path.join(tile.name, fname)
             # probably too verbose
             # logger.info("symlinking %s to %s", s.filename, dest)
-            insar.utils.force_symlink(s.filename, dest)
+            apertools.utils.force_symlink(s.filename, dest)
     if verbose:
         logger.info("%s symlinks created for %s", num_links, tile)

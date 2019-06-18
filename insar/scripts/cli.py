@@ -5,6 +5,7 @@ import os
 import json
 import click
 import insar
+import apertools
 import sardem
 import numpy as np
 import matplotlib.pyplot as plt
@@ -187,23 +188,23 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
     Otherwise, use --file-ext "unw", for example
     """
     if file_ext:
-        stack = insar.sario.load_stack(directory=context['path'], file_ext=file_ext)
+        stack = apertools.sario.load_stack(directory=context['path'], file_ext=file_ext)
         if intlist:
             intlist = insar.timeseries.read_intlist(context['path'])
             titles = [
                 "%s - %s" % (d1.strftime("%Y-%m-%d"), d2.strftime("%Y-%m-%d")) for d1, d2 in intlist
             ]
         else:
-            titles = sorted(insar.sario.find_files(context['path'], "*" + file_ext))
+            titles = sorted(apertools.sario.find_files(context['path'], "*" + file_ext))
     else:
         geolist, deformation = insar.timeseries.load_deformation(context['path'])
         stack = deformation
         titles = [d.strftime("%Y-%m-%d") for d in geolist]
 
     if db:
-        stack = insar.utils.db(stack)
+        stack = apertools.utils.db(stack)
 
-    insar.plotting.animate_stack(
+    apertools.plotting.animate_stack(
         stack,
         pause_time=pause,
         display=display,
@@ -253,17 +254,17 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
 
     stack = deformation[:, row_start:row_end, col_start:col_end]
     _, nrows, ncols = stack.shape
-    new_rsc_data = insar.latlon.LatlonImage.crop_rsc_data(
+    new_rsc_data = apertools.latlon.LatlonImage.crop_rsc_data(
         rsc_data,
         row_start,
         col_start,
         nrows,
         ncols,
     )
-    img = insar.latlon.LatlonImage(data=np.mean(stack[-3:], axis=0), dem_rsc=new_rsc_data)
+    img = apertools.latlon.LatlonImage(data=np.mean(stack[-3:], axis=0), dem_rsc=new_rsc_data)
     img = img[row_start:row_end, col_start:col_end]
 
-    insar.plotting.view_stack(
+    apertools.plotting.view_stack(
         stack,
         img,
         geolist=geolist,
@@ -296,7 +297,7 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
         insar --path /path/to/igrams <filename>
 
     """
-    img = insar.sario.load(filename, downsample=downsample)
+    img = apertools.sario.load(filename, downsample=downsample)
     plot_image(img, title=title, colorbar=colorbar, alpha=alpha)
 
 
@@ -308,7 +309,7 @@ def view_masks(context, downsample):
     geo_file_names = insar.timeseries.read_geolist(filepath=context['path'], fnames_only=True)
     geo_mask_file_names = [n + '.mask.npy' for n in geo_file_names]
     geo_masks = np.ma.array(
-        insar.sario.load_stack(file_list=geo_mask_file_names, downsample=downsample))
+        apertools.sario.load_stack(file_list=geo_mask_file_names, downsample=downsample))
     composite_mask = np.sum(geo_masks.astype(int), axis=0)
     plt.figure()
     plt.imshow(composite_mask, cmap='jet')
@@ -415,11 +416,11 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
     """
 
     def _save_npy_file(imgfile, new_filename):
-        image = insar.sario.load(imgfile)
+        image = apertools.sario.load(imgfile)
         if image.ndim > 2:
             # For 3D stack, assume we just want the final image
             image = image[-1]
-        insar.sario.save(new_filename, image, cmap=cmap, normalize=normalize, preview=True)
+        apertools.sario.save(new_filename, image, cmap=cmap, normalize=normalize, preview=True)
 
     if geojson:
         with open(geojson) as f:
@@ -427,13 +428,13 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
     else:
         gj_dict = None
 
-    rsc_data = insar.sario.load(rsc) if rsc else None
+    rsc_data = apertools.sario.load(rsc) if rsc else None
     # Check if imgfile is a .npy saved matrix
     if imgfile.endswith(".npy"):
         new_filename = imgfile.replace(".npy", ".png")
         _save_npy_file(imgfile, new_filename)
 
-    kml_string = insar.kml.create_kml(
+    kml_string = apertools.kml.create_kml(
         rsc_data=rsc_data,
         img_filename=new_filename,
         gj_dict=gj_dict,
@@ -454,9 +455,9 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
 def mask(context, imagefile, dem, output):
     """Mask an image where some elevation.dem is zero
     """
-    image = insar.sario.load(imagefile)
-    out_image = insar.utils.mask_int(image, dem_file=dem, dem=None)
-    insar.sario.save(output, out_image)
+    image = apertools.sario.load(imagefile)
+    out_image = apertools.utils.mask_int(image, dem_file=dem, dem=None)
+    apertools.sario.save(output, out_image)
 
 
 # COMMAND: avg-stack
@@ -472,7 +473,7 @@ def avg_stack(context, ref_row, ref_col):
     """
     if not ref_row or ref_col:
         click.echo("Finding most coherent patch in stack.")
-        cc_stack = insar.sario.load_stack(directory=context['path'], file_ext=".cc")
+        cc_stack = apertools.sario.load_stack(directory=context['path'], file_ext=".cc")
         ref_row, ref_col = insar.timeseries.find_coherent_patch(cc_stack)
         click.echo("Using %s as .unw reference point", (ref_row, ref_col))
     insar.timeseries.avg_stack(context['path'], ref_row, ref_col)
@@ -492,7 +493,7 @@ def dem_rate(context, rsc_file):
     """
     # full_file = os.path.join(context['path'], rsc_file)
     if rsc_file is None:
-        rsc_file = insar.sario.find_rsc_file(basepath=context['path'])
+        rsc_file = apertools.sario.find_rsc_file(basepath=context['path'])
     uprate = sardem.utils.calc_upsample_rate(rsc_filename=rsc_file)
 
     click.echo("%s has %.2f times the default spacing" % (rsc_file, uprate))
@@ -554,7 +555,7 @@ def intmask(context):
     run separately to inspect
     """
     igram_path = context['path']
-    row_looks, col_looks = insar.utils.find_looks_taken(igram_path)
+    row_looks, col_looks = apertools.utils.find_looks_taken(igram_path)
     insar.timeseries.create_igram_masks(
         igram_path,
         row_looks=row_looks,

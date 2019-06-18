@@ -2,7 +2,8 @@ import numpy as np
 import multiprocessing as mp
 import functools
 from . import find_blobs
-from insar import timeseries, sario
+from apertools import sario
+from insar import timeseries
 
 MAX_PROCS = mp.cpu_count()
 BLOB_KWARG_DEFAULTS = {'threshold': 1, 'min_sigma': 3, 'max_sigma': 40}

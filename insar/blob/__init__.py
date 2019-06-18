@@ -9,8 +9,8 @@ from . import skblob
 from . import plot  # , scores
 from . import utils as blob_utils
 from skimage import feature
-from insar import latlon, plotting
-from insar.log import get_log
+from apertools import latlon, plotting
+from apertools.log import get_log
 
 logger = get_log()
 BLOB_KWARG_DEFAULTS = {'threshold': 1, 'min_sigma': 3, 'max_sigma': 40}

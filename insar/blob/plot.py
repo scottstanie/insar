@@ -4,8 +4,8 @@ from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial.qhull import ConvexHull
 from sklearn import manifold
+from apertools import plotting
 from insar.blob import utils as blob_utils
-from insar import plotting
 
 
 def on_pick(blobs, patches):

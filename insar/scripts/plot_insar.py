@@ -5,7 +5,7 @@ import argparse
 
 import matplotlib.pyplot as plt
 import numpy as np
-from insar import sario, utils  # , plotting
+from apertools import sario, utils  # , plotting
 
 
 def plot_image(img, title=None, colorbar=True, alpha=0.6):
@@ -43,7 +43,12 @@ def plot_image(img, title=None, colorbar=True, alpha=0.6):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("filename", help="Name of file to open")
-    parser.add_argument("-d", "--downsample", type=int, default=1, help="Factor to downsample file to display (default=1)")
+    parser.add_argument(
+        "-d",
+        "--downsample",
+        type=int,
+        default=1,
+        help="Factor to downsample file to display (default=1)")
     parser.add_argument("--dem-rsc", help="Name of dem.rsc file to use for opening image")
     parser.add_argument("--colorbar", action="store_true", default=True, help="Show colorbar")
     parser.add_argument("--title", help="Title for figure")
@@ -51,4 +56,3 @@ if __name__ == '__main__':
 
     img = sario.load(args.filename, downsample=args.downsample)
     plot_image(img, title=args.title, colorbar=args.colorbar)
-
