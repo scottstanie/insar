@@ -121,39 +121,6 @@ def moving_average(arr, window_size=7):
     return uniform_filter1d(arr, size=window_size, mode='nearest')
 
 
-def window_stack(stack, row, col, window_size=3, func=np.mean):
-    """Combines square around (row, col) in 3D stack to a 1D array
-
-    Used to average around a pixel in a stack and produce a timeseries
-
-    Args:
-        stack (ndarray): 3D array of images, stacked along axis=0
-        row (int): row index of the reference pixel to subtract
-        col (int): col index of the reference pixel to subtract
-        window_size (int): size of the group around ref pixel to avg for reference.
-            if window_size=1 or None, only the single pixel location used for output
-        func (str): default=np.mean, numpy function to use on window.
-
-    Raises:
-        ValueError: if window_size is not a positive int, or if ref pixel out of bounds
-    """
-    window_size = window_size or 1
-    if not isinstance(window_size, int) or window_size < 1:
-        raise ValueError("Invalid window_size %s: must be odd positive int" % window_size)
-    elif row > stack.shape[1] or col > stack.shape[2]:
-        raise ValueError("(%s, %s) out of bounds reference for stack size %s" % (row, col,
-                                                                                 stack.shape))
-
-    if window_size % 2 == 0:
-        window_size -= 1
-        print("Making window_size an odd number (%s) to get square" % window_size)
-
-    win_size = window_size // 2
-    return func(stack[:,
-                row - win_size:row + win_size + 1,
-                col - win_size:col + win_size + 1], axis=(1, 2))  # yapf: disable
-
-
 def plot_gps_enu(station=None, station_df=None, days_smooth=12):
     def remove_xticks(ax):
         ax.tick_params(
@@ -238,7 +205,7 @@ def find_insar_ts(insar_dir, station_name, defo_name='deformation.npy'):
     insar_row, insar_col = defo_img.nearest_pixel(lat=lat, lon=lon)
     # import pdb
     # pdb.set_trace()
-    insar_ts = insar.timeseries.window_stack(
+    insar_ts = insar.utils.window_stack(
         deformation_stack, insar_row, insar_col, window_size=5, func=np.mean)
     return geolist, insar_ts
 

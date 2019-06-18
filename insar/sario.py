@@ -291,12 +291,15 @@ def combine_real_imag(real_data, imag_data):
     return real_data + 1j * imag_data
 
 
-def save(filename, array):
+def save(filename, array, normalize=True, cmap="gray", preview=False):
     """Save the numpy array in one of known formats
 
     Args:
-        filename (str) Output path to save file in
-        array (ndarray) matrix to save
+        filename (str): Output path to save file in
+        array (ndarray): matrix to save
+        normalize (bool): scale array to [-1, 1]
+        cmap (str, matplotlib.cmap): colormap (if output is png/jpg and will be plotted)
+        preview (bool): for png/jpg, display the image before saving
     Returns:
         None
 
@@ -319,10 +322,21 @@ def save(filename, array):
     ext = insar.utils.get_file_ext(filename)
 
     if ext == '.png':  # TODO: or ext == '.jpg':
+        # Normalize to be between 0 and 1
+        if normalize:
+            array = array / np.max(np.abs(array))
+            vmin, vmax = -1, 1
+        else:
+            vmin, vmax = None, None
         # from PIL import Image
         # im = Image.fromarray(array)
         # im.save(filename)
-        plt.imsave(filename, array, cmap='jet', vmin=0, vmax=1, format=ext.strip('.'))
+        if preview:
+            plt.imshow(array, cmap=cmap, vmin=vmin, vmax=vmax)
+            plt.colorbar()
+            plt.show(block=True)
+
+        plt.imsave(filename, array, cmap=cmap, vmin=vmin, vmax=vmax, format=ext.strip('.'))
 
     elif (ext in COMPLEX_EXTS + REAL_EXTS + ELEVATION_EXTS) and (ext not in STACKED_FILES):
         # If machine order is big endian, need to byteswap (TODO: test on big-endian)

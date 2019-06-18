@@ -401,8 +401,10 @@ def _handle_args(extra_args):
 @click.option("--title", "-t", help="Title of the KML object once loaded.")
 @click.option("--desc", "-d", help="Description for google Earth.")
 @click.option("--output", "-o", help="File to save kml output to")
+@click.option("--cmap", default="seismic", help="Colormap (if saving .npy image)")
+@click.option("--normalize", is_flag=True, default=False, help="Center image to [-1, 1]")
 @click.pass_obj
-def kml(context, imgfile, shape, rsc, geojson, title, desc, output):
+def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normalize):
     """Creates .kml file for some image
     IMGFILE is the image to load into Google Earth
 
@@ -417,9 +419,7 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output):
         if image.ndim > 2:
             # For 3D stack, assume we just want the final image
             image = image[-1]
-        # Normalize to be between 0 and 1
-        image = (image - np.min(image)) / np.ptp(image)
-        insar.sario.save(new_filename, image)
+        insar.sario.save(new_filename, image, cmap=cmap, normalize=normalize, preview=True)
 
     if geojson:
         with open(geojson) as f:
