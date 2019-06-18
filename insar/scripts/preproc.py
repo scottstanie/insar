@@ -3,9 +3,9 @@ import json
 import subprocess
 
 import apertools.utils
-import apertools.tile
-import apertools.timeseries
 from apertools.log import get_log
+import insar.tile
+import insar.timeseries
 
 logger = get_log()
 
