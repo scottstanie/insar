@@ -1,4 +1,5 @@
-from insar import latlon, blob, plotting
+from apertools import latlon, plotting
+from insar import blob
 import matplotlib.pyplot as plt
 import numpy as np
 import skimage

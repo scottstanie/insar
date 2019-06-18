@@ -492,29 +492,6 @@ def save_deformation(igram_path,
     np.save(os.path.join(igram_path, geolist_name), geolist)
 
 
-def load_deformation(igram_path, filename='deformation.npy'):
-    """Loads a stack of deformation images from igram_path
-
-    igram_path must also contain the "geolist.npy" file
-
-    Args:
-        igram_path (str): directory of .npy file
-        filename (str): default='deformation.npy', a .npy file of a 3D ndarray
-
-    Returns:
-        tuple[ndarray, ndarray]: geolist 1D array, deformation 3D array
-    """
-    try:
-        deformation = np.load(os.path.join(igram_path, filename))
-        # geolist is a list of datetimes: encoding must be bytes
-        geolist = np.load(os.path.join(igram_path, 'geolist.npy'), encoding='bytes')
-    except (IOError, OSError):
-        logger.error("%s or geolist.npy not found in path %s", filename, igram_path)
-        return None, None
-
-    return geolist, deformation
-
-
 def matrix_indices(shape, flatten=True):
     """Returns a pair of vectors for all indices of a 2D array
 

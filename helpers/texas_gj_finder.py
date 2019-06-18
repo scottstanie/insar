@@ -1,7 +1,8 @@
 import json
 from shapely.geometry import shape, Point
 from collections import defaultdict
-from insar import kml, tile
+from apertools import kml
+from insar import tile
 
 geolist_files = open('geojson_list.txt').read().splitlines()
 gjs = {num: json.load(open(gjf)) for num, gjf in enumerate(geolist_files)}

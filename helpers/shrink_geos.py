@@ -1,5 +1,4 @@
-from insar import sario
-from insar import utils
+from apertools import sario, utils
 from sardem.utils import upsample_dem_rsc
 import sys
 import os

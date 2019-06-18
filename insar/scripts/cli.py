@@ -197,7 +197,7 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
         else:
             titles = sorted(apertools.sario.find_files(context['path'], "*" + file_ext))
     else:
-        geolist, deformation = insar.timeseries.load_deformation(context['path'])
+        geolist, deformation = apertools.sario.load_deformation(context['path'])
         stack = deformation
         titles = [d.strftime("%Y-%m-%d") for d in geolist]
 
@@ -243,7 +243,7 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
         insar --path /path/to/igrams view_stack
 
     """
-    geolist, deformation = insar.timeseries.load_deformation(context['path'], filename=filename)
+    geolist, deformation = apertools.sario.load_deformation(context['path'], filename=filename)
     if geolist is None or deformation is None:
         return
 

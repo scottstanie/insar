@@ -2,7 +2,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-from insar import blob, plotting, latlon
+from apertools import plotting, latlon
+from insar import blob
+
 real_blob_locs = []
 real_blob_locs.append((141, 288))
 real_blob_locs.append((140, 608))

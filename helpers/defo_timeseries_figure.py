@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from insar import latlon
+from apertools import latlon
 
 defo = np.load('deformation.npy')
 defo_img = latlon.LatlonImage(data=np.mean(defo[-3:], axis=0), dem_rsc_file='dem.rsc')

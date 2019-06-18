@@ -7,7 +7,8 @@ import multiprocessing as mp
 
 import matplotlib.pyplot as plt
 import numpy as np
-from insar import blob, timeseries, latlon
+from insar import blob
+from apertools import sario, latlon
 import sardem
 
 
@@ -34,7 +35,7 @@ if __name__ == '__main__':
 
     igram_path = '.'
     print("Loading deformation image")
-    geolist, deformation = timeseries.load_deformation(igram_path)
+    geolist, deformation = sario.load_deformation(igram_path)
     rsc_data = sardem.loading.load_dem_rsc(os.path.join(igram_path, 'dem.rsc'))
 
     img = latlon.LatlonImage(data=np.mean(deformation[-3:], axis=0), dem_rsc=rsc_data)

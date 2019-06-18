@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from insar import latlon, plotting
+from apertools import latlon, plotting
 import sys
 
 # defo = np.load('deformation.npy')
