@@ -38,7 +38,7 @@ def save_int_masks(igram_fnames,
                    col_looks=1,
                    verbose=False):
     """Creates igram masks by taking the logical-or of the two .geo files
-    
+
     Assumes save_geo_masks already run
     """
     geomask_list = []

@@ -309,13 +309,22 @@ def view_masks(context, downsample):
     geo_file_names = insar.timeseries.read_geolist(filepath=context['path'], fnames_only=True)
     geo_mask_file_names = [n + '.mask.npy' for n in geo_file_names]
     geo_masks = np.ma.array(
-        apertools.sario.load_stack(file_list=geo_mask_file_names, downsample=downsample))
-    composite_mask = np.sum(geo_masks.astype(int), axis=0)
-    plt.figure()
-    plt.imshow(composite_mask, cmap='jet')
-    plt.title("Number of SAR .geo dates masked")
-    plt.colorbar()
-    plt.show(block=True)
+        apertools.sario.load_stack(file_list=geo_mask_file_names,
+                                   downsample=downsample)).astype(bool)
+    composite_mask = np.sum(geo_masks, axis=0)
+
+    geolist = insar.timeseries.read_geolist(filepath=context['path'])
+    apertools.plotting.view_stack(
+        geo_masks,
+        display_img=composite_mask,
+        geolist=geolist,
+        cmap="Reds",
+        label="is masked",
+        title="Number of dates of missing .geo data",
+        line_plot_kwargs=dict(marker="x", linestyle=' '),
+        perform_shift=True,
+        legend_loc=0,
+    )
 
 
 # COMMAND: blob
