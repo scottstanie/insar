@@ -27,12 +27,20 @@ setuptools.setup(
         "Intended Audience :: Science/Research",
     ),
     install_requires=[
-        "numpy", "scipy", "requests"
-        "matplotlib", "pandas", "click", "sardem", "sentineleof", "apertools"
+        "numpy",
+        "scipy",
+        "requests",
+        "matplotlib",
+        "pandas",
+        "click",
+        "sardem",
+        "sentineleof",
+        "apertools",
     ],
     entry_points={
         "console_scripts": [
             "insar=insar.scripts.cli:cli",
         ],
     },
-    zip_safe=False)
+    zip_safe=False,
+)
