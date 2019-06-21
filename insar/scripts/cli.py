@@ -442,6 +442,8 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
     if imgfile.endswith(".npy"):
         new_filename = imgfile.replace(".npy", ".png")
         _save_npy_file(imgfile, new_filename)
+    else:
+        new_filename = imgfile
 
     kml_string = apertools.kml.create_kml(
         rsc_data=rsc_data,

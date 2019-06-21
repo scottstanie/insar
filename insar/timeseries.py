@@ -7,7 +7,9 @@ scott@lidar igrams]$ head geolist
 ../S1A_IW_SLC__1SDV_20180420T043026_20180420T043054_021546_025211_81BE.SAFE.geo
 ../S1A_IW_SLC__1SDV_20180502T043026_20180502T043054_021721_025793_5C18.SAFE.geo
 [scott@lidar igrams]$ head sbas_list
-../S1A_IW_SLC__1SDV_20180420T043026_20180420T043054_021546_025211_81BE.SAFE.geo ../S1A_IW_SLC__1SDV_20180502T043026_20180502T043054_021721_025793_5C18.SAFE.geo 12.0   -16.733327776024169
+../S1A_IW_SLC__1SDV_20180420T043026_20180420T043054_021546_025211_81BE.SAFE.geo \
+        ../S1A_IW_SLC__1SDV_20180502T043026_20180502T043054_021721_025793_5C18.SAFE.geo 12.0   \
+        -16.733327776024169
 [scott@lidar igrams]$ head intlist
 20180420_20180502.int
 
@@ -841,7 +843,7 @@ def create_igram_masks(igram_path, row_looks=1, col_looks=1):
 #
 #     print("Diff in max phase:")
 #     print(total_days * (np.max(unw_normed_shifted.reshape(
-#         (num_igrams, -1)), axis=1) - np.min(unw_normed_shifted.reshape((num_igrams, -1)), axis=1)))
+#       (num_igrams, -1)), axis=1) - np.min(unw_normed_shifted.reshape((num_igrams, -1)), axis=1)))
 #     print("Converted to CM:")
 #     print(total_days * (np.max(unw_normed_shifted.reshape(
 #         (num_igrams, -1)) * PHASE_TO_CM, axis=1) - np.min(
