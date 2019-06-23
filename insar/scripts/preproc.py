@@ -10,7 +10,7 @@ import insar.timeseries
 logger = get_log()
 
 
-def unzip_sentinel_files(path="."):
+def unzip_sentinel_files(path=".", delete_zips=False):
     """Function to find all .zips and unzip them, skipping overwrites"""
     logger.info("Changing to %s to unzip files", path)
     cur_dir = os.getcwd()  # To return to after
@@ -22,10 +22,16 @@ def unzip_sentinel_files(path="."):
     # IMPORTANT: Only unzipping the VV .tiff files, annotation/xmls and preview/ for map-overlay.kml
 
     # Note: -n means "never overwrite existing files", so you can rerun this
-    subprocess.check_call(
-        "find . -maxdepth 1 -name '*.zip' -print0 | "
-        'xargs -0 -I {} --max-procs 10 unzip -n {} "*/preview/*" "*/annotation/*.xml" "*/measurement/*slc-vv-*.tiff" ',
-        shell=True)
+    command = "find . -maxdepth 1 -name '*.zip' -print0 | "
+    if delete_zips:
+        command += """xargs -0 -I {} --max-procs 10 sh -c 'unzip -n {} "*/preview/*" \
+            "*/annotation/*.xml" "*/measurement/*slc-vv-*.tiff" && rm -f {} ; ' """
+    else:
+        command += 'xargs -0 -I {} --max-procs 10 unzip -n {} "*/preview/*" \
+                "*/annotation/*.xml" "*/measurement/*slc-vv-*.tiff" '
+
+    logger.info("Running command: %s", command)
+    subprocess.check_call(command, shell=True)
 
     logger.info("Done unzipping, returning to %s", cur_dir)
     os.chdir(cur_dir)
@@ -52,8 +58,10 @@ def create_tile_directories(data_path, path_num=None, tile_size=0.5, overlap=0.1
         logger.error("No sentinel products found in %s for path_num %s", data_path, path_num)
         return [], []
 
-    tile_grid = insar.tile.create_tiles(
-        sentinel_list=sentinel_list, tile_size=tile_size, overlap=overlap, verbose=verbose)
+    tile_grid = insar.tile.create_tiles(sentinel_list=sentinel_list,
+                                        tile_size=tile_size,
+                                        overlap=overlap,
+                                        verbose=verbose)
 
     # new_dirs = []
     for tile in tile_grid:
