@@ -8,7 +8,6 @@ import insar
 import apertools
 import sardem
 import numpy as np
-import matplotlib.pyplot as plt
 from .plot_insar import plot_image
 
 
@@ -299,6 +298,7 @@ def view_masks(context, downsample):
     geo_masks = np.ma.array(
         apertools.sario.load_stack(file_list=geo_mask_file_names,
                                    downsample=downsample)).astype(bool)
+
     composite_mask = np.sum(geo_masks, axis=0)
 
     geolist = insar.timeseries.read_geolist(filepath=context['path'])
@@ -312,6 +312,8 @@ def view_masks(context, downsample):
         line_plot_kwargs=dict(marker="x", linestyle=' '),
         perform_shift=True,
         legend_loc=0,
+        timeline_callback=lambda series, row, col: print(".geos missing at (%s, %s): %s" % (
+            row, col, np.array(geo_file_names)[series])),
     )
 
 
