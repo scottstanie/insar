@@ -43,6 +43,7 @@ def run_inversion(igram_path,
                   deramp=True,
                   deramp_order=1,
                   masking=True,
+                  geolist_ignore_file=None,
                   verbose=False):
     """Runs SBAS inversion on all unwrapped igrams
 
@@ -61,6 +62,8 @@ def run_inversion(igram_path,
         deramp (bool): Fits plane to each igram and subtracts (to remove orbital error)
         deramp_order (int): order of polynomial to use when removing phase
             from unwrapped igram
+        geolist_ignore_file (str): text file with list of .geo files to ignore
+            Removes the .geo and and igrams with these date
         masking (bool): flag to load stack of .int.mask files to mask invalid areas
         verbose (bool): print extra timing and debug info
 
@@ -75,6 +78,8 @@ def run_inversion(igram_path,
 
     intlist = read_intlist(filepath=igram_path)
     geolist = read_geolist(filepath=igram_path)
+    if geolist_ignore_file is not None:
+        geolist, intlist = ignore_geo_dates(geolist, intlist, filepath=igram_path)
 
     # Prepare B matrix and timediffs used for each pixel inversion
     B = build_B_matrix(geolist, intlist)
@@ -99,10 +104,12 @@ def run_inversion(igram_path,
     if any(r is None for r in reference):
         # Make a latlon image to check for gps data containment
         # TODO: maybe i need to search for masks? dont wanna pick a garbage one by accident
-        latlon_image = latlon.LatlonImage(
-            data=unw_stack[0], dem_rsc_file=os.path.join(igram_path, 'dem.rsc'))
-        ref_row, ref_col = find_reference_location(
-            latlon_image, igram_path, mask_stack, gps_dir=None)
+        latlon_image = latlon.LatlonImage(data=unw_stack[0],
+                                          dem_rsc_file=os.path.join(igram_path, 'dem.rsc'))
+        ref_row, ref_col = find_reference_location(latlon_image,
+                                                   igram_path,
+                                                   mask_stack,
+                                                   gps_dir=None)
     else:
         ref_row, ref_col = reference
 
@@ -206,6 +213,13 @@ def read_intlist(filepath="./intlist", parse=True):
     else:
         dirname = os.path.dirname(filepath)
         return [os.path.join(dirname, igram) for igram in intlist]
+
+
+def ignore_geo_dates(geolist, intlist, filepath="."):
+    ignore_geos = set(read_geolist(filepath))
+    valid_geos = [g for g in geolist if g not in ignore_geos]
+    valid_igrams = [i for i in intlist if i[0] not in geolist and i[1] not in geolist]
+    return valid_geos, valid_igrams
 
 
 def build_A_matrix(geolist, intlist):

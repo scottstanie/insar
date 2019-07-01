@@ -74,24 +74,25 @@ def find_blobs(image,
     """
     # some skimage funcs fail for float32 when unnormalized [0,1]
     image = image.astype('float64')
-    sigma_list = skblob.create_sigma_list(
-        min_sigma=min_sigma, max_sigma=max_sigma, num_sigma=num_sigma, log_scale=log_scale)
+    sigma_list = skblob.create_sigma_list(min_sigma=min_sigma,
+                                          max_sigma=max_sigma,
+                                          num_sigma=num_sigma,
+                                          log_scale=log_scale)
     image_cube = skblob.create_gl_cube(image, sigma_list=sigma_list)
 
     blobs = np.empty((0, 4))
     if positive:
 
         # print('bpos')
-        blobs_pos = skblob.blob_log(
-            image=image,
-            threshold=threshold,
-            image_cube=image_cube,
-            sigma_list=sigma_list,
-            sigma_bins=sigma_bins,
-            prune_edges=prune_edges,
-            border_size=border_size,
-            positive=True,
-            **kwargs)
+        blobs_pos = skblob.blob_log(image=image,
+                                    threshold=threshold,
+                                    image_cube=image_cube,
+                                    sigma_list=sigma_list,
+                                    sigma_bins=sigma_bins,
+                                    prune_edges=prune_edges,
+                                    border_size=border_size,
+                                    positive=True,
+                                    **kwargs)
         # Append mags as a column and sort by it
         # TODO: FIX vvv
         if blobs_pos.size:
@@ -104,16 +105,15 @@ def find_blobs(image,
         blobs = np.vstack((blobs, blobs_with_mags))
     if negative:
         # print('bneg')
-        blobs_neg = skblob.blob_log(
-            image=image,
-            threshold=threshold,
-            image_cube=-1 * image_cube,
-            sigma_list=sigma_list,
-            sigma_bins=sigma_bins,
-            prune_edges=prune_edges,
-            border_size=border_size,
-            positive=False,
-            **kwargs)
+        blobs_neg = skblob.blob_log(image=image,
+                                    threshold=threshold,
+                                    image_cube=-1 * image_cube,
+                                    sigma_list=sigma_list,
+                                    sigma_bins=sigma_bins,
+                                    prune_edges=prune_edges,
+                                    border_size=border_size,
+                                    positive=False,
+                                    **kwargs)
         if blobs_neg.size:
             blobs_with_mags = blob_utils.sort_blobs_by_val(blobs_neg, image, positive=False)
         else:
@@ -150,6 +150,7 @@ def _make_blobs(image, extra_args, positive=True, negative=True, verbose=False):
 
 
 def make_blob_image(igram_path=".",
+                    filename=None,
                     load=True,
                     positive=True,
                     negative=True,
@@ -163,10 +164,16 @@ def make_blob_image(igram_path=".",
                     blobfunc_args=()):
     """Find and view blobs in deformation"""
 
-    logger.info("Searching %s for igram_path" % igram_path)
-    image = latlon.load_deformation_img(igram_path, n=3)
+    if not filename:
+        logger.info("Searching %s for igram_path" % igram_path)
+        image = latlon.load_deformation_img(igram_path, n=3)
+        # Note: now we use image.dem_rsc after cropping to keep track of new latlon bounds
+    else:
+        import apertools.sario
+        image = latlon.LatlonImage(data=np.angle(apertools.sario.load(filename)),
+                                   dem_rsc_file="dem.rsc")
+
     image = image[row_start:row_end, col_start:col_end]
-    # Note: now we use image.dem_rsc after cropping to keep track of new latlon bounds
 
     try:
         geolist = np.load(os.path.join(igram_path, 'geolist.npy'), encoding='bytes')
@@ -175,8 +182,11 @@ def make_blob_image(igram_path=".",
         logger.warning("No geolist found in %s" % igram_path)
         title = "%s Deformation" % title_prefix
 
-    imagefig, axes_image = plotting.plot_image_shifted(
-        image, img_data=image.dem_rsc, title=title, xlabel='Longitude', ylabel='Latitude')
+    imagefig, axes_image = plotting.plot_image_shifted(image,
+                                                       img_data=image.dem_rsc,
+                                                       title=title,
+                                                       xlabel='Longitude',
+                                                       ylabel='Latitude')
     # Or without lat/lon data:
     # imagefig, axes_image = plotting.plot_image_shifted(image, title=title)
 
@@ -265,9 +275,8 @@ def compute_blob_scores(image,
         jobs = []
         for layer in score_imgs:
             jobs.append(
-                pool.apply_async(skblob.peak_local_max, (layer, ), {
-                    'threshold_rel': threshold_rel
-                }))
+                pool.apply_async(skblob.peak_local_max, (layer, ),
+                                 {'threshold_rel': threshold_rel}))
         peaks = [result.get() for result in jobs]
     else:
         peaks = None
@@ -370,8 +379,10 @@ def find_blobs_with_harris_peaks(image,
         blobs, sigma_list = find_blobs(image, **kwargs)
 
     # Find peaks for every sigma in sigma_list
-    _, corner_peaks = compute_blob_scores(
-        image, sigma_list, gamma=gamma, threshold_rel=threshold_rel)
+    _, corner_peaks = compute_blob_scores(image,
+                                          sigma_list,
+                                          gamma=gamma,
+                                          threshold_rel=threshold_rel)
 
     sigma_idxs = blob_utils.find_sigma_idxs(blobs, sigma_list)
     # import ipdb
