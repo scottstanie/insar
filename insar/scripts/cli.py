@@ -294,6 +294,16 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
 @click.pass_obj
 def view_masks(context, downsample):
     geo_file_names = insar.timeseries.read_geolist(filepath=context['path'], fnames_only=True)
+
+    def _print(series, row, col):
+        print(".geos missing at (%s, %s): %s" % (row, col, np.array(geo_file_names)[series]))
+
+    def _save_missing_geos(series, row, col):
+        with open("geolist_missing.txt", "w") as f:
+            for fname in np.array(geo_file_names)[series]:
+                print("Writing %s" % fname)
+                f.write("%s\n" % fname)
+
     geo_mask_file_names = [n + '.mask.npy' for n in geo_file_names]
     geo_masks = np.ma.array(
         apertools.sario.load_stack(file_list=geo_mask_file_names,
@@ -312,8 +322,8 @@ def view_masks(context, downsample):
         line_plot_kwargs=dict(marker="x", linestyle=' '),
         perform_shift=True,
         legend_loc=0,
-        timeline_callback=lambda series, row, col: print(".geos missing at (%s, %s): %s" % (
-            row, col, np.array(geo_file_names)[series])),
+        # timeline_callback=_print,
+        timeline_callback=_save_missing_geos,
     )
 
 

@@ -3,6 +3,8 @@ import glob
 import numpy as np
 from apertools import sario, utils
 
+import ipdb
+
 
 def save_geo_masks(geo_dir=None, geo_filename=None, row_looks=1, col_looks=1):
     """Creates .mask files for geos where zeros occur
@@ -16,6 +18,7 @@ def save_geo_masks(geo_dir=None, geo_filename=None, row_looks=1, col_looks=1):
     def _save_mask(geo_fname, row_looks, col_looks):
         mask_fname = geo_fname + '.mask.npy'
         g = sario.load(geo_fname, looks=(row_looks, col_looks))
+        # ipdb.set_trace()
         print('Saving %s' % mask_fname)
         np.save(mask_fname, _get_geo_mask(g))
 
@@ -64,52 +67,52 @@ def save_int_masks(igram_fnames,
         np.save(igram_mask_name, igram_mask)
 
 
-def masked_lstsq(A, b, geo_mask_columns=None):
+def masked_lstsq(B, d, geo_mask_columns=None):
     """Performs least squares on masked numpy arrays
 
-    Handles the mask by deleting the row of A corresponding
-    to a masked b element.
+    Handles the mask by deleting the row of B corresponding
+    to a masked d element.
 
-    Inputs same as numpy.linalg.lstsq, where b_masked can be
+    Inputs same as numpy.linalg.lstsq, where d_masked can be
     a (n x k) matrix and each n-length column inverted.
 
     Inputs:
-      A (np.ndarray) 2D array of Ax = b
-      b (np.ndarray) an (m x k) array, the right hand side
+      B (np.ndarray) 2D array of Bx = d
+      d (np.ndarray) an (m x k) array, the right hand side
       geo_mask_columns (np.ndarray): 2D array where each column is
         a boolean mask of geo dates that should be masked
     """
-    b_masked = b.view(np.ma.MaskedArray)
-    if b_masked.ndim == 1:
-        b_masked = utils.force_column(b_masked)
+    d_masked = d.view(np.ma.MaskedArray)
+    if d_masked.ndim == 1:
+        d_masked = utils.force_column(d_masked)
 
     # First check if no masks exist (run normally if so)
-    if b_masked.mask is np.ma.nomask or not b_masked.mask.any():
-        return np.linalg.lstsq(A, b, rcond=None)[0]
+    if d_masked.mask is np.ma.nomask or not d_masked.mask.any():
+        return np.linalg.lstsq(B, d, rcond=None)[0]
 
-    # Otherwise, run first in bulk on all b's with no masks and
+    # Otherwise, run first in bulk on all d's with no masks and
     # only loop over ones with some mask
-    out_final = np.ma.empty((A.shape[1], b_masked.shape[1]))
+    out_final = np.ma.empty((B.shape[1], d_masked.shape[1]))
 
-    good_col_idxs = ~(b_masked.mask).any(axis=0)
-    bad_col_idxs = np.where((b_masked.mask).any(axis=0))[0]
+    good_col_idxs = ~(d_masked.mask).any(axis=0)
+    bad_col_idxs = np.where((d_masked.mask).any(axis=0))[0]
 
     if np.any(good_col_idxs):
-        out_final[:, good_col_idxs] = solve_good_columns(A, good_col_idxs, b_masked)
+        out_final[:, good_col_idxs] = solve_good_columns(B, good_col_idxs, d_masked)
 
-    out_final = solve_bad_columns(A, bad_col_idxs, b_masked, geo_mask_columns, out_final)
+    out_final = solve_bad_columns(B, bad_col_idxs, d_masked, geo_mask_columns, out_final)
     return out_final
 
 
-def solve_good_columns(A, good_col_idxs, b_masked):
-    good_cols = b_masked[:, good_col_idxs]
-    return np.linalg.lstsq(A, good_cols, rcond=None)[0]
+def solve_good_columns(B, good_col_idxs, d_masked):
+    good_cols = d_masked[:, good_col_idxs]
+    return np.linalg.lstsq(B, good_cols, rcond=None)[0]
 
 
-def solve_bad_columns(A, bad_col_idxs, b_masked, geo_mask_columns, out_final):
+def solve_bad_columns(B, bad_col_idxs, d_masked, geo_mask_columns, out_final):
     # Solve one partially masked column at a time
     for idx in bad_col_idxs:
-        col_masked = b_masked[:, idx]
+        col_masked = d_masked[:, idx]
 
         missing = col_masked.mask
         if np.all(missing):
@@ -118,17 +121,17 @@ def solve_bad_columns(A, bad_col_idxs, b_masked, geo_mask_columns, out_final):
             out_final[:, [idx]] = np.full((out_final.shape[0], 1), np.nan)
             continue
 
-        A_deleted = A[~missing, :]
+        B_deleted = B[~missing, :]
         col_deleted = col_masked[~missing]
 
         # TODO: failing if all except one of `missing` == True (only one pixel to solve)
-        sol, residuals, rank, _ = np.linalg.lstsq(A_deleted, col_deleted, rcond=None)
+        sol, residuals, rank, _ = np.linalg.lstsq(B_deleted, col_deleted, rcond=None)
 
         # If underdetermined, fill appropriate places with NaNs
         if not residuals:
             # If we aren't maksing specific geo dates, or doing a constant vel solution
             # TODO: Are there other cases we want to mask all?
-            if geo_mask_columns is None or A.shape[1] == 1:
+            if geo_mask_columns is None or B.shape[1] == 1:
                 sol[...] = np.NaN
             else:
                 mask_col = geo_mask_columns[:, idx]

@@ -1,7 +1,10 @@
 import numpy as np
 import itertools
-from insar import timeseries, mask, sario
+from insar import timeseries, mask
+from apertools import sario
 from datetime import datetime
+
+REF_ROW_COL = (2, 2)
 
 # 5 geos made so that the most igrams any date can make is
 # n-1 = 4 igrams (but 10 total igrams among all)
@@ -16,7 +19,7 @@ geo_date_list = [
 
 # Make 4 dummy 4x4 arrays of geo
 # bottom row will be 0s
-geo1 = np.ones((4, 4)).astype(np.complex64)
+geo1 = np.zeros((4, 4)).astype(np.complex64)
 geo2 = 1 + geo1
 geo3 = 2 + geo2
 geo4 = 4 + geo3
@@ -38,10 +41,15 @@ geo_tuple[3][3, 3] = 0
 geo_tuple[2][0, 0] = 0
 
 truth_geos = np.stack(geo_tuple, axis=0)
+print(truth_geos)
 
-for idx, geo in enumerate(truth_geos):
-    fname = 'S1A_{}.geo'.format(geo_date_list[idx].strftime('%Y%m%d'))
-    geo.tofile(fname)
+import ipdb
+# ipdb.set_trace()
+with open("geolist", "w") as f:
+    for idx, geo in enumerate(truth_geos):
+        fname = 'S1A_{}.geo'.format(geo_date_list[idx].strftime('%Y%m%d'))
+        geo.tofile(fname)
+        f.write("%s\n" % fname)
 
 timediffs = timeseries.find_time_diffs(geo_date_list)
 
@@ -66,12 +74,23 @@ for early_idx, late_idx in itertools.combinations(range(len(truth_geos)), 2):
     early_date, late_date = geo_date_list[early_idx], geo_date_list[late_idx]
     igram_date_list.append((early_date, late_date))
 
-    igram = np.abs(late) - np.abs(early)
+    # igram = np.abs(late) - np.abs(early)
+    igram_complex = late - early
+    igram_complex[REF_ROW_COL] = 0
+    igram = np.abs(igram_complex)
     fname = '{}_{}.int'.format(early_date.strftime('%Y%m%d'), late_date.strftime('%Y%m%d'))
-    igram.tofile(fname)
+    igram_complex.tofile(fname)
+
+    # Note: using the 'height" as both amplitude and height
+    new_unw = np.stack((igram, igram), axis=0)
+    sario.save(fname.replace(".int", ".unw"), new_unw)
 
     igram_fname_list.append(fname)
     igram_list.append(igram)
+
+with open("intlist", "w") as f:
+    for ig in igram_fname_list:
+        f.write("%s\n" % ig)
 
 mask.save_int_masks(igram_fname_list, igram_date_list, geo_date_list, geo_path='.')
 
@@ -90,4 +109,6 @@ B = timeseries.build_B_matrix(geo_date_list, igram_date_list)
 
 varr = timeseries.invert_sbas(columns_masked, B, geo_mask_columns)
 phi_hat = timeseries.integrate_velocities(varr, timediffs)
+print("phi_hat velos", phi_hat.astype(int))
 phi_hat = timeseries.cols_to_stack(phi_hat, *geo1.shape)
+print("phi_hat", phi_hat.astype(int))

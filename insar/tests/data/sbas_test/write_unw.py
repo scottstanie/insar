@@ -3,7 +3,7 @@ import numpy as np
 
 
 def writefile(arr, filename):
-    np.hstack((np.zeros((3, 2)), arr)).astype('float32').tofile(filename)
+    np.hstack((np.zeros((4, 4)), arr)).astype('float32').tofile(filename)
 
 
 # Make 5 dummy 3x2 arrays of phase
@@ -26,7 +26,7 @@ unwlist = [
     '20180428_20180502.unw',
 ]
 for idx, name in enumerate(unwlist):
-    d = delta_phis[idx, :].reshape((3, 2))
+    d = delta_phis[idx, :].reshape((4, 4))
     print("Writing size ", d.shape)
     print(d)
     writefile(d, name)
