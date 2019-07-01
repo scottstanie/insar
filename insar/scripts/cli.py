@@ -330,13 +330,14 @@ def view_masks(context, downsample):
 # COMMAND: blob
 @cli.command(context_settings=dict(ignore_unknown_options=True))
 @click.option('--load/--no-load', default=True, help='Load last calculated blobs')
-@click.option('--positive',
-              is_flag=True,
+@click.option('--filename',
+              type=str,
+              help="specific file to search blobs (default is deformation.npy)")
+@click.option('--positive/--no-positive',
               default=True,
               help="Search for positive (uplift) blobs "
               "(default True)")
-@click.option('--negative',
-              is_flag=True,
+@click.option('--negative/--no-negative',
               default=True,
               help="Search for negative (subsidence) blobs "
               "(default True)")
@@ -348,8 +349,8 @@ def view_masks(context, downsample):
 @click.option('--col-end', default=-1)
 @click.argument('blobfunc_args', nargs=-1, type=click.UNPROCESSED)
 @click.pass_obj
-def blob(context, load, positive, negative, title_prefix, blob_filename, row_start, row_end,
-         col_start, col_end, blobfunc_args, **kwargs):
+def blob(context, load, filename, positive, negative, title_prefix, blob_filename, row_start,
+         row_end, col_start, col_end, blobfunc_args, **kwargs):
     """Find and view blobs in deformation
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
@@ -364,6 +365,7 @@ def blob(context, load, positive, negative, title_prefix, blob_filename, row_sta
     igram_path = context['path']
     insar.blob.make_blob_image(
         igram_path,
+        filename,
         load,
         positive,
         negative,
