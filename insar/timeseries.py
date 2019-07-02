@@ -43,7 +43,7 @@ def run_inversion(igram_path,
                   deramp=True,
                   deramp_order=1,
                   masking=True,
-                  geolist_ignore_file=None,
+                  geolist_ignore_file="geolist_missing.txt",
                   verbose=False):
     """Runs SBAS inversion on all unwrapped igrams
 
@@ -75,10 +75,7 @@ def run_inversion(igram_path,
     if verbose:
         logger.setLevel(10)  # DEBUG
 
-    intlist = read_intlist(filepath=igram_path)
-    geolist = read_geolist(filepath=igram_path)
-    if geolist_ignore_file is not None:
-        geolist, intlist = ignore_geo_dates(geolist, intlist, filepath=igram_path)
+    geolist, intlist = load_geolist_intlist(igram_path, parse=True)
 
     # Prepare B matrix and timediffs used for each pixel inversion
     B = build_B_matrix(geolist, intlist)
@@ -160,12 +157,12 @@ def _strip_geoname(name):
     return name.replace('S1A_', '').replace('S1B_', '').replace('.geo', '')
 
 
-def read_geolist(filepath="./geolist", fnames_only=False):
+def read_geolist(filepath="./geolist", parse=True):
     """Reads in the list of .geo files used, in time order
 
     Args:
         filepath (str): path to the geolist file or directory
-        fnames_only (bool): default False. if true, return list of filenames
+        parse (bool): default True: output the geolist as parsed datetimes
 
     Returns:
         list[date]: the parse dates of each .geo used, in date order
@@ -175,7 +172,7 @@ def read_geolist(filepath="./geolist", fnames_only=False):
         filepath = os.path.join(filepath, 'geolist')
 
     with open(filepath) as f:
-        if fnames_only:
+        if not parse:
             return [fname for fname in f.read().splitlines()]
         else:
             # Stripped of path for parser
@@ -214,10 +211,23 @@ def read_intlist(filepath="./intlist", parse=True):
         return [os.path.join(dirname, igram) for igram in intlist]
 
 
-def ignore_geo_dates(geolist, intlist, filepath="."):
-    ignore_geos = set(read_geolist(filepath))
+def load_geolist_intlist(filepath, geolist_ignore_file=None, parse=True):
+    """Load the geolist and intlist from a directory with igrams"""
+    geolist = read_geolist(filepath, parse=parse)
+    intlist = read_intlist(filepath, parse=parse)
+    if geolist_ignore_file is not None:
+        ignore_filepath = os.path.join(filepath, geolist_ignore_file)
+        geolist, intlist = ignore_geo_dates(geolist, intlist, ignore_file=ignore_filepath)
+    return geolist, intlist
+
+
+def ignore_geo_dates(geolist, intlist, ignore_file="geolist_missing.txt"):
+    """Read extra file to ignore certain dates of interferograms"""
+    ignore_geos = set(read_geolist(ignore_file))
+    logger.info("Ignoreing the following .geo dates:")
+    logger.info(sorted(ignore_geos))
     valid_geos = [g for g in geolist if g not in ignore_geos]
-    valid_igrams = [i for i in intlist if i[0] not in geolist and i[1] not in geolist]
+    valid_igrams = [i for i in intlist if i[0] not in ignore_geos and i[1] not in ignore_geos]
     return valid_geos, valid_igrams
 
 
@@ -572,7 +582,7 @@ def load_unw_masked_stack(igram_path,
         # Note: using .geo masks as well as .int masks since valid data in one
         # .geo produces non-zero igram, but it is still garbage
         logger.info("Reading geoload masks into columns")
-        geo_file_names = read_geolist(filepath=igram_path, fnames_only=True)
+        geo_file_names = read_geolist(filepath=igram_path, parse=False)
         geo_mask_file_names = [n + '.mask.npy' for n in geo_file_names]
         geo_masks = np.ma.array(sario.load_stack(file_list=geo_mask_file_names))
         geo_mask_columns = stack_to_cols(geo_masks)

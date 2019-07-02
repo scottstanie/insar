@@ -291,15 +291,18 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
 # COMMAND: view-masks
 @cli.command('view-masks')
 @click.option("--downsample", default=1, help="Amount to downsample image")
+@click.option("--geolist-file",
+              default="geolist_missing.txt",
+              help="File to save date of missing .geos on click")
 @click.pass_obj
-def view_masks(context, downsample):
-    geo_file_names = insar.timeseries.read_geolist(filepath=context['path'], fnames_only=True)
+def view_masks(context, downsample, geolist_file):
+    geo_file_names = insar.timeseries.read_geolist(filepath=context['path'], parse=False)
 
     def _print(series, row, col):
         print(".geos missing at (%s, %s): %s" % (row, col, np.array(geo_file_names)[series]))
 
     def _save_missing_geos(series, row, col):
-        with open("geolist_missing.txt", "w") as f:
+        with open(geolist_file, "w") as f:
             for fname in np.array(geo_file_names)[series]:
                 print("Writing %s" % fname)
                 f.write("%s\n" % fname)
