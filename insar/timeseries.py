@@ -75,7 +75,9 @@ def run_inversion(igram_path,
     if verbose:
         logger.setLevel(10)  # DEBUG
 
-    geolist, intlist = load_geolist_intlist(igram_path, parse=True)
+    geolist, intlist = load_geolist_intlist(igram_path,
+                                            geolist_ignore_file=geolist_ignore_file,
+                                            parse=True)
 
     # Prepare B matrix and timediffs used for each pixel inversion
     B = build_B_matrix(geolist, intlist)

@@ -294,8 +294,11 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
 @click.option("--geolist-file",
               default="geolist_missing.txt",
               help="File to save date of missing .geos on click")
+@click.option("--print-dates/--no-print-dates",
+              default=True,
+              help="Print out missing dates to terminal")
 @click.pass_obj
-def view_masks(context, downsample, geolist_file):
+def view_masks(context, downsample, geolist_file, print_dates):
     geo_file_names = insar.timeseries.read_geolist(filepath=context['path'], parse=False)
 
     def _print(series, row, col):
@@ -315,6 +318,11 @@ def view_masks(context, downsample, geolist_file):
     composite_mask = np.sum(geo_masks, axis=0)
 
     geolist = insar.timeseries.read_geolist(filepath=context['path'])
+    if geolist_file:
+        callback = _save_missing_geos
+    elif print_dates:
+        callback = _print
+
     apertools.plotting.view_stack(
         geo_masks,
         display_img=composite_mask,
@@ -326,7 +334,7 @@ def view_masks(context, downsample, geolist_file):
         perform_shift=True,
         legend_loc=0,
         # timeline_callback=_print,
-        timeline_callback=_save_missing_geos,
+        timeline_callback=callback,
     )
 
 
