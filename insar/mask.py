@@ -88,7 +88,9 @@ def masked_lstsq(B, d, geo_mask_columns=None):
 
     # First check if no masks exist (run normally if so)
     if d_masked.mask is np.ma.nomask or not d_masked.mask.any():
-        return np.linalg.lstsq(B, d, rcond=None)[0]
+        pB = np.linalg.pinv(B)
+        return np.dot(pB, d)
+        # return np.linalg.lstsq(B, d, rcond=None)[0]
 
     # Otherwise, run first in bulk on all d's with no masks and
     # only loop over ones with some mask
@@ -106,7 +108,9 @@ def masked_lstsq(B, d, geo_mask_columns=None):
 
 def solve_good_columns(B, good_col_idxs, d_masked):
     good_cols = d_masked[:, good_col_idxs]
-    return np.linalg.lstsq(B, good_cols, rcond=None)[0]
+    pB = np.linalg.pinv(B)
+    return np.dot(pB, good_cols)
+    # return np.linalg.lstsq(B, good_cols, rcond=None)[0]
 
 
 def solve_bad_columns(B, bad_col_idxs, d_masked, geo_mask_columns, out_final):
