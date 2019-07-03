@@ -6,13 +6,11 @@ Forms stacks as .h5 files for easy access to depth-wise slices
 """
 import h5py
 import os
-import re
 import datetime
 import numpy as np
 from scipy.ndimage.filters import uniform_filter
 
 from sardem.loading import load_dem_rsc
-from apertools.parsers import Sentinel
 from apertools import sario, utils, latlon
 from insar import mask
 import apertools.gps
@@ -22,6 +20,66 @@ SENTINEL_WAVELENGTH = 5.5465763  # cm
 PHASE_TO_CM = SENTINEL_WAVELENGTH / (-4 * np.pi)
 DATE_FMT = "%Y%m%d"
 logger = get_log()
+
+# TODO: Process the correlation, mask very bad corr pixels in the igrams
+
+
+def create_igram_stacks(igram_path):
+    stack_dicts = (
+        dict(file_ext=".unw", create_mean=False, outfile_name="unw_stack.h5"),
+        dict(file_ext=".cc", create_mean=True, outfile_name="cc_stack.h5"),
+    )
+    for d in stack_dicts:
+        logger.info("Creating hdf5 stack %s" % d["outfile_name"])
+        create_hdf5_stack(directory=igram_path, **d)
+
+
+def pick_reference(igram_path):
+    # find ref on based on GPS availability and mean correlation
+    # Make a latlon image to check for gps data containment
+    # TODO: maybe i need to search for masks? dont wanna pick a garbage one by accident
+    latlon_image = latlon.LatlonImage(data=unw_stack[0],
+                                      dem_rsc_file=os.path.join(igram_path, 'dem.rsc'))
+    ref_row, ref_col = find_reference_location(latlon_image, igram_path, mask_stack, gps_dir=None)
+
+
+def create_hdf5_stack(outfile_name=None, directory=None, file_ext=None, create_mean=True):
+    """Make stack as hdf5 file from a list of files
+
+    Args:
+        outfile_name (str): if none provided, creates a file `[file_ext]_stack.h5`
+
+    Returns:
+        outfile_name
+    """
+    if not outfile_name:
+        outfile_name = "{fext}_stack.h5".format(fext=file_ext.strip("."))
+        logger.info("Creating stack file %s" % outfile_name)
+
+    if utils.get_file_ext(outfile_name) not in (".h5", ".hdf5"):
+        raise ValueError("outfile_name must end in .h5 or .hdf5")
+
+    # TODO: do we want to replace the .unw files with .h5 files, then make a Virtual dataset?
+    # layout = h5py.VirtualLayout(shape=(len(file_list), nrows, ncols), dtype=dtype)
+    file_list = sario.find_files(directory=directory, file_ext=file_ext)
+
+    stack = sario.load_stack(file_list=file_list)
+    with h5py.File(outfile_name, "a") as hf:
+        hf.create_dataset(
+            "stack",
+            data=stack,
+        )
+        if create_mean:
+            hf.create_dataset(
+                "mean_stack",
+                data=np.mean(stack, axis=0),
+            )
+        # vsource = h5py.VirtualSource()
+
+    with h5py.File(outfile_name, "a") as hf:
+        hf["stack"].attrs["filenames"] = file_list
+
+    return outfile_name
 
 
 def prepare_stacks(igram_path, geolist_ignore_file="geolist_missing.txt"):
@@ -42,136 +100,11 @@ def prepare_stacks(igram_path, geolist_ignore_file="geolist_missing.txt"):
         masking=masking,
     )
 
-    # TODO: Process the correlation, mask very bad corr pixels in the igrams
-
-    # Use the given reference, or find one on based on max correlation
-    if any(r is None for r in reference):
-        # Make a latlon image to check for gps data containment
-        # TODO: maybe i need to search for masks? dont wanna pick a garbage one by accident
-        latlon_image = latlon.LatlonImage(data=unw_stack[0],
-                                          dem_rsc_file=os.path.join(igram_path, 'dem.rsc'))
-        ref_row, ref_col = find_reference_location(latlon_image,
-                                                   igram_path,
-                                                   mask_stack,
-                                                   gps_dir=None)
-    else:
-        ref_row, ref_col = reference
-
-    logger.info("Starting shift_stack: using %s, %s as ref_row, ref_col", ref_row, ref_col)
-    unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
-    logger.info("Shifting stack complete")
-
-
-def create_hdf5_stack(outfile_name=None,
-                      compression=None,
-                      file_list=None,
-                      directory=None,
-                      file_ext=None,
-                      **kwargs):
-    """Make stack as hdf5 file from a list of files
-
-    Args:
-        outfile_name (str): if none provided, creates a file `[file_ext]_stack.h5`
-
-    Returns:
-        outfile_name
-    """
-    if not outfile_name:
-        if not file_ext:
-            file_ext = utils.get_file_ext(file_list[0])
-        outfile_name = "{fext}_stack.h5".format(fext=file_ext.strip("."))
-        logger.info("Creating stack file %s" % outfile_name)
-
-    if utils.get_file_ext(outfile_name) not in (".h5", ".hdf5"):
-        raise ValueError("outfile_name must end in .h5 or .hdf5")
-
-    # TODO: do we want to replace the .unw files with .h5 files, then make a Virtual dataset?
-    # layout = h5py.VirtualLayout(shape=(len(file_list), nrows, ncols), dtype=dtype)
-    if file_list is None:
-        file_list = _load_stack_files(directory, file_ext)
-
-    stack = load_stack(file_list=file_list, **kwargs)
-    with h5py.File(outfile_name, "a") as hf:
-        hf.create_dataset(
-            "stack",
-            data=stack,
-        )
-        hf.create_dataset(
-            "mean_stack",
-            data=np.mean(stack, axis=0),
-        )
-        # vsource = h5py.VirtualSource()
-
-    return outfile_name
-
-
-def _parse(datestr):
-    return datetime.datetime.strptime(datestr, DATE_FMT).date()
-
-
-def _strip_geoname(name):
-    """Leaves just date from format S1A_YYYYmmdd.geo"""
-    return name.replace('S1A_', '').replace('S1B_', '').replace('.geo', '')
-
-
-def read_geolist(filepath="./geolist", parse=True):
-    """Reads in the list of .geo files used, in time order
-
-    Args:
-        filepath (str): path to the geolist file or directory
-        parse (bool): default True: output the geolist as parsed datetimes
-
-    Returns:
-        list[date]: the parse dates of each .geo used, in date order
-
-    """
-    if os.path.isdir(filepath):
-        filepath = os.path.join(filepath, 'geolist')
-
-    with open(filepath) as f:
-        if not parse:
-            return [fname for fname in f.read().splitlines()]
-        else:
-            # Stripped of path for parser
-            geolist = [os.path.split(geoname)[1] for geoname in f.read().splitlines()]
-
-    if re.match(r'S1[AB]_\d{8}\.geo', geolist[0]):  # S1A_YYYYmmdd.geo
-        return sorted([_parse(_strip_geoname(geo)) for geo in geolist])
-    else:  # Full sentinel product name
-        return sorted([Sentinel(geo).start_time.date() for geo in geolist])
-
-
-def read_intlist(filepath="./intlist", parse=True):
-    """Reads the list of igrams to return dates of images as a tuple
-
-    Args:
-        filepath (str): path to the intlist directory, or file
-        parse (bool): output the intlist as parsed datetime tuples
-
-    Returns:
-        tuple(date, date) of master, slave dates for all igrams (if parse=True)
-            if parse=False: returns list[str], filenames of the igrams
-
-    """
-
-    if os.path.isdir(filepath):
-        filepath = os.path.join(filepath, 'intlist')
-
-    with open(filepath) as f:
-        intlist = f.read().splitlines()
-
-    if parse:
-        intlist = [intname.strip('.int').split('_') for intname in intlist]
-        return [(_parse(master), _parse(slave)) for master, slave in intlist]
-    else:
-        dirname = os.path.dirname(filepath)
-        return [os.path.join(dirname, igram) for igram in intlist]
-
 
 def load_geolist_intlist(filepath, geolist_ignore_file=None, parse=True):
     """Load the geolist and intlist from a directory with igrams"""
-    geolist = read_geolist(filepath, parse=parse)
-    intlist = read_intlist(filepath, parse=parse)
+    geolist = sario.read_geolist(filepath, parse=parse)
+    intlist = sario.read_intlist(filepath, parse=parse)
     if geolist_ignore_file is not None:
         ignore_filepath = os.path.join(filepath, geolist_ignore_file)
         geolist, intlist = ignore_geo_dates(geolist,
@@ -183,7 +116,7 @@ def load_geolist_intlist(filepath, geolist_ignore_file=None, parse=True):
 
 def ignore_geo_dates(geolist, intlist, ignore_file="geolist_missing.txt", parse=True):
     """Read extra file to ignore certain dates of interferograms"""
-    ignore_geos = set(read_geolist(ignore_file, parse=parse))
+    ignore_geos = set(sario.read_geolist(ignore_file, parse=parse))
     logger.info("Ignoreing the following .geo dates:")
     logger.info(sorted(ignore_geos))
     valid_geos = [g for g in geolist if g not in ignore_geos]
@@ -237,6 +170,27 @@ def _intlist_to_str(intlist):
     return [(a.strftime(DATE_FMT), b.strftime(DATE_FMT)) for a, b in intlist]
 
 
+def pick_reference():
+    # Use the given reference, or find one on based on max correlation
+    if any(r is None for r in reference):
+        # Make a latlon image to check for gps data containment
+        # TODO: maybe i need to search for masks? dont wanna pick a garbage one by accident
+        latlon_image = latlon.LatlonImage(data=unw_stack[0],
+                                          dem_rsc_file=os.path.join(igram_path, 'dem.rsc'))
+        ref_row, ref_col = find_reference_location(latlon_image,
+                                                   igram_path,
+                                                   mask_stack,
+                                                   gps_dir=None)
+    else:
+        ref_row, ref_col = reference
+
+
+def shift():
+    logger.info("Starting shift_stack: using %s, %s as ref_row, ref_col", ref_row, ref_col)
+    # unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
+    logger.info("Shifting stack complete")
+
+
 def save_deformation(igram_path,
                      deformation,
                      geolist,
@@ -282,7 +236,7 @@ def load_unw_masked_stack(igram_path,
                           deramp_order=1,
                           masking=True):
 
-    int_file_names = read_intlist(igram_path, parse=False)
+    int_file_names = sario.read_intlist(igram_path, parse=False)
     if deramp:
         # Deramp each .unw file
         # TODO: do I ever really want 2nd order?
@@ -380,7 +334,7 @@ def remove_ramp(z, order=1):
         return z - z_fit
 
 
-def deramp_stack(int_file_list, unw_ext, order=1):
+def deramp_stack(unw_stack_file, order=1):
     """Handles removing linear ramps for all files in a stack
 
     Saves the files to a ".unwflat" version
@@ -393,28 +347,29 @@ def deramp_stack(int_file_list, unw_ext, order=1):
     """
     logger.info("Removing any ramp from each stack layer")
     # Get file names to save results/ check if we deramped already
-    flat_ext = unw_ext + 'flat'
+    stack_dset = "stack"
+    deramp_dset = "stack_deramped"
 
-    unw_file_names = [f.replace('.int', unw_ext) for f in int_file_list]
-    unw_file_names = [f for f in unw_file_names if flat_ext not in f]
-    flat_file_names = [filename.replace(unw_ext, flat_ext) for filename in unw_file_names]
+    if not os.path.exists(unw_stack_file):
+        with h5py.File(unw_stack_file, "r") as f:
+            if stack_dset not in f:
+                raise ValueError("unw stack file/ dataset doesn't exist at %s" % unw_stack_file)
 
-    if not all(os.path.exists(f) for f in flat_file_names):
-        logger.info("Deramped files don't exist: Creating %s files and and saving." % flat_ext)
-        nrows, ncols = sario.load(unw_file_names[0]).shape
-        out_stack = np.empty((len(unw_file_names), nrows, ncols), dtype=sario.FLOAT_32_LE)
+    with h5py.File(unw_stack_file, "r") as f:
+        if deramp_dset in f:
+            logger.info("Deramped dataset exist.")
+            return
+
+    logger.info("Deramped dataset doesn't exist: Creating dataset %s in %s" %
+                (deramp_dset, unw_stack_file))
+
+    with h5py.File(unw_stack_file, "a") as f:
+        nlayers, nrows, ncols = f[deramp_dset].shape
+        out_stack = np.empty((nlayers, nrows, ncols), dtype=sario.FLOAT_32_LE)
+        f[deramp_dset] = out_stack
         # Shape of sario.load_stack with return_amp is (nlayers, 2, nrows, ncols)
-        for idx, (amp, height) in enumerate(
-                (sario.load(f, return_amp=True) for f in unw_file_names)):  # yapf: disable
-            # return_amp gives a 3D ndarray, [amp, height]
-            r = remove_ramp(height, order=order)
-            new_unw = np.stack((amp, r), axis=0)
-            sario.save(flat_file_names[idx], new_unw)
-            out_stack[idx] = r
-        return out_stack
-    else:
-        logger.info("Loading previous %s deramped files." % flat_ext)
-        return sario.load_stack(file_list=flat_file_names)
+        for layer in f[stack_dset]:
+            f[deramp_dset] = remove_ramp(layer, order=order)
 
 
 def find_reference_location(latlon_image, igram_path=None, mask_stack=None, gps_dir=None):
@@ -482,9 +437,9 @@ def find_coherent_patch(correlations, window=11):
 
 
 def create_igram_masks(igram_path, row_looks=1, col_looks=1):
-    intlist = read_intlist(filepath=igram_path)
-    int_file_names = read_intlist(filepath=igram_path, parse=False)
-    geolist = read_geolist(filepath=igram_path)
+    intlist = sario.read_intlist(filepath=igram_path)
+    int_file_names = sario.read_intlist(filepath=igram_path, parse=False)
+    geolist = sario.read_geolist(filepath=igram_path)
 
     geo_path = os.path.dirname(os.path.abspath(igram_path))
     mask.save_int_masks(
