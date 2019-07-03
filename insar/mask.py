@@ -4,67 +4,6 @@ import numpy as np
 from apertools import sario, utils
 
 
-def save_geo_masks(geo_dir=None, geo_filename=None, row_looks=1, col_looks=1):
-    """Creates .mask files for geos where zeros occur
-
-    Can either pass a directory to convert all geos, or one geo_filename
-    """
-
-    def _get_geo_mask(geo_arr):
-        return np.ma.make_mask(geo_arr == 0, shrink=False)
-
-    def _save_mask(geo_fname, row_looks, col_looks):
-        mask_fname = geo_fname + '.mask.npy'
-        g = sario.load(geo_fname, looks=(row_looks, col_looks))
-        # ipdb.set_trace()
-        print('Saving %s' % mask_fname)
-        np.save(mask_fname, _get_geo_mask(g))
-
-    if geo_filename is not None:
-        # Handle wither just geo, or mask name is passed
-        geo_fname = geo_filename.replace('.mask.npy', '')
-        _save_mask(geo_fname, row_looks, col_looks)
-    elif geo_dir is not None:
-        for geo_fname in sario.find_files(geo_dir, "*.geo"):
-            _save_mask(geo_fname, row_looks, col_looks)
-    else:
-        raise ValueError("Need geo_dir or geo_filename")
-
-
-def save_int_masks(igram_fnames,
-                   igram_date_list,
-                   geo_date_list,
-                   geo_path="../",
-                   row_looks=1,
-                   col_looks=1,
-                   verbose=False):
-    """Creates igram masks by taking the logical-or of the two .geo files
-
-    Assumes save_geo_masks already run
-    """
-    geomask_list = []
-    for cur_date in geo_date_list:
-        geoname = os.path.join(geo_path, '*{}*.geo'.format(cur_date.strftime('%Y%m%d')))
-        # Now glob to grab whether it's S1A_ or S1B_
-        geo_filename = glob.glob(geoname)[0]
-        geo_mask_filename = geo_filename + '.mask.npy'
-        if not os.path.exists(geo_mask_filename):
-            save_geo_masks(geo_filename=geo_filename, row_looks=row_looks, col_looks=col_looks)
-        geomask_list.append(sario.load(geo_mask_filename))
-
-    for idx, (early, late) in enumerate(igram_date_list):
-        early_idx = geo_date_list.index(early)
-        late_idx = geo_date_list.index(late)
-        early_mask = geomask_list[early_idx]
-        late_mask = geomask_list[late_idx]
-
-        igram_mask = np.logical_or(early_mask, late_mask)
-        igram_mask_name = igram_fnames[idx] + '.mask.npy'
-        if verbose:
-            print("Saving %s" % igram_mask_name)
-        np.save(igram_mask_name, igram_mask)
-
-
 def masked_lstsq(B, d, geo_mask_columns=None):
     """Performs least squares on masked numpy arrays
 

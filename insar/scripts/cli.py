@@ -296,7 +296,7 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
               help="File to save date of missing .geos on click")
 @click.pass_obj
 def view_masks(context, downsample, geolist_file):
-    geo_file_names = insar.timeseries.read_geolist(filepath=context['path'], parse=False)
+    geo_file_names = insar.timeseries.read_geolist(directory=context['path'], parse=False)
 
     def _print(series, row, col):
         print(".geos missing at (%s, %s): %s" % (row, col, np.array(geo_file_names)[series]))
@@ -314,7 +314,7 @@ def view_masks(context, downsample, geolist_file):
 
     composite_mask = np.sum(geo_masks, axis=0)
 
-    geolist = insar.timeseries.read_geolist(filepath=context['path'])
+    geolist = insar.timeseries.read_geolist(directory=apertools.utils.get_geo_path(context['path']))
     apertools.plotting.view_stack(
         geo_masks,
         display_img=composite_mask,
@@ -511,7 +511,7 @@ def dem_rate(context, rsc_file):
     """
     # full_file = os.path.join(context['path'], rsc_file)
     if rsc_file is None:
-        rsc_file = apertools.sario.find_rsc_file(basepath=context['path'])
+        rsc_file = apertools.sario.find_rsc_file(directory=context['path'])
     uprate = sardem.utils.calc_upsample_rate(rsc_filename=rsc_file)
 
     click.echo("%s has %.2f times the default spacing" % (rsc_file, uprate))
