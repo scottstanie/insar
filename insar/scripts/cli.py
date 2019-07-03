@@ -177,7 +177,7 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
     if file_ext:
         stack = apertools.sario.load_stack(directory=context['path'], file_ext=file_ext)
         if intlist:
-            intlist = insar.timeseries.read_intlist(context['path'])
+            intlist = (context['path'])
             titles = [
                 "%s - %s" % (d1.strftime("%Y-%m-%d"), d2.strftime("%Y-%m-%d")) for d1, d2 in intlist
             ]
@@ -299,7 +299,7 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
               help="Print out missing dates to terminal")
 @click.pass_obj
 def view_masks(context, downsample, geolist_file, print_dates):
-    geo_file_names = insar.timeseries.read_geolist(filepath=context['path'], parse=False)
+    geo_file_names = apertools.sario.find_geos(directory=context['path'], parse=False)
 
     def _print(series, row, col):
         print(".geos missing at (%s, %s): %s" % (row, col, np.array(geo_file_names)[series]))
@@ -317,7 +317,7 @@ def view_masks(context, downsample, geolist_file, print_dates):
 
     composite_mask = np.sum(geo_masks, axis=0)
 
-    geolist = insar.timeseries.read_geolist(filepath=context['path'])
+    geolist = apertools.sario.find_geos(directory=apertools.utils.get_geo_path(context['path']))
     if geolist_file:
         callback = _save_missing_geos
     elif print_dates:
@@ -476,9 +476,14 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
 def mask(context, imagefile, dem, output):
     """Mask an image where some elevation.dem is zero
     """
+    from PIL import Image
     image = apertools.sario.load(imagefile)
-    out_image = insar.mask.mask_int(image, dem_file=dem, dem=None)
-    apertools.sario.save(output, out_image)
+    heights = apertools.sario.load(dem)
+
+    zero_height = (heights == 0).astype(float)
+    mask = np.array(Image.fromarray(zero_height).resize(image.shape))
+    intmask = np.ma.array(image, mask=mask)
+    apertools.sario.save(output, intmask)
 
 
 # COMMAND: avg-stack
@@ -514,7 +519,7 @@ def dem_rate(context, rsc_file):
     """
     # full_file = os.path.join(context['path'], rsc_file)
     if rsc_file is None:
-        rsc_file = apertools.sario.find_rsc_file(basepath=context['path'])
+        rsc_file = apertools.sario.find_rsc_file(directory=context['path'])
     uprate = sardem.utils.calc_upsample_rate(rsc_filename=rsc_file)
 
     click.echo("%s has %.2f times the default spacing" % (rsc_file, uprate))
