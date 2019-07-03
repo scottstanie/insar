@@ -22,25 +22,34 @@ DATE_FMT = "%Y%m%d"
 MASK_FILENAME = "masks.h5"
 GEO_MASK_DSET = "geo"
 IGRAM_MASK_DSET = "igram"
+DEM_RSC_DSET = "dem_rsc"
 
 
-def prepare_stacks(igram_path, geolist_ignore_file="geolist_missing.txt"):
-    create_igram_stacks(igram_path)
-    create_mask_stacks(igram_path)
-    geo_date_list, int_date_list = load_geolist_intlist(igram_path,
-                                                        geolist_ignore_file=geolist_ignore_file,
-                                                        parse=True)
+def prepare_stacks(igram_path, overwrite=False, geolist_ignore_file="geolist_missing.txt"):
+    create_igram_stacks(igram_path, overwrite=overwrite)
+    create_mask_stacks(igram_path, overwrite=overwrite)
+    # geo_date_list, int_date_list = load_geolist_intlist(igram_path,
+    # geolist_ignore_file=geolist_ignore_file,
+    # parse=True)
 
 
-def create_mask_stacks(igram_path, geo_path=None):
+def create_igram_stacks(igram_path, overwrite=False):
+    stack_dicts = (
+        dict(file_ext=".unw", create_mean=False, fname="unw_stack.h5"),
+        dict(file_ext=".cc", create_mean=True, fname="cc_stack.h5"),
+    )
+    for d in stack_dicts:
+        filename = os.path.join(igram_path, d["fname"])
+        logger.info("Creating hdf5 stack %s" % filename)
+        d["filename"] = filename
+        create_hdf5_stack(directory=igram_path, overwrite=overwrite, **d)
+
+
+def create_mask_stacks(igram_path, geo_path=None, overwrite=False):
     """Create mask stacks for areas in .geo and .int
 
     Uses .geo dead areas as well as correlation
     """
-    MASK_FILENAME = "masks.h5"
-    GEO_MASK_DSET = "geo"
-    IGRAM_MASK_DSET = "igram"
-
     create_geos = True
     create_igram = True
     mask_file = os.path.join(igram_path, MASK_FILENAME)
@@ -60,32 +69,38 @@ def create_mask_stacks(igram_path, geo_path=None):
     # Used to shrink the .geo masks to save size as .int masks
     row_looks, col_looks = apertools.utils.find_looks_taken(igram_path, geo_path=geo_path)
 
-    dem_rsc = utils.f(igram_path, geo_path=geo_path)
-    _save_dem_to_h5(mask_file, dem_rsc, dset="dem_rsc")
+    dem_rsc = sario.load(sario.find_rsc_file(directory=igram_path))
+    _save_dem_to_h5(mask_file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
 
     if create_geos:
-        save_geo_masks(geo_path,
-                       mask_file,
-                       dem_rsc=dem_rsc,
-                       row_looks=row_looks,
-                       col_looks=col_looks)
+        save_geo_masks(
+            geo_path,
+            mask_file,
+            dem_rsc=dem_rsc,
+            row_looks=row_looks,
+            col_looks=col_looks,
+            overwrite=overwrite,
+        )
 
     if not create_igram:
         return mask_file
 
-    int_date_list = sario.read_intlist(directory=igram_path)
-    int_file_list = sario.read_intlist(directory=igram_path, parse=False)
+    int_date_list = sario.find_igrams(directory=igram_path)
+    int_file_list = sario.find_igrams(directory=igram_path, parse=False)
 
-    geo_date_list = sario.read_geolist(directory=geo_path)
-    geo_file_list = sario.read_geolist(directory=geo_path, parse=False)
+    geo_date_list = sario.find_geos(directory=geo_path)
+    geo_file_list = sario.find_geos(directory=geo_path, parse=False)
 
     compute_int_masks(
-        int_date_list,
-        int_file_list,
-        geo_date_list=geo_date_list,
+        mask_file=mask_file,
+        int_file_list=int_file_list,
+        int_date_list=int_date_list,
         geo_file_list=geo_file_list,
+        geo_date_list=geo_date_list,
         row_looks=row_looks,
         col_looks=col_looks,
+        dem_rsc=dem_rsc,
+        overwrite=overwrite,
     )
     # TODO: now add the correlation check
     return mask_file
@@ -105,25 +120,16 @@ def save_geo_masks(directory,
         overwrite (bool): erase the dataset from the file if it exists and recreate
     """
 
-    geo_file_list = sario.find_files(directory=directory, search_term="*.geo")
-    if not dem_rsc:
-        try:
-            g = sario.load(geo_file_list[0], looks=(row_looks, col_looks))
-        except IndexError:
-            raise ValueError("No .geo files exist in %s" % directory)
-        shape = (len(geo_file_list), g.shape[0], g.shape[1])
-    else:
-        shape = (len(geo_file_list), dem_rsc["file_length"], dem_rsc["width"])
-
-    # Make the empty stack, or delete if exists
-    with h5py.File(mask_file, "a") as f:
-        if dset_name in f:
-            if overwrite:
-                del f[dset_name]
-        f.create_dataset(dset_name, shape=shape, dtype=bool)
-
     def _get_geo_mask(geo_arr):
         return np.ma.make_mask(geo_arr == 0, shrink=False)
+
+    geo_file_list = sario.find_files(directory=directory, search_term="*.geo")
+    # Make the empty stack, or delete if exists
+    shape = _find_file_shape(dem_rsc=dem_rsc,
+                             file_list=geo_file_list,
+                             row_looks=row_looks,
+                             col_looks=col_looks)
+    _create_dset(mask_file, dset_name, overwrite, shape=shape, dtype=bool)
 
     with h5py.File(mask_file) as f:
         dset = f[dset_name]
@@ -134,42 +140,126 @@ def save_geo_masks(directory,
             dset[idx] = _get_geo_mask(g)
 
 
-def compute_int_masks(int_file_names,
-                      igram_date_list,
-                      geo_date_list,
-                      geo_file_list,
-                      row_looks,
-                      col_looks,
-                      verbose=False):
+def compute_int_masks(
+        mask_file=None,
+        int_file_list=None,
+        int_date_list=None,
+        geo_file_list=None,
+        geo_date_list=None,
+        row_looks=None,
+        col_looks=None,
+        dem_rsc=None,
+        dset_name=IGRAM_MASK_DSET,
+        overwrite=False,
+):
     """Creates igram masks by taking the logical-or of the two .geo files
 
     Assumes save_geo_masks already run
     """
+    # Make the empty stack, or delete if exists
+    shape = _find_file_shape(dem_rsc=dem_rsc,
+                             file_list=int_file_list,
+                             row_looks=row_looks,
+                             col_looks=col_looks)
+    _create_dset(mask_file, dset_name, overwrite, shape=shape, dtype=bool)
 
-    for idx, (early, late) in enumerate(igram_date_list):
-        early_idx = geo_date_list.index(early)
-        late_idx = geo_date_list.index(late)
-        early_mask = geomask_list[early_idx]
-        late_mask = geomask_list[late_idx]
+    with h5py.File(mask_file) as f:
+        geo_mask_stack = f[GEO_MASK_DSET]
+        int_mask_dset = f[dset_name]
+        for idx, (early, late) in enumerate(int_date_list):
+            early_idx = geo_date_list.index(early)
+            late_idx = geo_date_list.index(late)
+            early_mask = geo_mask_stack[early_idx]
+            late_mask = geo_mask_stack[late_idx]
 
-        igram_mask = np.logical_or(early_mask, late_mask)
-        igram_mask_name = int_file_names[idx] + '.mask.npy'
-        if verbose:
-            print("Saving %s" % igram_mask_name)
-        np.save(igram_mask_name, igram_mask)
+            int_mask_dset[idx] = np.logical_or(early_mask, late_mask)
+
+
+def create_hdf5_stack(filename=None,
+                      directory=None,
+                      file_ext=None,
+                      create_mean=True,
+                      save_rsc=True,
+                      overwrite=False,
+                      **kwargs):
+    """Make stack as hdf5 file from a list of files
+
+    Args:
+        filename (str): if none provided, creates a file `[file_ext]_stack.h5`
+
+    Returns:
+        filename
+    """
+    if not filename:
+        fname = "{fext}_stack.h5".format(fext=file_ext.strip("."))
+        filename = os.path.abspath(os.path.join(directory, fname))
+        logger.info("Creating stack file %s" % filename)
+
+    if utils.get_file_ext(filename) not in (".h5", ".hdf5"):
+        raise ValueError("filename must end in .h5 or .hdf5")
+
+    # TODO: do we want to replace the .unw files with .h5 files, then make a Virtual dataset?
+    # layout = h5py.VirtualLayout(shape=(len(file_list), nrows, ncols), dtype=dtype)
+    file_list = sario.find_files(directory=directory, search_term="*" + file_ext)
+
+    stack_dset = "stack"
+    stack_mean_dset = "mean_stack"
+    if os.path.exists(filename):
+        print("{} already exists".format(filename))
+        if overwrite:
+            print("Overwriting file")
+        else:
+            print("Skipping")
+            return
+
+    with h5py.File(filename, "w") as hf:
+        stack = sario.load_stack(file_list=file_list)
+        hf.create_dataset(
+            stack_dset,
+            data=stack,
+        )
+        hf[stack_dset].attrs["filenames"] = file_list
+
+    if save_rsc:
+        dem_rsc = sario.load(sario.find_rsc_file(directory=directory))
+        _save_dem_to_h5(filename, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
+
+    if create_mean:
+        with h5py.File(filename, "a") as hf:
+            hf.create_dataset(
+                stack_mean_dset,
+                data=np.mean(stack, axis=0),
+            )
+
+    return filename
 
 
 # TODO: Process the correlation, mask very bad corr pixels in the igrams
+def _create_dset(h5file, dset_name, overwrite, shape, dtype=bool):
+    with h5py.File(h5file, "a") as f:
+        if dset_name in f:
+            if overwrite:
+                del f[dset_name]
+            else:
+                print("{dset} already exists in {file}: skipping".format(dset=dset_name,
+                                                                         file=h5file))
+                return
+
+        f.create_dataset(dset_name, shape=shape, dtype=dtype)
 
 
-def create_igram_stacks(igram_path):
-    stack_dicts = (
-        dict(file_ext=".unw", create_mean=False, outfile_name="unw_stack.h5"),
-        dict(file_ext=".cc", create_mean=True, outfile_name="cc_stack.h5"),
-    )
-    for d in stack_dicts:
-        logger.info("Creating hdf5 stack %s" % d["outfile_name"])
-        create_hdf5_stack(directory=igram_path, **d)
+def _find_file_shape(dem_rsc=None, file_list=None, row_looks=None, col_looks=None):
+    if not dem_rsc:
+        try:
+            g = sario.load(file_list[0], looks=(row_looks, col_looks))
+        except IndexError:
+            raise ValueError("No .geo files found in s")
+        except TypeError:
+            raise ValueError("Need file_list if no dem_rsc")
+
+        return (len(file_list), g.shape[0], g.shape[1])
+    else:
+        return (len(file_list), dem_rsc["file_length"], dem_rsc["width"])
 
 
 def _load_dem_from_h5(h5file, dset="dem_rsc"):
@@ -177,9 +267,16 @@ def _load_dem_from_h5(h5file, dset="dem_rsc"):
         return json.loads(f['dem_rsc'][()])
 
 
-def _save_dem_to_h5(h5file, dem_rsc, dset="dem_rsc"):
+def _save_dem_to_h5(h5file, dem_rsc, dset_name="dem_rsc", overwrite=True):
     with h5py.File(h5file, "a") as f:
-        f['dem_rsc'] = json.dumps(dem_rsc)
+        if dset_name in f:
+            if overwrite:
+                del f[dset_name]
+            else:
+                print("{dset} already exists in {file}: skipping".format(dset=dset_name,
+                                                                         file=h5file))
+                return
+        f[dset_name] = json.dumps(dem_rsc)
 
 
 def _geolist_to_str(geo_date_list):
@@ -202,57 +299,10 @@ def pick_reference(igram_path):
     ref_row, ref_col = find_reference_location(latlon_image, igram_path, mask_stack, gps_dir=None)
 
 
-def create_hdf5_stack(outfile_name=None,
-                      directory=None,
-                      file_ext=None,
-                      create_mean=True,
-                      save_rsc=True):
-    """Make stack as hdf5 file from a list of files
-
-    Args:
-        outfile_name (str): if none provided, creates a file `[file_ext]_stack.h5`
-
-    Returns:
-        outfile_name
-    """
-    if not outfile_name:
-        outfile_name = "{fext}_stack.h5".format(fext=file_ext.strip("."))
-        logger.info("Creating stack file %s" % outfile_name)
-
-    if utils.get_file_ext(outfile_name) not in (".h5", ".hdf5"):
-        raise ValueError("outfile_name must end in .h5 or .hdf5")
-
-    # TODO: do we want to replace the .unw files with .h5 files, then make a Virtual dataset?
-    # layout = h5py.VirtualLayout(shape=(len(file_list), nrows, ncols), dtype=dtype)
-    file_list = sario.find_files(directory=directory, search_term="*" + file_ext)
-
-    stack = sario.load_stack(file_list=file_list)
-    with h5py.File(outfile_name, "a") as hf:
-        hf.create_dataset(
-            "stack",
-            data=stack,
-        )
-    with h5py.File(outfile_name, "a") as hf:
-        hf["stack"].attrs["filenames"] = file_list
-
-    if save_rsc:
-        dem_rsc = sario.load(sario.find_rsc_file(directory=directory))
-        _save_dem_to_h5(outfile_name, dem_rsc, dset="dem_rsc")
-
-    if create_mean:
-        with h5py.File(outfile_name, "a") as hf:
-            hf.create_dataset(
-                "mean_stack",
-                data=np.mean(stack, axis=0),
-            )
-
-    return outfile_name
-
-
 def load_geolist_intlist(directory, geolist_ignore_file=None, parse=True):
     """Load the geo_date_list and int_date_list from a directory with igrams"""
-    int_date_list = sario.read_intlist(directory, parse=parse)
-    geo_date_list = sario.read_geolist(utils.get_parent_dir(directory), parse=parse)
+    int_date_list = sario.find_igrams(directory, parse=parse)
+    geo_date_list = sario.find_geos(utils.get_parent_dir(directory), parse=parse)
 
     if geolist_ignore_file is not None:
         ignore_filepath = os.path.join(directory, geolist_ignore_file)
@@ -265,7 +315,7 @@ def load_geolist_intlist(directory, geolist_ignore_file=None, parse=True):
 
 def ignore_geo_dates(geo_date_list, int_date_list, ignore_file="geolist_missing.txt", parse=True):
     """Read extra file to ignore certain dates of interferograms"""
-    ignore_geos = set(sario.read_geolist(ignore_file, parse=parse))
+    ignore_geos = set(sario.find_geos(ignore_file, parse=parse))
     logger.info("Ignoreing the following .geo dates:")
     logger.info(sorted(ignore_geos))
     valid_geos = [g for g in geo_date_list if g not in ignore_geos]
@@ -383,7 +433,7 @@ def load_unw_masked_stack(igram_path,
                           deramp_order=1,
                           masking=True):
 
-    int_file_list = sario.read_intlist(igram_path, parse=False)
+    int_file_list = sario.find_igrams(igram_path, parse=False)
     if deramp:
         # Deramp each .unw file
         # TODO: do I ever really want 2nd order?
@@ -411,7 +461,7 @@ def load_unw_masked_stack(igram_path,
         # Note: using .geo masks as well as .int masks since valid data in one
         # .geo produces non-zero igram, but it is still garbage
 
-        # need to specify file_list or the order is different from read_intlist
+        # need to specify file_list or the order is different from find_igrams
         logger.info("Reading igram masks")
         mask_stack = sario.load_stack(file_list=int_mask_file_names)
         unw_stack.mask = mask_stack

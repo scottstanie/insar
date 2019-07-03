@@ -62,7 +62,7 @@ def run_inversion(igram_path,
         verbose (bool): print extra timing and debug info
 
     Returns:
-        geolist (list[datetime]): dates of each SAR acquisition from read_geolist
+        geolist (list[datetime]): dates of each SAR acquisition from find_geos
         phi_arr (ndarray): absolute phases of every pixel at each time
         deformation (ndarray): matrix of deformations at each pixel and time
     """
@@ -144,8 +144,8 @@ def run_inversion(igram_path,
 
 def load_geolist_intlist(filepath, geolist_ignore_file=None, parse=True):
     """Load the geolist and intlist from a directory with igrams"""
-    geolist = sario.read_geolist(filepath, parse=parse)
-    intlist = sario.read_intlist(filepath, parse=parse)
+    geolist = sario.find_geos(filepath, parse=parse)
+    intlist = sario.find_igrams(filepath, parse=parse)
     if geolist_ignore_file is not None:
         ignore_filepath = os.path.join(filepath, geolist_ignore_file)
         geolist, intlist = ignore_geo_dates(geolist, intlist, ignore_file=ignore_filepath)
@@ -154,7 +154,7 @@ def load_geolist_intlist(filepath, geolist_ignore_file=None, parse=True):
 
 def ignore_geo_dates(geolist, intlist, ignore_file="geolist_missing.txt"):
     """Read extra file to ignore certain dates of interferograms"""
-    ignore_geos = set(sario.read_geolist(ignore_file))
+    ignore_geos = set(sario.find_geos(ignore_file))
     logger.info("Ignoreing the following .geo dates:")
     logger.info(sorted(ignore_geos))
     valid_geos = [g for g in geolist if g not in ignore_geos]

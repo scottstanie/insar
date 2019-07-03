@@ -177,7 +177,7 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
     if file_ext:
         stack = apertools.sario.load_stack(directory=context['path'], file_ext=file_ext)
         if intlist:
-            intlist = insar.timeseries.read_intlist(context['path'])
+            intlist = (context['path'])
             titles = [
                 "%s - %s" % (d1.strftime("%Y-%m-%d"), d2.strftime("%Y-%m-%d")) for d1, d2 in intlist
             ]
@@ -296,7 +296,7 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
               help="File to save date of missing .geos on click")
 @click.pass_obj
 def view_masks(context, downsample, geolist_file):
-    geo_file_names = insar.timeseries.read_geolist(directory=context['path'], parse=False)
+    geo_file_names = apertools.sario.find_geos(directory=context['path'], parse=False)
 
     def _print(series, row, col):
         print(".geos missing at (%s, %s): %s" % (row, col, np.array(geo_file_names)[series]))
@@ -314,7 +314,7 @@ def view_masks(context, downsample, geolist_file):
 
     composite_mask = np.sum(geo_masks, axis=0)
 
-    geolist = insar.timeseries.read_geolist(directory=apertools.utils.get_geo_path(context['path']))
+    geolist = apertools.sario.find_geos(directory=apertools.utils.get_geo_path(context['path']))
     apertools.plotting.view_stack(
         geo_masks,
         display_img=composite_mask,
