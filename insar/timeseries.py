@@ -144,6 +144,18 @@ def run_inversion(igram_path,
     return (geolist, phi_arr, deformation)
 
 
+def find_time_diffs(geo_date_list):
+    """Finds the number of days between successive .geo files
+
+    Args:
+        geo_date_list (list[date]): dates of the .geo SAR acquisitions
+
+    Returns:
+        np.array: days between each datetime in geo_date_list
+            dtype=int, length is a len(geo_date_list) - 1"""
+    return np.array([difference.days for difference in np.diff(geo_date_list)])
+
+
 def load_geolist_intlist(filepath, geolist_ignore_file=None, parse=True):
     """Load the geolist and intlist from a directory with igrams"""
     geolist = sario.find_geos(filepath, parse=parse)
