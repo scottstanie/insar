@@ -24,6 +24,44 @@ DATE_FMT = "%Y%m%d"
 logger = get_log()
 
 
+def prepare_stacks(igram_path, geolist_ignore_file="geolist_missing.txt"):
+    geolist, intlist = load_geolist_intlist(igram_path,
+                                            geolist_ignore_file=geolist_ignore_file,
+                                            parse=True)
+
+    # Prepare B matrix and timediffs used for each pixel inversion
+    timediffs = find_time_diffs(geolist)
+
+    logger.debug("Reading unw stack")
+    unw_stack, mask_stack, geo_mask_columns = load_unw_masked_stack(
+        igram_path,
+        num_timediffs=len(timediffs),
+        unw_ext='.unw',
+        deramp=deramp,
+        deramp_order=deramp_order,
+        masking=masking,
+    )
+
+    # TODO: Process the correlation, mask very bad corr pixels in the igrams
+
+    # Use the given reference, or find one on based on max correlation
+    if any(r is None for r in reference):
+        # Make a latlon image to check for gps data containment
+        # TODO: maybe i need to search for masks? dont wanna pick a garbage one by accident
+        latlon_image = latlon.LatlonImage(data=unw_stack[0],
+                                          dem_rsc_file=os.path.join(igram_path, 'dem.rsc'))
+        ref_row, ref_col = find_reference_location(latlon_image,
+                                                   igram_path,
+                                                   mask_stack,
+                                                   gps_dir=None)
+    else:
+        ref_row, ref_col = reference
+
+    logger.info("Starting shift_stack: using %s, %s as ref_row, ref_col", ref_row, ref_col)
+    unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
+    logger.info("Shifting stack complete")
+
+
 def create_hdf5_stack(outfile_name=None,
                       compression=None,
                       file_list=None,
@@ -65,44 +103,6 @@ def create_hdf5_stack(outfile_name=None,
         # vsource = h5py.VirtualSource()
 
     return outfile_name
-
-
-def prepare_stacks(igram_path, geolist_ignore_file="geolist_missing.txt"):
-    geolist, intlist = load_geolist_intlist(igram_path,
-                                            geolist_ignore_file=geolist_ignore_file,
-                                            parse=True)
-
-    # Prepare B matrix and timediffs used for each pixel inversion
-    timediffs = find_time_diffs(geolist)
-
-    logger.debug("Reading unw stack")
-    unw_stack, mask_stack, geo_mask_columns = load_unw_masked_stack(
-        igram_path,
-        num_timediffs=len(timediffs),
-        unw_ext='.unw',
-        deramp=deramp,
-        deramp_order=deramp_order,
-        masking=masking,
-    )
-
-    # TODO: Process the correlation, mask very bad corr pixels in the igrams
-
-    # Use the given reference, or find one on based on max correlation
-    if any(r is None for r in reference):
-        # Make a latlon image to check for gps data containment
-        # TODO: maybe i need to search for masks? dont wanna pick a garbage one by accident
-        latlon_image = latlon.LatlonImage(data=unw_stack[0],
-                                          dem_rsc_file=os.path.join(igram_path, 'dem.rsc'))
-        ref_row, ref_col = find_reference_location(latlon_image,
-                                                   igram_path,
-                                                   mask_stack,
-                                                   gps_dir=None)
-    else:
-        ref_row, ref_col = reference
-
-    logger.info("Starting shift_stack: using %s, %s as ref_row, ref_col", ref_row, ref_col)
-    unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
-    logger.info("Shifting stack complete")
 
 
 def _parse(datestr):
