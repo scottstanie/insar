@@ -34,6 +34,9 @@ IGRAM_MASK_SUM_DSET = "igram_sum"
 
 DEM_RSC_DSET = "dem_rsc"
 
+GEOLIST_DSET = "geo_dates"
+INTLIST_DSET = "int_dates"
+
 
 def prepare_stacks(
         igram_path,
@@ -233,13 +236,8 @@ def create_hdf5_stack(filename=None,
     # layout = h5py.VirtualLayout(shape=(len(file_list), nrows, ncols), dtype=dtype)
     file_list = sario.find_files(directory=directory, search_term="*" + file_ext)
 
-    if os.path.exists(filename):
-        print("{} already exists".format(filename))
-        if overwrite:
-            print("Overwriting file")
-        else:
-            print("Skipping")
-            return
+    if not _check_dset(filename, STACK_DSET, overwrite):
+        return
 
     with h5py.File(filename, "w") as hf:
         stack = sario.load_stack(file_list=file_list)
@@ -267,14 +265,19 @@ def create_hdf5_stack(filename=None,
 
 
 def _check_dset(h5file, dset_name, overwrite):
-    """Returns false if the dataset exists and overwrite is False"""
+    """Returns false if the dataset exists and overwrite is False
+
+    If overwrite is set to true, will delete the dataset to make
+    sure a new one can be created
+    """
     with h5py.File(h5file, "a") as f:
         if dset_name in f:
+            logger.info("{dset} already exists in {file},".format(dset=dset_name, file=h5file))
             if overwrite:
+                logger.info("Overwrite true: Deleting.")
                 del f[dset_name]
             else:
-                print("{dset} already exists in {file}: skipping".format(dset=dset_name,
-                                                                         file=h5file))
+                logger.info("Skipping.")
                 return False
 
         return True
@@ -305,61 +308,23 @@ def load_dem_from_h5(h5file=None, dset="dem_rsc"):
 
 
 def save_dem_to_h5(h5file, dem_rsc, dset_name="dem_rsc", overwrite=True):
+    if not _check_dset(h5file, dset_name, overwrite):
+        return
+
     with h5py.File(h5file, "a") as f:
-        if dset_name in f:
-            if overwrite:
-                del f[dset_name]
-            else:
-                print("{dset} already exists in {file}: skipping".format(dset=dset_name,
-                                                                         file=h5file))
-                return
         f[dset_name] = json.dumps(dem_rsc)
-
-
-def _geolist_to_str(geo_date_list):
-    return [d.strftime(DATE_FMT) for d in geo_date_list]
-
-
-def _intlist_to_str(int_date_list):
-    return [(a.strftime(DATE_FMT), b.strftime(DATE_FMT)) for a, b in int_date_list]
-
-
-def load_geolist_intlist(directory, geolist_ignore_file=None, parse=True):
-    """Load the geo_date_list and int_date_list from a directory with igrams"""
-    int_date_list = sario.find_igrams(directory, parse=parse)
-    geo_date_list = sario.find_geos(utils.get_parent_dir(directory), parse=parse)
-
-    if geolist_ignore_file is not None:
-        ignore_filepath = os.path.join(directory, geolist_ignore_file)
-        geo_date_list, int_date_list = ignore_geo_dates(geo_date_list,
-                                                        int_date_list,
-                                                        ignore_file=ignore_filepath,
-                                                        parse=parse)
-    return geo_date_list, int_date_list
-
-
-def ignore_geo_dates(geo_date_list, int_date_list, ignore_file="geolist_missing.txt", parse=True):
-    """Read extra file to ignore certain dates of interferograms"""
-    ignore_geos = set(sario.find_geos(ignore_file, parse=parse))
-    logger.info("Ignoreing the following .geo dates:")
-    logger.info(sorted(ignore_geos))
-    valid_geos = [g for g in geo_date_list if g not in ignore_geos]
-    valid_igrams = [i for i in int_date_list if i[0] not in ignore_geos and i[1] not in ignore_geos]
-    return valid_geos, valid_igrams
 
 
 def shift_unw_file(unw_stack_file, ref_row, ref_col, window, overwrite=False):
     """Runs a reference point shift on flattened stack of unw files stored in .h5"""
     logger.info("Starting shift_stack: using %s, %s as ref_row, ref_col", ref_row, ref_col)
+    if not _check_dset(unw_stack_file, STACK_FLAT_SHIFTED_DSET, overwrite):
+        return
+
     with h5py.File(unw_stack_file, "a") as f:
-        if STACK_FLAT_SHIFTED_DSET in f:
-            if not overwrite:
-                logger.info("%s already exists in %s:" % (STACK_FLAT_SHIFTED_DSET, unw_stack_file))
-                logger.info("Skipping")
-                return
-            else:
-                logger.info("overwriting")
-                del f[STACK_FLAT_SHIFTED_DSET]
+        if STACK_FLAT_DSET not in f:
+            raise ValueError("Need %s to be created in %s before"
+                             " shift stack can be run" % (STACK_FLAT_DSET, unw_stack_file))
 
         stack_in = f[STACK_FLAT_DSET]
         f.create_dataset(
@@ -405,7 +370,7 @@ def save_deformation(igram_path,
     if utils.get_file_ext(defo_file_name) in (".h5", ".hdf5"):
         with h5py.File(defo_file_name, "a") as f:
             f[dset_name] = deformation
-            f["geo_date_list"] = _geolist_to_str(geo_date_list)
+            f[GEOLIST_DSET] = _geolist_to_str(geo_date_list)
     elif defo_file_name.endswith(".npy"):
         np.save(os.path.join(igram_path, defo_file_name), deformation)
         np.save(os.path.join(igram_path, geolist_file_name), geo_date_list)
@@ -462,17 +427,11 @@ def deramp_stack(
         if STACK_DSET not in f:
             raise ValueError("unw stack dataset doesn't exist at %s" % unw_stack_file)
 
+    if not _check_dset(unw_stack_file, STACK_FLAT_DSET, overwrite):
+        return
+
     with h5py.File(unw_stack_file, "a") as f:
-        if STACK_FLAT_DSET in f:
-            if overwrite:
-                logger.info("Overwriting existing deramped dataset.")
-                del f[STACK_DSET]
-            else:
-                logger.info("Deramped dataset exist.")
-                return
-        else:
-            logger.info("Deramped dataset doesn't exist: Creating dataset %s in %s" %
-                        (STACK_FLAT_DSET, unw_stack_file))
+        logger.info("Creating dataset %s in %s" % (STACK_FLAT_DSET, unw_stack_file))
 
         f.create_dataset(
             STACK_FLAT_DSET,
@@ -634,3 +593,48 @@ def find_coherent_patch(correlations, window=11):
     # Now find row, column of the max value
     max_idx = conv.argmax()
     return np.unravel_index(max_idx, mean_stack.shape)
+
+
+def store_geolist_intlist(igram_path, unw_stack_file, overwrite=False):
+    geo_date_list, int_date_list = load_geolist_intlist(igram_path)
+    if not _check_dset(unw_stack_file, GEOLIST_DSET, overwrite):
+        return
+    if not _check_dset(unw_stack_file, INTLIST_DSET, overwrite):
+        return
+
+    with h5py.File(unw_stack_file, "a") as f:
+
+        f[GEOLIST_DSET] = _geolist_to_str(geo_date_list)
+        f[INTLIST_DSET] = _geolist_to_str(geo_date_list)
+
+
+def load_geolist_intlist(directory, geolist_ignore_file=None, parse=True):
+    """Load the geo_date_list and int_date_list from a directory with igrams"""
+    int_date_list = sario.find_igrams(directory, parse=parse)
+    geo_date_list = sario.find_geos(utils.get_parent_dir(directory), parse=parse)
+
+    if geolist_ignore_file is not None:
+        ignore_filepath = os.path.join(directory, geolist_ignore_file)
+        geo_date_list, int_date_list = ignore_geo_dates(geo_date_list,
+                                                        int_date_list,
+                                                        ignore_file=ignore_filepath,
+                                                        parse=parse)
+    return geo_date_list, int_date_list
+
+
+def ignore_geo_dates(geo_date_list, int_date_list, ignore_file="geolist_missing.txt", parse=True):
+    """Read extra file to ignore certain dates of interferograms"""
+    ignore_geos = set(sario.find_geos(ignore_file, parse=parse))
+    logger.info("Ignoreing the following .geo dates:")
+    logger.info(sorted(ignore_geos))
+    valid_geos = [g for g in geo_date_list if g not in ignore_geos]
+    valid_igrams = [i for i in int_date_list if i[0] not in ignore_geos and i[1] not in ignore_geos]
+    return valid_geos, valid_igrams
+
+
+def _geolist_to_str(geo_date_list):
+    return [d.strftime(DATE_FMT) for d in geo_date_list]
+
+
+def _intlist_to_str(int_date_list):
+    return [(a.strftime(DATE_FMT), b.strftime(DATE_FMT)) for a, b in int_date_list]
