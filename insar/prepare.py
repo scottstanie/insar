@@ -54,6 +54,7 @@ def prepare_stacks(
         cc_stack_file=cc_stack_file,
         overwrite=overwrite,
     )
+
     create_mask_stacks(igram_path, overwrite=overwrite)
     deramp_stack(unw_stack_file=unw_stack_file, order=1, overwrite=overwrite)
 
@@ -65,9 +66,6 @@ def prepare_stacks(
     )
 
     shift_unw_file(unw_stack_file=unw_stack_file, ref_row=ref_row, ref_col=ref_col, window=3)
-    # geo_date_list, int_date_list = load_geolist_intlist(igram_path,
-    # geolist_ignore_file=geolist_ignore_file,
-    # parse=True)
 
 
 def create_igram_stacks(
@@ -83,6 +81,8 @@ def create_igram_stacks(
     for d in stack_dicts:
         logger.info("Creating hdf5 stack %s" % d["filename"])
         create_hdf5_stack(directory=igram_path, overwrite=overwrite, **d)
+        store_intlist(igram_path, d["filename"], overwrite=overwrite)
+        store_geolist(igram_path, d["filename"], overwrite=overwrite)
 
 
 def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=False):
@@ -304,7 +304,7 @@ def _find_file_shape(dem_rsc=None, file_list=None, row_looks=None, col_looks=Non
 
 def load_dem_from_h5(h5file=None, dset="dem_rsc"):
     with h5py.File(h5file, "r") as f:
-        return json.loads(f['dem_rsc'][()])
+        return json.loads(f[dset][()])
 
 
 def save_dem_to_h5(h5file, dem_rsc, dset_name="dem_rsc", overwrite=True):
@@ -595,17 +595,38 @@ def find_coherent_patch(correlations, window=11):
     return np.unravel_index(max_idx, mean_stack.shape)
 
 
-def store_geolist_intlist(igram_path, unw_stack_file, overwrite=False):
-    geo_date_list, int_date_list = load_geolist_intlist(igram_path)
-    if not _check_dset(unw_stack_file, GEOLIST_DSET, overwrite):
+def store_geolist(igram_path, stack_file, overwrite=False):
+    geo_date_list, _ = load_geolist_intlist(igram_path)
+
+    if not _check_dset(stack_file, GEOLIST_DSET, overwrite):
         return
-    if not _check_dset(unw_stack_file, INTLIST_DSET, overwrite):
+    logger.info("Saving geo dates to %s / %s" % (stack_file, GEOLIST_DSET))
+    with h5py.File(stack_file, "a") as f:
+        f[GEOLIST_DSET] = json.dumps(_geolist_to_str(geo_date_list))
+
+
+def store_intlist(igram_path, stack_file, overwrite=False):
+    _, int_date_list = load_geolist_intlist(igram_path)
+    if not _check_dset(stack_file, INTLIST_DSET, overwrite):
         return
 
-    with h5py.File(unw_stack_file, "a") as f:
+    logger.info("Saving igram dates to %s / %s" % (stack_file, GEOLIST_DSET))
+    with h5py.File(stack_file, "a") as f:
+        f[INTLIST_DSET] = json.dumps(_intlist_to_str(int_date_list))
 
-        f[GEOLIST_DSET] = _geolist_to_str(geo_date_list)
-        f[INTLIST_DSET] = _geolist_to_str(geo_date_list)
+
+def load_geolist_from_h5(h5file):
+    with h5py.File(h5file, "r") as f:
+        geolist_str = json.loads(f[GEOLIST_DSET][()])
+
+    return sario.parse_geolist_str(geolist_str)
+
+
+def load_intlist_from_h5(h5file):
+    with h5py.File(h5file, "r") as f:
+        intlist_str = json.loads(f[INTLIST_DSET][()])
+
+    return sario.parse_intlist_str_pairs(intlist_str)
 
 
 def load_geolist_intlist(directory, geolist_ignore_file=None, parse=True):
