@@ -573,6 +573,10 @@ def find_reference_location(latlon_image, igram_path=None, mask_stack=None, gps_
     ref_row, ref_col = None, None
     logger.info("Searching for gps station within area")
     stations = apertools.gps.stations_within_image(latlon_image, mask_invalid=True, gps_dir=gps_dir)
+    mask_ll_image = latlon.LatlonImage(data=np.sum(mask_stack, axis=0),
+                                       dem_rsc_file=latlon_image.dem_rsc_file)
+
+    num_masks = [mask_ll_image[lat, lon] for name, lon, lat in stations]
     if len(stations) > 0:
         # TODO: pick best station somehow? maybe higher mean correlation?
         logger.info("Station options:")
