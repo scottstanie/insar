@@ -468,9 +468,14 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
 def mask(context, imagefile, dem, output):
     """Mask an image where some elevation.dem is zero
     """
+    from PIL import Image
     image = apertools.sario.load(imagefile)
-    out_image = insar.mask.mask_int(image, dem_file=dem, dem=None)
-    apertools.sario.save(output, out_image)
+    heights = apertools.sario.load(dem)
+
+    zero_height = (heights == 0).astype(float)
+    mask = np.array(Image.fromarray(zero_height).resize(image.shape))
+    intmask = np.ma.array(image, mask=mask)
+    apertools.sario.save(output, intmask)
 
 
 # COMMAND: avg-stack
