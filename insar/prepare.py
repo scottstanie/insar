@@ -81,8 +81,8 @@ def create_igram_stacks(
     for d in stack_dicts:
         logger.info("Creating hdf5 stack %s" % d["filename"])
         create_hdf5_stack(directory=igram_path, overwrite=overwrite, **d)
-        store_intlist(igram_path, d["filename"], overwrite=overwrite)
         store_geolist(igram_path, d["filename"], overwrite=overwrite)
+        store_intlist(igram_path, d["filename"], overwrite=overwrite)
 
 
 def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=False):
@@ -191,6 +191,8 @@ def compute_int_masks(
                              row_looks=row_looks,
                              col_looks=col_looks)
     if not _check_dset(mask_file, dset_name, overwrite):
+        return
+    if not _check_dset(mask_file, IGRAM_MASK_SUM_DSET, overwrite):
         return
     _create_dset(mask_file, dset_name, shape=shape, dtype=bool)
 
@@ -600,9 +602,11 @@ def store_geolist(igram_path, stack_file, overwrite=False):
 
     if not _check_dset(stack_file, GEOLIST_DSET, overwrite):
         return
-    logger.info("Saving geo dates to %s / %s" % (stack_file, GEOLIST_DSET))
+    logger.debug("Saving geo dates to %s / %s" % (stack_file, GEOLIST_DSET))
     with h5py.File(stack_file, "a") as f:
-        f[GEOLIST_DSET] = json.dumps(_geolist_to_str(geo_date_list))
+        # JSON gets messed from doing from julia to h5py for now
+        # f[GEOLIST_DSET] = json.dumps(_geolist_to_str(geo_date_list))
+        f[GEOLIST_DSET] = _geolist_to_str(geo_date_list)
 
 
 def store_intlist(igram_path, stack_file, overwrite=False):
@@ -612,21 +616,7 @@ def store_intlist(igram_path, stack_file, overwrite=False):
 
     logger.info("Saving igram dates to %s / %s" % (stack_file, GEOLIST_DSET))
     with h5py.File(stack_file, "a") as f:
-        f[INTLIST_DSET] = json.dumps(_intlist_to_str(int_date_list))
-
-
-def load_geolist_from_h5(h5file):
-    with h5py.File(h5file, "r") as f:
-        geolist_str = json.loads(f[GEOLIST_DSET][()])
-
-    return sario.parse_geolist_str(geolist_str)
-
-
-def load_intlist_from_h5(h5file):
-    with h5py.File(h5file, "r") as f:
-        intlist_str = json.loads(f[INTLIST_DSET][()])
-
-    return sario.parse_intlist_str_pairs(intlist_str)
+        f[INTLIST_DSET] = _intlist_to_str(int_date_list)
 
 
 def load_geolist_intlist(directory, geolist_ignore_file=None, parse=True):
@@ -654,8 +644,9 @@ def ignore_geo_dates(geo_date_list, int_date_list, ignore_file="geolist_missing.
 
 
 def _geolist_to_str(geo_date_list):
-    return [d.strftime(DATE_FMT) for d in geo_date_list]
+    return np.array([d.strftime(DATE_FMT) for d in geo_date_list]).astype("S")
 
 
 def _intlist_to_str(int_date_list):
-    return [(a.strftime(DATE_FMT), b.strftime(DATE_FMT)) for a, b in int_date_list]
+    return np.array([(a.strftime(DATE_FMT), b.strftime(DATE_FMT))
+                     for a, b in int_date_list]).astype("S")
