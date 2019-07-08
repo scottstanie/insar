@@ -538,10 +538,10 @@ def find_reference_location(
 
         logger.info("Sorting by fewer masked dates and highest correlation")
         # Note: make cor negative to sort large numbers to the front
-        sorted_stations = sorted([
-            (num, -cor, station)
-            for num, cor, station in zip(num_masks, pixel_correlations, stations)
-        ])
+        sorted_stations = sorted(
+            zip(num_masks, pixel_correlations, stations),
+            key=lambda tup: (tup[0], -tup[1]),
+        )
         logger.info(sorted_stations)
 
         name, lon, lat = sorted_stations[0][-1]
