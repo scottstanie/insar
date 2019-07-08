@@ -359,7 +359,7 @@ def shift_stack(stack_in, stack_out, ref_row, ref_col, window=3):
     win = window // 2
     for idx, layer in enumerate(stack_in):
         patch = layer[ref_row - win:ref_row + win + 1, ref_col - win:ref_col + win + 1]
-        stack_out[idx] -= np.mean(patch)
+        stack_out[idx] = layer - np.mean(patch)
 
 
 def save_deformation(igram_path,
