@@ -292,7 +292,7 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
 @cli.command('view-masks')
 @click.option("--downsample", default=1, help="Amount to downsample image")
 @click.option("--geolist-file",
-              default="geolist_missing.txt",
+              default="geolist_ignore.txt",
               help="File to save date of missing .geos on click")
 @click.option("--print-dates/--no-print-dates",
               default=True,
@@ -535,6 +535,21 @@ def dem_rate(context, rsc_file):
 @click.pass_obj
 def preproc(ctx):
     """Extra commands for preprocessing steps"""
+
+
+@preproc.command('stacks')
+@click.option('--overwrite', is_flag=True, default=False, help="Erase current files and reprocess")
+@click.option('--gps-dir', default=None, help="Directory of gps data")
+@click.pass_obj
+def prepare_stacks(context, overwrite, gps_dir):
+    """Create .h5 files of prepared stacks for timeseries
+
+    This step is run before the final `process` step.
+    Makes .h5 files for easy loading to timeseries inversion.
+    """
+    import insar.prepare
+    igram_path = context['path']
+    insar.prepare.prepare_stacks(igram_path, overwrite=overwrite, gps_dir=gps_dir)
 
 
 @preproc.command()

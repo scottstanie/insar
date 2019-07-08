@@ -41,7 +41,6 @@ INTLIST_DSET = "int_dates"
 def prepare_stacks(
         igram_path,
         overwrite=False,
-        geolist_ignore_file="geolist_missing.txt",
         gps_dir=None,
 ):
     unw_stack_file = os.path.join(igram_path, UNW_FILENAME)
