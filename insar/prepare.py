@@ -30,6 +30,7 @@ STACK_FLAT_SHIFTED_DSET = "deramped_shifted_stack"
 
 # Mask file datasets
 GEO_MASK_DSET = "geo"
+GEO_MASK_SUM_DSET = "geo_sum"
 IGRAM_MASK_DSET = "igram"
 IGRAM_MASK_SUM_DSET = "igram_sum"
 
@@ -103,6 +104,7 @@ def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=
     dem_rsc = sario.load(sario.find_rsc_file(directory=igram_path))
     save_dem_to_h5(mask_file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
     store_geolist(igram_path, mask_file, overwrite=overwrite)
+    store_intlist(igram_path, mask_file, overwrite=overwrite)
 
     # if create_geos:
     save_geo_masks(
@@ -170,6 +172,9 @@ def save_geo_masks(directory,
             print('Saving %s to stack' % geo_fname)
             dset[idx] = _get_geo_mask(g)
 
+        # Also add a composite mask depthwise
+        f[GEO_MASK_SUM_DSET] = np.sum(dset, axis=0)
+
 
 def compute_int_masks(
         mask_file=None,
@@ -196,6 +201,7 @@ def compute_int_masks(
         return
     if not _check_dset(mask_file, IGRAM_MASK_SUM_DSET, overwrite):
         return
+
     _create_dset(mask_file, dset_name, shape=shape, dtype=bool)
 
     with h5py.File(mask_file, "a") as f:
@@ -374,7 +380,7 @@ def save_deformation(igram_path,
     if utils.get_file_ext(defo_file_name) in (".h5", ".hdf5"):
         with h5py.File(defo_file_name, "a") as f:
             f[dset_name] = deformation
-            f[GEOLIST_DSET] = _geolist_to_str(geo_date_list)
+        store_geolist(igram_path, defo_file_name, overwrite=True)
     elif defo_file_name.endswith(".npy"):
         np.save(os.path.join(igram_path, defo_file_name), deformation)
         np.save(os.path.join(igram_path, geolist_file_name), geo_date_list)
@@ -616,7 +622,7 @@ def store_intlist(igram_path, stack_file, overwrite=False):
     if not _check_dset(stack_file, INTLIST_DSET, overwrite):
         return
 
-    logger.info("Saving igram dates to %s / %s" % (stack_file, GEOLIST_DSET))
+    logger.info("Saving igram dates to %s / %s" % (stack_file, INTLIST_DSET))
     with h5py.File(stack_file, "a") as f:
         f[INTLIST_DSET] = _intlist_to_str(int_date_list)
 
