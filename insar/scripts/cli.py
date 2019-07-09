@@ -3,6 +3,7 @@ Main command line entry point to manage all other sub commands
 """
 import os
 import json
+import h5py
 import click
 import insar
 import apertools
@@ -229,31 +230,29 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
         insar --path /path/to/igrams view_stack
 
     """
-    geolist, deformation = apertools.sario.load_deformation(context['path'], filename=filename)
-    if geolist is None or deformation is None:
+    geo_date_list, deformation = apertools.sario.load_deformation(context['path'],
+                                                                  filename=filename)
+
+    if geo_date_list is None or deformation is None:
         return
 
     if rowcol:
         rsc_data = None
+        print("Using rows/cols")
     else:
         rsc_data = sardem.loading.load_dem_rsc(os.path.join(context['path'], 'dem.rsc'))
+        print("Using lat/lon")
 
-    stack = deformation[:, row_start:row_end, col_start:col_end]
-    _, nrows, ncols = stack.shape
-    new_rsc_data = apertools.latlon.LatlonImage.crop_rsc_data(
-        rsc_data,
-        row_start,
-        col_start,
-        nrows,
-        ncols,
-    )
-    img = apertools.latlon.LatlonImage(data=np.mean(stack[-3:], axis=0), dem_rsc=new_rsc_data)
-    img = img[row_start:row_end, col_start:col_end]
+    stack_ll = apertools.latlon.LatlonImage(data=deformation, dem_rsc=rsc_data)
+    stack_ll = stack_ll[:, row_start:row_end, col_start:col_end]
+
+    img = apertools.latlon.LatlonImage(data=np.mean(stack_ll[-3:], axis=0),
+                                       dem_rsc=stack_ll.dem_rsc)
 
     apertools.plotting.view_stack(
-        stack,
+        stack_ll,
         img,
-        geolist=geolist,
+        geolist=geo_date_list,
         title=title,
         label=label,
         cmap=cmap,
@@ -291,51 +290,55 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
 # COMMAND: view-masks
 @cli.command('view-masks')
 @click.option("--downsample", default=1, help="Amount to downsample image")
-@click.option("--geolist-file",
+@click.option("--geolist-ignore-file",
               default="geolist_ignore.txt",
               help="File to save date of missing .geos on click")
 @click.option("--print-dates/--no-print-dates",
-              default=True,
+              default=False,
               help="Print out missing dates to terminal")
 @click.pass_obj
-def view_masks(context, downsample, geolist_file, print_dates):
-    geo_file_names = apertools.sario.find_geos(directory=context['path'], parse=False)
+def view_masks(context, downsample, geolist_ignore_file, print_dates):
+    import insar.prepare
+
+    geo_date_list = apertools.sario.load_geolist_from_h5(insar.prepare.MASK_FILENAME)
 
     def _print(series, row, col):
-        print(".geos missing at (%s, %s): %s" % (row, col, np.array(geo_file_names)[series]))
+        print(".geos missing at (%s, %s): %s" % (row, col, np.array(geo_date_list)[series]))
 
     def _save_missing_geos(series, row, col):
-        with open(geolist_file, "w") as f:
-            for fname in np.array(geo_file_names)[series]:
-                print("Writing %s" % fname)
-                f.write("%s\n" % fname)
+        with open(geolist_ignore_file, "w") as f:
+            for gdate in np.array(geo_date_list)[series]:
+                geo_str = gdate.strftime(insar.prepare.DATE_FMT)
+                print("Writing %s" % geo_str)
+                f.write("%s\n" % geo_str)
 
-    geo_mask_file_names = [n + '.mask.npy' for n in geo_file_names]
-    geo_masks = np.ma.array(
-        apertools.sario.load_stack(file_list=geo_mask_file_names,
-                                   downsample=downsample)).astype(bool)
+    f = h5py.File(insar.prepare.MASK_FILENAME)
+    geo_masks = f[insar.prepare.GEO_MASK_DSET]
 
-    composite_mask = np.sum(geo_masks, axis=0)
+    composite_mask = f[insar.prepare.IGRAM_MASK_SUM_DSET][:]
 
-    geolist = apertools.sario.find_geos(directory=apertools.utils.get_geo_path(context['path']))
-    if geolist_file:
-        callback = _save_missing_geos
-    elif print_dates:
+    if print_dates:
         callback = _print
+    elif geolist_file:
+        print("Saving to %s" % geolist_file)
+        callback = _save_missing_geos
 
-    apertools.plotting.view_stack(
-        geo_masks,
-        display_img=composite_mask,
-        geolist=geolist,
-        cmap="Reds",
-        label="is masked",
-        title="Number of dates of missing .geo data",
-        line_plot_kwargs=dict(marker="x", linestyle=' '),
-        perform_shift=True,
-        legend_loc=0,
-        # timeline_callback=_print,
-        timeline_callback=callback,
-    )
+    try:
+        apertools.plotting.view_stack(
+            geo_masks,
+            display_img=composite_mask,
+            geolist=geo_date_list,
+            cmap="Reds",
+            label="is masked",
+            title="Number of dates of missing .geo data",
+            line_plot_kwargs=dict(marker="x", linestyle=' '),
+            perform_shift=True,
+            legend_loc=0,
+            # timeline_callback=_print,
+            timeline_callback=callback,
+        )
+    finally:
+        f.close()
 
 
 # COMMAND: blob
@@ -367,7 +370,7 @@ def blob(context, load, filename, positive, negative, title_prefix, blob_filenam
     If deformation.npy and geolist.npy or .unw files are not in current directory,
     use the --path option:
 
-        insar --path /path/to/igrams view_stack
+        insar --path /path/to/igrams blob
     """
     import insar.blob
     extra_args = _handle_args(blobfunc_args)
@@ -493,7 +496,7 @@ def avg_stack(context, ref_row, ref_col):
 
     If .unw files are not in the current directory, use the --path option:
 
-        insar --path /path/to/igrams view_stack
+        insar --path /path/to/igrams avg_stack
 
     If --ref-row and --ref-col not provided, most coherent patch found as reference
     """

@@ -102,6 +102,7 @@ def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=
 
     dem_rsc = sario.load(sario.find_rsc_file(directory=igram_path))
     save_dem_to_h5(mask_file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
+    store_geolist(igram_path, mask_file, overwrite=overwrite)
 
     # if create_geos:
     save_geo_masks(
@@ -599,7 +600,7 @@ def find_coherent_patch(correlations, window=11):
 
 
 def store_geolist(igram_path, stack_file, overwrite=False):
-    geo_date_list, _ = load_geolist_intlist(igram_path)
+    geo_date_list, _ = load_geolist_intlist(igram_path, parse=True)
 
     if not _check_dset(stack_file, GEOLIST_DSET, overwrite):
         return
@@ -621,7 +622,10 @@ def store_intlist(igram_path, stack_file, overwrite=False):
 
 
 def load_geolist_intlist(directory, geolist_ignore_file=None, parse=True):
-    """Load the geo_date_list and int_date_list from a directory with igrams"""
+    """Load the geo_date_list and int_date_list from a directory with igrams
+
+    Assumes that the .geo files are one diretory up from the igrams
+    """
     int_date_list = sario.find_igrams(directory, parse=parse)
     geo_date_list = sario.find_geos(utils.get_parent_dir(directory), parse=parse)
 
