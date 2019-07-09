@@ -12,9 +12,10 @@ from scipy.ndimage.filters import uniform_filter
 
 from apertools import sario, utils, latlon
 import apertools.gps
-from apertools.log import get_log
+from apertools.log import get_log, log_runtime
 
 logger = get_log()
+
 DATE_FMT = "%Y%m%d"
 
 MASK_FILENAME = "masks.h5"
@@ -38,6 +39,7 @@ GEOLIST_DSET = "geo_dates"
 INTLIST_DSET = "int_dates"
 
 
+@log_runtime
 def prepare_stacks(
         igram_path,
         overwrite=False,
