@@ -10,6 +10,7 @@ import apertools
 import sardem
 import numpy as np
 from .plot_insar import plot_image
+import insar.prepare
 
 
 # Main entry point:
@@ -212,16 +213,17 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
 @click.option("--label", default='Centimeters', help="Label on colorbar/yaxis for plot")
 @click.option("--title", help="Title for image plot")
 @click.option('--row-start', default=0)
-@click.option('--row-end', default=-1)
+@click.option('--row-end', type=int, default=None)
 @click.option('--col-start', default=0)
-@click.option('--col-end', default=-1)
+@click.option('--col-end', type=int, default=None)
 @click.option("--rowcol",
               help="Use row,col for legened entries (instead of default lat,lon)",
               is_flag=True,
               default=False)
+@click.option("--mask/--no-mask", help="Mask areas that have any missing data", default=True)
 @click.pass_obj
 def view_stack(context, filename, cmap, label, title, row_start, row_end, col_start, col_end,
-               rowcol):
+               rowcol, mask):
     """Explore timeseries on deformation image.
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
@@ -243,11 +245,25 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
         rsc_data = sardem.loading.load_dem_rsc(os.path.join(context['path'], 'dem.rsc'))
         print("Using lat/lon")
 
+    if mask:
+        with h5py.File(insar.prepare.MASK_FILENAME) as f:
+            # Get the indices of the mask layers that were used in the deformation stack
+            all_geo_dates = apertools.sario.load_geolist_from_h5(insar.prepare.MASK_FILENAME)
+            used_bool_arr = np.array([g in geo_date_list for g in all_geo_dates])
+
+            # Maks a single mask image for any pixel that has a mask
+            stack_mask = np.sum(f[insar.prepare.GEO_MASK_DSET][used_bool_arr, :, :], axis=0)
+            stack_mask = stack_mask > 0
+    else:
+        stack_mask = np.ma.nomask
+
     stack_ll = apertools.latlon.LatlonImage(data=deformation, dem_rsc=rsc_data)
+    stack_ll[:, stack_mask] = np.nan
     stack_ll = stack_ll[:, row_start:row_end, col_start:col_end]
 
     img = apertools.latlon.LatlonImage(data=np.mean(stack_ll[-3:], axis=0),
                                        dem_rsc=stack_ll.dem_rsc)
+    img[stack_mask] = np.nan
 
     apertools.plotting.view_stack(
         stack_ll,
@@ -298,8 +314,6 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
               help="Print out missing dates to terminal")
 @click.pass_obj
 def view_masks(context, downsample, geolist_ignore_file, print_dates):
-    import insar.prepare
-
     geo_date_list = apertools.sario.load_geolist_from_h5(insar.prepare.MASK_FILENAME)
 
     def _print(series, row, col):
@@ -550,7 +564,6 @@ def prepare_stacks(context, overwrite, gps_dir):
     This step is run before the final `process` step.
     Makes .h5 files for easy loading to timeseries inversion.
     """
-    import insar.prepare
     igram_path = context['path']
     insar.prepare.prepare_stacks(igram_path, overwrite=overwrite, gps_dir=gps_dir)
 
