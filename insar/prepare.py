@@ -376,6 +376,14 @@ def shift_stack(stack_in, stack_out, ref_row, ref_col, window=3):
         stack_out[idx] = layer - np.mean(patch)
 
 
+def load_reference(unw_stack_file=UNW_FILENAME):
+    with h5py.File(unw_stack_file, "r") as f:
+        try:
+            return f[STACK_FLAT_SHIFTED_DSET].attrs["reference"]
+        except KeyError:
+            return None, None
+
+
 def save_deformation(igram_path,
                      deformation,
                      geo_date_list,
