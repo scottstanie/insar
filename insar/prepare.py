@@ -689,3 +689,25 @@ def _geolist_to_str(geo_date_list):
 def _intlist_to_str(int_date_list):
     return np.array([(a.strftime(DATE_FMT), b.strftime(DATE_FMT))
                      for a, b in int_date_list]).astype("S")
+
+
+def load_mask(geo_date_list=None, perform_mask=True, mask_filename=MASK_FILENAME, directory=None):
+    if not perform_mask:
+        return np.ma.nomask
+
+    if directory is not None:
+        mask_filename = os.path.join(directory, mask_filename)
+
+    # Get the indices of the mask layers that were used in the deformation stack
+    all_geo_dates = apertools.sario.load_geolist_from_h5(mask_filename)
+    if geo_date_list is None:
+        used_bool_arr = np.full(len(all_geo_dates), True)
+    else:
+        used_bool_arr = np.array([g in geo_date_list for g in all_geo_dates])
+
+    with h5py.File(mask_filename) as f:
+        # Maks a single mask image for any pixel that has a mask
+        # Note: not using GEO_MASK_SUM_DSET since we may be sub selecting layers
+        stack_mask = np.sum(f[GEO_MASK_DSET][used_bool_arr, :, :], axis=0)
+        stack_mask = stack_mask > 0
+        return stack_mask

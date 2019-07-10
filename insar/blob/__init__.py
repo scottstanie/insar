@@ -8,8 +8,9 @@ import numpy as np
 from . import skblob
 from . import plot  # , scores
 from . import utils as blob_utils
+import insar.prepare
 from skimage import feature
-from apertools import latlon, plotting
+from apertools import latlon, plotting, sario, utils
 from apertools.log import get_log
 
 logger = get_log()
@@ -150,28 +151,33 @@ def _make_blobs(image, extra_args, positive=True, negative=True, verbose=False):
 
 
 def make_blob_image(igram_path=".",
-                    filename=None,
+                    filename="deformation.h5",
                     load=True,
                     positive=True,
                     negative=True,
                     title_prefix='',
                     blob_filename='blobs.npy',
                     row_start=0,
-                    row_end=-1,
+                    row_end=None,
                     col_start=0,
-                    col_end=-1,
+                    col_end=None,
                     verbose=False,
+                    masking=True,
                     blobfunc_args=()):
     """Find and view blobs in deformation"""
 
-    if not filename:
+    ext = utils.get_file_ext(filename)
+    if not filename or ext in (".h5", ".npy"):
         logger.info("Searching %s for igram_path" % igram_path)
-        image = latlon.load_deformation_img(igram_path, n=3)
+        image = latlon.load_deformation_img(igram_path, n=3, filename=filename)
         # Note: now we use image.dem_rsc after cropping to keep track of new latlon bounds
     else:
-        import apertools.sario
-        image = latlon.LatlonImage(data=np.angle(apertools.sario.load(filename)),
-                                   dem_rsc_file="dem.rsc")
+        image = latlon.LatlonImage(data=np.angle(sario.load(filename)), dem_rsc_file="dem.rsc")
+
+    if masking is True and ext == ".h5":
+        stack_mask = insar.prepare.load_mask(directory=igram_path)
+        logger.info("Masking image:")
+        image[stack_mask] = np.nan
 
     image = image[row_start:row_end, col_start:col_end]
 
@@ -191,11 +197,11 @@ def make_blob_image(igram_path=".",
     # imagefig, axes_image = plotting.plot_image_shifted(image, title=title)
 
     if load and os.path.exists(blob_filename):
-        print("Loading %s" % blob_filename)
+        logger.info("Loading %s" % blob_filename)
         blobs = np.load(blob_filename)
     else:
         blobs = _make_blobs(image, blobfunc_args, positive=positive, negative=negative)
-        print("Saving %s" % blob_filename)
+        logger.info("Saving %s" % blob_filename)
         np.save(blob_filename, blobs)
 
     blobs_ll = blob_utils.blobs_to_latlon(blobs, image.dem_rsc)
