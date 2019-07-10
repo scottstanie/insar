@@ -175,8 +175,8 @@ def make_blob_image(igram_path=".",
         image = latlon.LatlonImage(data=np.angle(sario.load(filename)), dem_rsc_file="dem.rsc")
 
     if masking is True and ext == ".h5":
-        stack_mask = insar.prepare.load_mask(directory=igram_path)
-        logger.info("Masking image:")
+        stack_mask = insar.prepare.load_mask(directory=igram_path, deformation_filename=filename)
+        logger.info("Masking image")
         image[stack_mask] = np.nan
 
     image = image[row_start:row_end, col_start:col_end]

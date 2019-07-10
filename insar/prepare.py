@@ -691,12 +691,23 @@ def _intlist_to_str(int_date_list):
                      for a, b in int_date_list]).astype("S")
 
 
-def load_mask(geo_date_list=None, perform_mask=True, mask_filename=MASK_FILENAME, directory=None):
+def load_mask(geo_date_list=None,
+              perform_mask=True,
+              deformation_filename=None,
+              mask_filename=MASK_FILENAME,
+              directory=None):
     if not perform_mask:
         return np.ma.nomask
 
     if directory is not None:
         mask_filename = os.path.join(directory, mask_filename)
+
+    # If they pass a deformation .h5 stack, get only the dates actually used
+    # instead of all possible dates stored in the mask stack
+    if deformation_filename is not None:
+        if directory is not None:
+            deformation_filename = os.path.join(directory, deformation_filename)
+            geo_date_list = sario.load_geolist_from_h5(deformation_filename)
 
     # Get the indices of the mask layers that were used in the deformation stack
     all_geo_dates = apertools.sario.load_geolist_from_h5(mask_filename)
