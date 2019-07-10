@@ -310,16 +310,16 @@ def view_masks(context, downsample, geolist_ignore_file, print_dates):
         print(".geos missing at (%s, %s): %s" % (row, col, np.array(geo_date_list)[series]))
 
     def _save_missing_geos(series, row, col):
+        geo_str_list = [g.strftime(insar.prepare.DATE_FMT) for g in np.array(geo_date_list)[series]]
         with open(geolist_ignore_file, "w") as f:
-            for gdate in np.array(geo_date_list)[series]:
-                geo_str = gdate.strftime(insar.prepare.DATE_FMT)
-                print("Writing %s" % geo_str)
-                f.write("%s\n" % geo_str)
+            print("Writing %s dates: %s" % (len(geo_str_list), geo_str_list))
+            for gdate in geo_str_list:
+                f.write("%s\n" % gdate)
 
     f = h5py.File(insar.prepare.MASK_FILENAME)
     geo_masks = f[insar.prepare.GEO_MASK_DSET]
 
-    composite_mask = f[insar.prepare.IGRAM_MASK_SUM_DSET][:]
+    composite_mask = f[insar.prepare.GEO_MASK_SUM_DSET][:]
 
     if print_dates:
         callback = _print
