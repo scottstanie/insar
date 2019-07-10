@@ -67,9 +67,14 @@ def prepare_stacks(
         gps_dir=gps_dir,
     )
 
-    shift_unw_file(unw_stack_file=unw_stack_file, ref_row=ref_row, ref_col=ref_col, window=3)
+    shift_unw_file(unw_stack_file=unw_stack_file,
+                   ref_row=ref_row,
+                   ref_col=ref_col,
+                   window=3,
+                   overwrite=overwrite)
 
 
+@log_runtime
 def create_igram_stacks(
         igram_path,
         unw_stack_file=UNW_FILENAME,
@@ -87,6 +92,7 @@ def create_igram_stacks(
         store_intlist(igram_path, d["filename"], overwrite=overwrite)
 
 
+@log_runtime
 def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=False):
     """Create mask stacks for areas in .geo and .int
 
@@ -414,6 +420,7 @@ def matrix_indices(shape, flatten=True):
         return row_block, col_block
 
 
+@log_runtime
 def deramp_stack(
         unw_stack_file=UNW_FILENAME,
         order=1,
@@ -440,21 +447,48 @@ def deramp_stack(
     if not _check_dset(unw_stack_file, STACK_FLAT_DSET, overwrite):
         return
 
-    with h5py.File(unw_stack_file, "a") as f:
-        logger.info("Creating dataset %s in %s" % (STACK_FLAT_DSET, unw_stack_file))
+    with h5py.File(MASK_FILENAME) as fmask:
+        mask_dset = fmask[IGRAM_MASK_DSET]
+        with h5py.File(unw_stack_file, "a") as f:
+            logger.info("Creating dataset %s in %s" % (STACK_FLAT_DSET, unw_stack_file))
 
-        f.create_dataset(
-            STACK_FLAT_DSET,
-            shape=f[STACK_DSET].shape,
-            dtype=f[STACK_DSET].dtype,
-        )
-        # Shape of sario.load_stack with return_amp is (nlayers, 2, nrows, ncols)
-        for idx, layer in enumerate(f[STACK_DSET]):
-            f[STACK_FLAT_DSET][idx] = remove_ramp(layer, order=order)
+            f.create_dataset(
+                STACK_FLAT_DSET,
+                shape=f[STACK_DSET].shape,
+                dtype=f[STACK_DSET].dtype,
+            )
+            # Shape of sario.load_stack with return_amp is (nlayers, 2, nrows, ncols)
+            for idx, layer in enumerate(f[STACK_DSET]):
+                mask = mask_dset[idx]
+                f[STACK_FLAT_DSET][idx] = remove_ramp(layer, order=order, mask=mask)
 
 
-def _estimate_ramp(z, order):
+def remove_ramp(z, order=1, mask=np.ma.nomask):
+    """Estimates a linear plane through data and subtracts to flatten
+
+    Used to remove noise artifacts from unwrapped interferograms
+
+    Args:
+        z (ndarray): 2D array, interpreted as heights
+        order (int): degree of surface estimation
+            order = 1 removes linear ramp, order = 2 fits quadratic surface
+
+    Returns:
+        ndarray: flattened 2D array with estimated surface removed
+    """
+    # Make a version of the image with nans in masked places
+    z_masked = z.copy()
+    z_masked[mask] = np.nan
+    # Use this constrained version to find the plane fit
+    z_fit = estimate_ramp(z_masked, order)
+    # Then use the non-masked as return value
+    return z - z_fit
+
+
+def estimate_ramp(z, order):
     """Takes a 2D array an fits a linear plane to the data
+
+    Ignores pixels that have nan values
 
     Args:
         z (ndarray): 2D array, interpreted as heights
@@ -474,40 +508,26 @@ def _estimate_ramp(z, order):
     # Note: rows == ys, cols are xs
     yidxs, xidxs = matrix_indices(z.shape, flatten=True)
     # c_ stacks 1D arrays as columns into a 2D array
+    zflat = z.flatten()
+    good_idxs = ~np.isnan(zflat)
     if order == 1:
         A = np.c_[np.ones(xidxs.shape), xidxs, yidxs]
+        coeffs, _, _, _ = np.linalg.lstsq(A[good_idxs], zflat[good_idxs], rcond=None)
+        # coeffs will be a, b, c in the equation z = ax + by + c
+        c, a, b = coeffs
+        # We want full blocks, as opposed to matrix_index flattened
+        y_block, x_block = matrix_indices(z.shape, flatten=False)
+        z_fit = (a * x_block + b * y_block + c)
+
     elif order == 2:
         A = np.c_[np.ones(xidxs.shape), xidxs, yidxs, xidxs * yidxs, xidxs**2, yidxs**2]
-
-    coeffs, _, _, _ = np.linalg.lstsq(A, z.flatten(), rcond=None)
-    # coeffs will be a, b, c in the equation z = ax + by + c
-    return coeffs
-
-
-def remove_ramp(z, order=1):
-    """Estimates a linear plane through data and subtracts to flatten
-
-    Used to remove noise artifacts from unwrapped interferograms
-
-    Args:
-        z (ndarray): 2D array, interpreted as heights
-        order (int): degree of surface estimation
-            order = 1 removes linear ramp, order = 2 fits quadratic surface
-
-    Returns:
-        ndarray: flattened 2D array with estimated surface removed
-    """
-    coeffs = _estimate_ramp(z, order)
-    if order == 1:
-        # We want full blocks, as opposed to matrix_index flattened
-        c, a, b = coeffs
-        y_block, x_block = matrix_indices(z.shape, flatten=False)
-        return z - (a * x_block + b * y_block + c)
-    elif order == 2:
+        # coeffs will be 6 elements for the quadratic
+        coeffs, _, _, _ = np.linalg.lstsq(A[good_idxs], zflat[good_idxs], rcond=None)
         yy, xx = matrix_indices(z.shape, flatten=True)
         idx_matrix = np.c_[np.ones(xx.shape), xx, yy, xx * yy, xx**2, yy**2]
         z_fit = np.dot(idx_matrix, coeffs).reshape(z.shape)
-        return z - z_fit
+
+    return z_fit
 
 
 def find_reference_location(

@@ -246,14 +246,11 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
         print("Using lat/lon")
 
     if mask:
-        with h5py.File(insar.prepare.MASK_FILENAME) as f:
-            # Get the indices of the mask layers that were used in the deformation stack
-            all_geo_dates = apertools.sario.load_geolist_from_h5(insar.prepare.MASK_FILENAME)
-            used_bool_arr = np.array([g in geo_date_list for g in all_geo_dates])
-
-            # Maks a single mask image for any pixel that has a mask
-            stack_mask = np.sum(f[insar.prepare.GEO_MASK_DSET][used_bool_arr, :, :], axis=0)
-            stack_mask = stack_mask > 0
+        try:
+            stack_mask = _load_mask(geo_date_list)
+        except KeyError:
+            print("Failed to load mask")
+            stack_mask = np.ma.nomask
     else:
         stack_mask = np.ma.nomask
 
@@ -274,6 +271,21 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
         cmap=cmap,
         lat_lon=not rowcol,
     )
+
+
+def _load_mask(geo_date_list):
+    if geo_date_list is None:
+        return np.ma.nomask
+
+    with h5py.File(insar.prepare.MASK_FILENAME) as f:
+        # Get the indices of the mask layers that were used in the deformation stack
+        all_geo_dates = apertools.sario.load_geolist_from_h5(insar.prepare.MASK_FILENAME)
+        used_bool_arr = np.array([g in geo_date_list for g in all_geo_dates])
+
+        # Maks a single mask image for any pixel that has a mask
+        stack_mask = np.sum(f[insar.prepare.GEO_MASK_DSET][used_bool_arr, :, :], axis=0)
+        stack_mask = stack_mask > 0
+        return stack_mask
 
 
 # COMMAND: plot
@@ -451,12 +463,25 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
 
     """
 
-    def _save_npy_file(imgfile, new_filename):
-        image = apertools.sario.load(imgfile)
+    def _save_npy_file(imgfile, new_filename, use_mask=True):
+        try:
+            image = apertools.sario.load(imgfile)
+            geo_date_list = None
+        except ValueError:
+            geo_date_list, image = apertools.sario.load_deformation(".", filename=imgfile)
+
         if image.ndim > 2:
             # For 3D stack, assume we just want the final image
             image = image[-1]
-        apertools.sario.save(new_filename, image, cmap=cmap, normalize=normalize, preview=True)
+
+        stack_mask = _load_mask(geo_date_list) if use_mask else np.ma.nomask
+        image[stack_mask] = np.nan
+        shifted_cmap = apertools.plotting.make_shifted_cmap(image, cmap_name=cmap)
+        apertools.sario.save(new_filename,
+                             image,
+                             cmap=shifted_cmap,
+                             normalize=normalize,
+                             preview=True)
 
     if geojson:
         with open(geojson) as f:
@@ -466,8 +491,9 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
 
     rsc_data = apertools.sario.load(rsc) if rsc else None
     # Check if imgfile is a .npy saved matrix
-    if imgfile.endswith(".npy"):
-        new_filename = imgfile.replace(".npy", ".png")
+    file_ext = apertools.utils.get_file_ext(imgfile)
+    if file_ext in (".npy", ".h5"):
+        new_filename = imgfile.replace(file_ext, ".png")
         _save_npy_file(imgfile, new_filename)
     else:
         new_filename = imgfile
