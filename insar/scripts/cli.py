@@ -208,7 +208,7 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
 
 # COMMAND: view-stack
 @cli.command('view-stack')
-@click.option("--filename", default='deformation.npy', help="Name of saved deformation stack")
+@click.option("--filename", "-f", default='deformation.npy', help="Name of saved deformation stack")
 @click.option("--cmap", default='seismic', help="Colormap for image display.")
 @click.option("--label", default='Centimeters', help="Label on colorbar/yaxis for plot")
 @click.option("--title", help="Title for image plot")
@@ -436,14 +436,20 @@ def _handle_args(extra_args):
 @click.option("--output", "-o", help="File to save kml output to")
 @click.option("--cmap", default="seismic", help="Colormap (if saving .npy image)")
 @click.option("--normalize", is_flag=True, default=False, help="Center image to [-1, 1]")
+@click.option("--vmax", type=float, help="Maximum value for imshow")
+@click.option("--vmin", type=float, help="Minimum value for imshow")
+@click.option("--ann", help=".ann file containing lat/lon start and steps for UAVSAR")
+@click.option("--ext", help="extension for UAVSAR (to be used with --ann)")
 @click.pass_obj
-def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normalize):
+def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normalize, vmax, vmin,
+        ann, ext):
     """Creates .kml file for some image
     IMGFILE is the image to load into Google Earth
 
     Example:
 
         insar kml 20180420_20180502.tif --rsc dem.rsc -t "My igram" -d "Kiluea eruption" -o out.kml
+        insar kml grd_dismph.tif --ann trinity_all.ann --ext .int.grd -t "ground project int"
 
     """
 
@@ -460,12 +466,21 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
 
         stack_mask = insar.prepare.load_mask(geo_date_list=geo_date_list, perform_mask=use_mask)
         image[stack_mask] = np.nan
-        shifted_cmap = apertools.plotting.make_shifted_cmap(image, cmap_name=cmap)
-        apertools.sario.save(new_filename,
-                             image,
-                             cmap=shifted_cmap,
-                             normalize=normalize,
-                             preview=True)
+        shifted_cmap = apertools.plotting.make_shifted_cmap(
+            image,
+            cmap_name=cmap,
+            vmax=vmax,
+            vmin=vmin,
+        )
+        apertools.sario.save(
+            new_filename,
+            image,
+            cmap=shifted_cmap,
+            normalize=normalize,
+            preview=True,
+            vmax=vmax,
+            vmin=vmin,
+        )
 
     if geojson:
         with open(geojson) as f:
@@ -473,7 +488,13 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
     else:
         gj_dict = None
 
-    rsc_data = apertools.sario.load(rsc) if rsc else None
+    if rsc:
+        rsc_data = apertools.sario.load(rsc)
+    elif ann:
+        rsc_data = apertools.parsers.parse_ann_file(ann, ext=ext, verbose=True)
+    else:
+        rsc_data = None
+
     # Check if imgfile is a .npy saved matrix
     file_ext = apertools.utils.get_file_ext(imgfile)
     if file_ext in (".npy", ".h5"):
