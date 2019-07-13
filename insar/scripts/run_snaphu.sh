@@ -15,6 +15,7 @@ call_snaphu() {
 	OUTNAME=$(echo $INTFILE | sed 's/.int/.unw/' | sed 's/.lowpass//' )
 	echo "Running snaphu on $INTFILE with width $WIDTH: output to $OUTNAME"
   $PHASE_UNWRAP_DIR/snaphu -s $INTFILE $WIDTH -c $CORNAME -o $OUTNAME;
+	echo "Finished unwrapping $INTFILE "
 }
 
 SCRIPTNAME=`basename "$0"`
@@ -49,7 +50,7 @@ else
     
 
 	# For loop is faster for the fortran program than xargs
-	for FILE in $(find . -name "*.int"); do
+	for FILE in $(find . -maxdepth 1 -name "*.int"); do
 		$LOWPASS $FILE $WIDTH $BOX_SIZE
 	done
 	SNAFU_FILE_EXT=".int.lowpass"
@@ -62,5 +63,5 @@ export WIDTH
 export MAX_PROCS
 
 # Call snaphu with each file name matched by SNAFU_FILE_EXT, and pass WIDTH to each call
-find . -name "*${SNAFU_FILE_EXT}" -print0 | xargs -0 --max-procs=$MAX_PROCS -I{} $SHELL -c "call_snaphu {} $WIDTH"
+find . -maxdepth 1 -name "*${SNAFU_FILE_EXT}" -print0 | xargs -0 --max-procs=$MAX_PROCS -I{} $SHELL -c "call_snaphu {} $WIDTH"
 

@@ -269,7 +269,7 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
 # COMMAND: plot
 @cli.command('plot')
 @click.argument("filename")
-@click.option("--downsample", default=1, help="Amount to downsample image")
+@click.option("--downsample", "-d", default=1, help="Amount to downsample image")
 @click.option("--cmap", default='dismph', help="Colormap for image display.")
 @click.option("--title", help="Title for image plot")
 @click.option("--alpha",
@@ -295,7 +295,7 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
 
 # COMMAND: view-masks
 @cli.command('view-masks')
-@click.option("--downsample", default=1, help="Amount to downsample image")
+@click.option("--downsample", "-d", default=1, help="Amount to downsample image")
 @click.option("--geolist-ignore-file",
               default="geolist_ignore.txt",
               help="File to save date of missing .geos on click")
@@ -349,6 +349,7 @@ def view_masks(context, downsample, geolist_ignore_file, print_dates):
 @cli.command(context_settings=dict(ignore_unknown_options=True))
 @click.option('--load/--no-load', default=True, help='Load last calculated blobs')
 @click.option('--filename',
+              '-f',
               type=str,
               default="deformation.h5",
               help="specific file to search blobs (default is deformation.h5)")
