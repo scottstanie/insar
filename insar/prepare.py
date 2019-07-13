@@ -19,6 +19,7 @@ logger = get_log()
 DATE_FMT = "%Y%m%d"
 
 MASK_FILENAME = "masks.h5"
+INT_FILENAME = "int_stack.h5"
 UNW_FILENAME = "unw_stack.h5"
 CC_FILENAME = "cc_stack.h5"
 
@@ -46,12 +47,14 @@ def prepare_stacks(
         overwrite=False,
         gps_dir=None,
 ):
+    int_stack_file = os.path.join(igram_path, INT_FILENAME)
     unw_stack_file = os.path.join(igram_path, UNW_FILENAME)
     cc_stack_file = os.path.join(igram_path, CC_FILENAME)
     mask_stack_file = os.path.join(igram_path, MASK_FILENAME)
 
     create_igram_stacks(
         igram_path,
+        int_stack_file=int_stack_file,
         unw_stack_file=unw_stack_file,
         cc_stack_file=cc_stack_file,
         overwrite=overwrite,
@@ -77,15 +80,19 @@ def prepare_stacks(
 @log_runtime
 def create_igram_stacks(
         igram_path,
+        int_stack_file=INT_FILENAME,
         unw_stack_file=UNW_FILENAME,
         cc_stack_file=CC_FILENAME,
         overwrite=False,
 ):
     stack_dicts = (
+        dict(file_ext=".int", create_mean=False, filename=int_stack_file),
         dict(file_ext=".unw", create_mean=False, filename=unw_stack_file),
         dict(file_ext=".cc", create_mean=True, filename=cc_stack_file),
     )
     for d in stack_dicts:
+        if d["filename"] is None:
+            continue
         logger.info("Creating hdf5 stack %s" % d["filename"])
         create_hdf5_stack(directory=igram_path, overwrite=overwrite, **d)
         store_geolist(igram_path, d["filename"], overwrite=overwrite)
@@ -691,11 +698,11 @@ def _intlist_to_str(int_date_list):
                      for a, b in int_date_list]).astype("S")
 
 
-def load_mask(geo_date_list=None,
-              perform_mask=True,
-              deformation_filename=None,
-              mask_filename=MASK_FILENAME,
-              directory=None):
+def load_composite_mask(geo_date_list=None,
+                        perform_mask=True,
+                        deformation_filename=None,
+                        mask_filename=MASK_FILENAME,
+                        directory=None):
     if not perform_mask:
         return np.ma.nomask
 
@@ -722,3 +729,61 @@ def load_mask(geo_date_list=None,
         stack_mask = np.sum(f[GEO_MASK_DSET][used_bool_arr, :, :], axis=0)
         stack_mask = stack_mask > 0
         return stack_mask
+
+
+def load_single_mask(int_date_string=None,
+                     date_pair=None,
+                     mask_filename=MASK_FILENAME,
+                     int_date_list=None):
+    """Load one mask from the `mask_filename`
+
+    Can either pass a tuple of Datetimes in date_pair, or a string like
+    `20170101_20170104.int` or `20170101_20170303` to int_date_string
+    """
+    if int_date_list is None:
+        int_date_list = sario.load_intlist_from_h5(mask_filename)
+
+    if int_date_string is not None:
+        # If the pass string with ., only take first part
+        date_str_pair = int_date_string.split('.')[0].split('_')
+        date_pair = sario.parse_intlist_strings([date_str_pair])[0]
+
+    with h5py.File(mask_filename, "r") as f:
+        idx = int_date_list.index(date_pair)
+        return f[IGRAM_MASK_DSET][idx]
+
+
+@log_runtime
+def zero_masked_areas(igram_path=".", mask_filename=None, verbose=True):
+    logger.info("Zeroing out masked area in .cc and .int files")
+
+    if mask_filename is None:
+        mask_filename = os.path.join(igram_path, MASK_FILENAME)
+
+    int_date_list = sario.load_intlist_from_h5(mask_filename)
+
+    with h5py.File(mask_filename, "r") as f:
+        igram_mask_dset = f[IGRAM_MASK_DSET]
+        for idx, (early, late) in enumerate(int_date_list):
+            cur_mask = igram_mask_dset[idx]
+            base_str = "%s_%s" % (early.strftime(DATE_FMT), late.strftime(DATE_FMT))
+
+            if verbose:
+                logger.info("Zeroing {0}.cc and {0}.int".format(base_str))
+
+            int_filename = base_str + ".int"
+            zero_file(int_filename, cur_mask, is_stacked=False)
+
+            cc_filename = base_str + ".cc"
+            zero_file(cc_filename, cur_mask, is_stacked=True)
+
+
+def zero_file(filename, mask, is_stacked=False):
+    if is_stacked:
+        amp, img = sario.load(filename, return_amp=True)
+        img[mask] = 0
+        sario.save(filename, np.stack((amp, img), axis=0))
+    else:
+        img = sario.load(filename)
+        img[mask] = 0
+        sario.save(filename, img)

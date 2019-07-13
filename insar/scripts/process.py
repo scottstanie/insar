@@ -171,7 +171,12 @@ sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(rsc_file=elevation_dem_
     subprocess.check_call(ps_sbas_cmd, shell=True)
 
     # Also create masks of invalid areas of igrams/.geos
-    insar.timeseries.create_igram_masks('.', row_looks=looks, col_looks=looks)
+    logger.info("Making stacks for new igrams, overwriting old mask file")
+    mask_filename = insar.prepare.create_mask_stacks(igram_path='.', overwrite=True)
+
+    # Uses the computed mask areas to set the .int and .cc bad values to 0
+    # (since they are non-zero from FFT smearing rows)
+    insar.prepare.zero_masked_areas(igram_path='.', mask_filename=mask_filename, verbose=True)
 
 
 def run_snaphu(lowpass=None, **kwargs):

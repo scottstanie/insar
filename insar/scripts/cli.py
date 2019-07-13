@@ -245,7 +245,7 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
         rsc_data = sardem.loading.load_dem_rsc(os.path.join(context['path'], 'dem.rsc'))
         print("Using lat/lon")
 
-    stack_mask = insar.prepare.load_mask(geo_date_list=geo_date_list, perform_mask=mask)
+    stack_mask = insar.prepare.load_composite_mask(geo_date_list=geo_date_list, perform_mask=mask)
 
     stack_ll = apertools.latlon.LatlonImage(data=deformation, dem_rsc=rsc_data)
     stack_ll[:, stack_mask] = np.nan
@@ -465,7 +465,8 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
             # For 3D stack, assume we just want the final image
             image = image[-1]
 
-        stack_mask = insar.prepare.load_mask(geo_date_list=geo_date_list, perform_mask=use_mask)
+        stack_mask = insar.prepare.load_composite_mask(geo_date_list=geo_date_list,
+                                                       perform_mask=use_mask)
         image[stack_mask] = np.nan
         shifted_cmap = apertools.plotting.make_shifted_cmap(
             image,
