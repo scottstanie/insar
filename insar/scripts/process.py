@@ -28,7 +28,7 @@ import apertools.utils
 from apertools.log import get_log, log_runtime
 from apertools.utils import mkdir_p, force_symlink
 from apertools.parsers import Sentinel
-import insar.timeseries
+import insar.prepare
 
 logger = get_log()
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -214,6 +214,7 @@ def convert_to_tif(max_height=None, **kwargs):
     subprocess.check_call(snaphu_cmd, shell=True)
 
 
+# TODO: fix this function for new stuff
 def run_sbas_inversion(ref_row=None,
                        ref_col=None,
                        window=None,
@@ -226,17 +227,25 @@ def run_sbas_inversion(ref_row=None,
 
     Assumes we are in the directory with all .unw files"""
     igram_path = os.path.realpath(os.getcwd())
-    geolist, phi_arr, deformation = insar.timeseries.run_inversion(igram_path,
-                                                                   reference=(ref_row, ref_col),
-                                                                   window=window,
-                                                                   alpha=alpha,
-                                                                   constant_vel=constant_vel,
-                                                                   difference=difference,
-                                                                   deramp_order=deramp_order,
-                                                                   verbose=kwargs['verbose'])
-    logger.info("Saving deformation.npy and geolist.npy")
-    np.save('deformation.npy', deformation)
-    np.save('geolist.npy', geolist)
+
+    # Note: with overwrite=False, this will only take a long time once
+    insar.prepare.prepare_stacks(igram_path, overwrite=False)
+
+    cmd = "julia /home/scott/repos/InsarTimeseries.jl/src/cli.jl --ignore geolist_ignore.txt " \
+          " -o {output_name}.h5 --alpha {alpha} "
+
+    if constant_vel:
+        output_name = "deformation_linear.h5"
+        cmd += " --constant-velocity "
+    else:
+        output_name = "deformation.h5"
+
+    cmd = cmd.format(output_name=output_name, alpha=alpha)
+    logger.info("Saving to %s" % output_name)
+    logger.info("Running:")
+    logger.info(cmd)
+
+    subprocess.check_call(cmd, shell=True)
 
 
 # List of functions that run each step
