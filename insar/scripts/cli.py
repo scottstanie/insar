@@ -102,7 +102,8 @@ def parse_steps(ctx, param, value):
               help="Maximum height/max absolute phase for converting .unw files to .tif"
               " (used for contour_interval option to dishgt)")
 @click.option('--window', default=3, help="Window size for .unw stack reference")
-@click.option('--constant-vel',
+@click.option('--constant-velocity',
+              '-c',
               is_flag=True,
               help="Use a constant velocity for SBAS inversion solution")
 @click.option('--alpha', default=0.0, help="Regularization parameter for SBAS inversion")
