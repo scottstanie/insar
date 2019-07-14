@@ -14,8 +14,12 @@ call_snaphu() {
 	CORNAME=$(echo $INTFILE | sed 's/.int/.cc/' | sed 's/.lowpass//' )
 	OUTNAME=$(echo $INTFILE | sed 's/.int/.unw/' | sed 's/.lowpass//' )
 	echo "Running snaphu on $INTFILE with width $WIDTH: output to $OUTNAME"
-  $PHASE_UNWRAP_DIR/snaphu -s $INTFILE $WIDTH -c $CORNAME -o $OUTNAME;
-	echo "Finished unwrapping $INTFILE "
+    if [ -f $OUTNAME ]; then
+        echo "$OUTNAME exists already. Skipping unwrapping $INTFILE"
+    else
+        $PHASE_UNWRAP_DIR/snaphu -s $INTFILE $WIDTH -c $CORNAME -o $OUTNAME;
+        echo "Finished unwrapping $INTFILE "
+    fi
 }
 
 SCRIPTNAME=`basename "$0"`
