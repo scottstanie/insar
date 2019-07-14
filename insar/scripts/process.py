@@ -179,7 +179,7 @@ sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(rsc_file=elevation_dem_
     insar.prepare.zero_masked_areas(igram_path='.', mask_filename=mask_filename, verbose=True)
 
 
-def run_snaphu(lowpass=None, **kwargs):
+def run_snaphu(lowpass=None, max_jobs=None, **kwargs):
     """8. run snaphu to unwrap all .int files
 
     Assumes we are in the directory with all .unw files
@@ -190,6 +190,8 @@ def run_snaphu(lowpass=None, **kwargs):
     snaphu_cmd = '{filepath} {width} {lowpass}'.format(filepath=snaphu_script,
                                                        width=igram_rsc['width'],
                                                        lowpass=lowpass)
+    if max_jobs is not None:
+        snaphu_cmd += " {}".format(max_jobs)
     logger.info(snaphu_cmd)
     subprocess.check_call(snaphu_cmd, shell=True)
 

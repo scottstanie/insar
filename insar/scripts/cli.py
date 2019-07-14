@@ -97,6 +97,11 @@ def parse_steps(ctx, param, value):
               type=int,
               default=1,
               help="Size of lowpass filter to use on igrams before unwrapping")
+@click.option("--max-jobs",
+              type=int,
+              default=None,
+              help="Cap the number of snaphu processes to kick off at once."
+              " If none specified, number of cpu cores is used.")
 @click.option("--max-height",
               default=10,
               help="Maximum height/max absolute phase for converting .unw files to .tif"
@@ -243,17 +248,20 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
         rsc_data = None
         print("Using rows/cols")
     else:
-        rsc_data = sardem.loading.load_dem_rsc(os.path.join(context['path'], 'dem.rsc'))
+        rsc_data = apertools.sario.load(os.path.join(context['path'], 'dem.rsc'))
         print("Using lat/lon")
 
     stack_mask = insar.prepare.load_composite_mask(geo_date_list=geo_date_list, perform_mask=mask)
 
     stack_ll = apertools.latlon.LatlonImage(data=deformation, dem_rsc=rsc_data)
     stack_ll[:, stack_mask] = np.nan
+
     stack_ll = stack_ll[:, row_start:row_end, col_start:col_end]
 
     img = apertools.latlon.LatlonImage(data=np.mean(stack_ll[-3:], axis=0),
                                        dem_rsc=stack_ll.dem_rsc)
+
+    stack_mask = stack_mask[row_start:row_end, col_start:col_end]
     img[stack_mask] = np.nan
 
     apertools.plotting.view_stack(
