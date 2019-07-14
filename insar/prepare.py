@@ -640,11 +640,13 @@ def find_coherent_patch(correlations, window=11):
     return np.unravel_index(max_idx, mean_stack.shape)
 
 
-def store_geolist(igram_path, stack_file, overwrite=False):
-    geo_date_list, _ = load_geolist_intlist(igram_path, parse=True)
+def store_geolist(igram_path=None, stack_file=None, overwrite=False, geo_date_list=None):
+    if geo_date_list is None:
+        geo_date_list, _ = load_geolist_intlist(igram_path, parse=True)
 
     if not _check_dset(stack_file, GEOLIST_DSET, overwrite):
         return
+
     logger.debug("Saving geo dates to %s / %s" % (stack_file, GEOLIST_DSET))
     with h5py.File(stack_file, "a") as f:
         # JSON gets messed from doing from julia to h5py for now
@@ -652,8 +654,10 @@ def store_geolist(igram_path, stack_file, overwrite=False):
         f[GEOLIST_DSET] = _geolist_to_str(geo_date_list)
 
 
-def store_intlist(igram_path, stack_file, overwrite=False):
-    _, int_date_list = load_geolist_intlist(igram_path)
+def store_intlist(igram_path=None, stack_file=None, overwrite=False, int_date_list=None):
+    if int_date_list is None:
+        _, int_date_list = load_geolist_intlist(igram_path)
+
     if not _check_dset(stack_file, INTLIST_DSET, overwrite):
         return
 
@@ -787,3 +791,63 @@ def zero_file(filename, mask, is_stacked=False):
         img = sario.load(filename)
         img[mask] = 0
         sario.save(filename, img)
+
+
+@log_runtime
+def merge_files(filename1, filename2, new_filename, overwrite=False):
+    """Merge together 2 (currently mask) hdf5 files into a new file"""
+
+    def _merge_lists(list1, list2, merged_list, dset_name, dset1, dset2):
+        logger.info("%s: %s from %s and %s from %s into %s in file %s" % (
+            dset_name,
+            len(list1),
+            filename1,
+            len(list2),
+            filename2,
+            len(merged_list),
+            new_filename,
+        ))
+        for idx in range(len(merged_list)):
+            cur_item = merged_list[idx]
+            if cur_item in list1:
+                jdx = list1.index(cur_item)
+                fnew[dset_name][idx] = dset1[jdx]
+            else:
+                jdx = list2.index(cur_item)
+                fnew[dset_name][idx] = dset2[jdx]
+
+    if overwrite:
+        _check_dset(new_filename, IGRAM_MASK_DSET, overwrite)
+        _check_dset(new_filename, GEO_MASK_DSET, overwrite)
+
+    f1 = h5py.File(filename1)
+    f2 = h5py.File(filename2)
+    igram_dset1 = f1[IGRAM_MASK_DSET]
+    igram_dset2 = f2[IGRAM_MASK_DSET]
+    geo_dset1 = f1[GEO_MASK_DSET]
+    geo_dset2 = f2[GEO_MASK_DSET]
+
+    intlist1 = sario.load_intlist_from_h5(filename1)
+    intlist2 = sario.load_intlist_from_h5(filename2)
+    geolist1 = sario.load_geolist_from_h5(filename1)
+    geolist2 = sario.load_geolist_from_h5(filename2)
+    merged_intlist = sorted(set(intlist1) | set(intlist2))
+    merged_geolist = sorted(set(geolist1) | set(geolist2))
+
+    store_intlist(stack_file=new_filename, overwrite=True, int_date_list=merged_intlist)
+    store_geolist(stack_file=new_filename, overwrite=True, geo_date_list=merged_geolist)
+
+    new_geo_shape = (len(merged_geolist), geo_dset1.shape[1], geo_dset1.shape[2])
+    _create_dset(new_filename, GEO_MASK_DSET, new_geo_shape, dtype=igram_dset1.dtype)
+    new_igram_shape = (len(merged_intlist), igram_dset1.shape[1], igram_dset1.shape[2])
+    _create_dset(new_filename, IGRAM_MASK_DSET, new_igram_shape, dtype=igram_dset1.dtype)
+
+    fnew = h5py.File(new_filename, "a")
+    try:
+        _merge_lists(geolist1, geolist2, merged_geolist, GEO_MASK_DSET, geo_dset1, geo_dset2)
+        _merge_lists(intlist1, intlist2, merged_intlist, IGRAM_MASK_DSET, igram_dset1, igram_dset2)
+
+    finally:
+        f1.close()
+        f2.close()
+        fnew.close()
