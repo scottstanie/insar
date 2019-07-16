@@ -257,18 +257,19 @@ def create_hdf5_stack(filename=None,
 
     # TODO: do we want to replace the .unw files with .h5 files, then make a Virtual dataset?
     # layout = h5py.VirtualLayout(shape=(len(file_list), nrows, ncols), dtype=dtype)
-    file_list = sario.find_files(directory=directory, search_term="*" + file_ext)
-
     if not _check_dset(filename, STACK_DSET, overwrite):
         return
 
-    with h5py.File(filename, "w") as hf:
-        stack = sario.load_stack(file_list=file_list)
-        hf.create_dataset(
-            STACK_DSET,
-            data=stack,
-        )
-        hf[STACK_DSET].attrs["filenames"] = file_list
+    file_list = sario.find_files(directory=directory, search_term="*" + file_ext)
+
+    testf = sario.load(file_list[0])
+    shape = (len(file_list), testf.shape[0], testf.shape[1])
+    _create_dset(filename, STACK_DSET, shape, dtype=testf.dtype)
+    with h5py.File(filename, "a") as hf:
+        dset = hf[STACK_DSET]
+        dset.attrs["filenames"] = file_list
+        for idx, f in enumerate(file_list):
+            dset[idx] = sario.load(f)
 
     if save_rsc:
         dem_rsc = sario.load(sario.find_rsc_file(directory=directory))
@@ -278,7 +279,7 @@ def create_hdf5_stack(filename=None,
         with h5py.File(filename, "a") as hf:
             hf.create_dataset(
                 STACK_MEAN_DSET,
-                data=np.mean(stack, axis=0),
+                data=np.mean(hf[STACK_DSET], axis=0),
             )
 
     return filename
