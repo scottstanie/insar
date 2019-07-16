@@ -107,10 +107,15 @@ def parse_steps(ctx, param, value):
               help="Maximum height/max absolute phase for converting .unw files to .tif"
               " (used for contour_interval option to dishgt)")
 @click.option('--window', default=3, help="Window size for .unw stack reference")
+@click.option('--ignore-geos',
+              is_flag=True,
+              help="Use the geolist ignore file to ignore dates "
+              "(saved to geolist_ignore.txt from `view-masks`")
 @click.option('--constant-velocity',
               '-c',
               is_flag=True,
               help="Use a constant velocity for SBAS inversion solution")
+@click.option('--stackavg', is_flag=True, help="Use a stack averaging method for timeseries")
 @click.option('--alpha', default=0.0, help="Regularization parameter for SBAS inversion")
 @click.option('--difference', is_flag=True, help="Use velocity differences for regularization")
 @click.option(
@@ -260,9 +265,6 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
 
     img = apertools.latlon.LatlonImage(data=np.mean(stack_ll[-3:], axis=0),
                                        dem_rsc=stack_ll.dem_rsc)
-
-    stack_mask = stack_mask[row_start:row_end, col_start:col_end]
-    img[stack_mask] = np.nan
 
     apertools.plotting.view_stack(
         stack_ll,
@@ -433,6 +435,43 @@ def _handle_args(extra_args):
     return dict(zip(keys, vals))
 
 
+def _save_npy_file(imgfile,
+                   new_filename,
+                   use_mask=True,
+                   vmin=None,
+                   vmax=None,
+                   normalize=False,
+                   cmap='seismic'):
+    try:
+        image = apertools.sario.load(imgfile)
+        geo_date_list, use_mask = None, False
+    except ValueError:
+        geo_date_list, image = apertools.sario.load_deformation(".", filename=imgfile)
+
+    if image.ndim > 2:
+        # For 3D stack, assume we just want the final image
+        image = image[-1]
+
+    stack_mask = insar.prepare.load_composite_mask(geo_date_list=geo_date_list,
+                                                   perform_mask=use_mask)
+    image[stack_mask] = np.nan
+    shifted_cmap = apertools.plotting.make_shifted_cmap(
+        image,
+        cmap_name=cmap,
+        vmax=vmax,
+        vmin=vmin,
+    )
+    apertools.sario.save(
+        new_filename,
+        image,
+        cmap=shifted_cmap,
+        normalize=normalize,
+        preview=True,
+        vmax=vmax,
+        vmin=vmin,
+    )
+
+
 # COMMAND: kml
 @cli.command()
 @click.argument("imgfile", required=False)
@@ -462,37 +501,6 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
         insar kml grd_dismph.tif --ann trinity_all.ann --ext .int.grd -t "ground project int"
 
     """
-
-    def _save_npy_file(imgfile, new_filename, use_mask=True):
-        try:
-            image = apertools.sario.load(imgfile)
-            geo_date_list, use_mask = None, False
-        except ValueError:
-            geo_date_list, image = apertools.sario.load_deformation(".", filename=imgfile)
-
-        if image.ndim > 2:
-            # For 3D stack, assume we just want the final image
-            image = image[-1]
-
-        stack_mask = insar.prepare.load_composite_mask(geo_date_list=geo_date_list,
-                                                       perform_mask=use_mask)
-        image[stack_mask] = np.nan
-        shifted_cmap = apertools.plotting.make_shifted_cmap(
-            image,
-            cmap_name=cmap,
-            vmax=vmax,
-            vmin=vmin,
-        )
-        apertools.sario.save(
-            new_filename,
-            image,
-            cmap=shifted_cmap,
-            normalize=normalize,
-            preview=True,
-            vmax=vmax,
-            vmin=vmin,
-        )
-
     if geojson:
         with open(geojson) as f:
             gj_dict = json.load(f)
@@ -510,7 +518,15 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
     file_ext = apertools.utils.get_file_ext(imgfile)
     if file_ext in (".npy", ".h5"):
         new_filename = imgfile.replace(file_ext, ".png")
-        _save_npy_file(imgfile, new_filename)
+        _save_npy_file(
+            imgfile,
+            new_filename,
+            use_mask=True,
+            vmin=vmin,
+            vmax=vmax,
+            normalize=normalize,
+            cmap=cmap,
+        )
     else:
         new_filename = imgfile
 
@@ -524,6 +540,55 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
         shape=shape,
     )
     print(kml_string)
+
+
+# COMMAND: geotiff
+@cli.command()
+@click.argument("imgfile", required=False)
+@click.option("--shape",
+              default="box",
+              help="kml shape: use 'box' for image overlay, 'quad' for tiled map-overlay")
+@click.option("--rsc", help=".rsc file containing lat/lon start and steps")
+@click.option("--kml", help=".kml file for image (not used if .rsc used)")
+@click.option("--output",
+              "-o",
+              help="File to save .tif output to (defaults to input, replaced with tif)")
+@click.option("--cmap", default="seismic", help="Colormap (if saving .npy/.h5 image)")
+@click.option("--normalize", is_flag=True, default=False, help="Center image to [-1, 1]")
+@click.option("--vmax", type=float, help="Maximum value for imshow")
+@click.option("--vmin", type=float, help="Minimum value for imshow")
+@click.pass_obj
+def geotiff(context, imgfile, shape, rsc, kml, output, cmap, normalize, vmax, vmin):
+    if rsc:
+        rsc_data = apertools.sario.load(rsc)
+    else:
+        rsc_data = None
+
+    # Check if imgfile is a .npy saved matrix
+    file_ext = apertools.utils.get_file_ext(imgfile)
+    if file_ext in (".npy", ".h5"):
+        new_filename = imgfile.replace(file_ext, ".png")
+        _save_npy_file(
+            imgfile,
+            new_filename,
+            use_mask=True,
+            vmin=vmin,
+            vmax=vmax,
+            normalize=normalize,
+            cmap=cmap,
+        )
+    else:
+        new_filename = imgfile
+    if output is None:
+        output = imgfile.replace(file_ext, ".tif")
+    # create_geotiff(rsc_data, kml_file, img_filename, shape='box', outfile)
+    apertools.kml.create_geotiff(
+        rsc_data=rsc_data,
+        kml_file=kml,
+        img_filename=new_filename,
+        shape=shape,
+        outfile=output,
+    )
 
 
 # COMMAND: mask
