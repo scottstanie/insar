@@ -224,6 +224,8 @@ def run_sbas_inversion(ref_row=None,
                        constant_vel=False,
                        difference=False,
                        deramp_order=1,
+                       ignore_geos=False,
+                       stackavg=False,
                        **kwargs):
     """10. Perofrm SBAS inversion, save the deformation as .npy
 
@@ -233,12 +235,20 @@ def run_sbas_inversion(ref_row=None,
     # Note: with overwrite=False, this will only take a long time once
     insar.prepare.prepare_stacks(igram_path, overwrite=False)
 
-    cmd = "julia /home/scott/repos/InsarTimeseries.jl/src/cli.jl --ignore geolist_ignore.txt " \
-          " -o {output_name}.h5 --alpha {alpha} "
+    # cmd = "julia --start=no /home/scott/repos/InsarTimeseries.jl/src/runcli.jl " \
+    # " -o {output_name} --alpha {alpha} "
+    cmd = "/home/scott/repos/InsarTimeseries.jl/builddir/insarts " \
+          " -o {output_name} --alpha {alpha} "
+
+    if ignore_geos:
+        cmd += " --ignore geolist_ignore.txt "
 
     if constant_vel:
         output_name = "deformation_linear.h5"
         cmd += " --constant-velocity "
+    elif stackavg:
+        output_name = "deformation_stackavg.h5"
+        cmd += " --stack-average "
     else:
         output_name = "deformation.h5"
 
