@@ -221,7 +221,7 @@ def run_sbas_inversion(ref_row=None,
                        ref_col=None,
                        window=None,
                        alpha=0,
-                       constant_vel=False,
+                       constant_velocity=False,
                        difference=False,
                        deramp_order=1,
                        ignore_geos=False,
@@ -243,7 +243,7 @@ def run_sbas_inversion(ref_row=None,
     if ignore_geos:
         cmd += " --ignore geolist_ignore.txt "
 
-    if constant_vel:
+    if constant_velocity:
         output_name = "deformation_linear.h5"
         cmd += " --constant-velocity "
     elif stackavg:

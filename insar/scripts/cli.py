@@ -313,12 +313,17 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
 @click.option("--print-dates/--no-print-dates",
               default=False,
               help="Print out missing dates to terminal")
+@click.option("--cmap", default="Reds", help="colormap to display mask areas")
+@click.option("--vmin", type=float, default=0, help="Optional: Minimum value for imshow")
+@click.option("--vmax", type=float, help="Optional: Maximum value for imshow")
 @click.pass_obj
-def view_masks(context, downsample, geolist_ignore_file, print_dates):
+def view_masks(context, downsample, geolist_ignore_file, print_dates, cmap, vmin, vmax):
     geo_date_list = apertools.sario.load_geolist_from_h5(insar.prepare.MASK_FILENAME)
 
     def _print(series, row, col):
-        print(".geos missing at (%s, %s): %s" % (row, col, np.array(geo_date_list)[series]))
+        dstrings = [d.strftime("%Y%m%d") for d in np.array(geo_date_list)[series]]
+        print(".geos missing at (%s, %s)" % (row, col))
+        print("%s" % '\n'.join(dstrings))
 
     def _save_missing_geos(series, row, col):
         geo_str_list = [g.strftime(insar.prepare.DATE_FMT) for g in np.array(geo_date_list)[series]]
@@ -343,11 +348,13 @@ def view_masks(context, downsample, geolist_ignore_file, print_dates):
             geo_masks,
             display_img=composite_mask,
             geolist=geo_date_list,
-            cmap="Reds",
+            cmap=cmap,
             label="is masked",
             title="Number of dates of missing .geo data",
             line_plot_kwargs=dict(marker="x", linestyle=' '),
-            perform_shift=True,
+            perform_shift=False,
+            vmin=vmin,
+            vmax=vmax,
             legend_loc=0,
             # timeline_callback=_print,
             timeline_callback=callback,
@@ -489,9 +496,12 @@ def _save_npy_file(imgfile,
 @click.option("--vmin", type=float, help="Minimum value for imshow")
 @click.option("--ann", help=".ann file containing lat/lon start and steps for UAVSAR")
 @click.option("--ext", help="extension for UAVSAR (to be used with --ann)")
+@click.option("--mask/--no-mask",
+              default=False,
+              help="If using .h5 stack, load mask and crop bad-data areas")
 @click.pass_obj
 def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normalize, vmax, vmin,
-        ann, ext):
+        ann, ext, mask):
     """Creates .kml file for some image
     IMGFILE is the image to load into Google Earth
 
@@ -521,7 +531,7 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
         _save_npy_file(
             imgfile,
             new_filename,
-            use_mask=True,
+            use_mask=mask,
             vmin=vmin,
             vmax=vmax,
             normalize=normalize,
@@ -557,8 +567,11 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
 @click.option("--normalize", is_flag=True, default=False, help="Center image to [-1, 1]")
 @click.option("--vmax", type=float, help="Maximum value for imshow")
 @click.option("--vmin", type=float, help="Minimum value for imshow")
+@click.option("--mask/--no-mask",
+              default=False,
+              help="If using .h5 stack, load mask and crop bad-data areas")
 @click.pass_obj
-def geotiff(context, imgfile, shape, rsc, kml, output, cmap, normalize, vmax, vmin):
+def geotiff(context, imgfile, shape, rsc, kml, output, cmap, normalize, vmax, vmin, mask):
     if rsc:
         rsc_data = apertools.sario.load(rsc)
     else:
@@ -571,7 +584,7 @@ def geotiff(context, imgfile, shape, rsc, kml, output, cmap, normalize, vmax, vm
         _save_npy_file(
             imgfile,
             new_filename,
-            use_mask=True,
+            use_mask=mask,
             vmin=vmin,
             vmax=vmax,
             normalize=normalize,
