@@ -476,7 +476,11 @@ def deramp_stack(
             # Shape of sario.load_stack with return_amp is (nlayers, 2, nrows, ncols)
             for idx, layer in enumerate(f[STACK_DSET]):
                 mask = mask_dset[idx]
-                f[STACK_FLAT_DSET][idx] = remove_ramp(layer, order=order, mask=mask)
+                try:
+                    f[STACK_FLAT_DSET][idx] = remove_ramp(layer, order=order, mask=mask)
+                except np.linalg.linalg.LinAlgError:
+                    logger.info("Failed to estimate ramp on layer %s: setting to 0" % idx)
+                    f[STACK_FLAT_DSET][idx] = np.zeros_like(layer)
 
 
 def remove_ramp(z, order=1, mask=np.ma.nomask):
