@@ -232,7 +232,7 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
               is_flag=True,
               default=False)
 @click.option("--mask/--no-mask", help="Mask areas that have any missing data", default=True)
-@click.option("--vmin", type=float, default=0, help="Optional: Minimum value for imshow")
+@click.option("--vmin", type=float, help="Optional: Minimum value for imshow")
 @click.option("--vmax", type=float, help="Optional: Maximum value for imshow")
 @click.pass_obj
 def view_stack(context, filename, cmap, label, title, row_start, row_end, col_start, col_end,
