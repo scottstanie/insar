@@ -21,12 +21,15 @@ def download(idx, overlay, look):
     return True
 
 
-overlays = open('overlays-deduped.txt').read().splitlines()
-quick_looks = [line.replace('map-overlay.kml', 'quick-look.png') for line in overlays]
-with ThreadPoolExecutor(max_workers=10) as executor:
-    procs = []
-    for idx, overlay, look in zip(range(1, len(overlays) + 1), overlays, quick_looks):
-        data = executor.submit(download, idx, overlay, look)
-        procs.append(data)
-    for p in procs:
-        p.result()
+if __name__ == '__main__':
+    # file should be list of files on remote with "map-overlap.kml"
+    fname = sys.argv[1]
+    overlays = open(fname).read().splitlines()
+    quick_looks = [line.replace('map-overlay.kml', 'quick-look.png') for line in overlays]
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        procs = []
+        for idx, overlay, look in zip(range(1, len(overlays) + 1), overlays, quick_looks):
+            data = executor.submit(download, idx, overlay, look)
+            procs.append(data)
+        for p in procs:
+            p.result()

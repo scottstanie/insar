@@ -140,8 +140,9 @@ def calc_detection_stats(blobs_real, detected, min_iou=0.5, verbose=True):
         closest_idx = dist_3d.argmin()
         closest_dist = dist_3d[closest_idx]
         min_dist_real_blob = blobs_real[closest_idx, :]
-        iou_frac = blob.skblob.intersection_over_union(
-            cur_clob[:3], min_dist_real_blob[:3], using_sigma=False)
+        iou_frac = blob.skblob.intersection_over_union(cur_clob[:3],
+                                                       min_dist_real_blob[:3],
+                                                       using_sigma=False)
         is_overlapping = iou_frac > min_iou
         # ipdb.set_trace()
         # if np.any(matches):  # If we want to check all iou, maybe do this
@@ -164,7 +165,8 @@ def calc_detection_stats(blobs_real, detected, min_iou=0.5, verbose=True):
     precision = len(true_detects) / len(detected)
     recall = len(true_detects) / len(blobs_real)
 
-    if 2 * len(true_detects) + len(false_positives) + len(misses) != len(blobs_real) + len(detected):
+    if 2 * len(true_detects) + len(false_positives) + len(misses) != len(blobs_real) + len(
+            detected):
         print('CAUTION: weird num of true + fp + miss')
     return np.array(true_detects), np.array(false_positives), misses, precision, recall
 
@@ -206,8 +208,9 @@ def demo_ghost_blobs(num_blobs=10,
     print("Finding blobs in synthetic images")
     detected, sigma_list = blob.find_blobs(out, **finding_params)
 
-    true_d, fp, misses, precision, recall = calc_detection_stats(
-        real_blobs, detected, min_iou=min_iou)
+    true_d, fp, misses, precision, recall = calc_detection_stats(real_blobs,
+                                                                 detected,
+                                                                 min_iou=min_iou)
     print("Results:")
     print("precision: ", precision)
     print("recall: ", recall)
@@ -224,8 +227,11 @@ def plot_blob_results(image, true_d=None, fp=None, misses=None, delete=False):
     if fp is not None:
         fixed, ax = blob.plot.plot_blobs(image=image, blobs=fp, color='black', ax=ax, delete=delete)
     if misses is not None:
-        fixed, ax = blob.plot.plot_blobs(
-            image=image, blobs=misses, color='red', ax=ax, delete=delete)
+        fixed, ax = blob.plot.plot_blobs(image=image,
+                                         blobs=misses,
+                                         color='red',
+                                         ax=ax,
+                                         delete=delete)
     return fixed, ax
 
 
@@ -376,16 +382,32 @@ GAUSSIAN = make_gaussian
 LOG = make_log
 
 
-def plot_func(func=GAUSSIAN, shape=(501, 501), sigma=None):
-    if sigma is None:
-        sigma = shape[0] / 19
-    f = func(shape, sigma)
-    X, Y = _xy_grid(shape, xmin=sigma, xmax=sigma, ymin=sigma, ymax=sigma)
+def plot_func(func=GAUSSIAN, shape=(501, 501), sigma=None, surface=None, ax=None):
+    if surface is None:
+        if sigma is None:
+            sigma = shape[0] / 19
+        surface = func(shape, sigma)
+        xmin = ymin = -sigma
+        xmax = ymax = sigma
+    else:
+        shape = surface.shape
 
-    fig = plt.figure(frameon=False)
-    ax = fig.gca(projection='3d')
-    surf = ax.plot_surface(X, Y, f, cmap=cm.coolwarm, linewidth=0, antialiased=True)
+        xmin = ymin = 0
+        ymax, xmax = shape
+
+    print(xmin, xmax, ymin, ymax)
+    X, Y = _xy_grid(shape, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
+
+    if ax is None:
+        fig = plt.figure(frameon=False)
+        ax = fig.gca(projection='3d')
+
+    ax.plot_surface(X, Y, surface, cmap=cm.coolwarm, linewidth=0, antialiased=True)
     plt.show()
+    return ax
+
+
+plot_3d_surf = plot_func
 
 
 def auto_corr_ratio(image, sigma, mode='nearest', cval=0):
@@ -512,8 +534,9 @@ def simulate_detections(num_sims,
         # print("Finding blobs in synthetic images")
         detected, sigma_list = blob.find_blobs(out, **finding_params)
 
-        true_d, fp, misses, precision, recall = calc_detection_stats(
-            real_blobs, detected, verbose=False)
+        true_d, fp, misses, precision, recall = calc_detection_stats(real_blobs,
+                                                                     detected,
+                                                                     verbose=False)
         print("Results for run %s:" % run_idx)
         print("num blobs real: ", len(real_blobs))
         print("precision: ", precision)
@@ -780,13 +803,14 @@ def make_stack(shape=(501, 501), max_amp=3, cmap='jet'):
 
 def make_stack2(N=501, max_amp=3, cmap='jet'):
     """Simpler composite of 3 blob sizes, no superimposing"""
-    b1 = make_gaussian(N, 60, N // 3, 2 * N // 3)
-    b2 = make_gaussian(N, 20, N // 3, N // 3)
+    shape = (N, N)
+    b1 = make_gaussian(shape, 60, N // 3, 2 * N // 3)
+    b2 = make_gaussian(shape, 20, N // 3, N // 3)
 
-    b4 = make_gaussian(N, 29, 345, 345)
-    b4 += make_gaussian(N, 29, 73 + 345, 345)
-    b4 += make_gaussian(N, 29, 345, 73 + 345)
-    b4 += make_gaussian(N, 29, 73 + 345, 73 + 345)
+    b4 = make_gaussian(shape, 29, 345, 345)
+    b4 += make_gaussian(shape, 29, 73 + 345, 345)
+    b4 += make_gaussian(shape, 29, 345, 73 + 345)
+    b4 += make_gaussian(shape, 29, 73 + 345, 73 + 345)
     out = b1 - .65 * b2 + .84 * b4
     out *= max_amp / np.max(out)
 
@@ -818,12 +842,21 @@ def igarss_fig():
     blobs, sigma_list = blob.find_blobs(out, min_sigma=3, max_sigma=100, num_sigma=40)
     image_cube = blob.skblob.create_gl_cube(out, sigma_list=sigma_list)
 
-    _, ax = blob.plot.plot_blobs(
-        image=out, blobs=blob.find_edge_blobs(blobs, out.shape)[0], ax=fig.gca(), color='blue')
+    # _, ax = blob.plot.plot_blobs(image=out,
+    # blobs=blob.find_edge_blobs(blobs, out.shape)[0],
+    # ax=fig.gca(),
+    # color='blue')
 
     plt.imshow(image_cube[:, :, 30], cmap='jet', vmin=-1.4, vmax=1.3)
     plt.imshow(image_cube[:, :, 10], cmap='jet', vmin=-1.4, vmax=1.3)
     return out, blobs, sigma_list, image_cube, fig
+
+
+def igarss_fig2(out, blobs, sigma_list, image_cube):
+    fig = plt.figure(frameon=False)
+    ax = fig.gca(projection='3d')
+    surf = ax.plot_surface(X, Y, f, cmap=cm.coolwarm, linewidth=0, antialiased=True)
+    plt.show()
 
 
 if __name__ == '__main__':
