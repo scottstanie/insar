@@ -119,7 +119,6 @@ def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=
     store_geolist(igram_path, mask_file, overwrite=overwrite)
     store_intlist(igram_path, mask_file, overwrite=overwrite)
 
-    # if create_geos:
     save_geo_masks(
         geo_path,
         mask_file,
@@ -129,18 +128,10 @@ def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=
         overwrite=overwrite,
     )
 
-    int_date_list = sario.find_igrams(directory=igram_path)
-    int_file_list = sario.find_igrams(directory=igram_path, parse=False)
-
-    geo_date_list = sario.find_geos(directory=geo_path)
-    geo_file_list = sario.find_geos(directory=geo_path, parse=False)
-
     compute_int_masks(
         mask_file=mask_file,
-        int_file_list=int_file_list,
-        int_date_list=int_date_list,
-        geo_file_list=geo_file_list,
-        geo_date_list=geo_date_list,
+        igram_path=igram_path,
+        geo_path=geo_path,
         row_looks=row_looks,
         col_looks=col_looks,
         dem_rsc=dem_rsc,
@@ -191,10 +182,8 @@ def save_geo_masks(directory,
 
 def compute_int_masks(
         mask_file=None,
-        int_file_list=None,
-        int_date_list=None,
-        geo_file_list=None,
-        geo_date_list=None,
+        igram_path=None,
+        geo_path=None,
         row_looks=None,
         col_looks=None,
         dem_rsc=None,
@@ -205,16 +194,21 @@ def compute_int_masks(
 
     Assumes save_geo_masks already run
     """
-    # Make the empty stack, or delete if exists
-    shape = _find_file_shape(dem_rsc=dem_rsc,
-                             file_list=int_file_list,
-                             row_looks=row_looks,
-                             col_looks=col_looks)
     if not _check_dset(mask_file, dset_name, overwrite):
         return
     if not _check_dset(mask_file, IGRAM_MASK_SUM_DSET, overwrite):
         return
 
+    int_date_list = sario.find_igrams(directory=igram_path)
+    int_file_list = sario.find_igrams(directory=igram_path, parse=False)
+
+    geo_date_list = sario.find_geos(directory=geo_path)
+
+    # Make the empty stack, or delete if exists
+    shape = _find_file_shape(dem_rsc=dem_rsc,
+                             file_list=int_file_list,
+                             row_looks=row_looks,
+                             col_looks=col_looks)
     _create_dset(mask_file, dset_name, shape=shape, dtype=bool)
 
     with h5py.File(mask_file, "a") as f:
@@ -646,11 +640,11 @@ def find_coherent_patch(correlations, window=11):
 
 
 def store_geolist(igram_path=None, stack_file=None, overwrite=False, geo_date_list=None):
-    if geo_date_list is None:
-        geo_date_list, _ = load_geolist_intlist(igram_path, parse=True)
-
     if not _check_dset(stack_file, GEOLIST_DSET, overwrite):
         return
+
+    if geo_date_list is None:
+        geo_date_list, _ = load_geolist_intlist(igram_path, parse=True)
 
     logger.debug("Saving geo dates to %s / %s" % (stack_file, GEOLIST_DSET))
     with h5py.File(stack_file, "a") as f:
@@ -660,11 +654,11 @@ def store_geolist(igram_path=None, stack_file=None, overwrite=False, geo_date_li
 
 
 def store_intlist(igram_path=None, stack_file=None, overwrite=False, int_date_list=None):
-    if int_date_list is None:
-        _, int_date_list = load_geolist_intlist(igram_path)
-
     if not _check_dset(stack_file, INTLIST_DSET, overwrite):
         return
+
+    if int_date_list is None:
+        _, int_date_list = load_geolist_intlist(igram_path)
 
     logger.info("Saving igram dates to %s / %s" % (stack_file, INTLIST_DSET))
     with h5py.File(stack_file, "a") as f:

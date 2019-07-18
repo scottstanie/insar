@@ -235,10 +235,9 @@ def run_sbas_inversion(ref_row=None,
     # Note: with overwrite=False, this will only take a long time once
     insar.prepare.prepare_stacks(igram_path, overwrite=False)
 
-    # cmd = "julia --start=no /home/scott/repos/InsarTimeseries.jl/src/runcli.jl " \
-    # " -o {output_name} --alpha {alpha} "
-    cmd = "/home/scott/repos/InsarTimeseries.jl/builddir/insarts " \
+    cmd = "julia --start=no /home/scott/repos/InsarTimeseries.jl/src/runcli.jl " \
           " -o {output_name} --alpha {alpha} "
+    # cmd = "/home/scott/repos/InsarTimeseries.jl/builddir/insarts " \
 
     if ignore_geos:
         cmd += " --ignore geolist_ignore.txt "
