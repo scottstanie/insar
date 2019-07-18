@@ -40,6 +40,8 @@ DEM_RSC_DSET = "dem_rsc"
 GEOLIST_DSET = "geo_dates"
 INTLIST_DSET = "int_dates"
 
+REFERENCE_ATTR = "reference"
+
 
 @log_runtime
 def prepare_stacks(
@@ -352,7 +354,7 @@ def shift_unw_file(unw_stack_file, ref_row, ref_col, window, overwrite=False):
         )
         stack_out = f[STACK_FLAT_SHIFTED_DSET]
         shift_stack(stack_in, stack_out, ref_row, ref_col, window=window)
-        f[STACK_FLAT_SHIFTED_DSET].attrs["reference"] = (ref_row, ref_col)
+        f[STACK_FLAT_SHIFTED_DSET].attrs[REFERENCE_ATTR] = (ref_row, ref_col)
 
     logger.info("Shifting stack complete")
 

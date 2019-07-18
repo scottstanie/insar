@@ -669,6 +669,22 @@ def dem_rate(context, rsc_file):
     click.echo("This is equal to %.2f meter spacing between pixels" % (default_spacing / uprate))
 
 
+# COMMAND: reference
+@cli.command('reference')
+@click.argument("filename")
+def reference(filename):
+    """Print the reference location for a shift unw stack
+
+    filename is name of .h5 unw stack file
+    """
+    ref = insar.prepare.load_reference(unw_stack_file=filename)
+    click.echo("Reference for %s: %s" % (filename, ref))
+
+    rsc_data = apertools.sario.load_dem_from_h5(filename)
+    lat, lon = apertools.latlon.rowcol_to_latlon(*ref, rsc_data=rsc_data)
+    click.echo("This is equal to (%s, %s)" % (lat, lon))
+
+
 # ###################################
 # Preprocessing subgroup of commands:
 # ###################################
