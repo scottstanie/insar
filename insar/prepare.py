@@ -5,7 +5,6 @@ Preprocessing insar data for timeseries analysis
 Forms stacks as .h5 files for easy access to depth-wise slices
 """
 import h5py
-import json
 import os
 import numpy as np
 from scipy.ndimage.filters import uniform_filter
@@ -117,7 +116,7 @@ def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=
     row_looks, col_looks = apertools.utils.find_looks_taken(igram_path, geo_path=geo_path)
 
     dem_rsc = sario.load(sario.find_rsc_file(directory=igram_path))
-    save_dem_to_h5(mask_file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
+    sario.save_dem_to_h5(mask_file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
     store_geolist(igram_path, mask_file, overwrite=overwrite)
     store_intlist(igram_path, mask_file, overwrite=overwrite)
 
@@ -143,6 +142,11 @@ def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=
     return mask_file
 
 
+def _create_dset(h5file, dset_name, shape, dtype=bool):
+    with h5py.File(h5file, "a") as f:
+        f.create_dataset(dset_name, shape=shape, dtype=dtype)
+
+
 def save_geo_masks(directory,
                    mask_file=MASK_FILENAME,
                    dem_rsc=None,
@@ -166,7 +170,9 @@ def save_geo_masks(directory,
                              file_list=geo_file_list,
                              row_looks=row_looks,
                              col_looks=col_looks)
-    if not _check_dset(mask_file, dset_name, overwrite):
+    if not sario.check_dset(mask_file, dset_name, overwrite):
+        return
+    if not sario.check_dset(mask_file, GEO_MASK_SUM_DSET, overwrite):
         return
     _create_dset(mask_file, dset_name, shape=shape, dtype=bool)
 
@@ -196,9 +202,9 @@ def compute_int_masks(
 
     Assumes save_geo_masks already run
     """
-    if not _check_dset(mask_file, dset_name, overwrite):
+    if not sario.check_dset(mask_file, dset_name, overwrite):
         return
-    if not _check_dset(mask_file, IGRAM_MASK_SUM_DSET, overwrite):
+    if not sario.check_dset(mask_file, IGRAM_MASK_SUM_DSET, overwrite):
         return
 
     int_date_list = sario.find_igrams(directory=igram_path)
@@ -253,7 +259,7 @@ def create_hdf5_stack(filename=None,
 
     # TODO: do we want to replace the .unw files with .h5 files, then make a Virtual dataset?
     # layout = h5py.VirtualLayout(shape=(len(file_list), nrows, ncols), dtype=dtype)
-    if not _check_dset(filename, STACK_DSET, overwrite):
+    if not sario.check_dset(filename, STACK_DSET, overwrite):
         return
 
     file_list = sario.find_files(directory=directory, search_term="*" + file_ext)
@@ -269,7 +275,7 @@ def create_hdf5_stack(filename=None,
 
     if save_rsc:
         dem_rsc = sario.load(sario.find_rsc_file(directory=directory))
-        save_dem_to_h5(filename, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
+        sario.save_dem_to_h5(filename, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
 
     if create_mean:
         with h5py.File(filename, "a") as hf:
@@ -282,30 +288,6 @@ def create_hdf5_stack(filename=None,
 
 
 # TODO: Process the correlation, mask very bad corr pixels in the igrams
-
-
-def _check_dset(h5file, dset_name, overwrite):
-    """Returns false if the dataset exists and overwrite is False
-
-    If overwrite is set to true, will delete the dataset to make
-    sure a new one can be created
-    """
-    with h5py.File(h5file, "a") as f:
-        if dset_name in f:
-            logger.info("{dset} already exists in {file},".format(dset=dset_name, file=h5file))
-            if overwrite:
-                logger.info("Overwrite true: Deleting.")
-                del f[dset_name]
-            else:
-                logger.info("Skipping.")
-                return False
-
-        return True
-
-
-def _create_dset(h5file, dset_name, shape, dtype=bool):
-    with h5py.File(h5file, "a") as f:
-        f.create_dataset(dset_name, shape=shape, dtype=dtype)
 
 
 def _find_file_shape(dem_rsc=None, file_list=None, row_looks=None, col_looks=None):
@@ -322,23 +304,10 @@ def _find_file_shape(dem_rsc=None, file_list=None, row_looks=None, col_looks=Non
         return (len(file_list), dem_rsc["file_length"], dem_rsc["width"])
 
 
-def load_dem_from_h5(h5file=None, dset="dem_rsc"):
-    with h5py.File(h5file, "r") as f:
-        return json.loads(f[dset][()])
-
-
-def save_dem_to_h5(h5file, dem_rsc, dset_name="dem_rsc", overwrite=True):
-    if not _check_dset(h5file, dset_name, overwrite):
-        return
-
-    with h5py.File(h5file, "a") as f:
-        f[dset_name] = json.dumps(dem_rsc)
-
-
 def shift_unw_file(unw_stack_file, ref_row, ref_col, window, overwrite=False):
     """Runs a reference point shift on flattened stack of unw files stored in .h5"""
     logger.info("Starting shift_stack: using %s, %s as ref_row, ref_col", ref_row, ref_col)
-    if not _check_dset(unw_stack_file, STACK_FLAT_SHIFTED_DSET, overwrite):
+    if not sario.check_dset(unw_stack_file, STACK_FLAT_SHIFTED_DSET, overwrite):
         return
 
     with h5py.File(unw_stack_file, "a") as f:
@@ -456,7 +425,7 @@ def deramp_stack(
         if STACK_DSET not in f:
             raise ValueError("unw stack dataset doesn't exist at %s" % unw_stack_file)
 
-    if not _check_dset(unw_stack_file, STACK_FLAT_DSET, overwrite):
+    if not sario.check_dset(unw_stack_file, STACK_FLAT_DSET, overwrite):
         return
 
     with h5py.File(MASK_FILENAME) as fmask:
@@ -554,7 +523,7 @@ def find_reference_location(
 ):
     """Find reference pixel on based on GPS availability and mean correlation
     """
-    dem_rsc = load_dem_from_h5(h5file=unw_stack_file, dset="dem_rsc")
+    dem_rsc = sario.load_dem_from_h5(h5file=unw_stack_file, dset="dem_rsc")
 
     # Make a latlon image to check for gps data containment
     with h5py.File(unw_stack_file, "r") as f:
@@ -642,7 +611,7 @@ def find_coherent_patch(correlations, window=11):
 
 
 def store_geolist(igram_path=None, stack_file=None, overwrite=False, geo_date_list=None):
-    if not _check_dset(stack_file, GEOLIST_DSET, overwrite):
+    if not sario.check_dset(stack_file, GEOLIST_DSET, overwrite):
         return
 
     if geo_date_list is None:
@@ -656,7 +625,7 @@ def store_geolist(igram_path=None, stack_file=None, overwrite=False, geo_date_li
 
 
 def store_intlist(igram_path=None, stack_file=None, overwrite=False, int_date_list=None):
-    if not _check_dset(stack_file, INTLIST_DSET, overwrite):
+    if not sario.check_dset(stack_file, INTLIST_DSET, overwrite):
         return
 
     if int_date_list is None:
@@ -818,8 +787,8 @@ def merge_files(filename1, filename2, new_filename, overwrite=False):
                 fnew[dset_name][idx] = dset2[jdx]
 
     if overwrite:
-        _check_dset(new_filename, IGRAM_MASK_DSET, overwrite)
-        _check_dset(new_filename, GEO_MASK_DSET, overwrite)
+        sario.check_dset(new_filename, IGRAM_MASK_DSET, overwrite)
+        sario.check_dset(new_filename, GEO_MASK_DSET, overwrite)
 
     f1 = h5py.File(filename1)
     f2 = h5py.File(filename2)
