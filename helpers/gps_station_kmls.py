@@ -13,7 +13,9 @@ if __name__ == '__main__':
     else:
         station_list = gps.stations_within_rsc(rsc_filename=sys.argv[1])
 
-    for name, lat, lon in station_list:
+    print("Station list:")
+    print(station_list)
+    for name, lon, lat in station_list:
         kml.create_kml(
             lon_lat=(lon, lat),
             title=name,
