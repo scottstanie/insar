@@ -6,6 +6,7 @@ Forms stacks as .h5 files for easy access to depth-wise slices
 """
 import h5py
 import os
+import multiprocessing
 import numpy as np
 from scipy.ndimage.filters import uniform_filter
 
@@ -40,13 +41,13 @@ GEOLIST_DSET = "geo_dates"
 INTLIST_DSET = "int_dates"
 
 REFERENCE_ATTR = "reference"
+REFERENCE_STATION_ATTR = "reference_station"
 
 
 @log_runtime
 def prepare_stacks(
         igram_path,
         overwrite=False,
-        gps_dir=None,
 ):
     int_stack_file = os.path.join(igram_path, INT_FILENAME)
     unw_stack_file = os.path.join(igram_path, UNW_FILENAME)
@@ -64,18 +65,27 @@ def prepare_stacks(
     create_mask_stacks(igram_path, overwrite=overwrite)
     deramp_stack(unw_stack_file=unw_stack_file, order=1, overwrite=overwrite)
 
-    ref_row, ref_col = find_reference_location(
+    ref_row, ref_col, ref_station = find_reference_location(
         unw_stack_file=unw_stack_file,
         cc_stack_file=cc_stack_file,
         mask_stack_file=mask_stack_file,
-        gps_dir=gps_dir,
     )
 
     shift_unw_file(unw_stack_file=unw_stack_file,
                    ref_row=ref_row,
                    ref_col=ref_col,
                    window=3,
+                   ref_station=ref_station,
                    overwrite=overwrite)
+
+
+def _run_stack(igram_path, d, overwrite):
+    if d["filename"] is None:
+        return
+    logger.info("Creating hdf5 stack %s" % d["filename"])
+    create_hdf5_stack(directory=igram_path, overwrite=overwrite, **d)
+    store_geolist(igram_path, d["filename"], overwrite=overwrite)
+    store_intlist(igram_path, d["filename"], overwrite=overwrite)
 
 
 @log_runtime
@@ -98,6 +108,15 @@ def create_igram_stacks(
         create_hdf5_stack(directory=igram_path, overwrite=overwrite, **d)
         store_geolist(igram_path, d["filename"], overwrite=overwrite)
         store_intlist(igram_path, d["filename"], overwrite=overwrite)
+
+    stack_dicts = (
+        dict(file_ext=".int", create_mean=False, filename=int_stack_file),
+        dict(file_ext=".unw", create_mean=False, filename=unw_stack_file),
+        dict(file_ext=".cc", create_mean=True, filename=cc_stack_file),
+    )
+    pool = multiprocessing.Pool()
+    results = [pool.apply_async(_run_stack, args=(igram_path, d, overwrite)) for d in stack_dicts]
+    return [res.get() for res in results]
 
 
 @log_runtime
@@ -249,6 +268,14 @@ def create_hdf5_stack(filename=None,
     Returns:
         filename
     """
+
+    def _create_mean(dset):
+        """Used to create a mean without loading all into mem with np.mean"""
+        mean_buf = np.zeros(dset.shape[1], dset.shape[2]).astype(dset.dtype)
+        for idx in range(len(dset)):
+            mean_buf += dset[idx]
+        return mean_buf / len(dset)
+
     if not filename:
         fname = "{fext}_stack.h5".format(fext=file_ext.strip("."))
         filename = os.path.abspath(os.path.join(directory, fname))
@@ -278,10 +305,11 @@ def create_hdf5_stack(filename=None,
         sario.save_dem_to_h5(filename, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
 
     if create_mean:
+        mean_data = _create_mean(hf[STACK_DSET])
         with h5py.File(filename, "a") as hf:
             hf.create_dataset(
                 STACK_MEAN_DSET,
-                data=np.mean(hf[STACK_DSET], axis=0),
+                data=mean_data,
             )
 
     return filename
@@ -304,7 +332,7 @@ def _find_file_shape(dem_rsc=None, file_list=None, row_looks=None, col_looks=Non
         return (len(file_list), dem_rsc["file_length"], dem_rsc["width"])
 
 
-def shift_unw_file(unw_stack_file, ref_row, ref_col, window, overwrite=False):
+def shift_unw_file(unw_stack_file, ref_row, ref_col, window=3, ref_station=None, overwrite=False):
     """Runs a reference point shift on flattened stack of unw files stored in .h5"""
     logger.info("Starting shift_stack: using %s, %s as ref_row, ref_col", ref_row, ref_col)
     if not sario.check_dset(unw_stack_file, STACK_FLAT_SHIFTED_DSET, overwrite):
@@ -322,8 +350,9 @@ def shift_unw_file(unw_stack_file, ref_row, ref_col, window, overwrite=False):
             dtype=f[STACK_FLAT_DSET].dtype,
         )
         stack_out = f[STACK_FLAT_SHIFTED_DSET]
-        shift_stack(stack_in, stack_out, ref_row, ref_col, window=window)
+        shift_stack(stack_in, stack_out, ref_row, ref_col, ref_station, window=window)
         f[STACK_FLAT_SHIFTED_DSET].attrs[REFERENCE_ATTR] = (ref_row, ref_col)
+        f[STACK_FLAT_SHIFTED_DSET].attrs[REFERENCE_STATION_ATTR] = ref_station
 
     logger.info("Shifting stack complete")
 
@@ -519,7 +548,6 @@ def find_reference_location(
         unw_stack_file=UNW_FILENAME,
         mask_stack_file=MASK_FILENAME,
         cc_stack_file=CC_FILENAME,
-        gps_dir=None,
 ):
     """Find reference pixel on based on GPS availability and mean correlation
     """
@@ -533,9 +561,7 @@ def find_reference_location(
     logger.info("Searching for gps station within area")
     # Don't make the invalid GPS here in case the random image chosed above is bad:
     # We'll use the mask ll image to decide which pixels are bad
-    stations = apertools.gps.stations_within_image(latlon_image,
-                                                   mask_invalid=False,
-                                                   gps_dir=gps_dir)
+    stations = apertools.gps.stations_within_image(latlon_image, mask_invalid=False)
     # Make a latlon image From the total masks
     with h5py.File(mask_stack_file, "r") as f:
         mask_ll_image = latlon.LatlonImage(data=f[IGRAM_MASK_SUM_DSET], dem_rsc=dem_rsc)
@@ -561,14 +587,16 @@ def find_reference_location(
         name, lon, lat = sorted_stations[0][-1]
         logger.info("Using station %s at (lon, lat) (%s, %s)", name, lon, lat)
         ref_row, ref_col = latlon_image.nearest_pixel(lon=lon, lat=lat)
+        ref_station = name
 
     if ref_row is None:
         logger.warning("GPS station search failed, reverting to coherence")
         logger.info("Finding most coherent patch in stack.")
         ref_row, ref_col = find_coherent_patch(mean_cor)
+        ref_station = None
 
     logger.info("Using %s as .unw reference point", (ref_row, ref_col))
-    return ref_row, ref_col
+    return ref_row, ref_col, ref_station
 
 
 def find_coherent_patch(correlations, window=11):

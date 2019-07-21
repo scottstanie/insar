@@ -696,16 +696,15 @@ def preproc(ctx):
 
 @preproc.command('stacks')
 @click.option('--overwrite', is_flag=True, default=False, help="Erase current files and reprocess")
-@click.option('--gps-dir', default=None, help="Directory of gps data")
 @click.pass_obj
-def prepare_stacks(context, overwrite, gps_dir):
+def prepare_stacks(context, overwrite):
     """Create .h5 files of prepared stacks for timeseries
 
     This step is run before the final `process` step.
     Makes .h5 files for easy loading to timeseries inversion.
     """
     igram_path = context['path']
-    insar.prepare.prepare_stacks(igram_path, overwrite=overwrite, gps_dir=gps_dir)
+    insar.prepare.prepare_stacks(igram_path, overwrite=overwrite)
 
 
 @preproc.command()
