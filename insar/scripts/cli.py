@@ -627,23 +627,22 @@ def mask(context, imagefile, dem, output):
     apertools.sario.save(output, intmask)
 
 
-# COMMAND: avg-stack
-@cli.command('avg-stack')
-def avg_stack(context, ref_row, ref_col):
-    """Perform simple igram stack average to get a linear trend
-
-    If .unw files are not in the current directory, use the --path option:
-
-        insar --path /path/to/igrams avg_stack
-
-    If --ref-row and --ref-col not provided, most coherent patch found as reference
-    """
-    if not ref_row or ref_col:
-        click.echo("Finding most coherent patch in stack.")
-        cc_stack = apertools.sario.load_stack(directory=context['path'], file_ext=".cc")
-        ref_row, ref_col = insar.timeseries.find_coherent_patch(cc_stack)
-        click.echo("Using %s as .unw reference point", (ref_row, ref_col))
-    insar.timeseries.avg_stack(context['path'], ref_row, ref_col)
+# COMMAND: validate
+@cli.command()
+@click.argument("geo_path")
+@click.argument("defo_filename")
+@click.option("--kind", type=click.Choice(['errorbar', 'slope', 'line']), default="errorbar")
+@click.option('--reference-station',
+              '-r',
+              help="GPS Station to base comparisons off. If None, just plots GPS vs InSAR")
+@click.option('--linear', is_flag=True, default=False, help="Erase current files and reprocess")
+def validate(geo_path, defo_filename, kind, reference_station, linear):
+    apertools.gps.plot_insar_vs_gps(geo_path=geo_path,
+                                    defo_filename=defo_filename,
+                                    kind=kind,
+                                    reference_station=reference_station,
+                                    linear=linear,
+                                    block=True)
 
 
 # COMMAND: dem-rate
@@ -712,35 +711,6 @@ def prepare_stacks(context, overwrite):
 @click.pass_obj
 def unzip(context, delete_zips):
     insar.scripts.preproc.unzip_sentinel_files(context['path'], delete_zips=delete_zips)
-
-
-@preproc.command('tiles')
-@click.argument('data-path')
-@click.option('--path-num',
-              type=int,
-              help="Relative orbit/path to use (None uses all within data-path)")
-@click.option('--tile-size', default=0.5, help="degrees of tile size to aim for")
-@click.option('--overlap', default=0.1, help="Overlap of adjacent tiles (in deg)")
-@click.pass_obj
-def tiles(context, data_path, path_num, tile_size, overlap):
-    """Use make_tiles to create a directory structure
-
-    Uses the current directory to make new folders.
-
-    data_path is where the unzipped .SAFE folders are located.
-
-    Populates the current directory with dirs and .geojson files (e.g.):
-    N28.8W101.6
-    N28.8W101.6.geojson
-    N28.8W102.0
-    N28.8W102.0.geojson
-    ...
-    """
-    insar.scripts.preproc.create_tile_directories(data_path,
-                                                  path_num=path_num,
-                                                  tile_size=tile_size,
-                                                  overlap=overlap,
-                                                  verbose=context['verbose'])
 
 
 @preproc.command('intmask')
