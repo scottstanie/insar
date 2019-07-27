@@ -219,7 +219,7 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
 
 # COMMAND: view-stack
 @cli.command('view-stack')
-@click.option("--filename", "-f", default='deformation.npy', help="Name of saved deformation stack")
+@click.argument("filename", default='deformation.h5', required=False)
 @click.option("--cmap", default='seismic', help="Colormap for image display.")
 @click.option("--label", default='Centimeters', help="Label on colorbar/yaxis for plot")
 @click.option("--title", help="Title for image plot")
@@ -237,8 +237,7 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
 @click.pass_obj
 def view_stack(context, filename, cmap, label, title, row_start, row_end, col_start, col_end,
                rowcol, mask, vmin, vmax):
-    """Explore timeseries on deformation image.
-
+    """Explore timeseries on `filename`, a deformation stack
     If deformation.npy and geolist.npy or .unw files are not in current directory,
     use the --path option:
 

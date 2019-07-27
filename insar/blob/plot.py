@@ -63,6 +63,7 @@ def plot_blobs(image=None,
                blob_cmap=None,
                plot_img=False,
                delete=False,
+               alpha=.8,
                **kwargs):
     """Takes the blob results from find_blobs and overlays on image
 
@@ -93,14 +94,14 @@ def plot_blobs(image=None,
         if blob_cmap:
             color_pct = idx / len(blobs)
             color = blob_cm(color_pct)
-        c = plt.Circle(
-            (blob[1], blob[0]),
-            blob[2],
-            color=color,
-            fill=False,
-            linewidth=2,
-            clip_on=False,
-            picker=True)
+        c = plt.Circle((blob[1], blob[0]),
+                       blob[2],
+                       color=color,
+                       fill=False,
+                       linewidth=2,
+                       alpha=alpha,
+                       clip_on=False,
+                       picker=True)
         ax.add_patch(c)
         patches.append(c)
 
