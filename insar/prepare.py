@@ -271,7 +271,7 @@ def create_hdf5_stack(filename=None,
 
     def _create_mean(dset):
         """Used to create a mean without loading all into mem with np.mean"""
-        mean_buf = np.zeros(dset.shape[1], dset.shape[2]).astype(dset.dtype)
+        mean_buf = np.zeros((dset.shape[1], dset.shape[2]), dset.dtype)
         for idx in range(len(dset)):
             mean_buf += dset[idx]
         return mean_buf / len(dset)
@@ -305,8 +305,8 @@ def create_hdf5_stack(filename=None,
         sario.save_dem_to_h5(filename, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
 
     if create_mean:
-        mean_data = _create_mean(hf[STACK_DSET])
         with h5py.File(filename, "a") as hf:
+            mean_data = _create_mean(hf[STACK_DSET])
             hf.create_dataset(
                 STACK_MEAN_DSET,
                 data=mean_data,
@@ -350,7 +350,7 @@ def shift_unw_file(unw_stack_file, ref_row, ref_col, window=3, ref_station=None,
             dtype=f[STACK_FLAT_DSET].dtype,
         )
         stack_out = f[STACK_FLAT_SHIFTED_DSET]
-        shift_stack(stack_in, stack_out, ref_row, ref_col, ref_station, window=window)
+        shift_stack(stack_in, stack_out, ref_row, ref_col, window=window)
         f[STACK_FLAT_SHIFTED_DSET].attrs[REFERENCE_ATTR] = (ref_row, ref_col)
         f[STACK_FLAT_SHIFTED_DSET].attrs[REFERENCE_STATION_ATTR] = ref_station
 
