@@ -25,8 +25,8 @@ CC_FILENAME = "cc_stack.h5"
 
 # dataset names for general 3D stacks
 STACK_DSET = "stack"
-STACK_MEAN_DSET = "mean_stack"
-STACK_FLAT_DSET = "deramped_stack"
+STACK_MEAN_DSET = "stack_mean"
+STACK_FLAT_DSET = "stack_deramped"
 STACK_FLAT_SHIFTED_DSET = "deramped_shifted_stack"
 
 # Mask file datasets
@@ -84,8 +84,8 @@ def _run_stack(igram_path, d, overwrite):
         return
     logger.info("Creating hdf5 stack %s" % d["filename"])
     create_hdf5_stack(directory=igram_path, overwrite=overwrite, **d)
-    store_geolist(igram_path, d["filename"], overwrite=overwrite)
-    store_intlist(igram_path, d["filename"], overwrite=overwrite)
+    save_geolist_to_h5(igram_path, d["filename"], overwrite=overwrite)
+    save_intlist_to_h5(igram_path, d["filename"], overwrite=overwrite)
 
 
 @log_runtime
@@ -106,8 +106,8 @@ def create_igram_stacks(
             continue
         logger.info("Creating hdf5 stack %s" % d["filename"])
         create_hdf5_stack(directory=igram_path, overwrite=overwrite, **d)
-        store_geolist(igram_path, d["filename"], overwrite=overwrite)
-        store_intlist(igram_path, d["filename"], overwrite=overwrite)
+        save_geolist_to_h5(igram_path, d["filename"], overwrite=overwrite)
+        save_intlist_to_h5(igram_path, d["filename"], overwrite=overwrite)
 
     stack_dicts = (
         dict(file_ext=".int", create_mean=False, filename=int_stack_file),
@@ -136,8 +136,8 @@ def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=
 
     dem_rsc = sario.load(sario.find_rsc_file(directory=igram_path))
     sario.save_dem_to_h5(mask_file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
-    store_geolist(igram_path, mask_file, overwrite=overwrite)
-    store_intlist(igram_path, mask_file, overwrite=overwrite)
+    save_geolist_to_h5(igram_path, mask_file, overwrite=overwrite)
+    save_intlist_to_h5(igram_path, mask_file, overwrite=overwrite)
 
     save_geo_masks(
         geo_path,
@@ -396,7 +396,7 @@ def save_deformation(igram_path,
     if utils.get_file_ext(defo_file_name) in (".h5", ".hdf5"):
         with h5py.File(defo_file_name, "a") as f:
             f[dset_name] = deformation
-        store_geolist(igram_path, defo_file_name, overwrite=True)
+        save_geolist_to_h5(igram_path, defo_file_name, overwrite=True)
     elif defo_file_name.endswith(".npy"):
         np.save(os.path.join(igram_path, defo_file_name), deformation)
         np.save(os.path.join(igram_path, geolist_file_name), geo_date_list)
@@ -638,29 +638,29 @@ def find_coherent_patch(correlations, window=11):
     return np.unravel_index(max_idx, mean_stack.shape)
 
 
-def store_geolist(igram_path=None, stack_file=None, overwrite=False, geo_date_list=None):
-    if not sario.check_dset(stack_file, GEOLIST_DSET, overwrite):
+def save_geolist_to_h5(igram_path=None, out_file=None, overwrite=False, geo_date_list=None):
+    if not sario.check_dset(out_file, GEOLIST_DSET, overwrite):
         return
 
     if geo_date_list is None:
         geo_date_list, _ = load_geolist_intlist(igram_path, parse=True)
 
-    logger.debug("Saving geo dates to %s / %s" % (stack_file, GEOLIST_DSET))
-    with h5py.File(stack_file, "a") as f:
+    logger.debug("Saving geo dates to %s / %s" % (out_file, GEOLIST_DSET))
+    with h5py.File(out_file, "a") as f:
         # JSON gets messed from doing from julia to h5py for now
         # f[GEOLIST_DSET] = json.dumps(_geolist_to_str(geo_date_list))
         f[GEOLIST_DSET] = _geolist_to_str(geo_date_list)
 
 
-def store_intlist(igram_path=None, stack_file=None, overwrite=False, int_date_list=None):
-    if not sario.check_dset(stack_file, INTLIST_DSET, overwrite):
+def save_intlist_to_h5(igram_path=None, out_file=None, overwrite=False, int_date_list=None):
+    if not sario.check_dset(out_file, INTLIST_DSET, overwrite):
         return
 
     if int_date_list is None:
         _, int_date_list = load_geolist_intlist(igram_path)
 
-    logger.info("Saving igram dates to %s / %s" % (stack_file, INTLIST_DSET))
-    with h5py.File(stack_file, "a") as f:
+    logger.info("Saving igram dates to %s / %s" % (out_file, INTLIST_DSET))
+    with h5py.File(out_file, "a") as f:
         f[INTLIST_DSET] = _intlist_to_str(int_date_list)
 
 
@@ -832,8 +832,8 @@ def merge_files(filename1, filename2, new_filename, overwrite=False):
     merged_intlist = sorted(set(intlist1) | set(intlist2))
     merged_geolist = sorted(set(geolist1) | set(geolist2))
 
-    store_intlist(stack_file=new_filename, overwrite=True, int_date_list=merged_intlist)
-    store_geolist(stack_file=new_filename, overwrite=True, geo_date_list=merged_geolist)
+    save_intlist_to_h5(out_file=new_filename, overwrite=True, int_date_list=merged_intlist)
+    save_geolist_to_h5(out_file=new_filename, overwrite=True, geo_date_list=merged_geolist)
 
     new_geo_shape = (len(merged_geolist), geo_dset1.shape[1], geo_dset1.shape[2])
     _create_dset(new_filename, GEO_MASK_DSET, new_geo_shape, dtype=igram_dset1.dtype)
