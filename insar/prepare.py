@@ -27,7 +27,7 @@ CC_FILENAME = "cc_stack.h5"
 STACK_DSET = "stack"
 STACK_MEAN_DSET = "stack_mean"
 STACK_FLAT_DSET = "stack_deramped"
-STACK_FLAT_SHIFTED_DSET = "deramped_shifted_stack"
+STACK_FLAT_SHIFTED_DSET = "stack_deramped_shifted"
 
 # Mask file datasets
 GEO_MASK_DSET = "geo"
@@ -305,6 +305,8 @@ def create_hdf5_stack(filename=None,
         sario.save_dem_to_h5(filename, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
 
     if create_mean:
+        if not sario.check_dset(filename, STACK_MEAN_DSET, overwrite):
+            return
         with h5py.File(filename, "a") as hf:
             mean_data = _create_mean(hf[STACK_DSET])
             hf.create_dataset(
@@ -352,7 +354,7 @@ def shift_unw_file(unw_stack_file, ref_row, ref_col, window=3, ref_station=None,
         stack_out = f[STACK_FLAT_SHIFTED_DSET]
         shift_stack(stack_in, stack_out, ref_row, ref_col, window=window)
         f[STACK_FLAT_SHIFTED_DSET].attrs[REFERENCE_ATTR] = (ref_row, ref_col)
-        f[STACK_FLAT_SHIFTED_DSET].attrs[REFERENCE_STATION_ATTR] = ref_station
+        f[STACK_FLAT_SHIFTED_DSET].attrs[REFERENCE_STATION_ATTR] = (ref_station or "")
 
     logger.info("Shifting stack complete")
 
