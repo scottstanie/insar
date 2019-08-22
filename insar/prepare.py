@@ -26,8 +26,8 @@ CC_FILENAME = "cc_stack.h5"
 # dataset names for general 3D stacks
 STACK_DSET = "stack"
 STACK_MEAN_DSET = "stack_mean"
-STACK_FLAT_DSET = "stack_deramped"
-STACK_FLAT_SHIFTED_DSET = "stack_deramped_shifted"
+STACK_FLAT_DSET = "stack_flat"
+STACK_FLAT_SHIFTED_DSET = "stack_flat_shifted"
 
 # Mask file datasets
 GEO_MASK_DSET = "geo"
