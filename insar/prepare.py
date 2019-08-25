@@ -84,8 +84,8 @@ def _run_stack(igram_path, d, overwrite):
         return
     logger.info("Creating hdf5 stack %s" % d["filename"])
     create_hdf5_stack(directory=igram_path, overwrite=overwrite, **d)
-    save_geolist_to_h5(igram_path, d["filename"], overwrite=overwrite)
-    save_intlist_to_h5(igram_path, d["filename"], overwrite=overwrite)
+    sario.save_geolist_to_h5(igram_path, d["filename"], overwrite=overwrite)
+    sario.save_intlist_to_h5(igram_path, d["filename"], overwrite=overwrite)
 
 
 @log_runtime
@@ -106,8 +106,8 @@ def create_igram_stacks(
             continue
         logger.info("Creating hdf5 stack %s" % d["filename"])
         create_hdf5_stack(directory=igram_path, overwrite=overwrite, **d)
-        save_geolist_to_h5(igram_path, d["filename"], overwrite=overwrite)
-        save_intlist_to_h5(igram_path, d["filename"], overwrite=overwrite)
+        sario.save_geolist_to_h5(igram_path, d["filename"], overwrite=overwrite)
+        sario.save_intlist_to_h5(igram_path, d["filename"], overwrite=overwrite)
 
     stack_dicts = (
         dict(file_ext=".int", create_mean=False, filename=int_stack_file),
@@ -136,8 +136,8 @@ def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=
 
     dem_rsc = sario.load(sario.find_rsc_file(directory=igram_path))
     sario.save_dem_to_h5(mask_file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
-    save_geolist_to_h5(igram_path, mask_file, overwrite=overwrite)
-    save_intlist_to_h5(igram_path, mask_file, overwrite=overwrite)
+    sario.save_geolist_to_h5(igram_path, mask_file, overwrite=overwrite)
+    sario.save_intlist_to_h5(igram_path, mask_file, overwrite=overwrite)
 
     save_geo_masks(
         geo_path,
@@ -398,7 +398,7 @@ def save_deformation(igram_path,
     if utils.get_file_ext(defo_file_name) in (".h5", ".hdf5"):
         with h5py.File(defo_file_name, "a") as f:
             f[dset_name] = deformation
-        save_geolist_to_h5(igram_path, defo_file_name, overwrite=True)
+        sario.save_geolist_to_h5(igram_path, defo_file_name, overwrite=True)
     elif defo_file_name.endswith(".npy"):
         np.save(os.path.join(igram_path, defo_file_name), deformation)
         np.save(os.path.join(igram_path, geolist_file_name), geo_date_list)
@@ -471,7 +471,8 @@ def deramp_stack(
             )
             # Shape of sario.load_stack with return_amp is (nlayers, 2, nrows, ncols)
             for idx, layer in enumerate(f[STACK_DSET]):
-                mask = mask_dset[idx]
+                with mask_dset.astype(bool):
+                    mask = mask_dset[idx]
                 try:
                     f[STACK_FLAT_DSET][idx] = remove_ramp(layer, order=order, mask=mask)
                 except np.linalg.linalg.LinAlgError:
@@ -566,7 +567,7 @@ def find_reference_location(
     stations = apertools.gps.stations_within_image(latlon_image, mask_invalid=False)
     # Make a latlon image From the total masks
     with h5py.File(mask_stack_file, "r") as f:
-        mask_ll_image = latlon.LatlonImage(data=f[IGRAM_MASK_SUM_DSET], dem_rsc=dem_rsc)
+        mask_ll_image = latlon.LatlonImage(data=f[GEO_MASK_SUM_DSET], dem_rsc=dem_rsc)
 
     with h5py.File(cc_stack_file, "r") as f:
         mean_cor = f[STACK_MEAN_DSET][:]
@@ -638,123 +639,6 @@ def find_coherent_patch(correlations, window=11):
     # Now find row, column of the max value
     max_idx = conv.argmax()
     return np.unravel_index(max_idx, mean_stack.shape)
-
-
-def save_geolist_to_h5(igram_path=None, out_file=None, overwrite=False, geo_date_list=None):
-    if not sario.check_dset(out_file, GEOLIST_DSET, overwrite):
-        return
-
-    if geo_date_list is None:
-        geo_date_list, _ = load_geolist_intlist(igram_path, parse=True)
-
-    logger.debug("Saving geo dates to %s / %s" % (out_file, GEOLIST_DSET))
-    with h5py.File(out_file, "a") as f:
-        # JSON gets messed from doing from julia to h5py for now
-        # f[GEOLIST_DSET] = json.dumps(_geolist_to_str(geo_date_list))
-        f[GEOLIST_DSET] = _geolist_to_str(geo_date_list)
-
-
-def save_intlist_to_h5(igram_path=None, out_file=None, overwrite=False, int_date_list=None):
-    if not sario.check_dset(out_file, INTLIST_DSET, overwrite):
-        return
-
-    if int_date_list is None:
-        _, int_date_list = load_geolist_intlist(igram_path)
-
-    logger.info("Saving igram dates to %s / %s" % (out_file, INTLIST_DSET))
-    with h5py.File(out_file, "a") as f:
-        f[INTLIST_DSET] = _intlist_to_str(int_date_list)
-
-
-def load_geolist_intlist(directory, geolist_ignore_file=None, parse=True):
-    """Load the geo_date_list and int_date_list from a directory with igrams
-
-    Assumes that the .geo files are one diretory up from the igrams
-    """
-    int_date_list = sario.find_igrams(directory, parse=parse)
-    geo_date_list = sario.find_geos(utils.get_parent_dir(directory), parse=parse)
-
-    if geolist_ignore_file is not None:
-        ignore_filepath = os.path.join(directory, geolist_ignore_file)
-        geo_date_list, int_date_list = ignore_geo_dates(geo_date_list,
-                                                        int_date_list,
-                                                        ignore_file=ignore_filepath,
-                                                        parse=parse)
-    return geo_date_list, int_date_list
-
-
-def ignore_geo_dates(geo_date_list, int_date_list, ignore_file="geolist_missing.txt", parse=True):
-    """Read extra file to ignore certain dates of interferograms"""
-    ignore_geos = set(sario.find_geos(ignore_file, parse=parse))
-    logger.info("Ignoreing the following .geo dates:")
-    logger.info(sorted(ignore_geos))
-    valid_geos = [g for g in geo_date_list if g not in ignore_geos]
-    valid_igrams = [i for i in int_date_list if i[0] not in ignore_geos and i[1] not in ignore_geos]
-    return valid_geos, valid_igrams
-
-
-def _geolist_to_str(geo_date_list):
-    return np.array([d.strftime(DATE_FMT) for d in geo_date_list]).astype("S")
-
-
-def _intlist_to_str(int_date_list):
-    return np.array([(a.strftime(DATE_FMT), b.strftime(DATE_FMT))
-                     for a, b in int_date_list]).astype("S")
-
-
-def load_composite_mask(geo_date_list=None,
-                        perform_mask=True,
-                        deformation_filename=None,
-                        mask_filename=MASK_FILENAME,
-                        directory=None):
-    if not perform_mask:
-        return np.ma.nomask
-
-    if directory is not None:
-        mask_filename = os.path.join(directory, mask_filename)
-
-    # If they pass a deformation .h5 stack, get only the dates actually used
-    # instead of all possible dates stored in the mask stack
-    if deformation_filename is not None:
-        if directory is not None:
-            deformation_filename = os.path.join(directory, deformation_filename)
-            geo_date_list = sario.load_geolist_from_h5(deformation_filename)
-
-    # Get the indices of the mask layers that were used in the deformation stack
-    all_geo_dates = apertools.sario.load_geolist_from_h5(mask_filename)
-    if geo_date_list is None:
-        used_bool_arr = np.full(len(all_geo_dates), True)
-    else:
-        used_bool_arr = np.array([g in geo_date_list for g in all_geo_dates])
-
-    with h5py.File(mask_filename) as f:
-        # Maks a single mask image for any pixel that has a mask
-        # Note: not using GEO_MASK_SUM_DSET since we may be sub selecting layers
-        stack_mask = np.sum(f[GEO_MASK_DSET][used_bool_arr, :, :], axis=0)
-        stack_mask = stack_mask > 0
-        return stack_mask
-
-
-def load_single_mask(int_date_string=None,
-                     date_pair=None,
-                     mask_filename=MASK_FILENAME,
-                     int_date_list=None):
-    """Load one mask from the `mask_filename`
-
-    Can either pass a tuple of Datetimes in date_pair, or a string like
-    `20170101_20170104.int` or `20170101_20170303` to int_date_string
-    """
-    if int_date_list is None:
-        int_date_list = sario.load_intlist_from_h5(mask_filename)
-
-    if int_date_string is not None:
-        # If the pass string with ., only take first part
-        date_str_pair = int_date_string.split('.')[0].split('_')
-        date_pair = sario.parse_intlist_strings([date_str_pair])[0]
-
-    with h5py.File(mask_filename, "r") as f:
-        idx = int_date_list.index(date_pair)
-        return f[IGRAM_MASK_DSET][idx]
 
 
 @log_runtime
@@ -834,8 +718,8 @@ def merge_files(filename1, filename2, new_filename, overwrite=False):
     merged_intlist = sorted(set(intlist1) | set(intlist2))
     merged_geolist = sorted(set(geolist1) | set(geolist2))
 
-    save_intlist_to_h5(out_file=new_filename, overwrite=True, int_date_list=merged_intlist)
-    save_geolist_to_h5(out_file=new_filename, overwrite=True, geo_date_list=merged_geolist)
+    sario.save_intlist_to_h5(out_file=new_filename, overwrite=True, int_date_list=merged_intlist)
+    sario.save_geolist_to_h5(out_file=new_filename, overwrite=True, geo_date_list=merged_geolist)
 
     new_geo_shape = (len(merged_geolist), geo_dset1.shape[1], geo_dset1.shape[2])
     _create_dset(new_filename, GEO_MASK_DSET, new_geo_shape, dtype=igram_dset1.dtype)

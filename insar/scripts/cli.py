@@ -257,7 +257,7 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
         rsc_data = apertools.sario.load(os.path.join(context['path'], 'dem.rsc'))
         print("Using lat/lon")
 
-    stack_mask = insar.prepare.load_composite_mask(geo_date_list=geo_date_list, perform_mask=mask)
+    stack_mask = insar.prepare.load_mask(geo_date_list=geo_date_list, perform_mask=mask)
 
     stack_ll = apertools.latlon.LatlonImage(data=deformation, dem_rsc=rsc_data)
     stack_ll[:, stack_mask] = np.nan
@@ -335,35 +335,35 @@ def view_masks(context, downsample, geolist_ignore_file, print_dates, cmap, vmin
             for gdate in geo_str_list:
                 f.write("%s\n" % gdate)
 
-    f = h5py.File(insar.prepare.MASK_FILENAME)
-    geo_masks = f[insar.prepare.GEO_MASK_DSET]
+    with h5py.File(insar.prepare.MASK_FILENAME) as f:
+        geo_dset = f[insar.prepare.GEO_MASK_DSET]
+        composite_mask = f[insar.prepare.GEO_MASK_SUM_DSET][:]
+        with geo_dset.astype(bool):
+            geo_masks = geo_dset[:]
+        composite_mask = f[insar.prepare.GEO_MASK_SUM_DSET][:]
 
-    composite_mask = f[insar.prepare.GEO_MASK_SUM_DSET][:]
-
+    geo_masks, composite_mask = apertools.sario.load_mask
     if print_dates:
         callback = _print
     elif geolist_ignore_file:
         print("Saving to %s" % geolist_ignore_file)
         callback = _save_missing_geos
 
-    try:
-        apertools.plotting.view_stack(
-            geo_masks,
-            display_img=composite_mask,
-            geolist=geo_date_list,
-            cmap=cmap,
-            label="is masked",
-            title="Number of dates of missing .geo data",
-            line_plot_kwargs=dict(marker="x", linestyle=' '),
-            perform_shift=False,
-            vmin=vmin,
-            vmax=vmax,
-            legend_loc=0,
-            # timeline_callback=_print,
-            timeline_callback=callback,
-        )
-    finally:
-        f.close()
+    apertools.plotting.view_stack(
+        geo_masks,
+        display_img=composite_mask,
+        geolist=geo_date_list,
+        cmap=cmap,
+        label="is masked",
+        title="Number of dates of missing .geo data",
+        line_plot_kwargs=dict(marker="x", linestyle=' '),
+        perform_shift=False,
+        vmin=vmin,
+        vmax=vmax,
+        legend_loc=0,
+        # timeline_callback=_print,
+        timeline_callback=callback,
+    )
 
 
 # COMMAND: blob
@@ -462,8 +462,7 @@ def _save_npy_file(imgfile,
         # For 3D stack, assume we just want the final image
         image = image[-1]
 
-    stack_mask = insar.prepare.load_composite_mask(geo_date_list=geo_date_list,
-                                                   perform_mask=use_mask)
+    stack_mask = insar.prepare.load_mask(geo_date_list=geo_date_list, perform_mask=use_mask)
     image[stack_mask] = np.nan
     shifted_cmap = apertools.plotting.make_shifted_cmap(
         image,
