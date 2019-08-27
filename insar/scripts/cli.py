@@ -244,8 +244,8 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
         insar --path /path/to/igrams view_stack
 
     """
-    geo_date_list, deformation = apertools.sario.load_deformation(context['path'],
-                                                                  filename=filename)
+    defo_path = os.path.abspath(os.path.split(filename)[0])
+    geo_date_list, deformation = apertools.sario.load_deformation(defo_path, filename=filename)
 
     if geo_date_list is None or deformation is None:
         return
@@ -254,10 +254,12 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
         rsc_data = None
         print("Using rows/cols")
     else:
-        rsc_data = apertools.sario.load(os.path.join(context['path'], 'dem.rsc'))
+        rsc_data = apertools.sario.load(os.path.join(defo_path, 'dem.rsc'))
         print("Using lat/lon")
 
-    stack_mask = insar.prepare.load_mask(geo_date_list=geo_date_list, perform_mask=mask)
+    stack_mask = apertools.sario.load_mask(geo_date_list=geo_date_list,
+                                           perform_mask=mask,
+                                           directory=defo_path)
 
     stack_ll = apertools.latlon.LatlonImage(data=deformation, dem_rsc=rsc_data)
     stack_ll[:, stack_mask] = np.nan
