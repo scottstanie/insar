@@ -344,7 +344,6 @@ def view_masks(context, downsample, geolist_ignore_file, print_dates, cmap, vmin
             geo_masks = geo_dset[:]
         composite_mask = f[insar.prepare.GEO_MASK_SUM_DSET][:]
 
-    geo_masks, composite_mask = apertools.sario.load_mask
     if print_dates:
         callback = _print
     elif geolist_ignore_file:
