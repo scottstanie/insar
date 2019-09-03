@@ -11,7 +11,7 @@ import argparse
 import sys
 import subprocess
 import os.path
-from os.path import abspath, dirname
+from os.path import dirname
 
 import sardem.loading
 import apertools.sario

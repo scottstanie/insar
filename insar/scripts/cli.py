@@ -323,7 +323,7 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
 @click.option("--vmax", type=float, help="Optional: Maximum value for imshow")
 @click.pass_obj
 def view_masks(context, downsample, geolist_ignore_file, print_dates, cmap, vmin, vmax):
-    geo_date_list = apertools.sario.load_geolist_from_h5(insar.prepare.MASK_FILENAME)
+    geo_date_list = apertools.sario.load_geolist_from_h5(apertools.sario.MASK_FILENAME)
 
     def _print(series, row, col):
         dstrings = [d.strftime("%Y%m%d") for d in np.array(geo_date_list)[series]]
@@ -331,18 +331,20 @@ def view_masks(context, downsample, geolist_ignore_file, print_dates, cmap, vmin
         print("%s" % '\n'.join(dstrings))
 
     def _save_missing_geos(series, row, col):
-        geo_str_list = [g.strftime(insar.prepare.DATE_FMT) for g in np.array(geo_date_list)[series]]
+        geo_str_list = [
+            g.strftime(apertools.sario.DATE_FMT) for g in np.array(geo_date_list)[series]
+        ]
         with open(geolist_ignore_file, "w") as f:
             print("Writing %s dates: %s" % (len(geo_str_list), geo_str_list))
             for gdate in geo_str_list:
                 f.write("%s\n" % gdate)
 
-    with h5py.File(insar.prepare.MASK_FILENAME) as f:
-        geo_dset = f[insar.prepare.GEO_MASK_DSET]
-        composite_mask = f[insar.prepare.GEO_MASK_SUM_DSET][:]
+    with h5py.File(apertools.sario.MASK_FILENAME) as f:
+        geo_dset = f[apertools.sario.GEO_MASK_DSET]
+        composite_mask = f[apertools.sario.GEO_MASK_SUM_DSET][:]
         with geo_dset.astype(bool):
             geo_masks = geo_dset[:]
-        composite_mask = f[insar.prepare.GEO_MASK_SUM_DSET][:]
+        composite_mask = f[apertools.sario.GEO_MASK_SUM_DSET][:]
 
     if print_dates:
         callback = _print
@@ -454,16 +456,16 @@ def _save_npy_file(imgfile,
                    normalize=False,
                    cmap='seismic'):
     try:
+        geo_date_list, image = apertools.sario.load_deformation(".", filename=imgfile)
+    except ValueError:
         image = apertools.sario.load(imgfile)
         geo_date_list, use_mask = None, False
-    except ValueError:
-        geo_date_list, image = apertools.sario.load_deformation(".", filename=imgfile)
 
     if image.ndim > 2:
         # For 3D stack, assume we just want the final image
         image = image[-1]
 
-    stack_mask = insar.prepare.load_mask(geo_date_list=geo_date_list, perform_mask=use_mask)
+    stack_mask = apertools.sario.load_mask(geo_date_list=geo_date_list, perform_mask=use_mask)
     image[stack_mask] = np.nan
     shifted_cmap = apertools.plotting.make_shifted_cmap(
         image,
@@ -675,7 +677,7 @@ def reference(filename):
 
     filename is name of .h5 unw stack file
     """
-    ref = insar.prepare.load_reference(unw_stack_file=filename)
+    ref = apertools.sario.load_reference(unw_stack_file=filename)
     click.echo("Reference for %s: %s" % (filename, ref))
 
     rsc_data = apertools.sario.load_dem_from_h5(filename)
