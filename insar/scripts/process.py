@@ -163,20 +163,22 @@ def run_ps_sbas_igrams(rate=1, looks=None, **kwargs):
     looks = looks or rate
     logger.info("Running ps_sbas_igrams.py")
     ps_sbas_cmd = "/usr/bin/env python ~/sentinel/ps_sbas_igrams.py \
-sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(rsc_file=elevation_dem_rsc_file,
-                                                         xsize=xsize,
-                                                         ysize=ysize,
-                                                         looks=looks)
+sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
+        rsc_file=elevation_dem_rsc_file, xsize=xsize, ysize=ysize, looks=looks)
     logger.info(ps_sbas_cmd)
     subprocess.check_call(ps_sbas_cmd, shell=True)
 
     # Also create masks of invalid areas of igrams/.geos
     logger.info("Making stacks for new igrams, overwriting old mask file")
-    mask_filename = insar.prepare.create_mask_stacks(igram_path='.', overwrite=True)
+    insar.prepare.create_mask_stacks(igram_path='.', overwrite=True)
 
     # Uses the computed mask areas to set the .int and .cc bad values to 0
     # (since they are non-zero from FFT smearing rows)
-    insar.prepare.zero_masked_areas(igram_path='.', mask_filename=mask_filename, verbose=True)
+    # TODO: run the julia script
+    # insar.prepare.zero_masked_areas(igram_path='.', mask_filename=mask_filename, verbose=True)
+    cmd = "julia --start=no /home/scott/repos/InsarTimeseries.jl/src/runprepare.jl --zero "
+    logger.info(cmd)
+    subprocess.check_call(cmd, shell=True)
 
 
 def run_snaphu(lowpass=None, max_jobs=None, **kwargs):
@@ -187,9 +189,8 @@ def run_snaphu(lowpass=None, max_jobs=None, **kwargs):
     # TODO: probably shouldn't call these like this? idk alternative right now
     igram_rsc = sardem.loading.load_dem_rsc('dem.rsc')
     snaphu_script = os.path.join(SCRIPTS_DIR, 'run_snaphu.sh')
-    snaphu_cmd = '{filepath} {width} {lowpass}'.format(filepath=snaphu_script,
-                                                       width=igram_rsc['width'],
-                                                       lowpass=lowpass)
+    snaphu_cmd = '{filepath} {width} {lowpass}'.format(
+        filepath=snaphu_script, width=igram_rsc['width'], lowpass=lowpass)
     if max_jobs is not None:
         snaphu_cmd += " {}".format(max_jobs)
     logger.info(snaphu_cmd)
@@ -210,8 +211,8 @@ def convert_to_tif(max_height=None, **kwargs):
     subprocess.check_call(convert_cmd, shell=True)
 
     snaphu_script = os.path.join(SCRIPTS_DIR, 'convert_snaphu.py')
-    snaphu_cmd = 'python {filepath} --max-height {hgt}'.format(filepath=snaphu_script,
-                                                               hgt=max_height)
+    snaphu_cmd = 'python {filepath} --max-height {hgt}'.format(
+        filepath=snaphu_script, hgt=max_height)
     logger.info(snaphu_cmd)
     subprocess.check_call(snaphu_cmd, shell=True)
 
