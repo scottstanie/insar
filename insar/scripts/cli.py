@@ -16,12 +16,13 @@ import insar.prepare
 # Main entry point:
 @click.group()
 @click.option('--verbose', is_flag=True)
-@click.option('--path',
-              type=click.Path(exists=False, file_okay=False, writable=True),
-              default='.',
-              help="Path of interest for command. "
-              "Will search for files path or change directory, "
-              "depending on command.")
+@click.option(
+    '--path',
+    type=click.Path(exists=False, file_okay=False, writable=True),
+    default='.',
+    help="Path of interest for command. "
+    "Will search for files path or change directory, "
+    "depending on command.")
 @click.pass_context
 def cli(ctx, verbose, path):
     """Command line tools for processing insar."""
@@ -52,69 +53,80 @@ def parse_steps(ctx, param, value):
 
 
 @cli.command()
-@click.option("--start",
-              type=click.IntRange(min=1, max=len(insar.scripts.process.STEPS)),
-              help="Choose which step to start on, then run all after. Steps: {}".format(
-                  insar.scripts.process.STEP_LIST),
-              default=1)
-@click.option("--step",
-              callback=parse_steps,
-              help="Run a one or a range of steps and exit. "
-              "Examples:\n--step 4,5,7\n--step 3-6\n--step 1,9-10",
-              required=False)
+@click.option(
+    "--start",
+    type=click.IntRange(min=1, max=len(insar.scripts.process.STEPS)),
+    help="Choose which step to start on, then run all after. Steps: {}".format(
+        insar.scripts.process.STEP_LIST),
+    default=1)
+@click.option(
+    "--step",
+    callback=parse_steps,
+    help="Run a one or a range of steps and exit. "
+    "Examples:\n--step 4,5,7\n--step 3-6\n--step 1,9-10",
+    required=False)
 @click.argument("left_lon", type=float, required=False)
 @click.argument("top_lat", type=float, required=False)
 @click.argument("dlon", type=float, required=False)
 @click.argument("dlat", type=float, required=False)
 @click.option('--geojson', '-g', help="Filename containing the geojson object for DEM bounds")
-@click.option("--sentinel-path",
-              envvar="SENTINEL_PATH",
-              default="~/sentinel/",
-              help="(default=~/sentinel/) Directory containing sentinel scripts.")
-@click.option("--rate",
-              "-r",
-              default=1,
-              help="Rate at which to upsample DEM (default=1, no upsampling)")
-@click.option("--unzip/--no-unzip",
-              help="Pass to sentinel_stack whether to unzip Sentinel files",
-              default=True)
-@click.option("--cleanup/--no-cleanup",
-              help="Rename .geos and cleanup directory to `extra_files` after .geo processing",
-              default=True)
-@click.option("--max-temporal",
-              type=int,
-              default=500,
-              help="Maximum temporal baseline for igrams (fed to sbas_list)")
-@click.option("--max-spatial",
-              type=int,
-              default=500,
-              help="Maximum spatial baseline for igrams (fed to sbas_list)")
-@click.option("--looks",
-              type=int,
-              help="Number of looks to perform on .geo files to shrink down .int, "
-              "Default is the upsampling rate, makes the igram size=original DEM size")
-@click.option("--lowpass",
-              type=int,
-              default=1,
-              help="Size of lowpass filter to use on igrams before unwrapping")
-@click.option("--max-jobs",
-              type=int,
-              default=None,
-              help="Cap the number of snaphu processes to kick off at once."
-              " If none specified, number of cpu cores is used.")
-@click.option("--max-height",
-              default=10,
-              help="Maximum height/max absolute phase for converting .unw files to .tif"
-              " (used for contour_interval option to dishgt)")
+@click.option(
+    "--sentinel-path",
+    envvar="SENTINEL_PATH",
+    default="~/sentinel/",
+    help="(default=~/sentinel/) Directory containing sentinel scripts.")
+@click.option(
+    "--rate", "-r", default=1, help="Rate at which to upsample DEM (default=1, no upsampling)")
+@click.option(
+    "--unzip/--no-unzip",
+    help="Pass to sentinel_stack whether to unzip Sentinel files",
+    default=True)
+@click.option(
+    "--cleanup/--no-cleanup",
+    help="Rename .geos and cleanup directory to `extra_files` after .geo processing",
+    default=True)
+@click.option(
+    "--max-temporal",
+    type=int,
+    default=500,
+    help="Maximum temporal baseline for igrams (fed to sbas_list)")
+@click.option(
+    "--max-spatial",
+    type=int,
+    default=500,
+    help="Maximum spatial baseline for igrams (fed to sbas_list)")
+@click.option(
+    "--looks",
+    type=int,
+    help="Number of looks to perform on .geo files to shrink down .int, "
+    "Default is the upsampling rate, makes the igram size=original DEM size")
+@click.option(
+    "--lowpass",
+    type=int,
+    default=1,
+    help="Size of lowpass filter to use on igrams before unwrapping")
+@click.option(
+    "--max-jobs",
+    type=int,
+    default=None,
+    help="Cap the number of snaphu processes to kick off at once."
+    " If none specified, number of cpu cores is used.")
+@click.option(
+    "--max-height",
+    default=10,
+    help="Maximum height/max absolute phase for converting .unw files to .tif"
+    " (used for contour_interval option to dishgt)")
 @click.option('--window', default=3, help="Window size for .unw stack reference")
-@click.option('--ignore-geos',
-              is_flag=True,
-              help="Use the geolist ignore file to ignore dates "
-              "(saved to geolist_ignore.txt from `view-masks`")
-@click.option('--constant-velocity',
-              '-c',
-              is_flag=True,
-              help="Use a constant velocity for SBAS inversion solution")
+@click.option(
+    '--ignore-geos',
+    is_flag=True,
+    help="Use the geolist ignore file to ignore dates "
+    "(saved to geolist_ignore.txt from `view-masks`")
+@click.option(
+    '--constant-velocity',
+    '-c',
+    is_flag=True,
+    help="Use a constant velocity for SBAS inversion solution")
 @click.option('--stackavg', is_flag=True, help="Use a stack averaging method for timeseries")
 @click.option('--alpha', default=0.0, help="Regularization parameter for SBAS inversion")
 @click.option('--difference', is_flag=True, help="Use velocity differences for regularization")
@@ -123,12 +135,14 @@ def parse_steps(ctx, param, value):
     default=1,
     help="Order of 2D polynomial to use to remove residual phase from unwrapped interferograms"
     " (default is 1, linear ramp)")
-@click.option("--ref-row",
-              type=int,
-              help="Row number of pixel to use as unwrapping reference for SBAS inversion")
-@click.option("--ref-col",
-              type=int,
-              help="Column number of pixel to use as unwrapping reference for SBAS inversion")
+@click.option(
+    "--ref-row",
+    type=int,
+    help="Row number of pixel to use as unwrapping reference for SBAS inversion")
+@click.option(
+    "--ref-col",
+    type=int,
+    help="Column number of pixel to use as unwrapping reference for SBAS inversion")
 @click.pass_obj
 def process(context, **kwargs):
     """Process stack of Sentinel interferograms.
@@ -153,24 +167,26 @@ def process(context, **kwargs):
 
 # COMMAND: animate
 @cli.command()
-@click.option("--pause",
-              '-p',
-              default=200,
-              help="For --animate, time in milliseconds to pause"
-              " between stack layers (default 200).")
-@click.option("--save",
-              '-s',
-              help="If you want to save the animation as a movie,"
-              " title to save file as.")
-@click.option("--display/--no-display",
-              help="Pop up matplotlib figure to view (instead of just saving)",
-              default=True)
+@click.option(
+    "--pause",
+    '-p',
+    default=200,
+    help="For --animate, time in milliseconds to pause"
+    " between stack layers (default 200).")
+@click.option(
+    "--save", '-s', help="If you want to save the animation as a movie,"
+    " title to save file as.")
+@click.option(
+    "--display/--no-display",
+    help="Pop up matplotlib figure to view (instead of just saving)",
+    default=True)
 @click.option("--cmap", default='seismic', help="Colormap for image display.")
 @click.option("--shifted/--no-shifted", default=True, help="Shift colormap to be 0 centered.")
 @click.option("--file-ext", help="If not loading deformation.npy, the extension of files to load")
-@click.option("--intlist/--no-intlist",
-              default=False,
-              help="If loading other file type, also load `intlist` file  for titles")
+@click.option(
+    "--intlist/--no-intlist",
+    default=False,
+    help="If loading other file type, also load `intlist` file  for titles")
 @click.option("--db/--no-db", help="Use dB scale for images (default false)", default=False)
 @click.option("--vmax", type=float, help="Maximum value for imshow")
 @click.option("--vmin", type=float, help="Minimum value for imshow")
@@ -227,10 +243,11 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
 @click.option('--row-end', type=int, default=None)
 @click.option('--col-start', default=0)
 @click.option('--col-end', type=int, default=None)
-@click.option("--rowcol",
-              help="Use row,col for legened entries (instead of default lat,lon)",
-              is_flag=True,
-              default=False)
+@click.option(
+    "--rowcol",
+    help="Use row,col for legened entries (instead of default lat,lon)",
+    is_flag=True,
+    default=False)
 @click.option("--mask/--no-mask", help="Mask areas that have any missing data", default=True)
 @click.option("--vmin", type=float, help="Optional: Minimum value for imshow")
 @click.option("--vmax", type=float, help="Optional: Maximum value for imshow")
@@ -257,17 +274,16 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
         rsc_data = apertools.sario.load(os.path.join(defo_path, 'dem.rsc'))
         print("Using lat/lon")
 
-    stack_mask = apertools.sario.load_mask(geo_date_list=geo_date_list,
-                                           perform_mask=mask,
-                                           directory=defo_path)
+    stack_mask = apertools.sario.load_mask(
+        geo_date_list=geo_date_list, perform_mask=mask, directory=defo_path)
 
     stack_ll = apertools.latlon.LatlonImage(data=deformation, dem_rsc=rsc_data)
     stack_ll[:, stack_mask] = np.nan
 
     stack_ll = stack_ll[:, row_start:row_end, col_start:col_end]
 
-    img = apertools.latlon.LatlonImage(data=np.mean(stack_ll[-3:], axis=0),
-                                       dem_rsc=stack_ll.dem_rsc)
+    img = apertools.latlon.LatlonImage(
+        data=np.mean(stack_ll[-3:], axis=0), dem_rsc=stack_ll.dem_rsc)
 
     apertools.plotting.view_stack(
         stack_ll,
@@ -288,9 +304,8 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
 @click.option("--downsample", "-d", default=1, help="Amount to downsample image")
 @click.option("--cmap", default='dismph', help="Colormap for image display.")
 @click.option("--title", help="Title for image plot")
-@click.option("--alpha",
-              default=0.6,
-              help="Transparency for background magnitude (if plotting insar)")
+@click.option(
+    "--alpha", default=0.6, help="Transparency for background magnitude (if plotting insar)")
 @click.option("--colorbar/--no-colorbar", default=True, help="Display colorbar on figure")
 def plot(filename, downsample, cmap, title, alpha, colorbar):
     """Quick plot of a single InSAR file.
@@ -312,12 +327,12 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
 # COMMAND: view-masks
 @cli.command('view-masks')
 @click.option("--downsample", "-d", default=1, help="Amount to downsample image")
-@click.option("--geolist-ignore-file",
-              default="geolist_ignore.txt",
-              help="File to save date of missing .geos on click")
-@click.option("--print-dates/--no-print-dates",
-              default=False,
-              help="Print out missing dates to terminal")
+@click.option(
+    "--geolist-ignore-file",
+    default="geolist_ignore.txt",
+    help="File to save date of missing .geos on click")
+@click.option(
+    "--print-dates/--no-print-dates", default=False, help="Print out missing dates to terminal")
 @click.option("--cmap", default="Reds", help="colormap to display mask areas")
 @click.option("--vmin", type=float, default=0, help="Optional: Minimum value for imshow")
 @click.option("--vmax", type=float, help="Optional: Maximum value for imshow")
@@ -372,29 +387,33 @@ def view_masks(context, downsample, geolist_ignore_file, print_dates, cmap, vmin
 # COMMAND: blob
 @cli.command(context_settings=dict(ignore_unknown_options=True))
 @click.option('--load/--no-load', default=True, help='Load last calculated blobs')
-@click.option('--filename',
-              '-f',
-              type=str,
-              default="deformation.h5",
-              help="specific file to search blobs (default is deformation.h5)")
-@click.option('--positive/--no-positive',
-              default=True,
-              help="Search for positive (uplift) blobs "
-              "(default True)")
-@click.option('--negative/--no-negative',
-              default=True,
-              help="Search for negative (subsidence) blobs "
-              "(default True)")
+@click.option(
+    '--filename',
+    '-f',
+    type=str,
+    default="deformation.h5",
+    help="specific file to search blobs (default is deformation.h5)")
+@click.option(
+    '--positive/--no-positive',
+    default=True,
+    help="Search for positive (uplift) blobs "
+    "(default True)")
+@click.option(
+    '--negative/--no-negative',
+    default=True,
+    help="Search for negative (subsidence) blobs "
+    "(default True)")
 @click.option('--title-prefix', default='')
 @click.option('--blob-filename', default='blobs.npy', help='File to save found blobs')
 @click.option('--row-start', default=0)
 @click.option('--row-end', default=-1)
 @click.option('--col-start', default=0)
 @click.option('--col-end', default=-1)
-@click.option('--mask/--no-mask',
-              default=True,
-              help="Use the stack mask to ignore bad-data areas "
-              "(default True)")
+@click.option(
+    '--mask/--no-mask',
+    default=True,
+    help="Use the stack mask to ignore bad-data areas "
+    "(default True)")
 @click.argument('blobfunc_args', nargs=-1, type=click.UNPROCESSED)
 @click.pass_obj
 def blob(context, load, filename, positive, negative, title_prefix, blob_filename, row_start,
@@ -454,11 +473,12 @@ def _save_npy_file(imgfile,
                    vmin=None,
                    vmax=None,
                    normalize=False,
-                   cmap='seismic'):
+                   cmap='seismic',
+                   **kwargs):
     try:
         geo_date_list, image = apertools.sario.load_deformation(".", filename=imgfile)
     except ValueError:
-        image = apertools.sario.load(imgfile)
+        image = apertools.sario.load(imgfile, **kwargs)
         geo_date_list, use_mask = None, False
 
     if image.ndim > 2:
@@ -487,9 +507,10 @@ def _save_npy_file(imgfile,
 # COMMAND: kml
 @cli.command()
 @click.argument("imgfile", required=False)
-@click.option("--shape",
-              default="box",
-              help="kml shape: use 'box' for image overlay, 'polygon' for geojson square")
+@click.option(
+    "--shape",
+    default="box",
+    help="kml shape: use 'box' for image overlay, 'polygon' for geojson square")
 @click.option("--rsc", help=".rsc file containing lat/lon start and steps")
 @click.option("--geojson", "-g", help="Optional: if making shape from .geojson, file to specify")
 @click.option("--title", "-t", help="Title of the KML object once loaded.")
@@ -501,12 +522,12 @@ def _save_npy_file(imgfile,
 @click.option("--vmin", type=float, help="Minimum value for imshow")
 @click.option("--ann", help=".ann file containing lat/lon start and steps for UAVSAR")
 @click.option("--ext", help="extension for UAVSAR (to be used with --ann)")
-@click.option("--mask/--no-mask",
-              default=False,
-              help="If using .h5 stack, load mask and crop bad-data areas")
+@click.option("--dset", help="If loading a .h5 file, which dset to load")
+@click.option(
+    "--mask/--no-mask", default=False, help="If using .h5 stack, load mask and crop bad-data areas")
 @click.pass_obj
 def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normalize, vmax, vmin,
-        ann, ext, mask):
+        ann, ext, dset, mask):
     """Creates .kml file for some image
     IMGFILE is the image to load into Google Earth
 
@@ -541,6 +562,7 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
             vmax=vmax,
             normalize=normalize,
             cmap=cmap,
+            dset=dset,
         )
     else:
         new_filename = imgfile
@@ -560,21 +582,20 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
 # COMMAND: geotiff
 @cli.command()
 @click.argument("imgfile", required=False)
-@click.option("--shape",
-              default="box",
-              help="kml shape: use 'box' for image overlay, 'quad' for tiled map-overlay")
+@click.option(
+    "--shape",
+    default="box",
+    help="kml shape: use 'box' for image overlay, 'quad' for tiled map-overlay")
 @click.option("--rsc", help=".rsc file containing lat/lon start and steps")
 @click.option("--kml", help=".kml file for image (not used if .rsc used)")
-@click.option("--output",
-              "-o",
-              help="File to save .tif output to (defaults to input, replaced with tif)")
+@click.option(
+    "--output", "-o", help="File to save .tif output to (defaults to input, replaced with tif)")
 @click.option("--cmap", default="seismic", help="Colormap (if saving .npy/.h5 image)")
 @click.option("--normalize", is_flag=True, default=False, help="Center image to [-1, 1]")
 @click.option("--vmax", type=float, help="Maximum value for imshow")
 @click.option("--vmin", type=float, help="Minimum value for imshow")
-@click.option("--mask/--no-mask",
-              default=False,
-              help="If using .h5 stack, load mask and crop bad-data areas")
+@click.option(
+    "--mask/--no-mask", default=False, help="If using .h5 stack, load mask and crop bad-data areas")
 @click.pass_obj
 def geotiff(context, imgfile, shape, rsc, kml, output, cmap, normalize, vmax, vmin, mask):
     if rsc:
@@ -633,17 +654,19 @@ def mask(context, imagefile, dem, output):
 @click.argument("geo_path")
 @click.argument("defo_filename")
 @click.option("--kind", type=click.Choice(['errorbar', 'slope', 'line']), default="errorbar")
-@click.option('--reference-station',
-              '-r',
-              help="GPS Station to base comparisons off. If None, just plots GPS vs InSAR")
+@click.option(
+    '--reference-station',
+    '-r',
+    help="GPS Station to base comparisons off. If None, just plots GPS vs InSAR")
 @click.option('--linear', is_flag=True, default=False, help="Erase current files and reprocess")
 def validate(geo_path, defo_filename, kind, reference_station, linear):
-    apertools.gps.plot_insar_vs_gps(geo_path=geo_path,
-                                    defo_filename=defo_filename,
-                                    kind=kind,
-                                    reference_station=reference_station,
-                                    linear=linear,
-                                    block=True)
+    apertools.gps.plot_insar_vs_gps(
+        geo_path=geo_path,
+        defo_filename=defo_filename,
+        kind=kind,
+        reference_station=reference_station,
+        linear=linear,
+        block=True)
 
 
 # COMMAND: dem-rate
