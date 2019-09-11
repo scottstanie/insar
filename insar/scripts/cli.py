@@ -487,6 +487,7 @@ def _save_npy_file(imgfile,
 
     stack_mask = apertools.sario.load_mask(geo_date_list=geo_date_list, perform_mask=use_mask)
     image[stack_mask] = np.nan
+    image[image == 0] = np.nan
     shifted_cmap = apertools.plotting.make_shifted_cmap(
         image,
         cmap_name=cmap,
