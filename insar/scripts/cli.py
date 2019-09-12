@@ -307,7 +307,8 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
 @click.option(
     "--alpha", default=0.6, help="Transparency for background magnitude (if plotting insar)")
 @click.option("--colorbar/--no-colorbar", default=True, help="Display colorbar on figure")
-def plot(filename, downsample, cmap, title, alpha, colorbar):
+@click.option("--dset", help="Name of dset if plotting from .h5 file")
+def plot(filename, downsample, cmap, title, alpha, colorbar, dset):
     """Quick plot of a single InSAR file.
 
     filename: Name of InSAR file to plot (possible extensions: .int, .cor, .unw, .geo,...)"
@@ -320,8 +321,8 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
         insar --path /path/to/igrams <filename>
 
     """
-    img = apertools.sario.load(filename, downsample=downsample)
-    plot_image(img, title=title, colorbar=colorbar, alpha=alpha)
+    img = apertools.sario.load(filename, downsample=downsample, dset=dset)
+    plot_image(img, title=title, cmap=cmap, colorbar=colorbar, alpha=alpha)
 
 
 # COMMAND: view-masks
@@ -404,7 +405,7 @@ def view_masks(context, downsample, geolist_ignore_file, print_dates, cmap, vmin
     help="Search for negative (subsidence) blobs "
     "(default True)")
 @click.option('--title-prefix', default='')
-@click.option('--blob-filename', default='blobs.npy', help='File to save found blobs')
+@click.option('--blob-filename', default='blobs.h5', help='File to save found blobs')
 @click.option('--row-start', default=0)
 @click.option('--row-end', default=-1)
 @click.option('--col-start', default=0)

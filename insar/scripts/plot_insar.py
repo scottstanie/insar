@@ -8,7 +8,7 @@ import numpy as np
 from apertools import sario, utils  # , plotting
 
 
-def plot_image(img, title=None, colorbar=True, alpha=0.6):
+def plot_image(img, title=None, colorbar=True, cmap=None, alpha=1):
     if np.iscomplexobj(img):
         img_abs = np.abs(img)
         img_phase = np.angle(img)
@@ -25,7 +25,10 @@ def plot_image(img, title=None, colorbar=True, alpha=0.6):
     img_db = utils.db(img_abs)
 
     fig, axes = plt.subplots()
-    axim = axes.imshow(img_db, cmap='gray')
+    if cmap is None:
+        cmap = "dismph" if np.iscomplexobj(img) else "gray"
+
+    axim = axes.imshow(img_db, cmap=cmap)
     if img_phase is not None:
         axes.imshow(img_phase, cmap='dismph', alpha=alpha)
 
@@ -41,11 +44,12 @@ def plot_image(img, title=None, colorbar=True, alpha=0.6):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("filename", help="Name of file to open")
-    parser.add_argument("-d",
-                        "--downsample",
-                        type=int,
-                        default=1,
-                        help="Factor to downsample file to display (default=1)")
+    parser.add_argument(
+        "-d",
+        "--downsample",
+        type=int,
+        default=1,
+        help="Factor to downsample file to display (default=1)")
     parser.add_argument("--dem-rsc", help="Name of dem.rsc file to use for opening image")
     parser.add_argument("--colorbar", action="store_true", default=True, help="Show colorbar")
     parser.add_argument("--title", help="Title for figure")
