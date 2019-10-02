@@ -358,7 +358,7 @@ def view_masks(context, downsample, geolist_ignore_file, print_dates, cmap, vmin
     with h5py.File(apertools.sario.MASK_FILENAME) as f:
         geo_dset = f[apertools.sario.GEO_MASK_DSET]
         composite_mask = f[apertools.sario.GEO_MASK_SUM_DSET][:]
-        with geo_dset.astype(bool):
+        with geo_dset.astype(np.bool):
             geo_masks = geo_dset[:]
         composite_mask = f[apertools.sario.GEO_MASK_SUM_DSET][:]
 
@@ -475,9 +475,11 @@ def _save_npy_file(imgfile,
                    vmax=None,
                    normalize=False,
                    cmap='seismic',
+                   shifted=True,
+                   preview=True,
                    **kwargs):
     try:
-        geo_date_list, image = apertools.sario.load_deformation(".", filename=imgfile)
+        geo_date_list, image = apertools.sario.load_deformation(".", filename=imgfile, **kwargs)
     except ValueError:
         image = apertools.sario.load(imgfile, **kwargs)
         geo_date_list, use_mask = None, False
@@ -489,18 +491,21 @@ def _save_npy_file(imgfile,
     stack_mask = apertools.sario.load_mask(geo_date_list=geo_date_list, perform_mask=use_mask)
     image[stack_mask] = np.nan
     image[image == 0] = np.nan
-    shifted_cmap = apertools.plotting.make_shifted_cmap(
-        image,
-        cmap_name=cmap,
-        vmax=vmax,
-        vmin=vmin,
-    )
+    if shifted:
+        cm = apertools.plotting.make_shifted_cmap(
+            image,
+            cmap_name=cmap,
+            vmax=vmax,
+            vmin=vmin,
+        )
+    else:
+        cm = cmap
     apertools.sario.save(
         new_filename,
         image,
-        cmap=shifted_cmap,
+        cmap=cm,
         normalize=normalize,
-        preview=True,
+        preview=preview,
         vmax=vmax,
         vmin=vmin,
     )
@@ -518,8 +523,12 @@ def _save_npy_file(imgfile,
 @click.option("--title", "-t", help="Title of the KML object once loaded.")
 @click.option("--desc", "-d", help="Description for google Earth.")
 @click.option("--output", "-o", help="File to save kml output to")
+@click.option("--imgout", help="File to save image output (default: replace `imgfile` ext to .png")
 @click.option("--cmap", default="seismic", help="Colormap (if saving .npy image)")
-@click.option("--normalize", is_flag=True, default=False, help="Center image to [-1, 1]")
+@click.option(
+    "--normalize", is_flag=True, default=False, help="Center image to [-1, 1] (default false)")
+@click.option(
+    "--shifted/--no-shifted", default=True, help="Shift cmap to center around 0 (default true)")
 @click.option("--vmax", type=float, help="Maximum value for imshow")
 @click.option("--vmin", type=float, help="Minimum value for imshow")
 @click.option("--ann", help=".ann file containing lat/lon start and steps for UAVSAR")
@@ -527,9 +536,11 @@ def _save_npy_file(imgfile,
 @click.option("--dset", help="If loading a .h5 file, which dset to load")
 @click.option(
     "--mask/--no-mask", default=False, help="If using .h5 stack, load mask and crop bad-data areas")
+@click.option(
+    "--preview/--no-preview", default=True, help="If using .h5 stack, view to-be-saved img")
 @click.pass_obj
-def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normalize, vmax, vmin,
-        ann, ext, dset, mask):
+def kml(context, imgfile, shape, rsc, geojson, title, desc, output, imgout, cmap, shifted,
+        normalize, vmax, vmin, ann, ext, dset, mask, preview):
     """Creates .kml file for some image
     IMGFILE is the image to load into Google Earth
 
@@ -555,7 +566,7 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
     # Check if imgfile is a .npy saved matrix
     file_ext = apertools.utils.get_file_ext(imgfile)
     if file_ext in (".npy", ".h5"):
-        new_filename = imgfile.replace(file_ext, ".png")
+        new_filename = imgfile.replace(file_ext, ".png") if imgout is None else imgout
         _save_npy_file(
             imgfile,
             new_filename,
@@ -564,7 +575,9 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
             vmax=vmax,
             normalize=normalize,
             cmap=cmap,
+            shifted=shifted,
             dset=dset,
+            preview=preview,
         )
     else:
         new_filename = imgfile

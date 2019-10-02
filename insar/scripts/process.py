@@ -176,9 +176,9 @@ sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
     # (since they are non-zero from FFT smearing rows)
     # TODO: run the julia script
     # insar.prepare.zero_masked_areas(igram_path='.', mask_filename=mask_filename, verbose=True)
-    cmd = "julia --start=no /home/scott/repos/InsarTimeseries.jl/src/runprepare.jl --zero "
-    logger.info(cmd)
-    subprocess.check_call(cmd, shell=True)
+    # cmd = "julia --start=no /home/scott/repos/InsarTimeseries.jl/src/runprepare.jl --zero "
+    # logger.info(cmd)
+    # subprocess.check_call(cmd, shell=True)
 
 
 def run_snaphu(lowpass=None, max_jobs=None, **kwargs):
