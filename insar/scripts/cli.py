@@ -595,33 +595,70 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, imgout, cmap
 
 
 # COMMAND: geotiff
+# @cli.command()
+# @click.argument("imgfile", required=False)
+# @click.option(
+#     "--shape",
+#     default="box",
+#     help="kml shape: use 'box' for image overlay, 'quad' for tiled map-overlay")
+# @click.option("--rsc", help=".rsc file containing lat/lon start and steps")
+# @click.option("--kml", help=".kml file for image (not used if .rsc used)")
+# @click.option(
+#     "--output", "-o", help="File to save .tif output to (defaults to input, replaced with tif)")
+# @click.option("--cmap", default="seismic", help="Colormap (if saving .npy/.h5 image)")
+# @click.option("--normalize", is_flag=True, default=False, help="Center image to [-1, 1]")
+# @click.option("--vmax", type=float, help="Maximum value for imshow")
+# @click.option("--vmin", type=float, help="Minimum value for imshow")
+# @click.option(
+#     "--mask/--no-mask", default=False, help="If using .h5 stack, load mask and crop bad-data areas")
+# @click.pass_obj
+# # COMMAND: kml
 @cli.command()
 @click.argument("imgfile", required=False)
 @click.option(
     "--shape",
     default="box",
-    help="kml shape: use 'box' for image overlay, 'quad' for tiled map-overlay")
+    help="kml shape: use 'box' for image overlay, 'polygon' for geojson square")
 @click.option("--rsc", help=".rsc file containing lat/lon start and steps")
-@click.option("--kml", help=".kml file for image (not used if .rsc used)")
+@click.option("--geojson", "-g", help="Optional: if making shape from .geojson, file to specify")
+@click.option("--title", "-t", help="Title of the KML object once loaded.")
+@click.option("--desc", "-d", help="Description for google Earth.")
+@click.option("--output", "-o", help="File to save kml output to")
+@click.option("--imgout", help="File to save image output (default: replace `imgfile` ext to .png")
+@click.option("--cmap", default="seismic", help="Colormap (if saving .npy image)")
 @click.option(
-    "--output", "-o", help="File to save .tif output to (defaults to input, replaced with tif)")
-@click.option("--cmap", default="seismic", help="Colormap (if saving .npy/.h5 image)")
-@click.option("--normalize", is_flag=True, default=False, help="Center image to [-1, 1]")
+    "--normalize", is_flag=True, default=False, help="Center image to [-1, 1] (default false)")
+@click.option(
+    "--shifted/--no-shifted", default=True, help="Shift cmap to center around 0 (default true)")
 @click.option("--vmax", type=float, help="Maximum value for imshow")
 @click.option("--vmin", type=float, help="Minimum value for imshow")
+@click.option("--ann", help=".ann file containing lat/lon start and steps for UAVSAR")
+@click.option("--ext", help="extension for UAVSAR (to be used with --ann)")
+@click.option("--dset", help="If loading a .h5 file, which dset to load")
 @click.option(
     "--mask/--no-mask", default=False, help="If using .h5 stack, load mask and crop bad-data areas")
+@click.option(
+    "--preview/--no-preview", default=True, help="If using .h5 stack, view to-be-saved img")
 @click.pass_obj
-def geotiff(context, imgfile, shape, rsc, kml, output, cmap, normalize, vmax, vmin, mask):
+def geotiff(context, imgfile, shape, rsc, geojson, title, desc, output, imgout, cmap, shifted,
+            normalize, vmax, vmin, ann, ext, dset, mask, preview):
+    if geojson:
+        with open(geojson) as f:
+            gj_dict = json.load(f)
+    else:
+        gj_dict = None
+
     if rsc:
         rsc_data = apertools.sario.load(rsc)
+    elif ann:
+        rsc_data = apertools.parsers.parse_ann_file(ann, ext=ext, verbose=True)
     else:
         rsc_data = None
 
     # Check if imgfile is a .npy saved matrix
     file_ext = apertools.utils.get_file_ext(imgfile)
     if file_ext in (".npy", ".h5"):
-        new_filename = imgfile.replace(file_ext, ".png")
+        new_filename = imgfile.replace(file_ext, ".png") if imgout is None else imgout
         _save_npy_file(
             imgfile,
             new_filename,
@@ -630,12 +667,17 @@ def geotiff(context, imgfile, shape, rsc, kml, output, cmap, normalize, vmax, vm
             vmax=vmax,
             normalize=normalize,
             cmap=cmap,
+            shifted=shifted,
+            dset=dset,
+            preview=preview,
         )
     else:
         new_filename = imgfile
+
     if output is None:
         output = imgfile.replace(file_ext, ".tif")
     # create_geotiff(rsc_data, kml_file, img_filename, shape='box', outfile)
+
     apertools.kml.create_geotiff(
         rsc_data=rsc_data,
         kml_file=kml,
