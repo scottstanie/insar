@@ -17,7 +17,7 @@ call_snaphu() {
     if [ -f $OUTNAME ]; then
         echo "$OUTNAME exists already. Skipping unwrapping $INTFILE"
     else
-        $PHASE_UNWRAP_DIR/snaphu -s $INTFILE $WIDTH -c $CORNAME -o $OUTNAME;
+        $PHASE_UNWRAP_DIR/snaphu -s $INTFILE $WIDTH -c $CORNAME -o $OUTNAME --tile 3 3 30 30 --nproc 9;
         echo "Finished unwrapping $INTFILE "
     fi
 }
@@ -35,7 +35,8 @@ WIDTH=$1
 if [ "$#" -lt 3 ]
 then
 	# Get the number of cores (at least on linux): if it fails, use 4
-	NUM_CORES=$(grep -c ^processor /proc/cpuinfo) && MAX_PROCS=$NUM_CORES || MAX_PROCS=4
+	# NUM_CORES=$(grep -c ^processor /proc/cpuinfo) && MAX_PROCS=$NUM_CORES || MAX_PROCS=4
+    MAX_PROCS=10
 else
 	MAX_PROCS=$3
 fi
