@@ -180,7 +180,7 @@ def process(context, **kwargs):
     "--display/--no-display",
     help="Pop up matplotlib figure to view (instead of just saving)",
     default=True)
-@click.option("--cmap", default='seismic', help="Colormap for image display.")
+@click.option("--cmap", default='seismic_wide', help="Colormap for image display.")
 @click.option("--shifted/--no-shifted", default=True, help="Shift colormap to be 0 centered.")
 @click.option("--file-ext", help="If not loading deformation.npy, the extension of files to load")
 @click.option(
@@ -236,7 +236,8 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
 # COMMAND: view-stack
 @cli.command('view-stack')
 @click.argument("filename", default='deformation.h5', required=False)
-@click.option("--cmap", default='seismic', help="Colormap for image display.")
+@click.option("--dset", help="If loading hdf5, which dset")
+@click.option("--cmap", default='seismic_wide', help="Colormap for image display.")
 @click.option("--label", default='Centimeters', help="Label on colorbar/yaxis for plot")
 @click.option("--title", help="Title for image plot")
 @click.option('--row-start', default=0)
@@ -252,7 +253,7 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
 @click.option("--vmin", type=float, help="Optional: Minimum value for imshow")
 @click.option("--vmax", type=float, help="Optional: Maximum value for imshow")
 @click.pass_obj
-def view_stack(context, filename, cmap, label, title, row_start, row_end, col_start, col_end,
+def view_stack(context, filename, dset, cmap, label, title, row_start, row_end, col_start, col_end,
                rowcol, mask, vmin, vmax):
     """Explore timeseries on `filename`, a deformation stack
     If deformation.npy and geolist.npy or .unw files are not in current directory,
@@ -262,7 +263,8 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
 
     """
     defo_path = os.path.abspath(os.path.split(filename)[0])
-    geo_date_list, deformation = apertools.sario.load_deformation(defo_path, filename=filename)
+    geo_date_list, deformation = apertools.sario.load_deformation(
+        defo_path, filename=filename, dset=dset)
 
     if geo_date_list is None or deformation is None:
         return
@@ -474,7 +476,7 @@ def _save_npy_file(imgfile,
                    vmin=None,
                    vmax=None,
                    normalize=False,
-                   cmap='seismic',
+                   cmap='seismic_wide',
                    shifted=True,
                    preview=True,
                    **kwargs):
@@ -524,7 +526,7 @@ def _save_npy_file(imgfile,
 @click.option("--desc", "-d", help="Description for google Earth.")
 @click.option("--output", "-o", help="File to save kml output to")
 @click.option("--imgout", help="File to save image output (default: replace `imgfile` ext to .png")
-@click.option("--cmap", default="seismic", help="Colormap (if saving .npy image)")
+@click.option("--cmap", default="seismic_wide", help="Colormap (if saving .npy image)")
 @click.option(
     "--normalize", is_flag=True, default=False, help="Center image to [-1, 1] (default false)")
 @click.option(
@@ -605,7 +607,7 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, imgout, cmap
 # @click.option("--kml", help=".kml file for image (not used if .rsc used)")
 # @click.option(
 #     "--output", "-o", help="File to save .tif output to (defaults to input, replaced with tif)")
-# @click.option("--cmap", default="seismic", help="Colormap (if saving .npy/.h5 image)")
+# @click.option("--cmap", default="seismic_wide", help="Colormap (if saving .npy/.h5 image)")
 # @click.option("--normalize", is_flag=True, default=False, help="Center image to [-1, 1]")
 # @click.option("--vmax", type=float, help="Maximum value for imshow")
 # @click.option("--vmin", type=float, help="Minimum value for imshow")
@@ -625,7 +627,7 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, imgout, cmap
 @click.option("--desc", "-d", help="Description for google Earth.")
 @click.option("--output", "-o", help="File to save kml output to")
 @click.option("--imgout", help="File to save image output (default: replace `imgfile` ext to .png")
-@click.option("--cmap", default="seismic", help="Colormap (if saving .npy image)")
+@click.option("--cmap", default="seismic_wide", help="Colormap (if saving .npy image)")
 @click.option(
     "--normalize", is_flag=True, default=False, help="Center image to [-1, 1] (default false)")
 @click.option(
