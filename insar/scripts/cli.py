@@ -396,6 +396,7 @@ def view_masks(context, downsample, geolist_ignore_file, print_dates, cmap, vmin
     type=str,
     default="deformation.h5",
     help="specific file to search blobs (default is deformation.h5)")
+@click.option("--dset", help="If loading a .h5 file, which dset to load")
 @click.option(
     '--positive/--no-positive',
     default=True,
@@ -419,7 +420,7 @@ def view_masks(context, downsample, geolist_ignore_file, print_dates, cmap, vmin
     "(default True)")
 @click.argument('blobfunc_args', nargs=-1, type=click.UNPROCESSED)
 @click.pass_obj
-def blob(context, load, filename, positive, negative, title_prefix, blob_filename, row_start,
+def blob(context, load, filename, dset, positive, negative, title_prefix, blob_filename, row_start,
          row_end, col_start, col_end, mask, blobfunc_args, **kwargs):
     """Find and view blobs in deformation
 
@@ -436,6 +437,7 @@ def blob(context, load, filename, positive, negative, title_prefix, blob_filenam
     insar.blob.make_blob_image(
         igram_path,
         filename,
+        dset,
         load,
         positive,
         negative,
