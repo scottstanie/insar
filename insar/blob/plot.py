@@ -4,8 +4,8 @@ from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial.qhull import ConvexHull
 from sklearn import manifold
-from apertools import plotting
-from insar.blob import utils as blob_utils
+from apertools import plotting, latlon
+from . import utils as blob_utils
 
 
 def on_pick(blobs, patches):
@@ -94,14 +94,15 @@ def plot_blobs(image=None,
         if blob_cmap:
             color_pct = idx / len(blobs)
             color = blob_cm(color_pct)
-        c = plt.Circle((blob[1], blob[0]),
-                       blob[2],
-                       color=color,
-                       fill=False,
-                       linewidth=2,
-                       alpha=alpha,
-                       clip_on=False,
-                       picker=True)
+        c = plt.Circle(
+            (blob[1], blob[0]),
+            blob[2],
+            color=color,
+            fill=False,
+            linewidth=2,
+            alpha=alpha,
+            clip_on=False,
+            picker=True)
         ax.add_patch(c)
         patches.append(c)
 
@@ -306,8 +307,29 @@ def plot_scores(score_arr, nrows=1, y_idxs=None, titles=None):
         ax.legend()
 
 
+def blob_to_geojson(blob_ll):
+    gjs = []
+    for lat, lon, rad_deg, amp in blob_ll:
+        radius_km = latlon.latlon_to_dist([lat, lon], [lat, lon + rad_deg])
+        p = shapely.geometry.Point([lon, lat])
+        n_points = 20
+        d = radius_km * 1000  # meters
+        angles = np.linspace(0, 360, n_points)
+        polygon = geog.propagate(p, angles, d)
+        gjs.append(json.dumps(shapely.geometry.mapping(shapely.geometry.Polygon(polygon))))
+    return gjs
+
+
 if __name__ == '__main__':
-    npz = np.load('patches/image_1.npz')
-    image = npz['image']
-    real_blobs = npz['real_blobs']
-    plot_blobs(image=image, blobs=real_blobs)
+    # npz = np.load('patches/image_1.npz')
+    # image = npz['image']
+    # real_blobs = npz['real_blobs']
+    # plot_blobs(image=image, blobs=real_blobs)
+    import sys
+    import json
+    import geog
+    import shapely.geometry
+    if len(sys.argv) < 4:
+        print("python %s lat lon radius(in km)" % sys.argv[0])
+    else:
+        print("python %s lat lon radius(in km)" % sys.argv[0])

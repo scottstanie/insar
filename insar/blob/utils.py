@@ -10,7 +10,10 @@ import skimage
 from scipy.ndimage import gaussian_filter
 import cv2 as cv
 # from scipy.spatial.qhull import ConvexHull
-from shapely.geometry import Point, MultiPoint, Polygon, box
+# from shapely.geometry import Point, MultiPoint, Polygon, box
+import geog
+import shapely.geometry
+import geojson
 
 
 def get_center_value(img, patch_size=1, accum_func=np.mean):
@@ -69,7 +72,8 @@ def get_blob_stats(blobs, image, center_only=False, accum_func=np.max):
         blobs (ndarray): 2D, entries [row, col, radius, ...], from find_blobs
         image (ndarray): 2D image where blobs were found
         center_only (bool): (default False) Only get the value of the center pixel of the blob
-        accum_func (bool): (default np.max) Function to run on all pixels within blob to accumulate to one value
+        accum_func (bool): (default np.max) Function to run on all pixels
+            within blob to accumulate to one value
 
     Returns:
         ndarray: length = N, number of blobs, each value is the max of the image
@@ -216,6 +220,28 @@ def blobs_to_rowcol(blobs, blob_info):
     return np.array(blobs_rowcol)
 
 
+def blob_to_geojson(blob_ll):
+    blob_polygons = []
+    for lat, lon, rad_deg, amp in blob_ll:
+        radius_km = apertools.latlon.latlon_to_dist([lat, lon], [lat, lon + rad_deg])
+        p = shapely.geometry.Point([lon, lat])
+        n_points = 20
+        d = radius_km * 1000  # meters
+        angles = np.linspace(0, 360, n_points)
+        polygon = geog.propagate(p, angles, d)
+        blob_polygons.append(shapely.geometry.mapping(shapely.geometry.Polygon(polygon)))
+
+    return geojson.FeatureCollection([geojson.Feature(geometry=gj) for gj in blob_polygons])
+
+
+def save_blobs_as_geojson(fname, blobs=None, blob_info=None, blobs_ll=None):
+    if blobs_ll is None:
+        blobs_ll = blobs_to_latlon(blobs, blob_info)
+
+    with open(fname, "w") as f:
+        f.write(geojson.dumps(blob_to_geojson(blobs_ll)))
+
+
 def img_as_uint8(img, vmin=None, vmax=None):
     # Handle invalids with masked array, set it to 0
     out = np.ma.masked_invalid(img).filled(0)
@@ -242,7 +268,7 @@ def bbox_to_coords(bbox, cv_format=False):
 
 
 def regions_to_shapes(regions):
-    return [Polygon(r) for r in regions]
+    return [shapely.geometry.Polygon(r) for r in regions]
 
 
 def _box_is_bad(bbox, min_pix=3, max_ratio=5):
@@ -264,14 +290,15 @@ def find_mser_regions(img, min_area=50):
     return regions, bboxes
 
 
-def combine_hulls(points1, points2):
-    # h = ConvexHull(np.vstack((points1, points2)))
-    # Or maybe
-    # h.add_points(points2)
-    # h.close()
-    h = ConvexHull(points1)
-    h.add_points(points2)
-    return h
+#
+# def combine_hulls(points1, points2):
+# h = ConvexHull(np.vstack((points1, points2)))
+# Or maybe
+# h.add_points(points2)
+# h.close()
+# h = ConvexHull(points1)
+# h.add_points(points2)
+# return h
 
 
 def prune_regions(regions, bboxes, overlap_thresh=0.5):

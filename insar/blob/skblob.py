@@ -200,7 +200,9 @@ def create_gl_cube(image, sigma_list=None, min_sigma=1, max_sigma=50, num_sigma=
     pool = multiprocessing.Pool()
     for s in sigma_list:
         filtered.append(
-            pool.apply_async(gaussian_laplace, args=(image, s), kwds={'mode': 'reflect'}))
+            pool.apply_async(gaussian_laplace, args=(image, s), kwds={
+                'mode': 'reflect'
+            }))
     # Include -s**2 for scale invariance, searches for positive signal
     return np.stack([-s**2 * res.get() for res, s in zip(filtered, sigma_list)], axis=-1)
     # Old way:
@@ -380,6 +382,7 @@ def prune_overlap_blobs(blobs_array, overlap, sigma_bins=1):
          [ 1  1 10]
          [ 2  2 20]]
     """
+    sigma_bins = int(sigma_bins)
     # If specified, divide into sigma bins, only prune within each range
     if sigma_bins > 1:
         out_blobs = []
@@ -572,6 +575,7 @@ def bin_blobs(blobs_array, num_radius_bands):
         bin_idxs = np.digitize(radius_list, bins[1:], right=True)
         return bin_idxs
 
+    num_radius_bands = int(num_radius_bands)
     bin_idxs = _bin_by_radius(blobs_array[:, 2], num_radius_bands)
 
     out_list = []

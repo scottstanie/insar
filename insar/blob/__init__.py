@@ -6,10 +6,11 @@ import multiprocessing
 import numpy as np
 # import insar.blob.plot as plot
 from . import skblob
-from . import plot  # , scores
+from . import plot
 from . import utils as blob_utils
 from skimage import feature
-from apertools import latlon, plotting, sario, utils
+import apertools.utils
+from apertools import latlon, plotting, sario
 from apertools.log import get_log
 
 logger = get_log()
@@ -179,7 +180,7 @@ def make_blob_image(igram_path=".",
                     blobfunc_args=()):
     """Find and view blobs in deformation"""
 
-    ext = utils.get_file_ext(filename)
+    ext = apertools.utils.get_file_ext(filename)
     if not filename or ext in (".h5", ".npy"):
         logger.info("Searching %s for igram_path" % igram_path)
         image = latlon.load_deformation_img(igram_path, n=1, filename=filename, dset=dset)
