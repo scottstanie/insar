@@ -109,10 +109,6 @@ def _reorganize_files(new_dir="extra_files"):
 
 def prep_igrams_dir(cleanup=False, **kwargs):
     """5. Reorganize and rename .geo files, stitches .geos, prepare for igrams"""
-
-    def _find_num_geos():
-        return len(glob.glob('./*.geo'))
-
     if cleanup:
         logger.info("Renaming .geo files, creating symlinks")
         new_dir = 'extra_files'
@@ -123,7 +119,7 @@ def prep_igrams_dir(cleanup=False, **kwargs):
         # Now stitch together duplicate dates of .geos
         apertools.stitching.stitch_same_dates(geo_path="extra_files/", output_path=".")
 
-    num_geos = _find_num_geos()
+    num_geos = len(glob.glob('./*.geo'))
     if num_geos < 2:  # Can't make igrams
         logger.error("%s .geo file in current folder, can't form igram: exiting", num_geos)
         return 1
@@ -179,6 +175,13 @@ sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
     # cmd = "julia --start=no /home/scott/repos/InsarTimeseries.jl/src/runprepare.jl --zero "
     # logger.info(cmd)
     # subprocess.check_call(cmd, shell=True)
+
+
+def run_form_igrams(looks=1, **kwargs):
+    cmd = "julia --start=no /home/scott/repos/InsarTimeseries.jl/src/run_form_igrams.jl --looks {}".format(
+        looks)
+    logger.info(cmd)
+    subprocess.check_call(cmd, shell=True)
 
 
 def run_snaphu(lowpass=None, max_jobs=None, **kwargs):
@@ -268,7 +271,8 @@ STEPS = [
     record_los_vectors,
     prep_igrams_dir,
     create_sbas_list,
-    run_ps_sbas_igrams,
+    # run_ps_sbas_igrams,
+    run_form_igrams,
     run_snaphu,
     convert_to_tif,
     run_sbas_inversion,

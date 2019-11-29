@@ -25,10 +25,8 @@ def unw_to_tif(filename, num_cols, num_rows, max_height):
     """Uses dishgtfile program to convert a .unw to .tif"""
     # The "1" is "firstline" option
     convert_command = "dishgtfile {filename} {num_cols} 1 {num_rows} {max_height}"
-    convert_cmd = convert_command.format(filename=filename,
-                                         num_cols=num_cols,
-                                         num_rows=num_rows,
-                                         max_height=max_height)
+    convert_cmd = convert_command.format(
+        filename=filename, num_cols=num_cols, num_rows=num_rows, max_height=max_height)
     logger.info("Running %s", convert_cmd)
     subprocess.check_call(convert_cmd.split(' '))
 
@@ -48,11 +46,12 @@ def main():
     parser.add_argument("--path", "-p", help="Path to directory of .unw files")
     parser.add_argument("--cols", "-c", help="Optional: Specify number of cols in the file")
     parser.add_argument("--rows", "-r", help="Optional: Specify number of rows in the file")
-    parser.add_argument("--max-height",
-                        "-m",
-                        default=100,
-                        help="Maximum height/max absolute phase in .unw files "
-                        "(used for contour_interval option to dishgt)")
+    parser.add_argument(
+        "--max-height",
+        "-m",
+        default=100,
+        help="Maximum height/max absolute phase in .unw files "
+        "(used for contour_interval option to dishgt)")
     args = parser.parse_args()
 
     if args.file and args.path:
