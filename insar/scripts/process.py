@@ -44,7 +44,8 @@ def create_dem(left_lon=None,
                dlat=None,
                dlon=None,
                geojson=None,
-               rate=1,
+               xrate=1,
+               yrate=2,
                data_source='NASA',
                **kwargs):
     """2. Download, upsample, and stich a DEM"""
@@ -60,7 +61,8 @@ def create_dem(left_lon=None,
         dlat=dlat,
         geojson=geojson,
         data_source=data_source,
-        rate=rate,
+        xrate=xrate,
+        yrate=yrate,
         output_name=output_name,
     )
 
@@ -80,7 +82,6 @@ def record_los_vectors(path=".", **kwargs):
 
 def _reorganize_files(new_dir="extra_files"):
     """Records current file names for Sentinel dir, renames to short names"""
-
     def _move_files(new_dir):
         # Save all sentinel_stack output to new_dir
         mkdir_p(new_dir)
@@ -140,27 +141,30 @@ def create_sbas_list(max_temporal=500, max_spatial=500, **kwargs):
     subprocess.check_call(sbas_cmd, shell=True)
 
 
-def run_ps_sbas_igrams(rate=1, looks=None, **kwargs):
+def run_ps_sbas_igrams(xrate=1, yrate=1, xlooks=None, ylooks=None, **kwargs):
     """7. run the ps_sbas_igrams script"""
-
     def calc_sizes(rate, width, length):
-        xsize = int(math.floor(width / rate) * rate)
-        ysize = int(math.floor(length / rate) * rate)
+        xsize = int(math.floor(width / xrate) * xrate)
+        ysize = int(math.floor(length / yrate) * yrate)
         return (xsize, ysize)
 
     logger.info("Gathering file size info from elevation.dem.rsc")
     elevation_dem_rsc_file = '../elevation.dem.rsc'
     rsc_data = sardem.loading.load_dem_rsc(elevation_dem_rsc_file)
-    xsize, ysize = calc_sizes(rate, rsc_data['width'], rsc_data['file_length'])
+    xsize, ysize = calc_sizes(xrate, yrate, rsc_data['width'], rsc_data['file_length'])
 
     # the "1 1" is xstart ystart
     # Default number of looks is the upsampling rate so that
     # the igram is the size of the original DEM (elevation_small.dem)
-    looks = looks or rate
+    xlooks = xlooks or xrate
+    ylooks = ylooks or yrate
     logger.info("Running ps_sbas_igrams.py")
     ps_sbas_cmd = "/usr/bin/env python ~/sentinel/ps_sbas_igrams.py \
-sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
-        rsc_file=elevation_dem_rsc_file, xsize=xsize, ysize=ysize, looks=looks)
+sbas_list {rsc_file} 1 1 {xsize} {ysize} {xlooks} {ylooks}".format(rsc_file=elevation_dem_rsc_file,
+                                                                   xsize=xsize,
+                                                                   ysize=ysize,
+                                                                   xlooks=xlooks,
+                                                                   ylooks=ylooks)
     logger.info(ps_sbas_cmd)
     subprocess.check_call(ps_sbas_cmd, shell=True)
 
@@ -177,9 +181,10 @@ sbas_list {rsc_file} 1 1 {xsize} {ysize} {looks}".format(
     # subprocess.check_call(cmd, shell=True)
 
 
-def run_form_igrams(looks=1, **kwargs):
-    cmd = "julia --start=no /home/scott/repos/InsarTimeseries.jl/src/run_form_igrams.jl --looks {}".format(
-        looks)
+def run_form_igrams(xlooks=1, ylooks=1, **kwargs):
+    srcdir = "/home/scott/repos/InsarTimeseries.jl/src"
+    cmd = "julia --start=no {}/run_form_igrams.jl --xlooks {} --ylooks {}".format(
+        srcdir, xlooks, ylooks)
     logger.info(cmd)
     subprocess.check_call(cmd, shell=True)
 
@@ -192,8 +197,9 @@ def run_snaphu(lowpass=None, max_jobs=None, **kwargs):
     # TODO: probably shouldn't call these like this? idk alternative right now
     igram_rsc = sardem.loading.load_dem_rsc('dem.rsc')
     snaphu_script = os.path.join(SCRIPTS_DIR, 'run_snaphu.sh')
-    snaphu_cmd = '{filepath} {width} {lowpass}'.format(
-        filepath=snaphu_script, width=igram_rsc['width'], lowpass=lowpass)
+    snaphu_cmd = '{filepath} {width} {lowpass}'.format(filepath=snaphu_script,
+                                                       width=igram_rsc['width'],
+                                                       lowpass=lowpass)
     if max_jobs is not None:
         snaphu_cmd += " {}".format(max_jobs)
     logger.info(snaphu_cmd)
@@ -214,8 +220,8 @@ def convert_to_tif(max_height=None, **kwargs):
     subprocess.check_call(convert_cmd, shell=True)
 
     snaphu_script = os.path.join(SCRIPTS_DIR, 'convert_snaphu.py')
-    snaphu_cmd = 'python {filepath} --max-height {hgt}'.format(
-        filepath=snaphu_script, hgt=max_height)
+    snaphu_cmd = 'python {filepath} --max-height {hgt}'.format(filepath=snaphu_script,
+                                                               hgt=max_height)
     logger.info(snaphu_cmd)
     subprocess.check_call(snaphu_cmd, shell=True)
 
