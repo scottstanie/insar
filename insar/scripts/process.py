@@ -143,7 +143,7 @@ def create_sbas_list(max_temporal=500, max_spatial=500, **kwargs):
 
 def run_ps_sbas_igrams(xrate=1, yrate=1, xlooks=None, ylooks=None, **kwargs):
     """7. run the ps_sbas_igrams script"""
-    def calc_sizes(rate, width, length):
+    def calc_sizes(xrate, yrate, width, length):
         xsize = int(math.floor(width / xrate) * xrate)
         ysize = int(math.floor(length / yrate) * yrate)
         return (xsize, ysize)
@@ -169,8 +169,8 @@ sbas_list {rsc_file} 1 1 {xsize} {ysize} {xlooks} {ylooks}".format(rsc_file=elev
     subprocess.check_call(ps_sbas_cmd, shell=True)
 
     # Also create masks of invalid areas of igrams/.geos
-    logger.info("Making stacks for new igrams, overwriting old mask file")
-    insar.prepare.create_mask_stacks(igram_path='.', overwrite=True)
+    # logger.info("Making stacks for new igrams, overwriting old mask file")
+    # insar.prepare.create_mask_stacks(igram_path='.', overwrite=True)
 
     # Uses the computed mask areas to set the .int and .cc bad values to 0
     # (since they are non-zero from FFT smearing rows)
@@ -277,8 +277,8 @@ STEPS = [
     record_los_vectors,
     prep_igrams_dir,
     create_sbas_list,
-    # run_ps_sbas_igrams,
-    run_form_igrams,
+    run_ps_sbas_igrams,
+    # run_form_igrams,
     run_snaphu,
     convert_to_tif,
     run_sbas_inversion,
