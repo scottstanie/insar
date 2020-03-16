@@ -179,7 +179,6 @@ def save_geo_masks(directory,
     Args:
         overwrite (bool): erase the dataset from the file if it exists and recreate
     """
-
     def _get_geo_mask(geo_arr):
         return np.ma.make_mask(geo_arr == 0, shrink=False)
 
@@ -195,7 +194,7 @@ def save_geo_masks(directory,
         return
     _create_dset(mask_file, dset_name, shape=shape, dtype=bool)
 
-    with h5py.File(mask_file) as f:
+    with h5py.File(mask_file, "a") as f:
         dset = f[dset_name]
         for idx, geo_fname in enumerate(geo_file_list):
             g = sario.load(geo_fname, looks=(row_looks, col_looks))
@@ -268,7 +267,6 @@ def create_hdf5_stack(filename=None,
     Returns:
         filename
     """
-
     def _create_mean(dset):
         """Used to create a mean without loading all into mem with np.mean"""
         mean_buf = np.zeros((dset.shape[1], dset.shape[2]), dset.dtype)
@@ -680,7 +678,6 @@ def zero_file(filename, mask, is_stacked=False):
 @log_runtime
 def merge_files(filename1, filename2, new_filename, overwrite=False):
     """Merge together 2 (currently mask) hdf5 files into a new file"""
-
     def _merge_lists(list1, list2, merged_list, dset_name, dset1, dset2):
         logger.info("%s: %s from %s and %s from %s into %s in file %s" % (
             dset_name,
