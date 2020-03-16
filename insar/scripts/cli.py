@@ -7,7 +7,6 @@ import h5py
 import click
 import insar
 import apertools
-import sardem
 import numpy as np
 from .plot_insar import plot_image
 import insar.prepare
@@ -842,7 +841,8 @@ def dem_rate(context, rsc_file):
     # full_file = os.path.join(context['path'], rsc_file)
     if rsc_file is None:
         rsc_file = apertools.sario.find_rsc_file(directory=context['path'])
-    x_uprate, y_uprate = sardem.utils.calc_upsample_rate(rsc_filename=rsc_file)
+    x_uprate, y_uprate = apertools.utils.calc_upsample_rate(
+        rsc_filename=rsc_file)
 
     click.echo("%s has (%.5f, %.5f) times the default spacing in (x, y)" %
                (rsc_file, x_uprate, y_uprate))
