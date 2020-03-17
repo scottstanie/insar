@@ -46,8 +46,8 @@ REFERENCE_STATION_ATTR = "reference_station"
 
 @log_runtime
 def prepare_stacks(
-        igram_path,
-        overwrite=False,
+    igram_path,
+    overwrite=False,
 ):
     int_stack_file = os.path.join(igram_path, INT_FILENAME)
     unw_stack_file = os.path.join(igram_path, UNW_FILENAME)
@@ -90,11 +90,11 @@ def _run_stack(igram_path, d, overwrite):
 
 @log_runtime
 def create_igram_stacks(
-        igram_path,
-        int_stack_file=INT_FILENAME,
-        unw_stack_file=UNW_FILENAME,
-        cc_stack_file=CC_FILENAME,
-        overwrite=False,
+    igram_path,
+    int_stack_file=INT_FILENAME,
+    unw_stack_file=UNW_FILENAME,
+    cc_stack_file=CC_FILENAME,
+    overwrite=False,
 ):
     stack_dicts = (
         dict(file_ext=".int", create_mean=False, filename=int_stack_file),
@@ -207,14 +207,14 @@ def save_geo_masks(directory,
 
 
 def compute_int_masks(
-        mask_file=None,
-        igram_path=None,
-        geo_path=None,
-        row_looks=None,
-        col_looks=None,
-        dem_rsc=None,
-        dset_name=IGRAM_MASK_DSET,
-        overwrite=False,
+    mask_file=None,
+    igram_path=None,
+    geo_path=None,
+    row_looks=None,
+    col_looks=None,
+    dem_rsc=None,
+    dset_name=IGRAM_MASK_DSET,
+    overwrite=False,
 ):
     """Creates igram masks by taking the logical-or of the two .geo files
 
@@ -432,9 +432,9 @@ def matrix_indices(shape, flatten=True):
 
 @log_runtime
 def deramp_stack(
-        unw_stack_file=UNW_FILENAME,
-        order=1,
-        overwrite=False,
+    unw_stack_file=UNW_FILENAME,
+    order=1,
+    overwrite=False,
 ):
     """Handles removing linear ramps for all files in a stack
 
@@ -546,17 +546,17 @@ def estimate_ramp(z, order):
 
 
 def find_reference_location(
-        unw_stack_file=UNW_FILENAME,
-        mask_stack_file=MASK_FILENAME,
-        cc_stack_file=CC_FILENAME,
+    unw_stack_file=UNW_FILENAME,
+    mask_stack_file=MASK_FILENAME,
+    cc_stack_file=CC_FILENAME,
 ):
     """Find reference pixel on based on GPS availability and mean correlation
     """
-    dem_rsc = sario.load_dem_from_h5(h5file=unw_stack_file, dset="dem_rsc")
+    rsc_data = sario.load_dem_from_h5(h5file=unw_stack_file, dset="dem_rsc")
 
     # Make a latlon image to check for gps data containment
     with h5py.File(unw_stack_file, "r") as f:
-        latlon_image = latlon.LatlonImage(data=f[STACK_DSET][0], dem_rsc=dem_rsc)
+        latlon_image = latlon.LatlonImage(data=f[STACK_DSET][0], rsc_data=rsc_data)
 
     ref_row, ref_col = None, None
     logger.info("Searching for gps station within area")
@@ -565,11 +565,11 @@ def find_reference_location(
     stations = apertools.gps.stations_within_image(latlon_image, mask_invalid=False)
     # Make a latlon image From the total masks
     with h5py.File(mask_stack_file, "r") as f:
-        mask_ll_image = latlon.LatlonImage(data=f[GEO_MASK_SUM_DSET], dem_rsc=dem_rsc)
+        mask_ll_image = latlon.LatlonImage(data=f[GEO_MASK_SUM_DSET], rsc_data=rsc_data)
 
     with h5py.File(cc_stack_file, "r") as f:
         mean_cor = f[STACK_MEAN_DSET][:]
-        mean_cor_ll_image = latlon.LatlonImage(data=mean_cor, dem_rsc=dem_rsc)
+        mean_cor_ll_image = latlon.LatlonImage(data=mean_cor, rsc_data=rsc_data)
 
     if len(stations) > 0:
         logger.info("Station options:")
