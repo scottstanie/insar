@@ -34,6 +34,8 @@ import insar.prepare
 logger = get_log()
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# TODO: Make DEM is 1, download data is 2, then the sentinel raw script gest EOF already
+
 
 def download_eof(mission=None, date=None, **kwargs):
     """1. Download precision orbit files"""
@@ -75,17 +77,6 @@ def run_sentinel_stack(sentinel_path="~/sentinel/", unzip=True, **kwargs):
     subprocess.check_call('/usr/bin/env python {} {}'.format(script_path, unzip_arg), shell=True)
 
 
-# TODO: move this after making igrams folder and dem.rsc creation
-def record_los_vectors(path=".", **kwargs):
-    """4. With .geos processed, record the ENU LOS vector from DEM center to sat"""
-    # enu_coeffs = apertools.los.find_east_up_coeffs(path)
-    # np.save("los_enu_midpoint_vector.npy", enu_coeffs)
-    srcdir = "/home/scott/repos/InsarTimeseries.jl/scripts"
-    cmd = "julia --start=no {}/create_los.jl ".format(srcdir)
-    logger.info(cmd)
-    subprocess.check_call(cmd, shell=True)
-
-
 def _reorganize_files(new_dir="extra_files"):
     """Records current file names for Sentinel dir, renames to short names"""
     def _move_files(new_dir):
@@ -115,7 +106,7 @@ def _reorganize_files(new_dir="extra_files"):
 
 
 def prep_igrams_dir(cleanup=False, **kwargs):
-    """5. Reorganize and rename .geo files, stitches .geos, prepare for igrams"""
+    """4. Reorganize and rename .geo files, stitches .geos, prepare for igrams"""
     if cleanup:
         logger.info("Renaming .geo files, creating symlinks")
         new_dir = 'extra_files'
@@ -137,7 +128,7 @@ def prep_igrams_dir(cleanup=False, **kwargs):
 
 
 def create_sbas_list(max_temporal=500, max_spatial=500, **kwargs):
-    """6. run the sbas_list script
+    """5. run the sbas_list script
 
     Uses the outputs of the geo coded SLCS to find files with small baselines
     Searches one directory up from where script is run for .geo files
@@ -148,7 +139,7 @@ def create_sbas_list(max_temporal=500, max_spatial=500, **kwargs):
 
 
 def run_ps_sbas_igrams(xrate=1, yrate=1, xlooks=None, ylooks=None, **kwargs):
-    """7. run the ps_sbas_igrams script"""
+    """6. run the ps_sbas_igrams script"""
     def calc_sizes(xrate, yrate, width, length):
         xsize = int(math.floor(width / xrate) * xrate)
         ysize = int(math.floor(length / yrate) * yrate)
@@ -191,6 +182,17 @@ def run_form_igrams(xlooks=1, ylooks=1, **kwargs):
     srcdir = "/home/scott/repos/InsarTimeseries.jl/src"
     cmd = "julia --start=no {}/run_form_igrams.jl --xlooks {} --ylooks {}".format(
         srcdir, xlooks, ylooks)
+    logger.info(cmd)
+    subprocess.check_call(cmd, shell=True)
+
+
+# TODO: move this after making igrams folder and dem.rsc creation
+def record_los_vectors(path=".", **kwargs):
+    """7. With .geos processed, record the ENU LOS vector from DEM center to sat"""
+    # enu_coeffs = apertools.los.find_east_up_coeffs(path)
+    # np.save("los_enu_midpoint_vector.npy", enu_coeffs)
+    srcdir = "/home/scott/repos/InsarTimeseries.jl/scripts"
+    cmd = "julia --start=no {}/create_los.jl ".format(srcdir)
     logger.info(cmd)
     subprocess.check_call(cmd, shell=True)
 
@@ -284,11 +286,11 @@ STEPS = [
     download_eof,
     create_dem,
     run_sentinel_stack,
-    record_los_vectors,
     prep_igrams_dir,
     create_sbas_list,
     # run_ps_sbas_igrams,
     run_form_igrams,
+    record_los_vectors,
     run_snaphu,
     convert_to_tif,
     run_sbas_inversion,
