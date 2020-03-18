@@ -267,13 +267,13 @@ def view_stack(context, filename, dset, cmap, label, title, row_start, row_end, 
                                            perform_mask=mask,
                                            directory=defo_path)
 
-    stack_ll = apertools.latlon.LatlonImage(data=deformation, dem_rsc=rsc_data)
+    stack_ll = apertools.latlon.LatlonImage(data=deformation, rsc_data=rsc_data)
     stack_ll[:, stack_mask] = np.nan
 
     stack_ll = stack_ll[:, row_start:row_end, col_start:col_end]
 
     img = apertools.latlon.LatlonImage(data=np.mean(stack_ll[-3:], axis=0),
-                                       dem_rsc=stack_ll.dem_rsc)
+                                       rsc_data=stack_ll.rsc_data)
 
     apertools.plotting.view_stack(
         stack_ll,
