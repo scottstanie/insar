@@ -18,12 +18,13 @@ import math
 import subprocess
 import os
 import glob
-import numpy as np
+from multiprocessing import cpu_count
+# import numpy as np
 from click import BadOptionUsage
 
 import sardem
 import eof
-import apertools.los
+# import apertools.los
 import apertools.utils
 from apertools.log import get_log, log_runtime
 from apertools.utils import mkdir_p, force_symlink
@@ -74,10 +75,15 @@ def run_sentinel_stack(sentinel_path="~/sentinel/", unzip=True, **kwargs):
     subprocess.check_call('/usr/bin/env python {} {}'.format(script_path, unzip_arg), shell=True)
 
 
+# TODO: move this after making igrams folder and dem.rsc creation
 def record_los_vectors(path=".", **kwargs):
     """4. With .geos processed, record the ENU LOS vector from DEM center to sat"""
-    enu_coeffs = apertools.los.find_east_up_coeffs(path)
-    np.save("los_enu_midpoint_vector.npy", enu_coeffs)
+    # enu_coeffs = apertools.los.find_east_up_coeffs(path)
+    # np.save("los_enu_midpoint_vector.npy", enu_coeffs)
+    srcdir = "/home/scott/repos/InsarTimeseries.jl/scripts"
+    cmd = "julia --start=no {}/create_los.jl ".format(srcdir)
+    logger.info(cmd)
+    subprocess.check_call(cmd, shell=True)
 
 
 def _reorganize_files(new_dir="extra_files"):
@@ -206,24 +212,28 @@ def run_snaphu(lowpass=None, max_jobs=None, **kwargs):
     subprocess.check_call(snaphu_cmd, shell=True)
 
 
-def convert_to_tif(max_height=None, **kwargs):
+def convert_to_tif(max_height=None, max_jobs=None, **kwargs):
     """9. Convert igrams (.int) and snaphu outputs (.unw) to .tif files
 
     Assumes we are in the directory with all .int and .unw files
     """
+    if max_jobs is None:
+        max_jobs = cpu_count()
     # Default name by ps_sbas_igrams
     igram_rsc = sardem.loading.load_dem_rsc('dem.rsc')
     # "shopt -s nullglob" skips the for-loop when nothing matches
-    convert_cmd = """shopt -s nullglob; for i in ./*.int ; do dismphfile "$i" {igram_width} ; \
- mv dismph.tif `echo "$i" | sed 's/int$/tif/'` ; done""".format(igram_width=igram_rsc['width'])
-    logger.info(convert_cmd)
-    subprocess.check_call(convert_cmd, shell=True)
+    convert_ints = """find . -name "*.int" -print0 | \
+xargs -0 -n1 -I{} --max-procs=30 dismphfile {} %s """ % (igram_rsc['width'])
+    logger.info(convert_ints)
+    subprocess.check_call(convert_ints, shell=True)
 
-    snaphu_script = os.path.join(SCRIPTS_DIR, 'convert_snaphu.py')
-    snaphu_cmd = 'python {filepath} --max-height {hgt}'.format(filepath=snaphu_script,
-                                                               hgt=max_height)
-    logger.info(snaphu_cmd)
-    subprocess.check_call(snaphu_cmd, shell=True)
+    convert_unws = """find . -name "*.unw" -print0 | \
+xargs -0 -n1 -I{} --max-procs=30 dishgtfile {} %s 1 100000 %s """ % (igram_rsc['width'], max_height)
+    # snaphu_script = os.path.join(SCRIPTS_DIR, 'convert_snaphu.py')
+    # convert_unws = 'python {filepath} --max-height {hgt}'.format(filepath=snaphu_script,
+    #                                                           hgt=max_height)
+    logger.info(convert_unws)
+    subprocess.check_call(convert_unws, shell=True)
 
 
 # TODO: fix this function for new stuff
