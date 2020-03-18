@@ -186,7 +186,6 @@ def run_form_igrams(xlooks=1, ylooks=1, **kwargs):
     subprocess.check_call(cmd, shell=True)
 
 
-# TODO: move this after making igrams folder and dem.rsc creation
 def record_los_vectors(path=".", **kwargs):
     """7. With .geos processed, record the ENU LOS vector from DEM center to sat"""
     # enu_coeffs = apertools.los.find_east_up_coeffs(path)
@@ -225,17 +224,31 @@ def convert_to_tif(max_height=None, max_jobs=None, **kwargs):
     igram_rsc = sardem.loading.load_dem_rsc('dem.rsc')
     # "shopt -s nullglob" skips the for-loop when nothing matches
     convert_ints = """find . -name "*.int" -print0 | \
-xargs -0 -n1 -I{} --max-procs=30 dismphfile {} %s """ % (igram_rsc['width'])
+xargs -0 -n1 -I{} --max-procs=50 dismphfile {} %s """ % (igram_rsc['width'])
     logger.info(convert_ints)
     subprocess.check_call(convert_ints, shell=True)
 
     convert_unws = """find . -name "*.unw" -print0 | \
-xargs -0 -n1 -I{} --max-procs=30 dishgtfile {} %s 1 100000 %s """ % (igram_rsc['width'], max_height)
+xargs -0 -n1 -I{} --max-procs=50 dishgtfile {} %s 1 100000 %s """ % (igram_rsc['width'], max_height)
     # snaphu_script = os.path.join(SCRIPTS_DIR, 'convert_snaphu.py')
     # convert_unws = 'python {filepath} --max-height {hgt}'.format(filepath=snaphu_script,
     #                                                           hgt=max_height)
     logger.info(convert_unws)
     subprocess.check_call(convert_unws, shell=True)
+
+    # Now also add geo projection and SRS info to the .tif files
+    projscript = os.path.join(SCRIPTS_DIR, "gdalcopyproj.py")
+    # Make fake .int and .int.rsc to use the ROI_PAC driver
+    open("fake.int", "w").close()
+    force_symlink("dem.rsc", "fake.int.rsc")
+
+    copyproj_cmd = """find . -name "*.tif" -print0 | \
+xargs -0 -n1 -I{} --max-procs=50 %s fake.int {} """ % projscript
+    logger.info(copyproj_cmd)
+    subprocess.check_call(copyproj_cmd, shell=True)
+
+    os.remove("fake.int")
+    os.remove("fake.int.rsc")
 
 
 # TODO: fix this function for new stuff
