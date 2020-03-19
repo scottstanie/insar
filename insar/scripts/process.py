@@ -110,12 +110,17 @@ def prep_igrams_dir(cleanup=False, **kwargs):
     if cleanup:
         logger.info("Renaming .geo files, creating symlinks")
         new_dir = 'extra_files'
-        _reorganize_files(new_dir)
+        if os.path.exists(new_dir):
+            logger.info("%s exists already, skipping reorganize files", new_dir)
+        else:
+            _reorganize_files(new_dir)
         # For now, leave out the "bad_geo" making
         # apertools.utils.clean_files(".geo", path=".", zero_threshold=0.50, test=False)
 
         # Now stitch together duplicate dates of .geos
-        apertools.stitching.stitch_same_dates(geo_path="extra_files/", output_path=".")
+        apertools.stitching.stitch_same_dates(geo_path="extra_files/",
+                                              output_path=".",
+                                              overwrite=False)
 
     num_geos = len(glob.glob('./*.geo'))
     if num_geos < 2:  # Can't make igrams

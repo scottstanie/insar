@@ -721,30 +721,6 @@ def validate(geo_path, defo_filename, kind, reference_station, linear):
                                     block=True)
 
 
-# COMMAND: dem-rate
-@cli.command('dem-rate')
-@click.option("--rsc_file", help="name of .rsc file")
-def dem_rate(rsc_file):
-    """Print the upsample rate of a dem
-
-        insar dem-rate   # Looks in current folder for one .rsc file
-        insar dem-rate /path/to/dem.rsc
-
-    """
-    # full_file = os.path.join(context['path'], rsc_file)
-    if rsc_file is None:
-        rsc_file = apertools.sario.find_rsc_file(directory=".")
-
-    x_uprate, y_uprate = apertools.utils.calc_upsample_rate(rsc_filename=rsc_file)
-
-    click.echo("%s has (%.5f, %.5f) times the default spacing in (x, y)" %
-               (rsc_file, x_uprate, y_uprate))
-
-    default_spacing = 30.0
-    click.echo("This is equal to (%.2f, %.2f) meter spacing between pixels" %
-               (default_spacing / x_uprate, default_spacing / y_uprate))
-
-
 # COMMAND: reference
 @cli.command('reference')
 @click.argument("filename")
