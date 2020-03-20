@@ -99,6 +99,8 @@ def create_igram_stacks(
     cc_stack_file=CC_FILENAME,
     overwrite=False,
 ):
+    # TODO: make this just make a vrt of unw and .int
+    sario.make_unw_vrt(directory=igram_path, output="unw_stack.vrt", ext=".unw")
     stack_dicts = (
         # dict(file_ext=".int", create_mean=False, filename=int_stack_file),
         dict(file_ext=".unw", create_mean=False, filename=unw_stack_file),
