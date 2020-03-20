@@ -22,7 +22,7 @@ from insar import mask
 from apertools.log import get_log, log_runtime
 
 SENTINEL_WAVELENGTH = 5.5465763  # cm
-PHASE_TO_CM = SENTINEL_WAVELENGTH / (-4 * np.pi)
+PHASE_TO_CM = SENTINEL_WAVELENGTH / (4 * np.pi)
 
 logger = get_log()
 
@@ -310,7 +310,11 @@ def _create_diff_matrix(n, order=1):
     return diff_matrix
 
 
-def invert_sbas(delta_phis, B, geo_mask_columns=None, constant_vel=False, alpha=0,
+def invert_sbas(delta_phis,
+                B,
+                geo_mask_columns=None,
+                constant_vel=False,
+                alpha=0,
                 difference=False):
     """Performs and SBAS inversion on each pixel of unw_stack to find deformation
 
@@ -333,7 +337,6 @@ def invert_sbas(delta_phis, B, geo_mask_columns=None, constant_vel=False, alpha=
     Returns:
         ndarray: solution velocity arrary
     """
-
     def _augment_matrices(B, delta_phis, alpha):
         reg_matrix = _create_diff_matrix(B.shape[1]) if difference else np.eye(B.shape[1])
         B = np.vstack((B, alpha * reg_matrix))
