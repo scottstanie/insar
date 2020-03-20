@@ -9,6 +9,9 @@ import os
 import multiprocessing
 import numpy as np
 from scipy.ndimage.filters import uniform_filter
+from scipy.ndimage.morphology import binary_opening
+import gdal
+from osgeo import gdalconst  # gdal_array,
 
 from apertools import sario, utils, latlon
 import apertools.gps
@@ -97,9 +100,9 @@ def create_igram_stacks(
     overwrite=False,
 ):
     stack_dicts = (
-        dict(file_ext=".int", create_mean=False, filename=int_stack_file),
+        # dict(file_ext=".int", create_mean=False, filename=int_stack_file),
         dict(file_ext=".unw", create_mean=False, filename=unw_stack_file),
-        dict(file_ext=".cc", create_mean=True, filename=cc_stack_file),
+        # dict(file_ext=".cc", create_mean=True, filename=cc_stack_file),
     )
     for d in stack_dicts:
         if d["filename"] is None:
@@ -109,14 +112,34 @@ def create_igram_stacks(
         sario.save_geolist_to_h5(igram_path, d["filename"], overwrite=overwrite)
         sario.save_intlist_to_h5(igram_path, d["filename"], overwrite=overwrite)
 
-    stack_dicts = (
-        dict(file_ext=".int", create_mean=False, filename=int_stack_file),
-        dict(file_ext=".unw", create_mean=False, filename=unw_stack_file),
-        dict(file_ext=".cc", create_mean=True, filename=cc_stack_file),
-    )
     pool = multiprocessing.Pool()
     results = [pool.apply_async(_run_stack, args=(igram_path, d, overwrite)) for d in stack_dicts]
     return [res.get() for res in results]
+
+
+@log_runtime
+def create_mask_stacks_gdal(igram_path, mask_filename=None, geo_path=None, overwrite=False):
+    """Create mask stacks for areas in .geo and .int using `gdal_translate`
+
+    Uses .geo dead areas
+    """
+    if mask_filename is None:
+        mask_file = os.path.join(igram_path, MASK_FILENAME)
+
+    if geo_path is None:
+        geo_path = utils.get_parent_dir(igram_path)
+
+    # Used to shrink the .geo masks to save size as .int masks
+    row_looks, col_looks = apertools.utils.find_looks_taken(igram_path, geo_path=geo_path)
+
+    rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
+
+    save_geo_masks_gdal(
+        geo_path,
+        mask_file,
+        dem_rsc=rsc_data,
+        overwrite=overwrite,
+    )
 
 
 @log_runtime
@@ -180,9 +203,13 @@ def save_geo_masks(directory,
         overwrite (bool): erase the dataset from the file if it exists and recreate
     """
     def _get_geo_mask(geo_arr):
-        return np.ma.make_mask(geo_arr == 0, shrink=False)
+        # Uses for removing single mask pixels from nearest neighbor resample
+        m = binary_opening(np.abs(geo_arr) == 0, structure=np.ones((3, 3)))
+        return np.ma.make_mask(m, shrink=False)
 
     geo_file_list = sario.find_files(directory=directory, search_term="*.geo")
+    rsc_geo = sario.load(sario.find_rsc_file(filename=geo_file_list[0]))
+    gshape = (rsc_geo["file_length"], rsc_geo["width"])
     # Make the empty stack, or delete if exists
     shape = _find_file_shape(dem_rsc=dem_rsc,
                              file_list=geo_file_list,
@@ -197,13 +224,66 @@ def save_geo_masks(directory,
     with h5py.File(mask_file, "a") as f:
         dset = f[dset_name]
         for idx, geo_fname in enumerate(geo_file_list):
-            g = sario.load(geo_fname, looks=(row_looks, col_looks))
+            # g = sario.load(geo_fname, looks=(row_looks, col_looks))
+            gmap = np.memmap(
+                geo_fname,
+                dtype="complex64",
+                mode="r",
+                shape=gshape,
+            )
+            g_subsample = gmap[::row_looks, ::col_looks]
             # ipdb.set_trace()
             print('Saving %s to stack' % geo_fname)
-            dset[idx] = _get_geo_mask(g)
+            dset[idx] = _get_geo_mask(g_subsample)
 
         # Also add a composite mask depthwise
         f[GEO_MASK_SUM_DSET] = np.sum(dset, axis=0)
+
+
+def save_geo_masks_gdal(directory=".",
+                        mask_file="masks.vrt",
+                        dem_rsc=None,
+                        dset_name=GEO_MASK_DSET,
+                        overwrite=False):
+    """Creates .mask files for geos where zeros occur
+
+    Makes look arguments are to create arrays the same size as the igrams
+    Args:
+        overwrite (bool): erase the dataset from the file if it exists and recreate
+    """
+    rsc_data = sario.load(dem_rsc)
+    save_path = os.path.split(mask_file)[0]
+
+    geo_file_list = sario.find_files(directory=directory, search_term="*.geo")
+    for f in geo_file_list:
+        logger.info("Processing mask for %s" % f)
+        rsc_geo = sario.find_rsc_file(filename=f)
+        apertools.sario.save_as_vrt(filename=f, rsc_file=rsc_geo)
+        src = f + ".vrt"
+        tmp_tif = os.path.join(save_path, "tmp.tif")
+        # gdal_translate S1A_20171019.geo.vrt tmp.tif -outsize 792 624 -r average
+        gdal.Translate(
+            tmp_tif,
+            src,
+            # noData=0.0,
+            width=rsc_data["width"],
+            height=rsc_data["file_length"],
+            # resampleAlg=gdalconst.GRA_Average,
+            resampleAlg=gdalconst.GRA_NearestNeighbour,
+        )
+        # Now find zero pixels to get mask:
+        ds = gdal.Open(tmp_tif)
+        in_arr = ds.GetRasterBand(1).ReadAsArray()
+        # Uses for removing single mask pixels from nearest neighbor resample
+        mask_arr = binary_opening(np.abs(in_arr) == 0, structure=np.ones((3, 3)))
+
+        outfile = os.path.join(save_path, os.path.split(f + ".mask.tif")[1])
+        sario.save_as_geotiff(outfile=outfile, array=mask_arr, rsc_data=rsc_data)
+        # cmd = gdal_calc.py -A {inp} --outfile {out} --type Byte --calc="abs(A)==0"
+        # logger.info(cmd)
+        # subprocess.run(cmd, shell=True, check=True)
+
+    # Now stack all these together
 
 
 def compute_int_masks(
