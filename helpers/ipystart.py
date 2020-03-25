@@ -19,4 +19,5 @@ import glob
 import requests
 import datetime
 import h5py
+import gdal
 from collections import Counter, defaultdict
