@@ -375,8 +375,11 @@ def create_hdf5_stack(filename=None,
     shape = (len(file_list), testf.shape[0], testf.shape[1])
     _create_dset(filename, STACK_DSET, shape, dtype=testf.dtype)
     with h5py.File(filename, "a") as hf:
+        # First record the names in a dataset
+        filename_dset = STACK_DSET + "_filenames"
+        hf[filename_dset] = np.array(file_list, dtype=np.string_)
+
         dset = hf[STACK_DSET]
-        dset.attrs["filenames"] = file_list
         for idx, f in enumerate(file_list):
             dset[idx] = sario.load(f)
 
