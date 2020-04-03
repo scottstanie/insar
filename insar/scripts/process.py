@@ -26,6 +26,7 @@ import sardem
 import eof
 # import apertools.los
 import apertools.utils
+import apertools.stitching
 from apertools.log import get_log, log_runtime
 from apertools.utils import mkdir_p, force_symlink
 from apertools.parsers import Sentinel
@@ -73,7 +74,12 @@ def create_dem(left_lon=None,
 def run_sentinel_stack(sentinel_path="~/sentinel/", unzip=True, **kwargs):
     """3. Create geocoded slcs as .geo files for each .zip file"""
     script_path = os.path.join(sentinel_path, "sentinel_stack.py")
-    unzip_arg = "--no-unzip" if unzip is False else ''
+    if unzip:
+        unzip_arg = ''
+        glob.glob("S*zip")
+    else:
+        unzip_arg = "--no-unzip"
+        glob.glob("S*SAFE")
     subprocess.check_call('/usr/bin/env python {} {}'.format(script_path, unzip_arg), shell=True)
 
 
@@ -94,37 +100,32 @@ def _make_symlinks(geofiles):
 
 def _reorganize_files(new_dir="extra_files"):
     """Records current file names for Sentinel dir, renames to short names"""
-    def _move_files(new_dir):
-        # Save all sentinel_stack output to new_dir
-        mkdir_p(new_dir)
-        subprocess.call("mv ./* {}/".format(new_dir), shell=True)
 
-    _move_files(new_dir)
+
+def prep_igrams_dir(cleanup=False, **kwargs):
+    """4. Reorganize and rename .geo files, stitches .geos, prepare for igrams"""
+    new_dir = 'extra_files'
+    if cleanup:
+        logger.info("Renaming .geo files, creating symlinks")
+        if os.path.exists(new_dir):
+            logger.info("%s exists already, skipping reorganize files", new_dir)
+        else:
+            # Save all sentinel_stack output to new_dir
+            mkdir_p(new_dir)
+            subprocess.call("mv ./* {}/".format(new_dir), shell=True)
+        # For now, leave out the "bad_geo" making
+        # apertools.utils.clean_files(".geo", path=".", zero_threshold=0.50, test=False)
+
     # Then bring back the useful ones to the cur dir as symlinks renamed
     geofiles = glob.glob(os.path.join(new_dir, "*.geo"))
     _make_symlinks(geofiles)
 
     # Move extra useful files back in main directory
     for fname in ('params', 'elevation.dem', 'elevation.dem.rsc'):
-        os.symlink(os.path.join(new_dir, fname), os.path.join('.', fname))
+        force_symlink(os.path.join(new_dir, fname), os.path.join('.', fname))
 
-
-def prep_igrams_dir(cleanup=False, **kwargs):
-    """4. Reorganize and rename .geo files, stitches .geos, prepare for igrams"""
-    if cleanup:
-        logger.info("Renaming .geo files, creating symlinks")
-        new_dir = 'extra_files'
-        if os.path.exists(new_dir):
-            logger.info("%s exists already, skipping reorganize files", new_dir)
-        else:
-            _reorganize_files(new_dir)
-        # For now, leave out the "bad_geo" making
-        # apertools.utils.clean_files(".geo", path=".", zero_threshold=0.50, test=False)
-
-        # Now stitch together duplicate dates of .geos
-        apertools.stitching.stitch_same_dates(geo_path="extra_files/",
-                                              output_path=".",
-                                              overwrite=False)
+    # Now stitch together duplicate dates of .geos
+    apertools.stitching.stitch_same_dates(geo_path="extra_files/", output_path=".", overwrite=False)
 
     num_geos = len(glob.glob('./*.geo'))
     if num_geos < 2:  # Can't make igrams
@@ -202,7 +203,7 @@ def record_los_vectors(path=".", **kwargs):
     srcdir = "/home/scott/repos/InsarTimeseries.jl/scripts"
     cmd = "julia --start=no {}/create_los.jl ".format(srcdir)
     logger.info(cmd)
-    subprocess.check_call(cmd, shell=True)
+    subprocess.run(cmd, shell=True)
 
 
 def run_snaphu(lowpass=None, max_jobs=None, **kwargs):
