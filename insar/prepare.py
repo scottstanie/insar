@@ -50,6 +50,9 @@ REFERENCE_STATION_ATTR = "reference_station"
 @log_runtime
 def prepare_stacks(
     igram_path,
+    ref_row=None,
+    ref_col=None,
+    ref_station=None,
     overwrite=False,
 ):
     int_stack_file = os.path.join(igram_path, INT_FILENAME)
@@ -68,11 +71,12 @@ def prepare_stacks(
     create_mask_stacks(igram_path, overwrite=overwrite)
     deramp_stack(unw_stack_file=unw_stack_file, order=1, overwrite=overwrite)
 
-    ref_row, ref_col, ref_station = find_reference_location(
-        unw_stack_file=unw_stack_file,
-        cc_stack_file=cc_stack_file,
-        mask_stack_file=mask_stack_file,
-    )
+    if ref_row is None or ref_col is None:
+        ref_row, ref_col, ref_station = find_reference_location(
+            unw_stack_file=unw_stack_file,
+            cc_stack_file=cc_stack_file,
+            mask_stack_file=mask_stack_file,
+        )
 
     shift_unw_file(unw_stack_file=unw_stack_file,
                    ref_row=ref_row,
@@ -159,15 +163,15 @@ def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=
     # Used to shrink the .geo masks to save size as .int masks
     row_looks, col_looks = apertools.utils.find_looks_taken(igram_path, geo_path=geo_path)
 
-    dem_rsc = sario.load(sario.find_rsc_file(directory=igram_path))
-    sario.save_dem_to_h5(mask_file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
+    rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
+    sario.save_dem_to_h5(mask_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite)
     sario.save_geolist_to_h5(igram_path, mask_file, overwrite=overwrite)
     sario.save_intlist_to_h5(igram_path, mask_file, overwrite=overwrite)
 
     save_geo_masks(
         geo_path,
         mask_file,
-        dem_rsc=dem_rsc,
+        dem_rsc=rsc_data,
         row_looks=row_looks,
         col_looks=col_looks,
         overwrite=overwrite,
@@ -179,7 +183,7 @@ def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=
         geo_path=geo_path,
         row_looks=row_looks,
         col_looks=col_looks,
-        dem_rsc=dem_rsc,
+        dem_rsc=rsc_data,
         overwrite=overwrite,
     )
     # TODO: now add the correlation check
@@ -217,6 +221,7 @@ def save_geo_masks(directory,
                              file_list=geo_file_list,
                              row_looks=row_looks,
                              col_looks=col_looks)
+
     if not sario.check_dset(mask_file, dset_name, overwrite):
         return
     if not sario.check_dset(mask_file, GEO_MASK_SUM_DSET, overwrite):
@@ -233,7 +238,7 @@ def save_geo_masks(directory,
                 mode="r",
                 shape=gshape,
             )
-            g_subsample = gmap[::row_looks, ::col_looks]
+            g_subsample = gmap[(row_looks - 1)::row_looks, (col_looks - 1)::col_looks]
             # ipdb.set_trace()
             print('Saving %s to stack' % geo_fname)
             dset[idx] = _get_geo_mask(g_subsample)
@@ -384,7 +389,7 @@ def create_hdf5_stack(filename=None,
             dset[idx] = sario.load(f)
 
     if save_rsc:
-        dem_rsc = sario.load(sario.find_rsc_file(directory=directory))
+        dem_rsc = sario.load(os.path.join(directory, "dem.rsc"))
         sario.save_dem_to_h5(filename, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
 
     if create_mean:
@@ -634,6 +639,7 @@ def find_reference_location(
     unw_stack_file=UNW_FILENAME,
     mask_stack_file=MASK_FILENAME,
     cc_stack_file=CC_FILENAME,
+    ref_station=None,
 ):
     """Find reference pixel on based on GPS availability and mean correlation
     """
@@ -643,7 +649,6 @@ def find_reference_location(
     with h5py.File(unw_stack_file, "r") as f:
         latlon_image = latlon.LatlonImage(data=f[STACK_DSET][0], rsc_data=rsc_data)
 
-    ref_row, ref_col = None, None
     logger.info("Searching for gps station within area")
     # Don't make the invalid GPS here in case the random image chosed above is bad:
     # We'll use the mask ll image to decide which pixels are bad

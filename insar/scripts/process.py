@@ -273,6 +273,19 @@ xargs -0 -n1 -I{} --max-procs=50 %s fake.int {} """ % projscript
     os.remove("fake.int.rsc")
 
 
+def stack(fname="unw_stack.vrt"):
+    import rasterio as rio
+    import h5py
+    with rio.open(fname) as ds:
+        out = ds.read(1)
+        for b in range(2, ds.count + 1):
+            out += ds.read(b)
+        out /= ds.count
+
+    with h5py.File("stack.h5", "w") as f:
+        f.create_dataset("stack", data=out)
+
+
 # TODO: fix this function for new stuff
 def run_sbas_inversion(ref_row=None,
                        ref_col=None,
@@ -290,7 +303,9 @@ def run_sbas_inversion(ref_row=None,
     igram_path = os.path.realpath(os.getcwd())
 
     # Note: with overwrite=False, this will only take a long time once
-    insar.prepare.prepare_stacks(igram_path, overwrite=False)
+    insar.prepare.prepare_stacks(igram_path, ref_row=ref_row, ref_col=ref_col, overwrite=False)
+    stack()
+    return
 
     cmd = "julia --start=no /home/scott/repos/InsarTimeseries.jl/src/runcli.jl " \
           " -o {output_name} --alpha {alpha} "
