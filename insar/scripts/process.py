@@ -227,9 +227,21 @@ def convert_to_tif(max_height=None, max_jobs=None, **kwargs):
     """9. Convert igrams (.int) and snaphu outputs (.unw) to .tif files
 
     Assumes we are in the directory with all .int and .unw files
+    Also adds .rsc files for all .int and .unw
     """
     if max_jobs is None:
+        # TODO:to i really care about this
         max_jobs = cpu_count()
+
+    add_int_rsc = """find . -name "*.int" -print0 | \
+xargs -0 -n1 -I{} --max-procs=50 ln -s dem.rsc {}.rsc """
+    logger.info(add_int_rsc)
+    subprocess.run(add_int_rsc, shell=True)
+
+    add_unw_rsc = add_int_rsc.replace(".int", ".unw")
+    logger.info(add_unw_rsc)
+    subprocess.run(add_unw_rsc, shell=True)
+
     # Default name by ps_sbas_igrams
     igram_rsc = sardem.loading.load_dem_rsc('dem.rsc')
     # "shopt -s nullglob" skips the for-loop when nothing matches
