@@ -41,7 +41,7 @@ def sum_phase(filenames, band=2):
 
     for (idx, fname) in enumerate(filenames[1:]):
         if (idx + 1) % 10 == 0:
-            print("Reading {} ({} of {})".format(fname, idx, len(filenames)))
+            print("Reading {} ({} of {})".format(fname, idx + 1, len(filenames)))
         with rio.open(fname) as ds:
             out += ds.read(band)
     return out
@@ -162,7 +162,9 @@ def find_valid(geo_date_list,
 
     # First filter by remove igrams with either date in `ignore_geo_file`
     valid_geos = [g for g in geo_date_list if g not in ignore_geos]
-    valid_igrams = [ig for ig in igram_date_list if ig not in ignore_geos]
+    valid_igrams = [
+        ig for ig in igram_date_list if (ig[0] not in ignore_geos and ig[1] not in ignore_geos)
+    ]
     print("Ignoring %s igrams listed in %s" % (ig1 - len(valid_igrams), ignore_geo_file))
 
     # Remove geos and igrams outside of min/max range
