@@ -273,19 +273,6 @@ xargs -0 -n1 -I{} --max-procs=50 %s fake.int {} """ % projscript
     os.remove("fake.int.rsc")
 
 
-def stack(fname="unw_stack.vrt"):
-    import rasterio as rio
-    import h5py
-    with rio.open(fname) as ds:
-        out = ds.read(1)
-        for b in range(2, ds.count + 1):
-            out += ds.read(b)
-        out /= ds.count
-
-    with h5py.File("stack.h5", "w") as f:
-        f.create_dataset("stack", data=out)
-
-
 # TODO: fix this function for new stuff
 def run_sbas_inversion(ref_row=None,
                        ref_col=None,
