@@ -1,97 +1,194 @@
-# TODO: make simple stack averaging work
-# from shutil import copyfile
-# import matplotlib.pyplot as plt
-# import glob
+import glob
+import numpy as np
+import rasterio as rio
+import h5py
+import apertools.sario as sario
+from insar.prepare import remove_ramp
+from collections import namedtuple
 
-# def avg_stack(igram_path, row, col):
-#     def plot_deformation(img, title='', cbar_label='Centimeters'):
-#         shifted_cmap = plotting.make_shifted_cmap(img, 'seismic')
-#         plt.imshow(img, cmap=shifted_cmap)
-#         cbar = plt.colorbar()
-#         cbar.set_label(cbar_label)
-#         plt.title(title)
-#         plt.show(block=True)
+# TODO: do i want this
+# from dataclasses import dataclass
+# @dataclass
+# class Igram:
+#     early: datetime.date
+#     late: datetime.date = ...  # Set default value
+
+# TODO: figure out best place for this
+Igram = namedtuple('Igram', 'early late')
+
+DATE_FMT = "%Y%m%d"
+
+SENTINEL_WAVELENGTH = 5.5465763  # cm
+PHASE_TO_CM = SENTINEL_WAVELENGTH / (4 * np.pi)
+P2MM = PHASE_TO_CM * 10
+
+
+def _default_outfile(max_temporal_baseline, min_date, max_date):
+    out = "velocities"
+    if max_temporal_baseline:
+        out += "_max{}".format(max_temporal_baseline)
+    if min_date:
+        out += "_from{}".format(min_date.strftime(DATE_FMT))
+    if max_date:
+        out += "_to{}".format(max_date.strftime(DATE_FMT))
+    out += ".h5"
+    return out
+
+
+def sum_phase(filenames, band=2):
+    with rio.open(filenames[0]) as ds:
+        out = ds.read(band)
+
+    for fname in filenames[1:]:
+        with rio.open(fname) as ds:
+            out += ds.read(band)
+    return out
+
+
+def run_stack(
+    # unw_stack_file="unw_stack.vrt",
+    outfile=None,
+    ignore_geo_file=None,
+    geo_dir="../",
+    igram_dir=".",
+    max_temporal_baseline=900,
+    min_date=None,
+    max_date=None,
+    ramp_order=1,
+):
+    if outfile is None:
+        outfile = _default_outfile(max_temporal_baseline, min_date, max_date)
+
+    # outgroup = "velos"  # Do i care about splitting up?
+    outdset = "velos/1"
+    # input_dset = STACK_FLAT_DSET
+
+    # Filter igrams and dates down from baselines/bad data
+    geolist, intlist = load_geolist_intlist(  # unw_stack_file,
+        ignore_geo_file,
+        max_temporal_baseline,
+        geo_dir=geo_dir,
+        igram_dir=igram_dir,
+        min_date=min_date,
+        max_date=max_date,
+    )
+
+    unw_files = sario.intlist_to_filenames(intlist, ".unw")
+    print("loading:")
+    print(unw_files[:5] + "...")
+    phase_sum = sum_phase(unw_files)
+
+    phase_sum = remove_ramp(phase_sum, order=ramp_order, mask=np.ma.nomask)
+
+    timediffs = [temporal_baseline(ig) for ig in intlist]
+    avg_velo = phase_sum / np.sum(timediffs)
+    out = (P2MM * avg_velo).astype('float32')
+
+    print("Writing solution into {}:{}".format(outfile, outdset))
+    with h5py.File(outfile, "a") as f:
+        f.create_dataset(outdset, data=out)
+
+    # TODO: save Igram pairs to vrt, geolist to vrt?
+    # geolist = sario.find_geos(directory=igram_dir, parse=True)
+
+    # Finally, save as a mm/year velocity
+
+    # h5open(outfile, "cw") do f
+    #     f[outdset] = permutedims(out)
+    #     # TODO: Do I care to add this for stack when it's all the same?
+    #     # f[_count_dset(cur_outdset)] = countstack
+    # end
+
+    # return outfile, outdset
+    return out
+
+
+def load_geolist_intlist(
+    # unw_stack_file,
+    ignore_geo_file,
+    max_temporal_baseline,
+    geo_dir="../",
+    igram_dir=".",
+    min_date=None,
+    max_date=None,
+):
+    geolist = sario.find_geos(directory=igram_dir, parse=True)
+    intlist = sario.find_igrams(directory=igram_dir, parse=True)
+    # geolist = sario.load_geolist_from_h5(unw_stack_file)
+    # intlist = sario.load_intlist_from_h5(unw_stack_file)
+
+    # If we are ignoreing some indices, remove them from for all pixels
+    # geo_idxs, igram_idxs = find_valid_indices(geolist, intlist, min_date, max_date,...
+    # return geolist[geo_idxs], intlist[igram_idxs], igram_idxs
+    return find_valid(
+        geolist,
+        intlist,
+        min_date,
+        max_date,
+        ignore_geo_file,
+        max_temporal_baseline,
+    )
+
+
+def find_valid(geo_date_list,
+               igram_date_list,
+               min_date=None,
+               max_date=None,
+               ignore_geo_file=None,
+               max_temporal_baseline=900):
+    """Cut down the full list of interferograms and geo dates
+
+    - Cuts date ranges (e.g. piecewise linear solution) with  `min_date` and `max_date`
+    - Can ignore whole dates by reading `ignore_geo_file`
+    - Prunes long time baseline interferograms with `max_temporal_baseline`
+    """
+    ig1 = len(igram_date_list)  # For logging purposes, what do we start with
+    if not ignore_geo_file:
+        print("Not ignoring any .geo dates")
+        ignore_geos = []
+    else:
+        ignore_geos = sorted(sario.find_geos(filename=ignore_geo_file, parse=True))
+        print("Ignoring the following .geo dates:")
+        print(ignore_geos)
+
+    # TODO: do I want to be able to pass an array of dates to ignore?
+
+    # First filter by remove igrams with either date in `ignore_geo_file`
+    valid_geos = [g for g in geo_date_list if g not in ignore_geos]
+    valid_igrams = [ig for ig in igram_date_list if ig not in ignore_geos]
+    print("Ignoring %s igrams listed in %s" % (ig1 - len(valid_igrams), ignore_geo_file))
+
+    # Remove geos and igrams outside of min/max range
+    if min_date is not None:
+        print("Keeping data after min_date: $min_date")
+        valid_geos = [g for g in valid_geos if g > min_date]
+        valid_igrams = [ig for ig in valid_igrams if (ig[1] > min_date and ig[2] > min_date)]
+
+    if max_date is not None:
+        print("Keeping data only before max_date: $max_date")
+        valid_geos = [g for g in valid_geos if g < max_date]
+        valid_igrams = [ig for ig in valid_igrams if (ig[1] < max_date and ig[2] < max_date)]
+
+    # This is just for logging purposes:
+    too_long_igrams = [ig for ig in valid_igrams if temporal_baseline(ig) > max_temporal_baseline]
+    print("Ignoring %s igrams with longer baseline than %s days" %
+          (len(too_long_igrams), max_temporal_baseline))
+
+    # ## Remove long time baseline igrams ###
+    valid_igrams = [ig for ig in valid_igrams if temporal_baseline(ig) <= max_temporal_baseline]
+
+    print("Ignoring %s igrams total" % (ig1 - len(valid_igrams)))
+    return valid_geos, valid_igrams
+    # Collect remaining geo dates and igrams
+    # valid_geo_indices = np.searchsorted(geo_date_list, valid_geos)
+    # valid_igram_indices = np.searchsorted(igram_date_list, valid_igrams)
+
+
+def temporal_baseline(igram: Igram):
+    return (igram[1] - igram[0]).days
+
+
+# span(dates::AbstractArray{Date, 1}) = (dates[end] - dates[1]).value
+# span(igrams::AbstractArray{Igram, 1}) = (sort(igrams)[end][2] - sort(igrams)[1][1]).value
 #
-#     logger.info("Using {} for igram path".format(igram_path))
-#     logger.info("Using {}, {} for reference row, col to shift stack".format(row, col))
-#
-#     if not os.path.exists(igram_path):
-#         logger.error("No directory {}".format(igram_path))
-#         return
-#
-#     subset_dir = os.path.join(igram_path, 'subset')
-#     utils.mkdir_p(subset_dir)
-#     logger.info("Making subset directory for igrams in stack: {}".format(subset_dir))
-#
-#     for f in glob.glob(subset_dir + "*.unw"):
-#         os.remove(f)
-#
-#     # intlist = read_intlist(igram_path)
-#     geolist = read_geolist(igram_path)
-#
-#     geolist2 = np.array(geolist[9:-16])
-#     print("List of .geo dates:")
-#     pprint.pprint(list((idx, g) for idx, g in enumerate(geolist2)))
-#
-#     # timediffs = find_time_diffs(geolist)
-#
-#     pairs2 = [(d1.strftime("%Y%m%d"), d2.strftime("%Y%m%d"))
-#               for d1, d2 in zip(geolist2[:-len(geolist2) // 2], geolist2[len(geolist2) // 2:])]
-#     pairs2_names = ['_'.join(p) + '.unw' for p in pairs2]
-#     print("Using unwrapped igrams:")
-#     print(pprint.pformat(pairs2_names))
-#     num_igrams = len(pairs2)
-#
-#     copyfile(os.path.join(igram_path, 'dem.rsc'), os.path.join(subset_dir, 'dem.rsc'))
-#     for n in pairs2_names:
-#         src = os.path.join(igram_path, n)
-#         dest = os.path.join(subset_dir, n)
-#         copyfile(src, dest)
-#
-#     unw_stack = sario.load_stack(directory=subset_dir, file_ext='.unw')
-#     unw_stack = np.stack(remove_ramp(layer) for layer in unw_stack)
-#
-#     # Pick reference point and shift
-#     unw_shifted = shift_stack(unw_stack, 100, 100, window=9, window_func=np.mean)
-#     stack_mean = np.mean(unw_shifted, axis=0)
-#
-#     start_dt = _parse(pairs2[0][0])
-#     end_dt = _parse(pairs2[-1][1])
-#     total_days = (end_dt - start_dt).days
-#     print("Start date:", start_dt.date())
-#     print("End date:", end_dt.date())
-#     print("Total Days:", total_days)
-#
-#     min_diff = np.min(stack_mean)
-#     max_diff = np.max(stack_mean)
-#     # Reshift again so that there is only uplift
-#     stack_mean = stack_mean - max_diff
-#     print("Min phase val, max val of the averaged stack")
-#     print(min_diff, max_diff)
-#     print("Min cm val, max cm val of the averaged deform")
-#     print(PHASE_TO_CM * min_diff, PHASE_TO_CM * max_diff)
-#     largest_phase_diff = min_diff if -1 * min_diff > max_diff else max_diff
-#
-#     print('largest mean phase diff:', largest_phase_diff)
-#     print('in cm:', PHASE_TO_CM * largest_phase_diff)
-#     print('=======' * 10)
-#     plot_deformation(stack_mean, title='avged stack (in phase)', cbar_label='radians')
-#
-#     title = "Stack avg'ed deform. from {} to {}".format(start_dt.date(), end_dt.date())
-#     plot_deformation(PHASE_TO_CM * stack_mean, title=title)
-#
-#     # Account for the different time periods in the igrams
-#     tds = [_parse(d2) - _parse(d1) for d1, d2 in pairs2]
-#     td_days = [d.days for d in tds]
-#     print("Igram intervals (in days):")
-#     print(td_days)
-#     # unw_normed = np.stack([layer / days for layer, days in zip(unw_stack, td_days)])
-#     unw_normed_shifted = np.stack([layer / days for layer, days in zip(unw_shifted, td_days)])
-#
-#     print("Diff in max phase:")
-#     print(total_days * (np.max(unw_normed_shifted.reshape(
-#       (num_igrams, -1)), axis=1) - np.min(unw_normed_shifted.reshape((num_igrams, -1)), axis=1)))
-#     print("Converted to CM:")
-#     print(total_days * (np.max(unw_normed_shifted.reshape(
-#         (num_igrams, -1)) * PHASE_TO_CM, axis=1) - np.min(
-#             unw_normed_shifted.reshape((num_igrams, -1)) * PHASE_TO_CM, axis=1)))
+# _get_day_nums(dts::AbstractArray{Date, 1}) = [( d - dts[1]).value for d in dts]
