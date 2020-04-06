@@ -81,6 +81,9 @@ def run_sentinel_stack(sentinel_path="~/sentinel/", unzip=True, **kwargs):
         unzip_arg = "--no-unzip"
         glob.glob("S*SAFE")
     subprocess.check_call('/usr/bin/env python {} {}'.format(script_path, unzip_arg), shell=True)
+    for f in glob.glob("S*.geo"):
+        # make symlinks of rsc file for loading
+        force_symlink("elevation.dem.rsc", f + ".rsc")
 
 
 def _make_symlinks(geofiles):
@@ -93,7 +96,7 @@ def _make_symlinks(geofiles):
             force_symlink(geofile, new_name + ".geo")
         except:
             pass
-        # also move corresponding orb timing file
+        # move corresponding orb timing file
         orbtiming_file = geofile.replace('geo', 'orbtiming')
         force_symlink(orbtiming_file, new_name + ".orbtiming")
 
@@ -123,6 +126,8 @@ def prep_igrams_dir(cleanup=False, **kwargs):
     # Move extra useful files back in main directory
     for fname in ('params', 'elevation.dem', 'elevation.dem.rsc'):
         force_symlink(os.path.join(new_dir, fname), os.path.join('.', fname))
+    for geofile in geofiles:
+        force_symlink("elevation.dem.rsc", geofile + ".rsc")
 
     # Now stitch together duplicate dates of .geos
     apertools.stitching.stitch_same_dates(geo_path="extra_files/", output_path=".", overwrite=False)
