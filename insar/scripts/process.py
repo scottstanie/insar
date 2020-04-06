@@ -22,7 +22,6 @@ from multiprocessing import cpu_count
 # import numpy as np
 # from click import BadOptionUsage
 
-# import sardem
 # import apertools.los
 import apertools.utils
 import apertools.sario
@@ -31,6 +30,7 @@ from apertools.log import get_log, log_runtime
 from apertools.utils import mkdir_p, force_symlink
 from apertools.parsers import Sentinel
 import insar.prepare
+import insar.stackavg
 
 logger = get_log()
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -186,7 +186,7 @@ def run_ps_sbas_igrams(xrate=1, yrate=1, xlooks=None, ylooks=None, **kwargs):
 
     logger.info("Gathering file size info from elevation.dem.rsc")
     elevation_dem_rsc_file = '../elevation.dem.rsc'
-    rsc_data = sardem.loading.load_dem_rsc(elevation_dem_rsc_file)
+    rsc_data = apertools.sario.load(elevation_dem_rsc_file)
     xsize, ysize = calc_sizes(xrate, yrate, rsc_data['width'], rsc_data['file_length'])
 
     # the "1 1" is xstart ystart
@@ -238,7 +238,7 @@ def run_snaphu(lowpass=None, max_jobs=None, **kwargs):
     Assumes we are in the directory with all .unw files
     """
     # TODO: probably shouldn't call these like this? idk alternative right now
-    igram_rsc = sardem.loading.load_dem_rsc('dem.rsc')
+    igram_rsc = apertools.sario.load('dem.rsc')
     snaphu_script = os.path.join(SCRIPTS_DIR, 'run_snaphu.sh')
     snaphu_cmd = '{filepath} {width} {lowpass}'.format(filepath=snaphu_script,
                                                        width=igram_rsc['width'],
@@ -310,8 +310,18 @@ def run_sbas_inversion(ref_row=None,
     igram_path = os.path.realpath(os.getcwd())
 
     # Note: with overwrite=False, this will only take a long time once
+    insar.stackavg.run_stack(
+        # unw_stack_file="unw_stack.vrt",
+        outfile=None,
+        ignore_geo_file=None,
+        geo_dir="../",
+        igram_dir=igram_path,
+        max_temporal_baseline=900,
+        min_date=None,
+        max_date=None,
+        ramp_order=1,
+    )
     insar.prepare.prepare_stacks(igram_path, ref_row=ref_row, ref_col=ref_col, overwrite=False)
-    # stack()
     return
 
     cmd = "julia --start=no /home/scott/repos/InsarTimeseries.jl/src/runcli.jl " \

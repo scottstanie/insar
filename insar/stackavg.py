@@ -96,6 +96,7 @@ def run_stack(
     with h5py.File(outfile, "w") as f:
         f.create_dataset(outdset, data=out)
 
+    sario.save_dem_to_h5(outfile, sario.load("dem.rsc"))
     # TODO: save Igram pairs to vrt, geolist to vrt?
     # geolist = sario.find_geos(directory=igram_dir, parse=True)
 
