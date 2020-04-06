@@ -6,8 +6,9 @@ get_ipython().run_line_magic('matplotlib', 'tk')
 import insar
 from insar import *
 from insar.scripts import *
-import apertools
-from apertools import *
+import apertools.sario as sario
+import apertools.utils as utils
+import apertools.gps as gps
 import sardem
 import eof
 import numpy as np
