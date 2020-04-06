@@ -79,6 +79,7 @@ def run_stack(
     print("loading {} files:".format(len(unw_files)))
     print(unw_files[:5], "...")
     phase_sum = sum_phase(unw_files)
+    # TODO: how to handle nodata masks...
 
     phase_sum = remove_ramp(phase_sum, order=ramp_order, mask=np.ma.nomask)
 
