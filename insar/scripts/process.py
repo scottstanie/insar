@@ -2,16 +2,16 @@
 """Runs all steps of interferogram processing
 
     Steps:
-    1. Download precise orbits EOF files
-    2. Create an upsampled DEM
+    1. create a (upsampled) DEM over area of interest
+    2. download sentinel files and precise orbits EOF
     3. run sentinel_stack to produce .geo file for all sentinel .zips
-    4. Record LOS ENU vector from midpoint of DEM
-    5. Post processing for sentinel stack (igrams folder prep)
-    6. create the sbas_list
-    7. run ps_sbas_igrams.py
+    4. Post processing for sentinel stack (igrams folder prep)
+    5. create the sbas_list
+    6. run ps_sbas_igrams.py
+    7. create map of LOS ENU vectors
     8. run snaphu to unwrap all .int files
-    9. Convert .int files and .unw files to .tif files
-    10. Run an SBAS inversion to get the LOS deformation
+    9. convert .int files and .unw files to .tif files
+    10. run an SBAS inversion to get the LOS deformation
 
 """
 import math
@@ -20,12 +20,12 @@ import os
 import glob
 from multiprocessing import cpu_count
 # import numpy as np
-from click import BadOptionUsage
+# from click import BadOptionUsage
 
-import sardem
-import eof
+# import sardem
 # import apertools.los
 import apertools.utils
+import apertools.sario
 import apertools.stitching
 from apertools.log import get_log, log_runtime
 from apertools.utils import mkdir_p, force_symlink
@@ -34,13 +34,18 @@ import insar.prepare
 
 logger = get_log()
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
-
+SENTINEL_SLC_PATH = os.path.expanduser("~/sentinel/")
+SENTINEL_RAW_PATH = os.path.expanduser("~/sentinel_l0/")
 # TODO: Make DEM is 1, download data is 2, then the sentinel raw script gest EOF already
 
 
-def download_eof(mission=None, date=None, **kwargs):
-    """1. Download precision orbit files"""
-    eof.download.main(mission=mission, date=date)
+def _log_and_run(cmd, check=True, shell=True):
+    logger.info("Running command:")
+    logger.info(cmd)
+    if check:
+        return subprocess.check_call(cmd, shell=shell)
+    else:
+        return subprocess.run(cmd, shell=shell)
 
 
 def create_dem(left_lon=None,
@@ -52,35 +57,55 @@ def create_dem(left_lon=None,
                yrate=2,
                data_source='NASA',
                **kwargs):
-    """2. Download, upsample, and stich a DEM"""
-    if not (left_lon and top_lat and dlon and dlat) and not geojson:
-        raise BadOptionUsage("Need either lat/lon arguments or --geojson option"
-                             " for create_dem step.")
-    output_name = 'elevation.dem'
-    logger.info("Running: sardem.dem:main")
-    sardem.dem.main(
-        left_lon=left_lon,
-        top_lat=top_lat,
-        dlon=dlon,
-        dlat=dlat,
-        geojson=geojson,
-        data_source=data_source,
-        xrate=xrate,
-        yrate=yrate,
-        output_name=output_name,
-    )
+    """1. Download, upsample, and stich a DEM"""
+    # TODO:
+    _log_and_run("createdem")
+    # output_name = 'elevation.dem'
+    # logger.info("Running: sardem.dem:main")
+    # sardem.dem.main(
+    #     left_lon=left_lon,
+    #     top_lat=top_lat,
+    #     dlon=dlon,
+    #     dlat=dlat,
+    #     geojson=geojson,
+    #     data_source=data_source,
+    #     xrate=xrate,
+    #     yrate=yrate,
+    #     output_name=output_name,
+    # )
 
 
-def run_sentinel_stack(sentinel_path="~/sentinel/", unzip=True, **kwargs):
+def download_data(mission=None, date=None, **kwargs):
+    """2. Download data from ASF precision orbit files"""
+    # TODO
+    _log_and_run("asfdownload")
+    pass
+
+
+def run_sentinel_stack(unzip=True, **kwargs):
     """3. Create geocoded slcs as .geo files for each .zip file"""
-    script_path = os.path.join(sentinel_path, "sentinel_stack.py")
-    if unzip:
-        unzip_arg = ''
-        glob.glob("S*zip")
+    # Download all EOF files
+    _log_and_run("eof")
+
+    # check if we have RAW or SLC type files
+    p = None
+    for f in glob.glob("./*"):
+        try:
+            p = Sentinel(f)
+            break
+        except ValueError:
+            continue
+    if p.product_type == "RAW":
+        script_path = os.path.join(SENTINEL_RAW_PATH, "sentinel_stack.py")
+    elif p.product_type == "SLC":
+        script_path = os.path.join(SENTINEL_SLC_PATH, "sentinel_stack.py")
     else:
-        unzip_arg = "--no-unzip"
-        glob.glob("S*SAFE")
-    subprocess.check_call('/usr/bin/env python {} {}'.format(script_path, unzip_arg), shell=True)
+        raise ValueError("Unknown sentinel product type %s of %s" (p.product_type, p.filename))
+    logger.info("Found %s product level sentinel files." % p.product_type)
+
+    unzip_arg = '' if unzip else "--no-unzip"
+    cmd = 'python {} {}'.format(script_path, unzip_arg)
+    _log_and_run(cmd)
     for f in glob.glob("S*.geo"):
         # make symlinks of rsc file for loading
         force_symlink("elevation.dem.rsc", f + ".rsc")
@@ -149,8 +174,7 @@ def create_sbas_list(max_temporal=500, max_spatial=500, **kwargs):
     Searches one directory up from where script is run for .geo files
     """
     sbas_cmd = '/usr/bin/env python ~/sentinel/sbas_list.py {} {}'.format(max_temporal, max_spatial)
-    logger.info(sbas_cmd)
-    subprocess.check_call(sbas_cmd, shell=True)
+    _log_and_run(sbas_cmd)
 
 
 def run_ps_sbas_igrams(xrate=1, yrate=1, xlooks=None, ylooks=None, **kwargs):
@@ -177,8 +201,7 @@ sbas_list {rsc_file} 1 1 {xsize} {ysize} {xlooks} {ylooks}".format(rsc_file=elev
                                                                    ysize=ysize,
                                                                    xlooks=xlooks,
                                                                    ylooks=ylooks)
-    logger.info(ps_sbas_cmd)
-    subprocess.check_call(ps_sbas_cmd, shell=True)
+    _log_and_run(ps_sbas_cmd)
 
     # Also create masks of invalid areas of igrams/.geos
     # logger.info("Making stacks for new igrams, overwriting old mask file")
@@ -197,8 +220,7 @@ def run_form_igrams(xlooks=1, ylooks=1, **kwargs):
     srcdir = "/home/scott/repos/InsarTimeseries.jl/src"
     cmd = "julia --start=no {}/run_form_igrams.jl --xlooks {} --ylooks {}".format(
         srcdir, xlooks, ylooks)
-    logger.info(cmd)
-    subprocess.check_call(cmd, shell=True)
+    _log_and_run(cmd)
 
 
 def record_los_vectors(path=".", **kwargs):
@@ -207,8 +229,7 @@ def record_los_vectors(path=".", **kwargs):
     # np.save("los_enu_midpoint_vector.npy", enu_coeffs)
     srcdir = "/home/scott/repos/InsarTimeseries.jl/scripts"
     cmd = "julia --start=no {}/create_los.jl ".format(srcdir)
-    logger.info(cmd)
-    subprocess.run(cmd, shell=True)
+    _log_and_run(cmd, check=False)
 
 
 def run_snaphu(lowpass=None, max_jobs=None, **kwargs):
@@ -224,8 +245,7 @@ def run_snaphu(lowpass=None, max_jobs=None, **kwargs):
                                                        lowpass=lowpass)
     if max_jobs is not None:
         snaphu_cmd += " {}".format(max_jobs)
-    logger.info(snaphu_cmd)
-    subprocess.check_call(snaphu_cmd, shell=True)
+    _log_and_run(snaphu_cmd)
 
 
 def convert_to_tif(max_height=None, max_jobs=None, **kwargs):
@@ -240,28 +260,24 @@ def convert_to_tif(max_height=None, max_jobs=None, **kwargs):
 
     add_int_rsc = """find . -name "*.int" -print0 | \
 xargs -0 -n1 -I{} --max-procs=50 ln -s dem.rsc {}.rsc """
-    logger.info(add_int_rsc)
-    subprocess.run(add_int_rsc, shell=True)
+    _log_and_run(add_int_rsc, check=False)
 
     add_unw_rsc = add_int_rsc.replace(".int", ".unw")
-    logger.info(add_unw_rsc)
-    subprocess.run(add_unw_rsc, shell=True)
+    _log_and_run(add_unw_rsc, check=False)
 
     # Default name by ps_sbas_igrams
-    igram_rsc = sardem.loading.load_dem_rsc('dem.rsc')
+    igram_rsc = apertools.sario.load('dem.rsc')
     # "shopt -s nullglob" skips the for-loop when nothing matches
     convert_ints = """find . -name "*.int" -print0 | \
 xargs -0 -n1 -I{} --max-procs=50 dismphfile {} %s """ % (igram_rsc['width'])
-    logger.info(convert_ints)
-    subprocess.check_call(convert_ints, shell=True)
+    _log_and_run(convert_ints)
 
     convert_unws = """find . -name "*.unw" -print0 | \
 xargs -0 -n1 -I{} --max-procs=50 dishgtfile {} %s 1 100000 %s """ % (igram_rsc['width'], max_height)
     # snaphu_script = os.path.join(SCRIPTS_DIR, 'convert_snaphu.py')
     # convert_unws = 'python {filepath} --max-height {hgt}'.format(filepath=snaphu_script,
     #                                                           hgt=max_height)
-    logger.info(convert_unws)
-    subprocess.check_call(convert_unws, shell=True)
+    _log_and_run(convert_unws)
 
     # Now also add geo projection and SRS info to the .tif files
     projscript = os.path.join(SCRIPTS_DIR, "gdalcopyproj.py")
@@ -271,8 +287,7 @@ xargs -0 -n1 -I{} --max-procs=50 dishgtfile {} %s 1 100000 %s """ % (igram_rsc['
 
     copyproj_cmd = """find . -name "*.tif" -print0 | \
 xargs -0 -n1 -I{} --max-procs=50 %s fake.int {} """ % projscript
-    logger.info(copyproj_cmd)
-    subprocess.check_call(copyproj_cmd, shell=True)
+    _log_and_run(copyproj_cmd)
 
     os.remove("fake.int")
     os.remove("fake.int.rsc")
@@ -296,7 +311,7 @@ def run_sbas_inversion(ref_row=None,
 
     # Note: with overwrite=False, this will only take a long time once
     insar.prepare.prepare_stacks(igram_path, ref_row=ref_row, ref_col=ref_col, overwrite=False)
-    stack()
+    # stack()
     return
 
     cmd = "julia --start=no /home/scott/repos/InsarTimeseries.jl/src/runcli.jl " \
@@ -317,16 +332,13 @@ def run_sbas_inversion(ref_row=None,
 
     cmd = cmd.format(output_name=output_name, alpha=alpha)
     logger.info("Saving to %s" % output_name)
-    logger.info("Running:")
-    logger.info(cmd)
-
-    subprocess.check_call(cmd, shell=True)
+    _log_and_run(cmd)
 
 
 # List of functions that run each step
 STEPS = [
-    download_eof,
     create_dem,
+    download_data,
     run_sentinel_stack,
     prep_igrams_dir,
     create_sbas_list,
@@ -358,44 +370,3 @@ def main(working_dir, kwargs):
         ret = curfunc(**kwargs)
         if ret:  # Option to have step give non-zero return to halt things
             return ret
-
-
-# IF we want to return the step to remove bad .geo files that are mostly zeros:
-# def _check_and_move(fp, zero_threshold, test, mv_dir):
-#     """Wrapper func for clean_files multiprocessing"""
-#     logger.debug("Checking {}".format(fp))
-#     pct = percent_zero(filepath=fp)
-#     if pct > zero_threshold:
-#         logger.info("Moving {} for having {:.2f}% zeros to {}".format(fp, 100 * pct, mv_dir))
-#         if not test:
-#             shutil.move(fp, mv_dir)
-#
-#
-# @log_runtime
-# def clean_files(ext, path=".", zero_threshold=0.50, test=True):
-#     """Move files of type ext from path with a high pct of zeros
-#
-#     Args:
-#         ext (str): file extension to open. Must be loadable by sario.load
-#         path (str): path of directory to search
-#         zero_threshold (float): between 0 and 1, threshold to delete files
-#             if they contain greater ratio of zeros
-#         test (bool): If true, doesn't delete files, just lists
-#     """
-#
-#     file_glob = os.path.join(path, "*{}".format(ext))
-#     logger.info("Searching {} for files with zero threshold {}".format(file_glob, zero_threshold))
-#
-#     # Make a folder to store the bad geos
-#     mv_dir = os.path.join(path, 'bad_{}'.format(ext.replace('.', '')))
-#     mkdir_p(mv_dir) if not test else logger.info("Test mode: not moving files.")
-#
-#     max_procs = mp.cpu_count() // 2
-#     pool = mp.Pool(processes=max_procs)
-#     results = [
-#         pool.apply_async(_check_and_move, (fp, zero_threshold, test, mv_dir))
-#         for fp in glob.glob(file_glob)
-#     ]
-#     # Now ask for results so processes launch
-#     [res.get() for res in results]
-#     pool.close()

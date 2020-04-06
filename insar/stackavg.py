@@ -20,7 +20,7 @@ DATE_FMT = "%Y%m%d"
 
 SENTINEL_WAVELENGTH = 5.5465763  # cm
 PHASE_TO_CM = SENTINEL_WAVELENGTH / (4 * np.pi)
-P2MM = PHASE_TO_CM * 10
+P2MM = PHASE_TO_CM * 10 * 365  # (cm / day) -> (mm / yr)
 
 
 def _default_outfile(max_temporal_baseline, min_date, max_date):
@@ -39,7 +39,9 @@ def sum_phase(filenames, band=2):
     with rio.open(filenames[0]) as ds:
         out = ds.read(band)
 
-    for fname in filenames[1:]:
+    for (idx, fname) in enumerate(filenames[1:]):
+        if (idx + 1) % 10 == 0:
+            print("Reading {} ({} of {})".format(fname, idx + 1, len(filenames)))
         with rio.open(fname) as ds:
             out += ds.read(band)
     return out
@@ -74,18 +76,24 @@ def run_stack(
     )
 
     unw_files = sario.intlist_to_filenames(intlist, ".unw")
-    print("loading:")
-    print(unw_files[:5] + "...")
+    print("loading {} files:".format(len(unw_files)))
+    print(unw_files[:5], "...")
     phase_sum = sum_phase(unw_files)
+    # TODO: how to handle nodata masks...
 
     phase_sum = remove_ramp(phase_sum, order=ramp_order, mask=np.ma.nomask)
 
-    timediffs = [temporal_baseline(ig) for ig in intlist]
-    avg_velo = phase_sum / np.sum(timediffs)
-    out = (P2MM * avg_velo).astype('float32')
+    timediffs = [temporal_baseline(ig) for ig in intlist]  # units: days
+    avg_velo = phase_sum / np.sum(timediffs)  # phase / day
+    avg_velo2 = phase_sum / len(timediffs)  # phase / day
+    out = (P2MM * avg_velo).astype('float32')  # MM / year
+    print(np.max(phase_sum), np.min(phase_sum))
+    print(np.max(avg_velo), np.min(avg_velo))
+    print(np.max(avg_velo2), np.min(avg_velo2))
+    print(np.max(out), np.min(out))
 
     print("Writing solution into {}:{}".format(outfile, outdset))
-    with h5py.File(outfile, "a") as f:
+    with h5py.File(outfile, "w") as f:
         f.create_dataset(outdset, data=out)
 
     # TODO: save Igram pairs to vrt, geolist to vrt?
@@ -155,7 +163,9 @@ def find_valid(geo_date_list,
 
     # First filter by remove igrams with either date in `ignore_geo_file`
     valid_geos = [g for g in geo_date_list if g not in ignore_geos]
-    valid_igrams = [ig for ig in igram_date_list if ig not in ignore_geos]
+    valid_igrams = [
+        ig for ig in igram_date_list if (ig[0] not in ignore_geos and ig[1] not in ignore_geos)
+    ]
     print("Ignoring %s igrams listed in %s" % (ig1 - len(valid_igrams), ignore_geo_file))
 
     # Remove geos and igrams outside of min/max range
