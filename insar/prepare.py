@@ -136,7 +136,7 @@ def create_mask_stacks_gdal(igram_path, mask_filename=None, geo_path=None, overw
         geo_path = utils.get_parent_dir(igram_path)
 
     # Used to shrink the .geo masks to save size as .int masks
-    row_looks, col_looks = apertools.utils.find_looks_taken(igram_path, geo_path=geo_path)
+    row_looks, col_looks = apertools.sario.find_looks_taken(igram_path, geo_path=geo_path)
 
     rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
 
@@ -161,7 +161,7 @@ def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=
         geo_path = utils.get_parent_dir(igram_path)
 
     # Used to shrink the .geo masks to save size as .int masks
-    row_looks, col_looks = apertools.utils.find_looks_taken(igram_path, geo_path=geo_path)
+    row_looks, col_looks = apertools.sario.find_looks_taken(igram_path, geo_path=geo_path)
 
     rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
     sario.save_dem_to_h5(mask_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite)

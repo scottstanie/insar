@@ -775,7 +775,7 @@ def intmask(context):
     run separately to inspect
     """
     igram_path = context['path']
-    row_looks, col_looks = apertools.utils.find_looks_taken(igram_path)
+    row_looks, col_looks = apertools.sario.find_looks_taken(igram_path)
     insar.timeseries.create_igram_masks(
         igram_path,
         row_looks=row_looks,

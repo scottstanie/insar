@@ -1,6 +1,7 @@
 import glob
 import numpy as np
 import rasterio as rio
+from rasterio.errors import RasterioIOError
 import h5py
 import apertools.sario as sario
 from insar.prepare import remove_ramp
@@ -42,8 +43,12 @@ def sum_phase(filenames, band=2):
     for (idx, fname) in enumerate(filenames[1:]):
         if (idx + 1) % 10 == 0:
             print("Reading {} ({} of {})".format(fname, idx + 1, len(filenames)))
-        with rio.open(fname) as ds:
-            out += ds.read(band)
+        try:
+            with rio.open(fname, driver="ROI_PAC") as ds:
+                out += ds.read(band)
+        except RasterioIOError as e:
+            print(f"Error during {fname}: {e}")
+            continue
     return out
 
 
