@@ -1,4 +1,3 @@
-import glob
 import numpy as np
 import rasterio as rio
 from rasterio.errors import RasterioIOError
@@ -37,6 +36,7 @@ def _default_outfile(max_temporal_baseline, min_date, max_date):
 
 
 def sum_phase(filenames, band=2):
+    print("summing phases...")
     with rio.open(filenames[0]) as ds:
         out = ds.read(band)
 
@@ -58,6 +58,7 @@ def run_stack(
     ignore_geo_file=None,
     geo_dir="../",
     igram_dir=".",
+    ext=".unw",
     max_temporal_baseline=900,
     min_date=None,
     max_date=None,
@@ -80,7 +81,10 @@ def run_stack(
         max_date=max_date,
     )
 
-    unw_files = sario.intlist_to_filenames(intlist, ".unw")
+    unw_files = sario.intlist_to_filenames(intlist, ext)
+    if not unw_files:
+        print(f"no files with {ext} here, exiting.")
+        return
     print("loading {} files:".format(len(unw_files)))
     print(unw_files[:5], "...")
     phase_sum = sum_phase(unw_files)
