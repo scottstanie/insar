@@ -7,44 +7,37 @@ Forms stacks as .h5 files for easy access to depth-wise slices
 import h5py
 import os
 import multiprocessing
+import subprocess
 import numpy as np
-from scipy.ndimage.filters import uniform_filter
 from scipy.ndimage.morphology import binary_opening
-import gdal
-from osgeo import gdalconst  # gdal_array,
+import rasterio as rio
 
 from apertools import sario, utils, latlon
 import apertools.gps
 from apertools.log import get_log, log_runtime
 
+from .constants import (
+    # DATE_FMT,
+    MASK_FILENAME,
+    INT_FILENAME,
+    UNW_FILENAME,
+    CC_FILENAME,
+    STACK_DSET,
+    STACK_MEAN_DSET,
+    STACK_FLAT_DSET,
+    STACK_FLAT_SHIFTED_DSET,
+    GEO_MASK_DSET,
+    GEO_MASK_SUM_DSET,
+    IGRAM_MASK_DSET,
+    IGRAM_MASK_SUM_DSET,
+    DEM_RSC_DSET,
+    # GEOLIST_DSET,
+    # INTLIST_DSET,
+    REFERENCE_ATTR,
+    REFERENCE_STATION_ATTR,
+)
+
 logger = get_log()
-
-DATE_FMT = "%Y%m%d"
-
-MASK_FILENAME = "masks.h5"
-INT_FILENAME = "int_stack.h5"
-UNW_FILENAME = "unw_stack.h5"
-CC_FILENAME = "cc_stack.h5"
-
-# dataset names for general 3D stacks
-STACK_DSET = "stack"
-STACK_MEAN_DSET = "stack_mean"
-STACK_FLAT_DSET = "stack_flat"
-STACK_FLAT_SHIFTED_DSET = "stack_flat_shifted"
-
-# Mask file datasets
-GEO_MASK_DSET = "geo"
-GEO_MASK_SUM_DSET = "geo_sum"
-IGRAM_MASK_DSET = "igram"
-IGRAM_MASK_SUM_DSET = "igram_sum"
-
-DEM_RSC_DSET = "dem_rsc"
-
-GEOLIST_DSET = "geo_dates"
-INTLIST_DSET = "int_dates"
-
-REFERENCE_ATTR = "reference"
-REFERENCE_STATION_ATTR = "reference_station"
 
 
 @log_runtime
@@ -53,24 +46,33 @@ def prepare_stacks(
     ref_row=None,
     ref_col=None,
     ref_station=None,
+    order=1,
     overwrite=False,
+    do_repack=True,
 ):
-    int_stack_file = os.path.join(igram_path, INT_FILENAME)
+    # int_stack_file = os.path.join(igram_path, INT_FILENAME)
     unw_stack_file = os.path.join(igram_path, UNW_FILENAME)
     cc_stack_file = os.path.join(igram_path, CC_FILENAME)
     mask_stack_file = os.path.join(igram_path, MASK_FILENAME)
 
-    create_igram_stacks(
-        igram_path,
-        int_stack_file=int_stack_file,
-        unw_stack_file=unw_stack_file,
-        cc_stack_file=cc_stack_file,
-        overwrite=overwrite,
-    )
+    # create_igram_stacks(
+    #     igram_path,
+    #     int_stack_file=int_stack_file,
+    #     unw_stack_file=unw_stack_file,
+    #     cc_stack_file=cc_stack_file,
+    #     overwrite=overwrite,
+    # )
 
     create_mask_stacks(igram_path, overwrite=overwrite)
-    deramp_stack(unw_stack_file=unw_stack_file, order=1, overwrite=overwrite)
+    # deramp_stack(unw_stack_file=unw_stack_file, order=order, overwrite=overwrite)
+    deramp_unws(directory=igram_path, order=order, overwrite=overwrite)
 
+    if ref_station is not None:
+        rsc_data = sario.load(os.path.join(igram_path, "dem.rsc"))
+        ref_row, ref_col = apertools.gps.station_rowcol(
+            station_name=ref_station,
+            rsc_data=rsc_data,
+        )
     if ref_row is None or ref_col is None:
         ref_row, ref_col, ref_station = find_reference_location(
             unw_stack_file=unw_stack_file,
@@ -84,6 +86,28 @@ def prepare_stacks(
                    window=3,
                    ref_station=ref_station,
                    overwrite=overwrite)
+    if do_repack:
+        repack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
+
+
+def repack(filename, dset_name):
+    # Now repack so that chunks are depth-wise (pixels for quick loading)
+    with h5py.File(filename, "r") as f:
+        nrows, ncols, nlayers = f[dset_name].shape
+
+    tmp_name = _make_tmp_name(filename)
+    chunk_size = f"{nlayers}x1x1"
+    print(f"Repacking {filename} into size {chunk_size} depth-wise chunks")
+    cmd = f"h5repack -v -f NONE -l {dset_name}:CHUNK={chunk_size} {filename} {tmp_name}"
+    print("Running:")
+    print(cmd)
+    subprocess.run(cmd, shell=True)
+    subprocess.run(f"mv $tmp_name {filename}", shell=True)
+
+
+def _make_tmp_name(filename):
+    basepath, name = os.path.split(filename)
+    return os.path.join(basepath, f"tmp_{name}")
 
 
 def _run_stack(igram_path, d, overwrite):
@@ -129,6 +153,8 @@ def create_mask_stacks_gdal(igram_path, mask_filename=None, geo_path=None, overw
 
     Uses .geo dead areas
     """
+    import gdal
+    from osgeo import gdalconst  # gdal_array,
     if mask_filename is None:
         mask_file = os.path.join(igram_path, MASK_FILENAME)
 
@@ -241,7 +267,11 @@ def save_geo_masks(directory,
             g_subsample = gmap[(row_looks - 1)::row_looks, (col_looks - 1)::col_looks]
             # ipdb.set_trace()
             print('Saving %s to stack' % geo_fname)
-            dset[idx] = _get_geo_mask(g_subsample)
+            cur_mask = _get_geo_mask(g_subsample)
+            dset[idx] = cur_mask
+            # Also save as an individual file
+            mask_name = os.path.split(geo_fname)[1] + ".mask"
+            sario.save(mask_name, cur_mask)
 
         # Also add a composite mask depthwise
         f[GEO_MASK_SUM_DSET] = np.sum(dset, axis=0)
@@ -258,6 +288,8 @@ def save_geo_masks_gdal(directory=".",
     Args:
         overwrite (bool): erase the dataset from the file if it exists and recreate
     """
+    import gdal
+    from osgeo import gdalconst  # gdal_array,
     rsc_data = sario.load(dem_rsc)
     save_path = os.path.split(mask_file)[0]
 
@@ -341,6 +373,7 @@ def compute_int_masks(
 
 def create_hdf5_stack(filename=None,
                       directory=None,
+                      dset=STACK_DSET,
                       file_ext=None,
                       create_mean=True,
                       save_rsc=True,
@@ -371,20 +404,20 @@ def create_hdf5_stack(filename=None,
 
     # TODO: do we want to replace the .unw files with .h5 files, then make a Virtual dataset?
     # layout = h5py.VirtualLayout(shape=(len(file_list), nrows, ncols), dtype=dtype)
-    if not sario.check_dset(filename, STACK_DSET, overwrite):
+    if not sario.check_dset(filename, dset, overwrite):
         return
 
     file_list = sario.find_files(directory=directory, search_term="*" + file_ext)
 
     testf = sario.load(file_list[0])
     shape = (len(file_list), testf.shape[0], testf.shape[1])
-    _create_dset(filename, STACK_DSET, shape, dtype=testf.dtype)
+    _create_dset(filename, dset, shape, dtype=testf.dtype)
     with h5py.File(filename, "a") as hf:
         # First record the names in a dataset
-        filename_dset = STACK_DSET + "_filenames"
+        filename_dset = dset + "_filenames"
         hf[filename_dset] = np.array(file_list, dtype=np.string_)
 
-        dset = hf[STACK_DSET]
+        dset = hf[dset]
         for idx, f in enumerate(file_list):
             dset[idx] = sario.load(f)
 
@@ -422,28 +455,51 @@ def _find_file_shape(dem_rsc=None, file_list=None, row_looks=None, col_looks=Non
         return (len(file_list), dem_rsc["file_length"], dem_rsc["width"])
 
 
-def shift_unw_file(unw_stack_file, ref_row, ref_col, window=3, ref_station=None, overwrite=False):
+def shift_unw_file(
+    unw_stack_file,
+    ref_row,
+    ref_col,
+    out_dset=STACK_FLAT_SHIFTED_DSET,
+    window=3,
+    ref_station=None,
+    overwrite=False,
+):
     """Runs a reference point shift on flattened stack of unw files stored in .h5"""
     logger.info("Starting shift_stack: using %s, %s as ref_row, ref_col", ref_row, ref_col)
-    if not sario.check_dset(unw_stack_file, STACK_FLAT_SHIFTED_DSET, overwrite):
+    if not sario.check_dset(unw_stack_file, out_dset, overwrite):
         return
 
+    in_files = sario.find_files(".", "*.unwflat")
+    rows, cols = sario.load(in_files[0]).shape
     with h5py.File(unw_stack_file, "a") as f:
-        if STACK_FLAT_DSET not in f:
-            raise ValueError("Need %s to be created in %s before"
-                             " shift stack can be run" % (STACK_FLAT_DSET, unw_stack_file))
+        # f STACK_FLAT_DSET not in f:
+        #    raise ValueError("Need %s to be created in %s before"
+        #                     " shift stack can be run" % (STACK_FLAT_DSET, unw_stack_file))
 
-        stack_in = f[STACK_FLAT_DSET]
+        # stack_in = f[STACK_FLAT_DSET]
+        # f.create_dataset(
+        #     STACK_FLAT_SHIFTED_DSET,
+        #     shape=f[STACK_FLAT_DSET].shape,
+        #     dtype=f[STACK_FLAT_DSET].dtype,
+        # )
+        # stack_out = f[STACK_FLAT_SHIFTED_DSET]
+        # shift_stack(stack_in, stack_out, ref_row, ref_col, window=window)
+        # f[STACK_FLAT_SHIFTED_DSET].attrs[REFERENCE_ATTR] = (ref_row, ref_col)
+        # f[STACK_FLAT_SHIFTED_DSET].attrs[REFERENCE_STATION_ATTR] = (ref_station or "")
         f.create_dataset(
-            STACK_FLAT_SHIFTED_DSET,
-            shape=f[STACK_FLAT_DSET].shape,
-            dtype=f[STACK_FLAT_DSET].dtype,
+            out_dset,
+            shape=(len(in_files), rows, cols),
+            dtype="float32",
         )
-        stack_out = f[STACK_FLAT_SHIFTED_DSET]
-        shift_stack(stack_in, stack_out, ref_row, ref_col, window=window)
-        f[STACK_FLAT_SHIFTED_DSET].attrs[REFERENCE_ATTR] = (ref_row, ref_col)
-        f[STACK_FLAT_SHIFTED_DSET].attrs[REFERENCE_STATION_ATTR] = (ref_station or "")
+        win = window // 2
+        stack_out = f[out_dset]
+        for idx, inf in enumerate(in_files):
+            layer = sario.load(inf)
+            patch = layer[ref_row - win:ref_row + win + 1, ref_col - win:ref_col + win + 1]
+            stack_out[idx] = layer - np.mean(patch)
 
+    dem_rsc = sario.load("dem.rsc")
+    sario.save_dem_to_h5(unw_stack_file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
     logger.info("Shifting stack complete")
 
 
@@ -476,22 +532,6 @@ def load_reference(unw_stack_file=UNW_FILENAME):
             return None, None
 
 
-def save_deformation(igram_path,
-                     deformation,
-                     geo_date_list,
-                     defo_file_name='deformation.h5',
-                     dset_name="stack",
-                     geolist_file_name='geolist.npy'):
-    """Saves deformation ndarray and geolist dates as .npy file"""
-    if utils.get_file_ext(defo_file_name) in (".h5", ".hdf5"):
-        with h5py.File(defo_file_name, "a") as f:
-            f[dset_name] = deformation
-        sario.save_geolist_to_h5(igram_path, defo_file_name, overwrite=True)
-    elif defo_file_name.endswith(".npy"):
-        np.save(os.path.join(igram_path, defo_file_name), deformation)
-        np.save(os.path.join(igram_path, geolist_file_name), geo_date_list)
-
-
 def matrix_indices(shape, flatten=True):
     """Returns a pair of vectors for all indices of a 2D array
 
@@ -518,6 +558,39 @@ def matrix_indices(shape, flatten=True):
         return row_block.flatten(), col_block.flatten()
     else:
         return row_block, col_block
+
+
+def _read_mask_by_idx(idx, fname="masks.h5", dset=IGRAM_MASK_DSET):
+    with h5py.File(fname, "r") as f:
+        return f[dset][idx, :, :]
+
+
+@log_runtime
+def deramp_unws(directory=".", order=1, overwrite=False):
+    # from rasterio.shutil import copy as rio_copy
+    in_ext, out_ext = ".unw", ".unwflat"
+    unw_file_list = sario.find_files(directory=directory, search_term="*" + in_ext)
+    # num_files = len(unw_file_list)
+    out_files = [f.replace(in_ext, out_ext) for f in unw_file_list]
+
+    # Get masks ready:
+    # TODO: more robust from readying file names? now just assuming it's same order
+    # date_str_pairs = sario.load_intlist_from_h5("masks.h5", parse=False)
+    # mask_fnames = [f"{early}_{late}.unw" for (early, late) in date_str_pairs]
+    rsc_data = sario.load(os.path.join(directory, "dem.rsc"))
+
+    for idx, (in_fname, out_fname) in enumerate(zip(unw_file_list, out_files)):
+        if idx % 10 == 0:
+            print(f"Processing {in_fname} -> {out_fname}")
+        if not os.path.exists(out_fname):
+            with rio.open(in_fname, driver="ROI_PAC") as inf:
+                mask = _read_mask_by_idx(idx)
+                amp = inf.read(1)
+                phase = inf.read(2)
+                deramped_phase = remove_ramp(phase, order=order, mask=mask)
+                sario.save(out_fname, np.stack((amp, deramped_phase)))
+        if not os.path.exists(out_fname + ".vrt"):
+            sario.save_as_vrt(out_fname, rsc_data=rsc_data, num_bands=2, dtype="float32")
 
 
 @log_runtime
@@ -636,15 +709,17 @@ def estimate_ramp(z, order):
 
 
 def find_reference_location(
-    unw_stack_file=UNW_FILENAME,
+    # unw_stack_file=UNW_FILENAME,
     mask_stack_file=MASK_FILENAME,
     cc_stack_file=CC_FILENAME,
     ref_station=None,
+    rsc_data=None,
 ):
     """Find reference pixel on based on GPS availability and mean correlation
     """
     rsc_data = sario.load_dem_from_h5(h5file=unw_stack_file, dset="dem_rsc")
 
+    # CHAGNE
     # Make a latlon image to check for gps data containment
     with h5py.File(unw_stack_file, "r") as f:
         latlon_image = latlon.LatlonImage(data=f[STACK_DSET][0], rsc_data=rsc_data)
@@ -681,144 +756,147 @@ def find_reference_location(
         ref_station = name
 
     if ref_row is None:
-        logger.warning("GPS station search failed, reverting to coherence")
-        logger.info("Finding most coherent patch in stack.")
-        ref_row, ref_col = find_coherent_patch(mean_cor)
-        ref_station = None
+        raise ValueError("GPS station search failed, need reference row/col")
+        # logger.warning("GPS station search failed, reverting to coherence")
+        # logger.info("Finding most coherent patch in stack.")
+        # ref_row, ref_col = find_coherent_patch(mean_cor)
+        # ref_station = None
 
     logger.info("Using %s as .unw reference point", (ref_row, ref_col))
     return ref_row, ref_col, ref_station
 
 
-def find_coherent_patch(correlations, window=11):
-    """Looks through 3d stack of correlation layers and finds strongest correlation patch
+# # TODO: change this to the Rowena paper for auto find
+# from scipy.ndimage.filters import uniform_filter
+# def find_coherent_patch(correlations, window=11):
+#     """Looks through 3d stack of correlation layers and finds strongest correlation patch
+#
+#     Also accepts a 2D array of the pre-compute means of the 3D stack.
+#     Uses a window of size (window x window), finds the largest average patch
+#
+#     Args:
+#         correlations (ndarray, possibly masked): 3D array of correlations:
+#             correlations = sario.load_stack('path/to/correlations', '.cc')
+#
+#         window (int): size of the patch to consider
+#
+#     Returns:
+#         tuple[int, int]: the row, column of center of the max patch
+#
+#     Example:
+#         >>> corrs = np.arange(25).reshape((5, 5))
+#         >>> print(find_coherent_patch(corrs, window=3))
+#         (3, 3)
+#         >>> corrs = np.stack((corrs, corrs), axis=0)
+#         >>> print(find_coherent_patch(corrs, window=3))
+#         (3, 3)
+#     """
+#     correlations = correlations.view(np.ma.MaskedArray)  # Force to be type np.ma
+#     if correlations.ndim == 2:
+#         mean_stack = correlations
+#     elif correlations.ndim == 3:
+#         mean_stack = np.ma.mean(correlations, axis=0)
+#     else:
+#         raise ValueError("correlations must be a 2D mean array, or 3D correlations")
+#
+#     # Run a 2d average over the image, then convert to masked array
+#     conv = uniform_filter(mean_stack, size=window, mode='constant')
+#     conv = np.ma.array(conv, mask=correlations.mask.any(axis=0))
+#     # Now find row, column of the max value
+#     max_idx = conv.argmax()
+#     return np.unravel_index(max_idx, mean_stack.shape)
 
-    Also accepts a 2D array of the pre-compute means of the 3D stack.
-    Uses a window of size (window x window), finds the largest average patch
+# TODO: do this with gdal calc
+# @log_runtime
+# def zero_masked_areas(igram_path=".", mask_filename=None, verbose=True):
+#     logger.info("Zeroing out masked area in .cc and .int files")
+#
+#     if mask_filename is None:
+#         mask_filename = os.path.join(igram_path, MASK_FILENAME)
+#
+#     int_date_list = sario.load_intlist_from_h5(mask_filename)
+#
+#     with h5py.File(mask_filename, "r") as f:
+#         igram_mask_dset = f[IGRAM_MASK_DSET]
+#         for idx, (early, late) in enumerate(int_date_list):
+#             cur_mask = igram_mask_dset[idx]
+#             base_str = "%s_%s" % (early.strftime(DATE_FMT), late.strftime(DATE_FMT))
+#
+#             if verbose:
+#                 logger.info("Zeroing {0}.cc and {0}.int".format(base_str))
+#
+#             int_filename = base_str + ".int"
+#             zero_file(int_filename, cur_mask, is_stacked=False)
+#
+#             cc_filename = base_str + ".cc"
+#             zero_file(cc_filename, cur_mask, is_stacked=True)
 
-    Args:
-        correlations (ndarray, possibly masked): 3D array of correlations:
-            correlations = sario.load_stack('path/to/correlations', '.cc')
+# TODO: do this with gdal_calc.py
+# def zero_file(filename, mask, is_stacked=False):
+#     if is_stacked:
+#         amp, img = sario.load(filename, return_amp=True)
+#         img[mask] = 0
+#         sario.save(filename, np.stack((amp, img), axis=0))
+#     else:
+#         img = sario.load(filename)
+#         img[mask] = 0
+#         sario.save(filename, img)
 
-        window (int): size of the patch to consider
-
-    Returns:
-        tuple[int, int]: the row, column of center of the max patch
-
-    Example:
-        >>> corrs = np.arange(25).reshape((5, 5))
-        >>> print(find_coherent_patch(corrs, window=3))
-        (3, 3)
-        >>> corrs = np.stack((corrs, corrs), axis=0)
-        >>> print(find_coherent_patch(corrs, window=3))
-        (3, 3)
-    """
-    correlations = correlations.view(np.ma.MaskedArray)  # Force to be type np.ma
-    if correlations.ndim == 2:
-        mean_stack = correlations
-    elif correlations.ndim == 3:
-        mean_stack = np.ma.mean(correlations, axis=0)
-    else:
-        raise ValueError("correlations must be a 2D mean array, or 3D correlations")
-
-    # Run a 2d average over the image, then convert to masked array
-    conv = uniform_filter(mean_stack, size=window, mode='constant')
-    conv = np.ma.array(conv, mask=correlations.mask.any(axis=0))
-    # Now find row, column of the max value
-    max_idx = conv.argmax()
-    return np.unravel_index(max_idx, mean_stack.shape)
-
-
-@log_runtime
-def zero_masked_areas(igram_path=".", mask_filename=None, verbose=True):
-    logger.info("Zeroing out masked area in .cc and .int files")
-
-    if mask_filename is None:
-        mask_filename = os.path.join(igram_path, MASK_FILENAME)
-
-    int_date_list = sario.load_intlist_from_h5(mask_filename)
-
-    with h5py.File(mask_filename, "r") as f:
-        igram_mask_dset = f[IGRAM_MASK_DSET]
-        for idx, (early, late) in enumerate(int_date_list):
-            cur_mask = igram_mask_dset[idx]
-            base_str = "%s_%s" % (early.strftime(DATE_FMT), late.strftime(DATE_FMT))
-
-            if verbose:
-                logger.info("Zeroing {0}.cc and {0}.int".format(base_str))
-
-            int_filename = base_str + ".int"
-            zero_file(int_filename, cur_mask, is_stacked=False)
-
-            cc_filename = base_str + ".cc"
-            zero_file(cc_filename, cur_mask, is_stacked=True)
-
-
-def zero_file(filename, mask, is_stacked=False):
-    if is_stacked:
-        amp, img = sario.load(filename, return_amp=True)
-        img[mask] = 0
-        sario.save(filename, np.stack((amp, img), axis=0))
-    else:
-        img = sario.load(filename)
-        img[mask] = 0
-        sario.save(filename, img)
-
-
-@log_runtime
-def merge_files(filename1, filename2, new_filename, overwrite=False):
-    """Merge together 2 (currently mask) hdf5 files into a new file"""
-    def _merge_lists(list1, list2, merged_list, dset_name, dset1, dset2):
-        logger.info("%s: %s from %s and %s from %s into %s in file %s" % (
-            dset_name,
-            len(list1),
-            filename1,
-            len(list2),
-            filename2,
-            len(merged_list),
-            new_filename,
-        ))
-        for idx in range(len(merged_list)):
-            cur_item = merged_list[idx]
-            if cur_item in list1:
-                jdx = list1.index(cur_item)
-                fnew[dset_name][idx] = dset1[jdx]
-            else:
-                jdx = list2.index(cur_item)
-                fnew[dset_name][idx] = dset2[jdx]
-
-    if overwrite:
-        sario.check_dset(new_filename, IGRAM_MASK_DSET, overwrite)
-        sario.check_dset(new_filename, GEO_MASK_DSET, overwrite)
-
-    f1 = h5py.File(filename1)
-    f2 = h5py.File(filename2)
-    igram_dset1 = f1[IGRAM_MASK_DSET]
-    igram_dset2 = f2[IGRAM_MASK_DSET]
-    geo_dset1 = f1[GEO_MASK_DSET]
-    geo_dset2 = f2[GEO_MASK_DSET]
-
-    intlist1 = sario.load_intlist_from_h5(filename1)
-    intlist2 = sario.load_intlist_from_h5(filename2)
-    geolist1 = sario.load_geolist_from_h5(filename1)
-    geolist2 = sario.load_geolist_from_h5(filename2)
-    merged_intlist = sorted(set(intlist1) | set(intlist2))
-    merged_geolist = sorted(set(geolist1) | set(geolist2))
-
-    sario.save_intlist_to_h5(out_file=new_filename, overwrite=True, int_date_list=merged_intlist)
-    sario.save_geolist_to_h5(out_file=new_filename, overwrite=True, geo_date_list=merged_geolist)
-
-    new_geo_shape = (len(merged_geolist), geo_dset1.shape[1], geo_dset1.shape[2])
-    _create_dset(new_filename, GEO_MASK_DSET, new_geo_shape, dtype=igram_dset1.dtype)
-    new_igram_shape = (len(merged_intlist), igram_dset1.shape[1], igram_dset1.shape[2])
-    _create_dset(new_filename, IGRAM_MASK_DSET, new_igram_shape, dtype=igram_dset1.dtype)
-
-    fnew = h5py.File(new_filename, "a")
-    try:
-        _merge_lists(geolist1, geolist2, merged_geolist, GEO_MASK_DSET, geo_dset1, geo_dset2)
-        _merge_lists(intlist1, intlist2, merged_intlist, IGRAM_MASK_DSET, igram_dset1, igram_dset2)
-
-    finally:
-        f1.close()
-        f2.close()
-        fnew.close()
+# TODO: decide if there's a fesible way to add a file to the repacked HDF5...
+# @log_runtime
+# def merge_files(filename1, filename2, new_filename, overwrite=False):
+#     """Merge together 2 (currently mask) hdf5 files into a new file"""
+#     def _merge_lists(list1, list2, merged_list, dset_name, dset1, dset2):
+#         logger.info("%s: %s from %s and %s from %s into %s in file %s" % (
+#             dset_name,
+#             len(list1),
+#             filename1,
+#             len(list2),
+#             filename2,
+#             len(merged_list),
+#             new_filename,
+#         ))
+#         for idx in range(len(merged_list)):
+#             cur_item = merged_list[idx]
+#             if cur_item in list1:
+#                 jdx = list1.index(cur_item)
+#                 fnew[dset_name][idx] = dset1[jdx]
+#             else:
+#                 jdx = list2.index(cur_item)
+#                 fnew[dset_name][idx] = dset2[jdx]
+#
+#     if overwrite:
+#         sario.check_dset(new_filename, IGRAM_MASK_DSET, overwrite)
+#         sario.check_dset(new_filename, GEO_MASK_DSET, overwrite)
+#
+#     f1 = h5py.File(filename1)
+#     f2 = h5py.File(filename2)
+#     igram_dset1 = f1[IGRAM_MASK_DSET]
+#     igram_dset2 = f2[IGRAM_MASK_DSET]
+#     geo_dset1 = f1[GEO_MASK_DSET]
+#     geo_dset2 = f2[GEO_MASK_DSET]
+#
+#     intlist1 = sario.load_intlist_from_h5(filename1)
+#     intlist2 = sario.load_intlist_from_h5(filename2)
+#     geolist1 = sario.load_geolist_from_h5(filename1)
+#     geolist2 = sario.load_geolist_from_h5(filename2)
+#     merged_intlist = sorted(set(intlist1) | set(intlist2))
+#     merged_geolist = sorted(set(geolist1) | set(geolist2))
+#
+#     sario.save_intlist_to_h5(out_file=new_filename, overwrite=True, int_date_list=merged_intlist)
+#     sario.save_geolist_to_h5(out_file=new_filename, overwrite=True, geo_date_list=merged_geolist)
+#
+#     new_geo_shape = (len(merged_geolist), geo_dset1.shape[1], geo_dset1.shape[2])
+#     _create_dset(new_filename, GEO_MASK_DSET, new_geo_shape, dtype=igram_dset1.dtype)
+#     new_igram_shape = (len(merged_intlist), igram_dset1.shape[1], igram_dset1.shape[2])
+#     _create_dset(new_filename, IGRAM_MASK_DSET, new_igram_shape, dtype=igram_dset1.dtype)
+#
+#     fnew = h5py.File(new_filename, "a")
+#     try:
+#         _merge_lists(geolist1, geolist2, merged_geolist, GEO_MASK_DSET, geo_dset1, geo_dset2)
+#         _merge_lists(intlist1, intlist2, merged_intlist, IGRAM_MASK_DSET, igram_dset1, igram_dset2)
+#
+#     finally:
+#         f1.close()
+#         f2.close()
+#         fnew.close()

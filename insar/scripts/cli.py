@@ -132,6 +132,7 @@ def parse_steps(ctx, param, value):
 @click.option("--ref-col",
               type=int,
               help="Column number of pixel to use as unwrapping reference for SBAS inversion")
+@click.option("--ref-station", help="Name of GPS station to use as reference")
 @click.pass_obj
 def process(context, **kwargs):
     """Process stack of Sentinel interferograms.
