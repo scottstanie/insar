@@ -5,6 +5,7 @@ Preprocessing insar data for timeseries analysis
 Forms stacks as .h5 files for easy access to depth-wise slices
 """
 import h5py
+import hdf5plugin
 import os
 import multiprocessing
 import subprocess
@@ -33,11 +34,41 @@ from .constants import (
     DEM_RSC_DSET,
     # GEOLIST_DSET,
     # INTLIST_DSET,
-    REFERENCE_ATTR,
-    REFERENCE_STATION_ATTR,
+    # REFERENCE_ATTR,
+    # REFERENCE_STATION_ATTR,
 )
 
 logger = get_log()
+
+
+def create_dset(h5file, dset_name, shape, dtype, chunks=True, compress=True):
+    comp_dict = hdf5plugin.Blosc() if compress else dict()
+    with h5py.File(h5file, "a") as f:
+        f.create_dataset(dset_name, shape=shape, dtype=dtype, chunks=chunks, **comp_dict)
+
+
+def load_chunk(fname, flist, dset="stack_flat_dset", n=None):
+    with h5py.File("unw_test.h5", "r+") as f:
+        chunk_size = f[dset].chunks
+        dshape = f[dset].shape
+        dt = f[dset].dtype
+
+    n = n or chunk_size[0]
+    buf = np.empty((n, dshape[1], dshape[2]), dtype=dt)
+    lastidx = 0
+    for idx, fname in enumerate(flist):
+        if idx % n == 0 and idx > 0:
+            print(f"Writing {lastidx}:{lastidx+n}")
+            with h5py.File("unw_test.h5", "r+") as f:
+                f[dset][lastidx:lastidx + n, :, :] = buf
+            lastidx = idx
+
+        with rio.open(fname, driver="ROI_PAC") as src:
+            curidx = idx % n
+            # f["stack_flat_dset"][idx, :, :] = src.read(2)
+            buf[curidx, :, :] = src.read(2)
+            # print(src.shape)
+    return buf
 
 
 @log_runtime
@@ -90,10 +121,27 @@ def prepare_stacks(
         repack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
 
 
+def all_bands(file_list, band=2, col_off=0, row_off=0, height=20):
+    from rasterio.windows import Window
+    with rio.open(file_list[0]) as src:
+        rows, cols = src.shape
+        # bshape = src.block_shapes[band-1]  # TODO: use?
+        dt = src.dtypes[band - 1]
+
+    block = np.empty((len(file_list), height, cols), dtype=dt)
+    for idx, f in enumerate(file_list):
+        try:
+            with rio.open(f, driver="ROI_PAC") as src:
+                block[idx] = src.read(band, window=Window(col_off, row_off, cols, height))
+        except Exception as e:
+            print(idx, f, e)
+    return block
+
+
 def repack(filename, dset_name):
     # Now repack so that chunks are depth-wise (pixels for quick loading)
     with h5py.File(filename, "r") as f:
-        nrows, ncols, nlayers = f[dset_name].shape
+        nlayers, nrows, ncols = f[dset_name].shape
 
     tmp_name = _make_tmp_name(filename)
     chunk_size = f"{nlayers}x1x1"
@@ -216,11 +264,6 @@ def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=
     return mask_file
 
 
-def _create_dset(h5file, dset_name, shape, dtype=bool):
-    with h5py.File(h5file, "a") as f:
-        f.create_dataset(dset_name, shape=shape, dtype=dtype)
-
-
 def save_geo_masks(directory,
                    mask_file=MASK_FILENAME,
                    dem_rsc=None,
@@ -252,7 +295,7 @@ def save_geo_masks(directory,
         return
     if not sario.check_dset(mask_file, GEO_MASK_SUM_DSET, overwrite):
         return
-    _create_dset(mask_file, dset_name, shape=shape, dtype=bool)
+    create_dset(mask_file, dset_name, shape=shape, dtype=bool)
 
     with h5py.File(mask_file, "a") as f:
         dset = f[dset_name]
@@ -354,7 +397,7 @@ def compute_int_masks(
                              file_list=int_file_list,
                              row_looks=row_looks,
                              col_looks=col_looks)
-    _create_dset(mask_file, dset_name, shape=shape, dtype=bool)
+    create_dset(mask_file, dset_name, shape=shape, dtype=bool)
 
     with h5py.File(mask_file, "a") as f:
         geo_mask_stack = f[GEO_MASK_DSET]
@@ -411,7 +454,7 @@ def create_hdf5_stack(filename=None,
 
     testf = sario.load(file_list[0])
     shape = (len(file_list), testf.shape[0], testf.shape[1])
-    _create_dset(filename, dset, shape, dtype=testf.dtype)
+    create_dset(filename, dset, shape, dtype=testf.dtype)
     with h5py.File(filename, "a") as hf:
         # First record the names in a dataset
         filename_dset = dset + "_filenames"
@@ -887,14 +930,14 @@ def find_reference_location(
 #     sario.save_geolist_to_h5(out_file=new_filename, overwrite=True, geo_date_list=merged_geolist)
 #
 #     new_geo_shape = (len(merged_geolist), geo_dset1.shape[1], geo_dset1.shape[2])
-#     _create_dset(new_filename, GEO_MASK_DSET, new_geo_shape, dtype=igram_dset1.dtype)
+#     create_dset(new_filename, GEO_MASK_DSET, new_geo_shape, dtype=igram_dset1.dtype)
 #     new_igram_shape = (len(merged_intlist), igram_dset1.shape[1], igram_dset1.shape[2])
-#     _create_dset(new_filename, IGRAM_MASK_DSET, new_igram_shape, dtype=igram_dset1.dtype)
+#     create_dset(new_filename, IGRAM_MASK_DSET, new_igram_shape, dtype=igram_dset1.dtype)
 #
 #     fnew = h5py.File(new_filename, "a")
 #     try:
 #         _merge_lists(geolist1, geolist2, merged_geolist, GEO_MASK_DSET, geo_dset1, geo_dset2)
-#         _merge_lists(intlist1, intlist2, merged_intlist, IGRAM_MASK_DSET, igram_dset1, igram_dset2)
+#        _merge_lists(intlist1, intlist2, merged_intlist, IGRAM_MASK_DSET, igram_dset1, igram_dset2)
 #
 #     finally:
 #         f1.close()
