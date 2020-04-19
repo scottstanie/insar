@@ -47,8 +47,8 @@ def create_dset(h5file, dset_name, shape, dtype, chunks=True, compress=True):
         f.create_dataset(dset_name, shape=shape, dtype=dtype, chunks=chunks, **comp_dict)
 
 
-def load_chunk(fname, flist, dset="stack_flat_dset", n=None):
-    with h5py.File("unw_test.h5", "r+") as f:
+def load_in_chunks(unw_stack_file="unw_stack.h5", flist=[], dset="stack_flat_dset", n=None):
+    with h5py.File(unw_stack_file, "r+") as f:
         chunk_size = f[dset].chunks
         dshape = f[dset].shape
         dt = f[dset].dtype
@@ -72,14 +72,80 @@ def load_chunk(fname, flist, dset="stack_flat_dset", n=None):
 
 
 @log_runtime
+def deramp_and_shift_unws(ref_row,
+                          ref_col,
+                          unw_stack_file=UNW_FILENAME,
+                          dset_name="stack_flat_shifted",
+                          directory=".",
+                          order=1,
+                          window=5,
+                          overwrite=False):
+
+    if not sario.check_dset(mask_file, dset_name, overwrite):
+        return
+    # First make the empty dataset and save aux info
+    in_ext = ".unw"
+    file_list = sario.find_files(directory=directory, search_term="*" + in_ext)
+    band = 2
+
+    with rio.open(file_list[0]) as src:
+        rows, cols = src.shape
+        # bshape = src.block_shapes[band-1]  # TODO: use?
+        dtype = src.dtypes[band - 1]
+
+    shape = (len(file_list), rows, cols)
+    create_dset(unw_stack_file, dset_name, shape, dtype, chunks=True, compress=True)
+
+    # Save the extra files too
+    rsc_data = sario.load(os.path.join(directory, "dem.rsc"))
+    sario.save_dem_to_h5(unw_stack_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite)
+    sario.save_geolist_to_h5(directory, unw_stack_file, overwrite=overwrite)
+    sario.save_intlist_to_h5(directory, unw_stack_file, overwrite=overwrite)
+
+    with h5py.File(unw_stack_file, "r+") as f:
+        chunk_shape = f[dset_name].chunks
+        chunk_depth, chunk_rows, chunk_cols = chunk_shape
+        # n = n or chunk_size[0]
+
+    buf = np.empty((chunk_depth, rows, cols), dtype=dtype)
+    win = window // 2
+    lastidx = 0
+    for idx, in_fname in enumerate(file_list):
+        if idx % 100 == 0:
+            print(f"Processing {in_fname} -> {idx+1} out of {len(file_list)}")
+
+        if idx % chunk_depth == 0 and idx > 0:
+            print(f"Writing {lastidx}:{lastidx+chunk_depth}")
+            with h5py.File(unw_stack_file, "r+") as f:
+                f[dset_name][lastidx:lastidx + chunk_depth, :, :] = buf
+
+            lastidx = idx
+
+        with rio.open(in_fname, driver="ROI_PAC") as inf:
+            mask = _read_mask_by_idx(idx)
+            # amp = inf.read(1)
+            phase = inf.read(2)
+            deramped_phase = remove_ramp(phase, order=order, mask=mask)
+
+            # Now center it on the shift window
+            patch = deramped_phase[ref_row - win:ref_row + win + 1, ref_col - win:ref_col + win + 1]
+
+            deramped_phase -= np.mean(patch)
+
+            # now store this in the bugger until emptied
+            curidx = idx % chunk_depth
+            buf[curidx, :, :] = phase
+
+
+@log_runtime
 def prepare_stacks(
     igram_path,
     ref_row=None,
     ref_col=None,
     ref_station=None,
     order=1,
+    window=5,
     overwrite=False,
-    do_repack=True,
 ):
     # int_stack_file = os.path.join(igram_path, INT_FILENAME)
     unw_stack_file = os.path.join(igram_path, UNW_FILENAME)
@@ -95,8 +161,6 @@ def prepare_stacks(
     # )
 
     create_mask_stacks(igram_path, overwrite=overwrite)
-    # deramp_stack(unw_stack_file=unw_stack_file, order=order, overwrite=overwrite)
-    deramp_unws(directory=igram_path, order=order, overwrite=overwrite)
 
     if ref_station is not None:
         rsc_data = sario.load(os.path.join(igram_path, "dem.rsc"))
@@ -111,16 +175,19 @@ def prepare_stacks(
             mask_stack_file=mask_stack_file,
         )
 
-    shift_unw_file(unw_stack_file=unw_stack_file,
-                   ref_row=ref_row,
-                   ref_col=ref_col,
-                   window=3,
-                   ref_station=ref_station,
-                   overwrite=overwrite)
-    if do_repack:
-        repack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
+    deramp_and_shift_unws(
+        ref_row,
+        ref_col,
+        unw_stack_file=unw_stack_file,
+        dset_name="stack_flat_shifted",
+        directory=igram_path,
+        order=1,
+        window=window,
+        overwrite=overwrite,
+    )
 
 
+# TODO: this is for reading windows of a big ratser, not needed for now
 def all_bands(file_list, band=2, col_off=0, row_off=0, height=20):
     from rasterio.windows import Window
     with rio.open(file_list[0]) as src:
@@ -136,26 +203,6 @@ def all_bands(file_list, band=2, col_off=0, row_off=0, height=20):
         except Exception as e:
             print(idx, f, e)
     return block
-
-
-def repack(filename, dset_name):
-    # Now repack so that chunks are depth-wise (pixels for quick loading)
-    with h5py.File(filename, "r") as f:
-        nlayers, nrows, ncols = f[dset_name].shape
-
-    tmp_name = _make_tmp_name(filename)
-    chunk_size = f"{nlayers}x1x1"
-    print(f"Repacking {filename} into size {chunk_size} depth-wise chunks")
-    cmd = f"h5repack -v -f NONE -l {dset_name}:CHUNK={chunk_size} {filename} {tmp_name}"
-    print("Running:")
-    print(cmd)
-    subprocess.run(cmd, shell=True)
-    subprocess.run(f"mv $tmp_name {filename}", shell=True)
-
-
-def _make_tmp_name(filename):
-    basepath, name = os.path.split(filename)
-    return os.path.join(basepath, f"tmp_{name}")
 
 
 def _run_stack(igram_path, d, overwrite):
@@ -300,6 +347,12 @@ def save_geo_masks(directory,
     with h5py.File(mask_file, "a") as f:
         dset = f[dset_name]
         for idx, geo_fname in enumerate(geo_file_list):
+            # save as an individual file too
+            mask_name = os.path.split(geo_fname)[1] + ".mask"
+            if os.path.exists(mask_name):
+                logger.info(f"{mask_name} exists, skipping.")
+                continue
+
             # g = sario.load(geo_fname, looks=(row_looks, col_looks))
             gmap = np.memmap(
                 geo_fname,
@@ -309,12 +362,10 @@ def save_geo_masks(directory,
             )
             g_subsample = gmap[(row_looks - 1)::row_looks, (col_looks - 1)::col_looks]
             # ipdb.set_trace()
-            print('Saving %s to stack' % geo_fname)
+            logger.info(f'Saving {geo_fname} to stack')
             cur_mask = _get_geo_mask(g_subsample)
-            dset[idx] = cur_mask
-            # Also save as an individual file
-            mask_name = os.path.split(geo_fname)[1] + ".mask"
             sario.save(mask_name, cur_mask)
+            dset[idx] = cur_mask
 
         # Also add a composite mask depthwise
         f[GEO_MASK_SUM_DSET] = np.sum(dset, axis=0)
@@ -606,34 +657,6 @@ def matrix_indices(shape, flatten=True):
 def _read_mask_by_idx(idx, fname="masks.h5", dset=IGRAM_MASK_DSET):
     with h5py.File(fname, "r") as f:
         return f[dset][idx, :, :]
-
-
-@log_runtime
-def deramp_unws(directory=".", order=1, overwrite=False):
-    # from rasterio.shutil import copy as rio_copy
-    in_ext, out_ext = ".unw", ".unwflat"
-    unw_file_list = sario.find_files(directory=directory, search_term="*" + in_ext)
-    # num_files = len(unw_file_list)
-    out_files = [f.replace(in_ext, out_ext) for f in unw_file_list]
-
-    # Get masks ready:
-    # TODO: more robust from readying file names? now just assuming it's same order
-    # date_str_pairs = sario.load_intlist_from_h5("masks.h5", parse=False)
-    # mask_fnames = [f"{early}_{late}.unw" for (early, late) in date_str_pairs]
-    rsc_data = sario.load(os.path.join(directory, "dem.rsc"))
-
-    for idx, (in_fname, out_fname) in enumerate(zip(unw_file_list, out_files)):
-        if idx % 10 == 0:
-            print(f"Processing {in_fname} -> {out_fname}")
-        if not os.path.exists(out_fname):
-            with rio.open(in_fname, driver="ROI_PAC") as inf:
-                mask = _read_mask_by_idx(idx)
-                amp = inf.read(1)
-                phase = inf.read(2)
-                deramped_phase = remove_ramp(phase, order=order, mask=mask)
-                sario.save(out_fname, np.stack((amp, deramped_phase)))
-        if not os.path.exists(out_fname + ".vrt"):
-            sario.save_as_vrt(out_fname, rsc_data=rsc_data, num_bands=2, dtype="float32")
 
 
 @log_runtime
