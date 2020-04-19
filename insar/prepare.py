@@ -8,7 +8,7 @@ import h5py
 import hdf5plugin
 import os
 import multiprocessing
-import subprocess
+# import subprocess
 import numpy as np
 from scipy.ndimage.morphology import binary_opening
 import rasterio as rio
@@ -58,7 +58,7 @@ def load_in_chunks(unw_stack_file="unw_stack.h5", flist=[], dset="stack_flat_dse
     lastidx = 0
     for idx, fname in enumerate(flist):
         if idx % n == 0 and idx > 0:
-            print(f"Writing {lastidx}:{lastidx+n}")
+            logger.info(f"Writing {lastidx}:{lastidx+n}")
             with h5py.File("unw_test.h5", "r+") as f:
                 f[dset][lastidx:lastidx + n, :, :] = buf
             lastidx = idx
@@ -67,7 +67,7 @@ def load_in_chunks(unw_stack_file="unw_stack.h5", flist=[], dset="stack_flat_dse
             curidx = idx % n
             # f["stack_flat_dset"][idx, :, :] = src.read(2)
             buf[curidx, :, :] = src.read(2)
-            # print(src.shape)
+            # logger.info(src.shape)
     return buf
 
 
@@ -112,10 +112,10 @@ def deramp_and_shift_unws(ref_row,
     lastidx = 0
     for idx, in_fname in enumerate(file_list):
         if idx % 100 == 0:
-            print(f"Processing {in_fname} -> {idx+1} out of {len(file_list)}")
+            logger.info(f"Processing {in_fname} -> {idx+1} out of {len(file_list)}")
 
         if idx % chunk_depth == 0 and idx > 0:
-            print(f"Writing {lastidx}:{lastidx+chunk_depth}")
+            logger.info(f"Writing {lastidx}:{lastidx+chunk_depth}")
             with h5py.File(unw_stack_file, "r+") as f:
                 f[dset_name][lastidx:lastidx + chunk_depth, :, :] = buf
 
@@ -201,7 +201,7 @@ def all_bands(file_list, band=2, col_off=0, row_off=0, height=20):
             with rio.open(f, driver="ROI_PAC") as src:
                 block[idx] = src.read(band, window=Window(col_off, row_off, cols, height))
         except Exception as e:
-            print(idx, f, e)
+            logger.warning(idx, f, e)
     return block
 
 
