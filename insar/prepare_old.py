@@ -10,6 +10,8 @@ from apertools import sario, utils, latlon
 import apertools.gps
 from apertools.log import get_log, log_runtime
 import multiprocessing
+
+
 # TODO: this is for reading windows of a big ratser, not needed for now
 def all_bands(file_list, band=2, col_off=0, row_off=0, height=20):
     from rasterio.windows import Window
@@ -28,6 +30,28 @@ def all_bands(file_list, band=2, col_off=0, row_off=0, height=20):
     return block
 
 
+def load_in_chunks(unw_stack_file="unw_stack.h5", flist=[], dset="stack_flat_dset", n=None):
+    with h5py.File(unw_stack_file, "r+") as f:
+        chunk_size = f[dset].chunks
+        dshape = f[dset].shape
+        dt = f[dset].dtype
+
+    n = n or chunk_size[0]
+    buf = np.empty((n, dshape[1], dshape[2]), dtype=dt)
+    lastidx = 0
+    for idx, fname in enumerate(flist):
+        if idx % n == 0 and idx > 0:
+            logger.info(f"Writing {lastidx}:{lastidx+n}")
+            with h5py.File("unw_test.h5", "r+") as f:
+                f[dset][lastidx:lastidx + n, :, :] = buf
+            lastidx = idx
+
+        with rio.open(fname, driver="ROI_PAC") as src:
+            curidx = idx % n
+            buf[curidx, :, :] = src.read(2)
+    return buf
+
+
 def _run_stack(igram_path, d, overwrite):
     if d["filename"] is None:
         return
@@ -35,6 +59,7 @@ def _run_stack(igram_path, d, overwrite):
     create_hdf5_stack(directory=igram_path, overwrite=overwrite, **d)
     sario.save_geolist_to_h5(igram_path, d["filename"], overwrite=overwrite)
     sario.save_intlist_to_h5(igram_path, d["filename"], overwrite=overwrite)
+
 
 @log_runtime
 def create_igram_stacks(
@@ -390,6 +415,7 @@ def deramp_stack(
 #         img = sario.load(filename)
 #         img[mask] = 0
 #         sario.save(filename, img)
+
 
 # TODO: decide if there's a fesible way to add a file to the repacked HDF5...
 # @log_runtime

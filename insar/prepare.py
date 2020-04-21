@@ -74,28 +74,6 @@ def create_dset(h5file, dset_name, shape, dtype, chunks=True, compress=True):
         f.create_dataset(dset_name, shape=shape, dtype=dtype, chunks=chunks, **comp_dict)
 
 
-def load_in_chunks(unw_stack_file="unw_stack.h5", flist=[], dset="stack_flat_dset", n=None):
-    with h5py.File(unw_stack_file, "r+") as f:
-        chunk_size = f[dset].chunks
-        dshape = f[dset].shape
-        dt = f[dset].dtype
-
-    n = n or chunk_size[0]
-    buf = np.empty((n, dshape[1], dshape[2]), dtype=dt)
-    lastidx = 0
-    for idx, fname in enumerate(flist):
-        if idx % n == 0 and idx > 0:
-            logger.info(f"Writing {lastidx}:{lastidx+n}")
-            with h5py.File("unw_test.h5", "r+") as f:
-                f[dset][lastidx:lastidx + n, :, :] = buf
-            lastidx = idx
-
-        with rio.open(fname, driver="ROI_PAC") as src:
-            curidx = idx % n
-            buf[curidx, :, :] = src.read(2)
-    return buf
-
-
 @log_runtime
 def deramp_and_shift_unws(ref_row,
                           ref_col,
@@ -156,10 +134,9 @@ def deramp_and_shift_unws(ref_row,
             patch = deramped_phase[ref_row - win:ref_row + win + 1, ref_col - win:ref_col + win + 1]
 
             deramped_phase -= np.mean(patch)
-
-            # now store this in the bugger until emptied
+            # now store this in the buffer until emptied
             curidx = idx % chunk_depth
-            buf[curidx, :, :] = phase
+            buf[curidx, :, :] = deramped_phase
 
 
 @log_runtime
@@ -358,7 +335,7 @@ def _read_mask_by_idx(idx, fname="masks.h5", dset=IGRAM_MASK_DSET):
         return f[dset][idx, :, :]
 
 
-def remove_ramp(z, order=1, mask=np.ma.nomask):
+def remove_ramp(z, order=1, mask=np.ma.nomask, copy=False):
     """Estimates a linear plane through data and subtracts to flatten
 
     Used to remove noise artifacts from unwrapped interferograms
@@ -371,8 +348,8 @@ def remove_ramp(z, order=1, mask=np.ma.nomask):
     Returns:
         ndarray: flattened 2D array with estimated surface removed
     """
+    z_masked = z.copy() if copy else z
     # Make a version of the image with nans in masked places
-    z_masked = z.copy()
     z_masked[mask] = np.nan
     # Use this constrained version to find the plane fit
     z_fit = estimate_ramp(z_masked, order)
