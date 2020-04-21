@@ -4,6 +4,7 @@ Preprocessing insar data for timeseries analysis
 
 Forms stacks as .h5 files for easy access to depth-wise slices
 """
+from datetime import datetime
 import h5py
 import hdf5plugin
 import os
@@ -74,15 +75,26 @@ def create_dset(h5file, dset_name, shape, dtype, chunks=True, compress=True):
         f.create_dataset(dset_name, shape=shape, dtype=dtype, chunks=chunks, **comp_dict)
 
 
+def temporal_baseline(filename):
+    fmt = "%Y%m%d"
+    fname = os.path.split(filename)[1]
+    datestrs = os.path.splitext(fname)[0].split('_')
+    igram = [datetime.strptime(t, fmt) for t in datestrs]
+    return (igram[1] - igram[0]).days
+
+
 @log_runtime
-def deramp_and_shift_unws(ref_row,
-                          ref_col,
-                          unw_stack_file=UNW_FILENAME,
-                          dset_name=STACK_FLAT_SHIFTED_DSET,
-                          directory=".",
-                          order=1,
-                          window=5,
-                          overwrite=False):
+def deramp_and_shift_unws(
+    ref_row,
+    ref_col,
+    unw_stack_file=UNW_FILENAME,
+    dset_name=STACK_FLAT_SHIFTED_DSET,
+    directory=".",
+    order=1,
+    window=5,
+    overwrite=False,
+    stack_fname="quick_stack.tif",
+):
 
     if not sario.check_dset(unw_stack_file, dset_name, overwrite):
         return
@@ -109,6 +121,10 @@ def deramp_and_shift_unws(ref_row,
         chunk_shape = f[dset_name].chunks
         chunk_depth, chunk_rows, chunk_cols = chunk_shape
         # n = n or chunk_size[0]
+
+    # While we're iterating, save a stacked average
+    out_stack = np.zeros((rows, cols), dtype='float32')
+    time_sum = 0
 
     buf = np.empty((chunk_depth, rows, cols), dtype=dtype)
     win = window // 2
@@ -137,6 +153,28 @@ def deramp_and_shift_unws(ref_row,
             # now store this in the buffer until emptied
             curidx = idx % chunk_depth
             buf[curidx, :, :] = deramped_phase
+
+            # sum for the stack
+            out_stack += deramped_phase
+            time_sum += temporal_baseline(in_fname)
+
+    with rio.open(file_list[0], driver="ROI_PAC") as ds:
+        out = np.zeros((ds.height, ds.width))
+        transform = ds.transform
+        crs = ds.crs
+    with rio.open(
+            stack_fname,
+            "w",
+            crs=crs,
+            transform=transform,
+            driver="GTiff",
+            height=out.shape[0],
+            width=out.shape[1],
+            count=1,
+            nodata=0,
+            dtype=out.dtype,
+    ) as dst:
+        dst.write(out_stack / time_sum, 1)
 
 
 @log_runtime
