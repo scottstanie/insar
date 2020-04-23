@@ -147,15 +147,17 @@ def deramp_and_shift_unws(
 
             # Now center it on the shift window
             patch = deramped_phase[ref_row - win:ref_row + win + 1, ref_col - win:ref_col + win + 1]
+            if not np.all(np.isnan(patch)):
+                deramped_phase -= np.nanmean(patch)
+            else:
+                # Do I actually just want to ignore this one and give 0s?
+                deramped_phase -= np.nanmean(deramped_phase)
 
-            deramped_phase -= np.mean(patch)
             # now store this in the buffer until emptied
             curidx = idx % chunk_depth
             buf[curidx, :, :] = deramped_phase
 
             # sum for the stack, only use non-masked data
-            if not (np.all(mask == np.isnan(deramped_phase))):
-                print(idx, in_fname)
             stackavg[~mask] += (deramped_phase[~mask] / temporal_baseline(in_fname))
 
     # Get the projection information to use to write as gtiff
