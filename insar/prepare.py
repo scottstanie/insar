@@ -124,7 +124,6 @@ def deramp_and_shift_unws(
 
     # While we're iterating, save a stacked average
     out_stack = np.zeros((rows, cols), dtype='float32')
-    time_sum = 0
 
     buf = np.empty((chunk_depth, rows, cols), dtype=dtype)
     win = window // 2
@@ -155,9 +154,9 @@ def deramp_and_shift_unws(
             buf[curidx, :, :] = deramped_phase
 
             # sum for the stack
-            out_stack += deramped_phase
-            time_sum += temporal_baseline(in_fname)
+            out_stack[mask] += (deramped_phase[mask] / temporal_baseline)
 
+    # Get the projection information to use to write as gtiff
     with rio.open(file_list[0], driver="ROI_PAC") as ds:
         out = np.zeros((ds.height, ds.width))
         transform = ds.transform
@@ -174,7 +173,7 @@ def deramp_and_shift_unws(
             nodata=0,
             dtype=out.dtype,
     ) as dst:
-        dst.write(out_stack / time_sum, 1)
+        dst.write(out_stack, 1)
 
 
 @log_runtime
