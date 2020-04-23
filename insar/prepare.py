@@ -93,7 +93,7 @@ def deramp_and_shift_unws(
     order=1,
     window=5,
     overwrite=False,
-    stack_fname="quick_stack.tif",
+    stack_fname="stackavg.tif",
 ):
 
     if not sario.check_dset(unw_stack_file, dset_name, overwrite):
@@ -123,7 +123,7 @@ def deramp_and_shift_unws(
         # n = n or chunk_size[0]
 
     # While we're iterating, save a stacked average
-    out_stack = np.zeros((rows, cols), dtype='float32')
+    stackavg = np.zeros((rows, cols), dtype='float32')
 
     buf = np.empty((chunk_depth, rows, cols), dtype=dtype)
     win = window // 2
@@ -153,27 +153,29 @@ def deramp_and_shift_unws(
             curidx = idx % chunk_depth
             buf[curidx, :, :] = deramped_phase
 
-            # sum for the stack
-            out_stack[mask] += (deramped_phase[mask] / temporal_baseline)
+            # sum for the stack, only use non-masked data
+            if not (np.all(mask == np.isnan(deramped_phase))):
+                print(idx, in_fname)
+            stackavg[~mask] += (deramped_phase[~mask] / temporal_baseline(in_fname))
 
     # Get the projection information to use to write as gtiff
     with rio.open(file_list[0], driver="ROI_PAC") as ds:
-        out = np.zeros((ds.height, ds.width))
         transform = ds.transform
         crs = ds.crs
+
     with rio.open(
             stack_fname,
             "w",
             crs=crs,
             transform=transform,
             driver="GTiff",
-            height=out.shape[0],
-            width=out.shape[1],
+            height=stackavg.shape[0],
+            width=stackavg.shape[1],
             count=1,
             nodata=0,
-            dtype=out.dtype,
+            dtype=stackavg.dtype,
     ) as dst:
-        dst.write(out_stack, 1)
+        dst.write(stackavg, 1)
 
 
 @log_runtime
