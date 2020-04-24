@@ -197,8 +197,8 @@ def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=
 
     rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
     sario.save_dem_to_h5(mask_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite)
-    sario.save_geolist_to_h5(igram_path, mask_file, overwrite=overwrite)
-    sario.save_intlist_to_h5(igram_path, mask_file, overwrite=overwrite)
+    sario.save_geolist_to_h5(igram_path=igram_path, out_file=mask_file, overwrite=overwrite)
+    sario.save_intlist_to_h5(igram_path=igram_path, out_file=mask_file, overwrite=overwrite)
 
     save_geo_masks(
         geo_path,
