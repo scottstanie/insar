@@ -415,3 +415,36 @@ def intmask(context):
         row_looks=row_looks,
         col_looks=col_looks,
     )
+
+
+@preproc.command('subset')
+@click.option(
+    '--bbox',
+    nargs=4,
+    type=float,
+    help="Window lat/lon bounds: left bot right top",
+)
+@click.option(
+    '--out-dir',
+    '-o',
+    type=click.Path(),
+)
+@click.option(
+    '--in-dir',
+    '-i',
+    type=click.Path(),
+)
+@click.pass_obj
+def subset(context):
+    """Read window subset from .geos in another directory
+
+    Writes the smaller .geos to `outpath`, along with the
+    extra files going with it (elevation.dem, .orbtimings)
+    """
+    igram_path = context['path']
+    row_looks, col_looks = apertools.sario.find_looks_taken(igram_path)
+    insar.timeseries.create_igram_masks(
+        igram_path,
+        row_looks=row_looks,
+        col_looks=col_looks,
+    )
