@@ -114,8 +114,8 @@ def deramp_and_shift_unws(
     # Save the extra files too
     rsc_data = sario.load(os.path.join(directory, "dem.rsc"))
     sario.save_dem_to_h5(unw_stack_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite)
-    sario.save_geolist_to_h5(directory, unw_stack_file, overwrite=overwrite)
-    sario.save_intlist_to_h5(directory, unw_stack_file, overwrite=overwrite)
+    sario.save_geolist_to_h5(igram_path=directory, out_file=unw_stack_file, overwrite=overwrite)
+    sario.save_intlist_to_h5(igram_path=directory, out_file=unw_stack_file, overwrite=overwrite)
 
     with h5py.File(unw_stack_file, "r+") as f:
         chunk_shape = f[dset_name].chunks

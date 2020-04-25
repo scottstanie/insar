@@ -1,13 +1,11 @@
 """
 Main command line entry point to manage all other sub commands
 """
+from os.path import abspath, join, split
+import glob
 import json
-import h5py
 import click
 import insar
-import apertools
-import numpy as np
-import insar.prepare
 
 
 # Main entry point:
@@ -167,6 +165,10 @@ def process(context, **kwargs):
 @click.option("--vmax", type=float, help="Optional: Maximum value for imshow")
 @click.pass_obj
 def view_masks(context, downsample, geolist_ignore_file, print_dates, cmap, vmin, vmax):
+    import numpy as np
+    import apertools.sario
+    import apertools.plotting
+    import h5py
     geo_date_list = apertools.sario.load_geolist_from_h5(apertools.sario.MASK_FILENAME)
 
     def _print(series, row, col):
@@ -185,7 +187,6 @@ def view_masks(context, downsample, geolist_ignore_file, print_dates, cmap, vmin
 
     with h5py.File(apertools.sario.MASK_FILENAME) as f:
         geo_dset = f[apertools.sario.GEO_MASK_DSET]
-        composite_mask = f[apertools.sario.GEO_MASK_SUM_DSET][:]
         with geo_dset.astype(np.bool):
             geo_masks = geo_dset[:]
         composite_mask = f[apertools.sario.GEO_MASK_SUM_DSET][:]
@@ -294,16 +295,20 @@ def _handle_args(extra_args):
     return dict(zip(keys, vals))
 
 
-def _save_npy_file(imgfile,
-                   new_filename,
-                   use_mask=True,
-                   vmin=None,
-                   vmax=None,
-                   normalize=False,
-                   cmap='seismic_wide',
-                   shifted=True,
-                   preview=True,
-                   **kwargs):
+def _save_npy_file(
+    imgfile,
+    new_filename,
+    use_mask=True,
+    vmin=None,
+    vmax=None,
+    normalize=False,
+    cmap='seismic_wide',
+    shifted=True,
+    preview=True,
+    **kwargs,
+):
+    import apertools.sario
+    import numpy as np
     try:
         geo_date_list, image = apertools.sario.load_deformation(".", filename=imgfile, **kwargs)
     except ValueError:
@@ -347,6 +352,7 @@ def _save_npy_file(imgfile,
               help="GPS Station to base comparisons off. If None, just plots GPS vs InSAR")
 @click.option('--linear', is_flag=True, default=False, help="Erase current files and reprocess")
 def validate(geo_path, defo_filename, kind, reference_station, linear):
+    import apertools.gps
     apertools.gps.plot_insar_vs_gps(geo_path=geo_path,
                                     defo_filename=defo_filename,
                                     kind=kind,
@@ -363,6 +369,8 @@ def reference(filename):
 
     filename is name of .h5 unw stack file
     """
+    import apertools.sario
+    import apertools.latlon
     ref = apertools.sario.load_reference(unw_stack_file=filename)
     click.echo("Reference for %s: %s" % (filename, ref))
 
@@ -389,6 +397,7 @@ def prepare_stacks(context, overwrite):
     This step is run before the final `process` step.
     Makes .h5 files for easy loading to timeseries inversion.
     """
+    import insar.prepare
     igram_path = context['path']
     insar.prepare.prepare_stacks(igram_path, overwrite=overwrite)
 
@@ -400,51 +409,84 @@ def unzip(context, delete_zips):
     insar.scripts.preproc.unzip_sentinel_files(context['path'], delete_zips=delete_zips)
 
 
-@preproc.command('intmask')
-@click.pass_obj
-def intmask(context):
-    """Create masks for .int files where invalid
-
-    This step is run in `process.ps_sbas_igrams`, but can be
-    run separately to inspect
-    """
-    igram_path = context['path']
-    row_looks, col_looks = apertools.sario.find_looks_taken(igram_path)
-    insar.timeseries.create_igram_masks(
-        igram_path,
-        row_looks=row_looks,
-        col_looks=col_looks,
-    )
+import rasterio as rio
 
 
 @preproc.command('subset')
-@click.option(
-    '--bbox',
-    nargs=4,
-    type=float,
-    help="Window lat/lon bounds: left bot right top",
-)
-@click.option(
-    '--out-dir',
-    '-o',
-    type=click.Path(),
-)
-@click.option(
-    '--in-dir',
-    '-i',
-    type=click.Path(),
-)
-@click.pass_obj
-def subset(context):
+@click.option('--bbox', nargs=4, type=float, help="Window lat/lon bounds: left bot right top")
+@click.option('--out-dir', '-o', type=click.Path(exists=True))
+@click.option('--in-dir', '-i', type=click.Path(exists=True))
+def subset(bbox, out_dir, in_dir):
     """Read window subset from .geos in another directory
 
     Writes the smaller .geos to `outpath`, along with the
     extra files going with it (elevation.dem, .orbtimings)
     """
-    igram_path = context['path']
-    row_looks, col_looks = apertools.sario.find_looks_taken(igram_path)
-    insar.timeseries.create_igram_masks(
-        igram_path,
-        row_looks=row_looks,
-        col_looks=col_looks,
+    import apertools.sario
+    from apertools.utils import force_symlink
+    if abspath(out_dir) == abspath(in_dir):
+        raise ValueError("--in-dir cannot be same as --out-dir")
+
+    # dems:
+    copy_subset(
+        bbox,
+        join(in_dir, "elevation.dem"),
+        join(out_dir, "elevation.dem"),
+        driver="ROI_PAC",
     )
+    # Fortran cant read anything but 15-space .rsc file :|
+    apertools.sario.save("elevation.dem.rsc", apertools.sario.load("elevation.dem.rsc"))
+
+    # weird params file
+    with open(join(out_dir, "params"), "w") as f:
+        f.write(f"{join(abspath(out_dir), 'elevation.dem')}\n")
+        f.write(f"{join(abspath(out_dir), 'elevation.dem.rsc')}\n")
+
+    # geos and .orbtimings
+    for in_fname in glob.glob(join(in_dir, "*.geo.vrt")):
+        img = read_subset(bbox, in_fname, driver="VRT")
+
+        _, nameonly = split(in_fname)
+        out_fname = join(out_dir, nameonly).replace(".vrt", "")
+        # Can't write vrt?
+        # copy_subset(bbox, in_fname, out_fname, driver="VRT")
+        click.echo(f"Subsetting {in_fname} to {out_fname}")
+        apertools.sario.save(out_fname, img)
+
+        s, d = (in_fname.replace(".geo.vrt", ".orbtiming"), out_fname.replace(".geo", ".orbtiming"))
+
+        click.echo(f"symlinking {s} to {d}")
+        force_symlink(s, d)
+        # copyfile(s, d)
+
+
+def read_subset(bbox, in_fname, driver=None):
+    with rio.open(in_fname, driver=driver) as src:
+        w = src.window(*bbox)
+        return src.read(1, window=w)
+
+
+def read_crs_transform(in_fname, driver=None):
+    with rio.open(in_fname, driver=driver) as src:
+        return src.crs, src.transform
+
+
+def copy_subset(bbox, in_fname, out_fname, driver=None, band=1, nodata=0, verbose=True):
+    if verbose:
+        click.echo(f"Subsetting {bbox} from {in_fname} to {out_fname}")
+    img = read_subset(bbox, in_fname, driver)
+    crs, transform = read_crs_transform(in_fname, driver)
+
+    with rio.open(
+            out_fname,
+            "w",
+            crs=crs,
+            transform=transform,
+            driver=driver,
+            height=img.shape[0],
+            width=img.shape[1],
+            count=1,
+            nodata=nodata,
+            dtype=img.dtype,
+    ) as dst:
+        dst.write(img, 1)
