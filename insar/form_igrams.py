@@ -1,8 +1,11 @@
-from apertools.utils import take_looks
-import apertools.sario as sario
 import numpy as np
 from numpy import sqrt, real, conj
 from glob import glob
+from apertools.utils import take_looks
+import apertools.sario as sario
+from apertools.log import get_log
+
+logger = get_log()
 
 EPS = np.finfo(np.float32).eps
 
@@ -61,7 +64,7 @@ def form_igram_names():
         early_file, late_file, temp, spatial = line.split()
         # "./S1A_20141104.ge
         igram_name = '_'.join(map(_get_date, [early_file, late_file])) + ".int"
-        out.append(igram_name, str(early_file), str(late_file))
+        out.append((igram_name, str(early_file), str(late_file)))
 
     # Note: orting so that ALL igrams with `early_file` are formed in a row
     return sorted(out)
@@ -76,7 +79,7 @@ def create_igrams(rowlooks=1, collooks=1):
     current_ints = glob("*.int")
     current_cors = glob("*.cc")
 
-    fulldemrsc = sario.load("./elevation.dem.rsc")
+    fulldemrsc = sario.load("../elevation.dem.rsc")
     demrsc = take_looks(fulldemrsc, rowlooks, collooks)
     sario.save("dem.rsc", demrsc)
 
@@ -84,34 +87,34 @@ def create_igrams(rowlooks=1, collooks=1):
     for (igram_name, early_file, late_file) in form_igram_names():
         cor_name = igram_name.replace(".int", ".cc")
         if (igram_name in current_ints) and (cor_name in current_cors):
-            print("Skipping $igram_name and $cor_name: exists")
+            logger.debug(f"Skipping {igram_name} and {cor_name}: exists")
             continue
         else:
-            print("Forming $igram_name and $cor_name")
+            logger.debog(f"Forming {igram_name} and {cor_name}")
 
         # Keep early in memory for all pairs: only load for new set
         if cur_early_file != early_file:
-            print(f"Loading {early_file}")
+            logger.debug(f"Loading {early_file}")
             early = sario.load(early_file)
             cur_early_file = early_file
 
         # But we load late every time
-        print(f"Loading {late_file}")
+        logger.debug(f"Loading {late_file}")
         late = sario.load(late_file)
 
         # TODO: check if window_read with rasterio is faster than loading huge files?
 
-        print("Forming amps")
+        logger.debug("Forming amps")
         ampslc1 = sqrt(powlooks(early, rowlooks, collooks))
 
         ampslc2 = sqrt(powlooks(late, rowlooks, collooks))
-        print("Forming igram")
+        logger.debug("Forming igram")
         igram = make_igam(early, late, rowlooks, collooks)
 
-        print("Forming cor")
+        logger.debug("Forming cor")
         amp = real(np.abs(igram))
         cor = real(amp / (EPS + (ampslc1 * ampslc2)))
 
-        print(f"Saving {cor_name}, {igram_name}")
+        logger.info(f"Saving {cor_name}, {igram_name}")
         sario.save(cor_name, np.stack([amp, cor], axis=0))
         sario.save(igram_name, igram)
