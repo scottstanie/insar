@@ -90,7 +90,7 @@ def create_igrams(rowlooks=1, collooks=1):
             logger.debug(f"Skipping {igram_name} and {cor_name}: exists")
             continue
         else:
-            logger.debog(f"Forming {igram_name} and {cor_name}")
+            logger.debug(f"Forming {igram_name} and {cor_name}")
 
         # Keep early in memory for all pairs: only load for new set
         if cur_early_file != early_file:
