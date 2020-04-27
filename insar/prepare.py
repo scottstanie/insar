@@ -98,6 +98,7 @@ def deramp_and_shift_unws(
 
     if not sario.check_dset(unw_stack_file, dset_name, overwrite):
         return
+    logger.info(f"Deramping with reference ({ref_row},{ref_col})")
     # First make the empty dataset and save aux info
     in_ext = ".unw"
     file_list = sario.find_files(directory=directory, search_term="*" + in_ext)
@@ -151,6 +152,7 @@ def deramp_and_shift_unws(
                 deramped_phase -= np.nanmean(patch)
             else:
                 # Do I actually just want to ignore this one and give 0s?
+                logger.debug(f"Patch is all nan for {ref_row},{ref_col}")
                 deramped_phase -= np.nanmean(deramped_phase)
 
             # now store this in the buffer until emptied

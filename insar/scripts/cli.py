@@ -428,7 +428,7 @@ def subset(bbox, out_dir, in_dir):
         raise ValueError("--in-dir cannot be same as --out-dir")
 
     # dems:
-    copy_subset(
+    apertools.subset.copy_subset(
         bbox,
         join(in_dir, "elevation.dem"),
         join(out_dir, "elevation.dem"),
@@ -444,7 +444,7 @@ def subset(bbox, out_dir, in_dir):
 
     # geos and .orbtimings
     for in_fname in glob.glob(join(in_dir, "*.geo.vrt")):
-        img = read_subset(bbox, in_fname, driver="VRT")
+        img = apertools.subset.read_subset(bbox, in_fname, driver="VRT")
 
         _, nameonly = split(in_fname)
         out_fname = join(out_dir, nameonly).replace(".vrt", "")
@@ -458,35 +458,3 @@ def subset(bbox, out_dir, in_dir):
         click.echo(f"symlinking {s} to {d}")
         force_symlink(s, d)
         # copyfile(s, d)
-
-
-def read_subset(bbox, in_fname, driver=None):
-    with rio.open(in_fname, driver=driver) as src:
-        w = src.window(*bbox)
-        return src.read(1, window=w)
-
-
-def read_crs_transform(in_fname, driver=None):
-    with rio.open(in_fname, driver=driver) as src:
-        return src.crs, src.transform
-
-
-def copy_subset(bbox, in_fname, out_fname, driver=None, band=1, nodata=0, verbose=True):
-    if verbose:
-        click.echo(f"Subsetting {bbox} from {in_fname} to {out_fname}")
-    img = read_subset(bbox, in_fname, driver)
-    crs, transform = read_crs_transform(in_fname, driver)
-
-    with rio.open(
-            out_fname,
-            "w",
-            crs=crs,
-            transform=transform,
-            driver=driver,
-            height=img.shape[0],
-            width=img.shape[1],
-            count=1,
-            nodata=nodata,
-            dtype=img.dtype,
-    ) as dst:
-        dst.write(img, 1)

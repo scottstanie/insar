@@ -72,7 +72,7 @@ def run_stack(
     # input_dset = STACK_FLAT_DSET
 
     # Filter igrams and dates down from baselines/bad data
-    geolist, intlist = load_geolist_intlist(  # unw_stack_file,
+    geolist, intlist, valid_idxs = load_geolist_intlist(  # unw_stack_file,
         ignore_geo_file,
         max_temporal_baseline,
         geo_dir=geo_dir,
@@ -130,7 +130,7 @@ def load_geolist_intlist(
     min_date=None,
     max_date=None,
 ):
-    geolist = sario.find_geos(directory=igram_dir, parse=True)
+    geolist = sario.find_geos(directory=geo_dir, parse=True)
     intlist = sario.find_igrams(directory=igram_dir, parse=True)
     # geolist = sario.load_geolist_from_h5(unw_stack_file)
     # intlist = sario.load_intlist_from_h5(unw_stack_file)
@@ -138,6 +138,7 @@ def load_geolist_intlist(
     # If we are ignoreing some indices, remove them from for all pixels
     # geo_idxs, igram_idxs = find_valid_indices(geolist, intlist, min_date, max_date,...
     # return geolist[geo_idxs], intlist[igram_idxs], igram_idxs
+    # TODO GET INDEXES FOR UNWS
     return find_valid(
         geolist,
         intlist,
@@ -176,32 +177,34 @@ def find_valid(geo_date_list,
     valid_igrams = [
         ig for ig in igram_date_list if (ig[0] not in ignore_geos and ig[1] not in ignore_geos)
     ]
-    print("Ignoring %s igrams listed in %s" % (ig1 - len(valid_igrams), ignore_geo_file))
+    print(f"Ignoring {ig1 - len(valid_igrams)} igrams listed in {ignore_geo_file}")
 
     # Remove geos and igrams outside of min/max range
     if min_date is not None:
-        print("Keeping data after min_date: $min_date")
+        print(f"Keeping data after min_date: {min_date}")
         valid_geos = [g for g in valid_geos if g > min_date]
-        valid_igrams = [ig for ig in valid_igrams if (ig[1] > min_date and ig[2] > min_date)]
+        valid_igrams = [ig for ig in valid_igrams if (ig[0] > min_date and ig[1] > min_date)]
 
     if max_date is not None:
-        print("Keeping data only before max_date: $max_date")
+        print(f"Keeping data only before max_date: {max_date}")
         valid_geos = [g for g in valid_geos if g < max_date]
-        valid_igrams = [ig for ig in valid_igrams if (ig[1] < max_date and ig[2] < max_date)]
+        valid_igrams = [ig for ig in valid_igrams if (ig[0] < max_date and ig[1] < max_date)]
 
     # This is just for logging purposes:
     too_long_igrams = [ig for ig in valid_igrams if temporal_baseline(ig) > max_temporal_baseline]
-    print("Ignoring %s igrams with longer baseline than %s days" %
-          (len(too_long_igrams), max_temporal_baseline))
+    print(f"Ignoring {len(too_long_igrams)} igrams with longer baseline "
+          f"than {max_temporal_baseline} days")
 
     # ## Remove long time baseline igrams ###
     valid_igrams = [ig for ig in valid_igrams if temporal_baseline(ig) <= max_temporal_baseline]
 
-    print("Ignoring %s igrams total" % (ig1 - len(valid_igrams)))
-    return valid_geos, valid_igrams
-    # Collect remaining geo dates and igrams
-    # valid_geo_indices = np.searchsorted(geo_date_list, valid_geos)
-    # valid_igram_indices = np.searchsorted(igram_date_list, valid_igrams)
+    print(f"Ignoring {ig1 - len(valid_igrams)} igrams total")
+    # Now go back to original full list and see what the indices were
+    # used for subselecting from the unw_stack by a pixel
+
+    valid_idxs = np.searchsorted(sario.intlist_to_filenames(igram_date_list),
+                                 sario.intlist_to_filenames(valid_igrams))
+    return valid_geos, valid_igrams, valid_idxs
 
 
 def temporal_baseline(igram: Igram):

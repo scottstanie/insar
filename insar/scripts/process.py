@@ -319,17 +319,18 @@ def run_sbas_inversion(ref_row=None,
         overwrite=False,
     )
 
-    insar.stackavg.run_stack(
-        # unw_stack_file="unw_stack.vrt",
-        outfile=None,
-        ignore_geo_file=None,
-        geo_dir="../",
-        igram_dir=igram_path,
-        max_temporal_baseline=900,
-        min_date=None,
-        max_date=None,
-        ramp_order=1,
-    )
+    # Now this happens in prepare
+    # insar.stackavg.run_stack(
+    #     # unw_stack_file="unw_stack.vrt",
+    #     outfile=None,
+    #     ignore_geo_file=None,
+    #     geo_dir="../",
+    #     igram_dir=igram_path,
+    #     max_temporal_baseline=900,
+    #     min_date=None,
+    #     max_date=None,
+    #     ramp_order=1,
+    # )
     return
 
     cmd = "julia --start=no /home/scott/repos/InsarTimeseries.jl/src/runcli.jl " \
