@@ -409,8 +409,6 @@ def unzip(context, delete_zips):
     insar.scripts.preproc.unzip_sentinel_files(context['path'], delete_zips=delete_zips)
 
 
-import rasterio as rio
-
 
 @preproc.command('subset')
 @click.option('--bbox', nargs=4, type=float, help="Window lat/lon bounds: left bot right top")
