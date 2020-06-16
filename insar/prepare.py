@@ -448,15 +448,8 @@ def estimate_ramp(z, order):
     return z_fit
 
 
-def load_reference(unw_stack_file=UNW_FILENAME, dset=STACK_FLAT_SHIFTED_DSET):
-    with h5py.File(unw_stack_file, "r") as f:
-        try:
-            return f[dset].attrs["reference"]
-        except KeyError:
-            return [None, None]
-
-
 def set_reference(ref_rowcol, ref_station=None, unw_stack_file=UNW_FILENAME, dset=STACK_FLAT_SHIFTED_DSET):
     with h5py.File(unw_stack_file, "r+") as f:
         f[dset].attrs["reference"] = ref_rowcol
-        f[dset].attrs["reference_station"] = ref_station
+        if ref_station is not None:
+            f[dset].attrs["reference_station"] = ref_station
