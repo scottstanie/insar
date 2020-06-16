@@ -37,7 +37,7 @@ def prepare_stacks(
     ref_row=None,
     ref_col=None,
     ref_station=None,
-    order=1,
+    order=2,
     window=5,
     overwrite=False,
 ):
@@ -61,12 +61,15 @@ def prepare_stacks(
         ref_row,
         ref_col,
         unw_stack_file=unw_stack_file,
-        dset_name="stack_flat_shifted",
+        dset_name=STACK_FLAT_SHIFTED_DSET,
         directory=igram_path,
-        order=1,
+        order=order,
         window=window,
         overwrite=overwrite,
     )
+    # Now record this in the HDF5 attributes
+    set_reference([ref_row, ref_col], ref_station=ref_station, 
+                  unw_stack_file=unw_stack_file, dset=STACK_FLAT_SHIFTED_DSET)
 
 
 def create_dset(h5file, dset_name, shape, dtype, chunks=True, compress=True):
@@ -90,7 +93,7 @@ def deramp_and_shift_unws(
     unw_stack_file=UNW_FILENAME,
     dset_name=STACK_FLAT_SHIFTED_DSET,
     directory=".",
-    order=1,
+    order=2,
     window=5,
     overwrite=False,
     stack_fname="stackavg.tif",
@@ -443,3 +446,17 @@ def estimate_ramp(z, order):
         z_fit = np.dot(idx_matrix, coeffs).reshape(z.shape)
 
     return z_fit
+
+
+def load_reference(unw_stack_file=UNW_FILENAME, dset=STACK_FLAT_SHIFTED_DSET):
+    with h5py.File(unw_stack_file, "r") as f:
+        try:
+            return f[dset].attrs["reference"]
+        except KeyError:
+            return [None, None]
+
+
+def set_reference(ref_rowcol, ref_station=None, unw_stack_file=UNW_FILENAME, dset=STACK_FLAT_SHIFTED_DSET):
+    with h5py.File(unw_stack_file, "r+") as f:
+        f[dset].attrs["reference"] = ref_rowcol
+        f[dset].attrs["reference_station"] = ref_station
