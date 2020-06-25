@@ -119,7 +119,7 @@ def parse_steps(ctx, param, value):
 @click.option('--difference', is_flag=True, help="Use velocity differences for regularization")
 @click.option(
     '--deramp-order',
-    default=1,
+    default=2,
     help="Order of 2D polynomial to use to remove residual phase from unwrapped interferograms"
     " (default is 1, linear ramp)")
 @click.option("--ref-row",

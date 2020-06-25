@@ -303,7 +303,7 @@ def run_sbas_inversion(ref_row=None,
                        alpha=0,
                        constant_velocity=False,
                        difference=False,
-                       deramp_order=1,
+                       deramp_order=2,
                        ignore_geos=False,
                        stackavg=False,
                        **kwargs):
@@ -319,6 +319,7 @@ def run_sbas_inversion(ref_row=None,
         ref_col=ref_col,
         ref_station=ref_station,
         overwrite=False,
+        deramp_order=deramp_order,
     )
 
     # Now this happens in prepare

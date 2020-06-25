@@ -37,7 +37,7 @@ def prepare_stacks(
     ref_row=None,
     ref_col=None,
     ref_station=None,
-    order=2,
+    deramp_order=2,
     window=5,
     overwrite=False,
 ):
@@ -63,13 +63,16 @@ def prepare_stacks(
         unw_stack_file=unw_stack_file,
         dset_name=STACK_FLAT_SHIFTED_DSET,
         directory=igram_path,
-        order=order,
+        deramp_order=deramp_order,
         window=window,
         overwrite=overwrite,
     )
-    # Now record this in the HDF5 attributes
-    set_reference([ref_row, ref_col], ref_station=ref_station, 
-                  unw_stack_file=unw_stack_file, dset=STACK_FLAT_SHIFTED_DSET)
+    # Now record attrs of the dataset
+    with h5py.File(unw_stack_file, "r+") as f:
+        f[STACK_FLAT_SHIFTED_DSET].attrs["deramp_order"] = deramp_order
+        f[STACK_FLAT_SHIFTED_DSET].attrs["reference"] = [ref_row, ref_col]
+        if ref_station is not None:
+            f[STACK_FLAT_SHIFTED_DSET].attrs["reference_station"] = ref_station
 
 
 def create_dset(h5file, dset_name, shape, dtype, chunks=True, compress=True):
@@ -93,7 +96,7 @@ def deramp_and_shift_unws(
     unw_stack_file=UNW_FILENAME,
     dset_name=STACK_FLAT_SHIFTED_DSET,
     directory=".",
-    order=2,
+    deramp_order=2,
     window=5,
     overwrite=False,
     stack_fname="stackavg.tif",
@@ -147,7 +150,7 @@ def deramp_and_shift_unws(
             mask = _read_mask_by_idx(idx)
             # amp = inf.read(1)
             phase = inf.read(2)
-            deramped_phase = remove_ramp(phase, order=order, mask=mask)
+            deramped_phase = remove_ramp(phase, deramp_order=deramp_order, mask=mask)
 
             # Now center it on the shift window
             patch = deramped_phase[ref_row - win:ref_row + win + 1, ref_col - win:ref_col + win + 1]
@@ -381,15 +384,15 @@ def _read_mask_by_idx(idx, fname="masks.h5", dset=IGRAM_MASK_DSET):
         return f[dset][idx, :, :]
 
 
-def remove_ramp(z, order=1, mask=np.ma.nomask, copy=False):
+def remove_ramp(z, deramp_order=1, mask=np.ma.nomask, copy=False):
     """Estimates a linear plane through data and subtracts to flatten
 
     Used to remove noise artifacts from unwrapped interferograms
 
     Args:
         z (ndarray): 2D array, interpreted as heights
-        order (int): degree of surface estimation
-            order = 1 removes linear ramp, order = 2 fits quadratic surface
+        deramp_order (int): degree of surface estimation
+            deramp_order = 1 removes linear ramp, deramp_order = 2 fits quadratic surface
 
     Returns:
         ndarray: flattened 2D array with estimated surface removed
@@ -398,37 +401,37 @@ def remove_ramp(z, order=1, mask=np.ma.nomask, copy=False):
     # Make a version of the image with nans in masked places
     z_masked[mask] = np.nan
     # Use this constrained version to find the plane fit
-    z_fit = estimate_ramp(z_masked, order)
+    z_fit = estimate_ramp(z_masked, deramp_order)
     # Then use the non-masked as return value
     return z - z_fit
 
 
-def estimate_ramp(z, order):
+def estimate_ramp(z, deramp_order):
     """Takes a 2D array an fits a linear plane to the data
 
     Ignores pixels that have nan values
 
     Args:
         z (ndarray): 2D array, interpreted as heights
-        order (int): degree of surface estimation
-            order = 1 removes linear ramp, order = 2 fits quadratic surface
-        order (int)
+        deramp_order (int): degree of surface estimation
+            deramp_order = 1 removes linear ramp, deramp_order = 2 fits quadratic surface
+        deramp_order (int)
 
     Returns:
         ndarray: the estimated coefficients of the surface
-            For order = 1, it will be 3 numbers, a, b, c from
+            For deramp_order = 1, it will be 3 numbers, a, b, c from
                  ax + by + c = z
-            For order = 2, it will be 6:
+            For deramp_order = 2, it will be 6:
                 f + ax + by + cxy + dx^2 + ey^2
     """
-    if order > 2:
+    if deramp_order > 2:
         raise ValueError("Order only implemented for 1 and 2")
     # Note: rows == ys, cols are xs
     yidxs, xidxs = matrix_indices(z.shape, flatten=True)
     # c_ stacks 1D arrays as columns into a 2D array
     zflat = z.flatten()
     good_idxs = ~np.isnan(zflat)
-    if order == 1:
+    if deramp_order == 1:
         A = np.c_[np.ones(xidxs.shape), xidxs, yidxs]
         coeffs, _, _, _ = np.linalg.lstsq(A[good_idxs], zflat[good_idxs], rcond=None)
         # coeffs will be a, b, c in the equation z = ax + by + c
@@ -437,7 +440,7 @@ def estimate_ramp(z, order):
         y_block, x_block = matrix_indices(z.shape, flatten=False)
         z_fit = (a * x_block + b * y_block + c)
 
-    elif order == 2:
+    elif deramp_order == 2:
         A = np.c_[np.ones(xidxs.shape), xidxs, yidxs, xidxs * yidxs, xidxs**2, yidxs**2]
         # coeffs will be 6 elements for the quadratic
         coeffs, _, _, _ = np.linalg.lstsq(A[good_idxs], zflat[good_idxs], rcond=None)
@@ -446,10 +449,3 @@ def estimate_ramp(z, order):
         z_fit = np.dot(idx_matrix, coeffs).reshape(z.shape)
 
     return z_fit
-
-
-def set_reference(ref_rowcol, ref_station=None, unw_stack_file=UNW_FILENAME, dset=STACK_FLAT_SHIFTED_DSET):
-    with h5py.File(unw_stack_file, "r+") as f:
-        f[dset].attrs["reference"] = ref_rowcol
-        if ref_station is not None:
-            f[dset].attrs["reference_station"] = ref_station
