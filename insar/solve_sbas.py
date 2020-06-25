@@ -8,7 +8,8 @@ from insar import timeseries
 from scipy.ndimage.filters import gaussian_filter
 
 
-def main(unw_stack=None, unw_file=None):
+def main(unw_file=None, unw_stack=None, max_date=None,
+        max_temporal_baseline=800,):
     # '/data1/scott/pecos/path78-bbox2/subset_injection/igrams_looked'
     # '/data4/scott/path85/stitched/subset_injection/igrams_looked'
     if unw_stack is None:
@@ -28,9 +29,9 @@ def main(unw_stack=None, unw_file=None):
     geolist, intlist, valid_idxs = find_valid(
         geo_date_list,
         igram_date_list,
-        max_date=datetime.date(2018, 1, 1),
+        max_date=max_date,
         ignore_geo_file="geolist_ignore.txt",
-        max_temporal_baseline=800,
+        max_temporal_baseline=max_temporal_baseline,
     )
     unw_pixel = unw_stack[valid_idxs, r, c]
     A = timeseries.build_A_matrix(geolist, intlist)

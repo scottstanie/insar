@@ -267,6 +267,9 @@ xargs -0 -n1 -I{} --max-procs=50 ln -s dem.rsc {}.rsc """
     add_unw_rsc = add_int_rsc.replace(".int", ".unw")
     _log_and_run(add_unw_rsc, check=False)
 
+    add_cc_rsc = add_int_rsc.replace(".int", ".cc")
+    _log_and_run(add_cc_rsc, check=False)
+
     # Default name by ps_sbas_igrams
     igram_rsc = apertools.sario.load('dem.rsc')
     # "shopt -s nullglob" skips the for-loop when nothing matches
