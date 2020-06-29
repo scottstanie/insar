@@ -248,19 +248,20 @@ def save_geo_masks(directory,
         m = binary_opening(np.abs(geo_arr) == 0, structure=np.ones((3, 3)))
         return np.ma.make_mask(m, shrink=False)
 
-    geo_file_list = sario.find_files(directory=directory, search_term="*.geo")
-    rsc_geo = sario.load(sario.find_rsc_file(filename=geo_file_list[0]))
-    gshape = (rsc_geo["file_length"], rsc_geo["width"])
     # Make the empty stack, or delete if exists
+    if not sario.check_dset(mask_file, dset_name, overwrite):
+        return
+    if not sario.check_dset(mask_file, GEO_MASK_SUM_DSET, overwrite):
+        return
+
+    rsc_geo = sario.load(sario.find_rsc_file(directory=directory))
+    gshape = (rsc_geo["file_length"], rsc_geo["width"])
+    geo_file_list = sario.find_files(directory=directory, search_term="*.geo")
     shape = _find_file_shape(dem_rsc=dem_rsc,
                              file_list=geo_file_list,
                              row_looks=row_looks,
                              col_looks=col_looks)
 
-    if not sario.check_dset(mask_file, dset_name, overwrite):
-        return
-    if not sario.check_dset(mask_file, GEO_MASK_SUM_DSET, overwrite):
-        return
     create_dset(mask_file, dset_name, shape=shape, dtype=bool)
 
     with h5py.File(mask_file, "a") as f:
@@ -316,10 +317,7 @@ def compute_int_masks(
     geo_date_list = sario.find_geos(directory=geo_path)
 
     # Make the empty stack, or delete if exists
-    shape = _find_file_shape(dem_rsc=dem_rsc,
-                             file_list=int_file_list,
-                             row_looks=row_looks,
-                             col_looks=col_looks)
+    shape = _find_file_shape(dem_rsc=dem_rsc, file_list=int_file_list)
     create_dset(mask_file, dset_name, shape=shape, dtype=bool)
 
     with h5py.File(mask_file, "a") as f:
