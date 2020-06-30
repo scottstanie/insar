@@ -8,18 +8,26 @@ from insar import timeseries
 from scipy.ndimage.filters import gaussian_filter
 
 
-def main(unw_file=None, unw_stack=None, max_date=None,
-        max_temporal_baseline=800,):
-    # '/data1/scott/pecos/path78-bbox2/subset_injection/igrams_looked'
-    # '/data4/scott/path85/stitched/subset_injection/igrams_looked'
+def _load_unw_stack(unw_file, unw_stack):
     if unw_stack is None:
         with h5py.File(unw_file) as f:
             unw_stack = f["stack_flat_shifted"][:]
+    return unw_stack
+
+
+def main(
+    unw_file=None,
+    unw_stack=None,
+    max_date=None,
+    max_temporal_baseline=800,
+):
+    unw_stack = _load_unw_stack(unw_file, unw_stack)
+    # '/data1/scott/pecos/path78-bbox2/subset_injection/igrams_looked'
+    # '/data4/scott/path85/stitched/subset_injection/igrams_looked'
 
     # with rio.open("velocities_201706_linear_max800_noprune_170_5.tif") as src:
-        # velos = src.read(2)
+    # velos = src.read(2)
     # r, c = np.unravel_index(np.argmin(velos), velos.shape)
-    r, c = 300, 300
     geo_date_list = sario.load_geolist_from_h5(unw_file)
     igram_date_list = sario.load_intlist_from_h5(unw_file)
 
@@ -33,9 +41,10 @@ def main(unw_file=None, unw_stack=None, max_date=None,
         ignore_geo_file="geolist_ignore.txt",
         max_temporal_baseline=max_temporal_baseline,
     )
-    unw_pixel = unw_stack[valid_idxs, r, c]
     A = timeseries.build_A_matrix(geolist, intlist)
-    phi = np.insert(np.linalg.pinv(A) @ unw_pixel, 0, 0)
+    # r, c = 300, 300
+    # unw_pixel = unw_stack[valid_idxs, r, c]
+    # phi = np.insert(np.linalg.pinv(A) @ unw_pixel, 0, 0)
 
     unw_subset = unw_stack[valid_idxs]
     pA = np.linalg.pinv(A)
@@ -47,6 +56,7 @@ def main(unw_file=None, unw_stack=None, max_date=None,
     with h5py.File("stack_final.h5", "w") as f:
         f["stack"] = stack
     return stack
+
 
 def filter_aps(stack, space_sigma=5, time_sigma=3):
     """Performes temporal filter in time (axis 0), and spatial filter (axis 1, 2)
@@ -60,5 +70,29 @@ def filter_aps(stack, space_sigma=5, time_sigma=3):
     return gaussian_filter(hp_time, [0, space_sigma, space_sigma])
 
 
+def solve_linear_offset(unw_file=None, unw_stack=None):
+    unw_stack = _load_unw_stack(unw_file, unw_stack)
+    eq_date = datetime.date(2020, 3, 26)
+    # geo_date_list = sario.load_geolist_from_h5(unw_file)
+    igram_date_list = sario.load_intlist_from_h5(unw_file)
+
+    # TODO: valid idx stuff
+    # Temporal matrix, for constant velo estimate
+    T = np.array([(ifg[1] - ifg[0]).days for ifg in igram_date_list]).reshape((-1, 1))
+    # "jump" matrix: indicator 1 if ifg contains eq
+    J = np.array([(ifg[0] < eq_date and ifg[1] > eq_date) for ifg in igram_date_list])
+    J = J.reshape((-1, 1)).astype(int)
+    A = np.hstack((T, J))
+    pA = np.linalg.pinv(A)
+    # print(unw_stack.shape, pA.shape)
+    # (465, 720, 720) (2, 465)
+    # So want to multiply first dim by the last dim
+    vj = np.einsum('a b c, d a -> d b c', unw_stack, pA)
+    with h5py.File("stack_velos_jump.h5", "w") as f:
+        f["velos/1"] = vj[0]
+        f["jump/1"] = vj[1]
+    return vj
+
+
 # if __name__ == "__main__":
-    # main(unw_stack)
+# main(unw_stack)
