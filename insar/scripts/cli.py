@@ -65,11 +65,16 @@ def parse_steps(ctx, param, value):
 @click.option("--sentinel-path",
               envvar="SENTINEL_PATH",
               default="~/sentinel/",
-              help="(default=~/sentinel/) Directory containing sentinel scripts.")
+              help="Directory containing sentinel scripts.",
+              show_default=True)
 @click.option("--xrate",
               default=1,
-              help="Upsample rate for DEM in X/range (default=1, no upsampling)")
-@click.option("--yrate", default=1, help="Upsample rate for DEM in Y/az (default=1, no upsampling)")
+              help="Upsample rate for DEM in X/range (default=1, no upsampling)",
+              show_default=True)
+@click.option("--yrate",
+              default=1,
+              help="Upsample rate for DEM in Y/az (default=1, no upsampling)",
+              show_default=True)
 @click.option("--unzip/--no-unzip",
               help="Pass to sentinel_stack whether to unzip Sentinel files",
               default=True)
@@ -120,8 +125,8 @@ def parse_steps(ctx, param, value):
 @click.option(
     '--deramp-order',
     default=2,
-    help="Order of 2D polynomial to use to remove residual phase from unwrapped interferograms"
-    " (default is 1, linear ramp)")
+    help="Order of 2D polynomial to use to remove residual phase from unwrapped interferograms",
+    show_default=True)
 @click.option("--ref-row",
               type=int,
               help="Row number of pixel to use as unwrapping reference for SBAS inversion")
@@ -407,7 +412,6 @@ def prepare_stacks(context, overwrite):
 @click.pass_obj
 def unzip(context, delete_zips):
     insar.scripts.preproc.unzip_sentinel_files(context['path'], delete_zips=delete_zips)
-
 
 
 @preproc.command('subset')
