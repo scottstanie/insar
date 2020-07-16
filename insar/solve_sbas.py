@@ -5,6 +5,7 @@ import h5py
 from insar.stackavg import load_geolist_intlist, find_valid
 import apertools.sario as sario
 from insar import timeseries
+from insar.timeseries import PHASE_TO_CM
 from scipy.ndimage.filters import gaussian_filter
 
 
@@ -20,6 +21,7 @@ def main(
     unw_stack=None,
     max_date=None,
     max_temporal_baseline=800,
+    outfile="stack_final.h5",
 ):
     unw_stack = _load_unw_stack(unw_file, unw_stack)
     # '/data1/scott/pecos/path78-bbox2/subset_injection/igrams_looked'
@@ -28,15 +30,16 @@ def main(
     # with rio.open("velocities_201706_linear_max800_noprune_170_5.tif") as src:
     # velos = src.read(2)
     # r, c = np.unravel_index(np.argmin(velos), velos.shape)
-    geo_date_list = sario.load_geolist_from_h5(unw_file)
-    igram_date_list = sario.load_intlist_from_h5(unw_file)
+    geolist_full = sario.load_geolist_from_h5(unw_file)
+    intlist_full = sario.load_intlist_from_h5(unw_file)
+    dem_rsc = sario.load_dem_from_h5(unw_file)
 
     # geolist, intlist, valid_idxs = load_geolist_intlist("geolist_ignore.txt",
     #                                                     800,
     #                                                     max_date=datetime.date(2018, 1, 1))
     geolist, intlist, valid_idxs = find_valid(
-        geo_date_list,
-        igram_date_list,
+        geolist_full,
+        intlist_full,
         max_date=max_date,
         ignore_geo_file="geolist_ignore.txt",
         max_temporal_baseline=max_temporal_baseline,
@@ -52,9 +55,12 @@ def main(
     # ((1170, 120, 156), (51, 1170))
     # So want to multiply first dim by the last dim
     stack = np.einsum('a b c, d a -> d b c', unw_subset, pA)
+    stack *= PHASE_TO_CM
     # import ipdb; ipdb.set_trace()
-    with h5py.File("stack_final.h5", "w") as f:
-        f["stack"] = stack
+    with h5py.File(outfile, "w") as f:
+        f["stack/1"] = stack
+    sario.save_geolist_to_h5(out_file=outfile, geo_date_list=geolist)
+    sario.save_dem_to_h5(outfile, dem_rsc)
     return stack
 
 
