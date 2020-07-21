@@ -254,7 +254,8 @@ def save_geo_masks(directory,
     if not sario.check_dset(mask_file, GEO_MASK_SUM_DSET, overwrite):
         return
 
-    rsc_geo = sario.load(sario.find_rsc_file(directory=directory))
+    # rsc_geo = sario.load(sario.find_rsc_file(directory=directory))
+    rsc_geo = sario.load(os.path.join(directory, "elevation.dem.rsc"))
     gshape = (rsc_geo["file_length"], rsc_geo["width"])
     geo_file_list = sario.find_files(directory=directory, search_term="*.geo")
     shape = _find_file_shape(dem_rsc=dem_rsc,
