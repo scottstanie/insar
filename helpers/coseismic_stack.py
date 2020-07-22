@@ -5,7 +5,7 @@ import apertools.sario as sario
 from insar.prepare import remove_ramp
 
 
-def stack_igrams(event_date=date(2020, 3, 26), outname=None, verbose=True):
+def stack_igrams(event_date=date(2020, 3, 26), rate=False, outname=None, verbose=True):
 
     geolist, intlist = sario.load_geolist_intlist('.')
     insert_idx = np.searchsorted(geolist, event_date)
@@ -23,7 +23,9 @@ def stack_igrams(event_date=date(2020, 3, 26), outname=None, verbose=True):
     stack = np.zeros(sario.load(stack_fnames[0]).shape).astype(float)
     for f, dt in zip(stack_fnames, dts):
         deramped_phase = remove_ramp(sario.load(f), deramp_order=1, mask=np.ma.nomask)
-        stack += (deramped_phase / dt)
+        stack += deramped_phase
+        if rate:
+            stack /= dt
 
     if outname:
         import h5py
