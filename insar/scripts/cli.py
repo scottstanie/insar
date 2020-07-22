@@ -409,12 +409,13 @@ def unzip(context, delete_zips):
     insar.scripts.preproc.unzip_sentinel_files(context['path'], delete_zips=delete_zips)
 
 
-
 @preproc.command('subset')
 @click.option('--bbox', nargs=4, type=float, help="Window lat/lon bounds: left bot right top")
 @click.option('--out-dir', '-o', type=click.Path(exists=True))
 @click.option('--in-dir', '-i', type=click.Path(exists=True))
-def subset(bbox, out_dir, in_dir):
+@click.option('--start-date', '-s', type=click.DateTime(formats=["%Y-%m-%d"]))
+@click.option('--end-date', '-e', type=click.DateTime(formats=["%Y-%m-%d"]))
+def subset(bbox, out_dir, in_dir, start_date, end_date):
     """Read window subset from .geos in another directory
 
     Writes the smaller .geos to `outpath`, along with the
@@ -442,6 +443,10 @@ def subset(bbox, out_dir, in_dir):
 
     # geos and .orbtimings
     for in_fname in glob.glob(join(in_dir, "*.geo.vrt")):
+        cur_date = apertools.sario._parse(apertools.sario._strip_geoname(split(in_fname)[1]))
+        if (end_date is not None and cur_date > end_date) or (start_date is not None
+                                                              and cur_date < start_date):
+            continue
         img = apertools.subset.read_subset(bbox, in_fname, driver="VRT")
 
         _, nameonly = split(in_fname)
