@@ -449,8 +449,8 @@ def subset(bbox, out_dir, in_dir, start_date, end_date):
     # geos and .orbtimings
     for in_fname in glob.glob(join(in_dir, "*.geo.vrt")):
         cur_date = apertools.sario._parse(apertools.sario._strip_geoname(split(in_fname)[1]))
-        if (end_date is not None and cur_date > end_date) or (start_date is not None
-                                                              and cur_date < start_date):
+        if ((end_date is not None and cur_date > end_date.date())
+                or (start_date is not None and cur_date < start_date.date())):
             continue
         img = apertools.subset.read_subset(bbox, in_fname, driver="VRT")
 
