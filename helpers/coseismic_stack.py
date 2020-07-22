@@ -2,6 +2,7 @@
 from datetime import date
 import numpy as np
 import apertools.sario as sario
+from insar.prepare import remove_ramp
 
 
 def stack_igrams(event_date=date(2020, 3, 26), outname=None, verbose=True):
@@ -19,9 +20,10 @@ def stack_igrams(event_date=date(2020, 3, 26), outname=None, verbose=True):
             print(f)
 
     dts = [(pair[1] - pair[0]).days for pair in stack_igrams]
-    stack = np.sum([sario.load(f) / dt for (f, dt) in zip(stack_fnames, dts)])
-    stack = np.sum(np.stack([sario.load(f) / dt for (f, dt) in zip(stack_fnames, dts)], axis=0),
-                   axis=0)
+    stack = np.zeros(sario.load(stack_fnames[0]).shape).astype(float)
+    for f, dt in zip(stack_fnames, dts):
+        deramped_phase = remove_ramp(sario.load(f), deramp_order=1, mask=np.ma.nomask)
+        stack += (deramped_phase / dt)
 
     if outname:
         import h5py
