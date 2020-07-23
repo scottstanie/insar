@@ -5,13 +5,25 @@ import apertools.sario as sario
 from insar.prepare import remove_ramp
 
 
-def stack_igrams(event_date=date(2020, 3, 26), use_cm=True, rate=False, outname=None, verbose=True):
+def stack_igrams(
+    event_date=date(2020, 3, 26),
+    num_igrams=None,
+    use_cm=True,
+    rate=False,
+    outname=None,
+    verbose=True,
+    ref=(5, 5),
+    window=5,
+):
 
     geolist, intlist = sario.load_geolist_intlist('.')
     insert_idx = np.searchsorted(geolist, event_date)
-    num_igrams = len(geolist) - insert_idx
+    num_igrams = num_igrams or len(geolist) - insert_idx
 
-    geo_subset = geolist[-(2 * num_igrams):]
+    # Since `event_date` will fit in the sorted array at `insert_idx`, then
+    # geolist[insert_idx] is the first date AFTER the event
+    geo_subset = geolist[insert_idx - num_igrams:insert_idx + num_igrams]
+
     stack_igrams = list(zip(geo_subset[:num_igrams], geo_subset[num_igrams:]))
     stack_fnames = sario.intlist_to_filenames(stack_igrams, '.unw')
     if verbose:
@@ -24,8 +36,15 @@ def stack_igrams(event_date=date(2020, 3, 26), use_cm=True, rate=False, outname=
     dt_total = 0
     for f, dt in zip(stack_fnames, dts):
         deramped_phase = remove_ramp(sario.load(f), deramp_order=1, mask=np.ma.nomask)
+
         stack += deramped_phase
         dt_total += dt
+
+    # subtract the reference location:
+    ref_row, ref_col = ref
+    win = window // 2
+    patch = stack[ref_row - win:ref_row + win + 1, ref_col - win:ref_col + win + 1]
+    stack -= np.nanmean(patch)
 
     if rate:
         stack /= dt
