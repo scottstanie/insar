@@ -16,7 +16,8 @@ def stack_igrams(
     window=5,
     ignore_geos=True,
     cc_thresh=None,
-    avg_cc_thresh=0.25,
+    avg_cc_thresh=0.35,
+    sigma_filter=.3,
 ):
 
     gi_file = "geolist_ignore.txt" if ignore_geos else None
@@ -80,6 +81,10 @@ def stack_igrams(
     if use_cm:
         from insar.timeseries import PHASE_TO_CM
         cur_phase_sum *= PHASE_TO_CM
+
+    if sigma_filter:
+        import insar.blob.utils as blob_utils
+        cur_phase_sum = blob_utils.gaussian_filter_nan(cur_phase_sum, sigma_filter)
 
     if outname:
         import h5py
