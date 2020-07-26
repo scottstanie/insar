@@ -15,6 +15,8 @@ def stack_igrams(
     ref=(5, 5),
     window=5,
     ignore_geos=True,
+    cc_thresh=None,
+    avg_cc_thresh=0.25,
 ):
 
     gi_file = "geolist_ignore.txt" if ignore_geos else None
@@ -36,35 +38,52 @@ def stack_igrams(
             print(f)
 
     dts = [(pair[1] - pair[0]).days for pair in stack_igrams]
-    stack = np.zeros(sario.load(stack_fnames[0]).shape).astype(float)
-    cc_stack = np.zeros_like(stack)
+    cur_phase_sum = np.zeros(sario.load(stack_fnames[0]).shape).astype(float)
+    cc_stack = np.zeros_like(cur_phase_sum)
+    # for pixels that get masked sometimes, lower that count in the final stack dividing
+    pixel_count = np.zeros_like(cur_phase_sum, dtype=int)
     dt_total = 0
     for f, dt in zip(stack_fnames, dts):
         deramped_phase = remove_ramp(sario.load(f), deramp_order=1, mask=np.ma.nomask)
-        stack += deramped_phase
-        dt_total += dt
+        cur_cc = sario.load(f.replace(".unw", ".cc"))
 
-        cc_stack += sario.load(f.replace(".unw", ".cc"))
+        if cc_thresh:
+            bad_pixel_mask = cur_cc < cc_thresh
+        else:
+            # zeros => dont mask any to nan
+            bad_pixel_mask = np.zeros_like(deramped_phase, dtype=bool)
+
+        deramped_phase[bad_pixel_mask] = np.nan
+
+        # cur_phase_sum += deramped_phase
+        cur_phase_sum = np.nansum(np.stack([cur_phase_sum, deramped_phase]), axis=0)
+        pixel_count += (~bad_pixel_mask).astype(int)
+        dt_total += ((~bad_pixel_mask) * dt)
+
+        cc_stack += cur_cc
 
     # subtract the reference location:
     ref_row, ref_col = ref
     win = window // 2
-    patch = stack[ref_row - win:ref_row + win + 1, ref_col - win:ref_col + win + 1]
-    stack -= np.nanmean(patch)
+    patch = cur_phase_sum[ref_row - win:ref_row + win + 1, ref_col - win:ref_col + win + 1]
+    cur_phase_sum -= np.nanmean(patch)
 
-    cc_stack /= len(stack_fnames)
     if rate:
-        stack /= dt
+        cur_phase_sum /= dt_total
     else:
-        stack /= len(stack_fnames)
+        cur_phase_sum /= pixel_count
+    cc_stack /= len(stack_fnames)
+
+    if avg_cc_thresh:
+        cur_phase_sum[cc_stack < avg_cc_thresh] = np.nan
 
     if use_cm:
         from insar.timeseries import PHASE_TO_CM
-        stack *= PHASE_TO_CM
+        cur_phase_sum *= PHASE_TO_CM
 
     if outname:
         import h5py
         with h5py.File(outname, 'w') as f:
-            f['stackavg'] = stack
+            f['stackavg'] = cur_phase_sum
         sario.save_dem_to_h5(outname, sario.load("dem.rsc"))
-    return stack, cc_stack
+    return cur_phase_sum, cc_stack
