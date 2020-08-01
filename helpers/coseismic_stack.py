@@ -2,7 +2,9 @@
 from datetime import date
 import numpy as np
 import apertools.sario as sario
+import apertools.subset as subset
 from insar.prepare import remove_ramp
+from insar.timeseries import PHASE_TO_CM
 
 MENTONE_EQ_DATE = date(2020, 3, 26)
 
@@ -70,12 +72,22 @@ def select_igrams(geolist, intlist, event_date, num_igrams=None):
     return stack_igrams
 
 
-def select_pre_event(geolist, intlist, event_date):
-    return [ifg for ifg in intlist if (ifg[0] < event_date and ifg[1] < event_date)]
+def select_pre_event(geolist, intlist, event_date, min_date=None):
+    ifgs = [ifg for ifg in intlist if (ifg[0] < event_date and ifg[1] < event_date)]
+    return _filter_min_max_date(ifgs, min_date, None)
 
 
-def select_post_event(geolist, intlist, event_date):
-    return [ifg for ifg in intlist if (ifg[0] > event_date and ifg[1] > event_date)]
+def select_post_event(geolist, intlist, event_date, max_date=None):
+    ifgs = [ifg for ifg in intlist if (ifg[0] > event_date and ifg[1] > event_date)]
+    return _filter_min_max_date(ifgs, None, max_date)
+
+
+def _filter_min_max_date(ifgs, min_date, max_date):
+    if min_date:
+        ifgs = [ifg for ifg in ifgs if (ifg[0] > min_date and ifg[1] > min_date)]
+    if max_date:
+        ifgs = [ifg for ifg in ifgs if (ifg[0] < max_date and ifg[1] < max_date)]
+    return ifgs
 
 
 def create_stack(
@@ -130,7 +142,6 @@ def create_stack(
         cur_phase_sum[cc_stack < avg_cc_thresh] = np.nan
 
     if use_cm:
-        from insar.timeseries import PHASE_TO_CM
         cur_phase_sum *= PHASE_TO_CM
 
     if sigma_filter:
@@ -138,3 +149,36 @@ def create_stack(
         cur_phase_sum = blob_utils.gaussian_filter_nan(cur_phase_sum, sigma_filter)
 
     return cur_phase_sum, cc_stack
+
+
+def subset_stack(point,
+                 event_date,
+                 ref=(3, 3),
+                 window=3,
+                 nigrams=10,
+                 ignore_geos=True,
+                 min_date=None,
+                 max_date=None):
+    gi_file = "geolist_ignore.txt" if ignore_geos else None
+    geolist, intlist = sario.load_geolist_intlist('.', geolist_ignore_file=gi_file)
+
+    # stack_igrams = select_igrams(geolist, intlist, event_date, nigrams)
+    # stack_igrams = select_pre_event(geolist, intlist, event_date, min_date=date(2019, 7, 1))
+    stack_igrams = select_post_event(geolist, intlist, event_date, max_date=date(2020, 5, 1))
+
+    stack_fnames = sario.intlist_to_filenames(stack_igrams, '.unw')
+    # dts = [(pair[1] - pair[0]).days for pair in stack_igrams]
+    phase_subset_stack = []
+    for f in stack_fnames:
+        cur = subset.read_subset(subset.bbox_around_point(*point), f, driver="ROI_PAC", bands=[2])
+        deramped_phase = remove_ramp(np.squeeze(cur), deramp_order=1, mask=np.ma.nomask)
+        phase_subset_stack.append(deramped_phase)
+
+    phase_subset_stack = np.mean(np.stack(phase_subset_stack, axis=0), axis=0)
+    # subtract the reference location:
+    ref_row, ref_col = ref
+    win = window // 2
+    patch = phase_subset_stack[ref_row - win:ref_row + win + 1, ref_col - win:ref_col + win + 1]
+    phase_subset_stack -= np.nanmean(patch)
+    phase_subset_stack *= PHASE_TO_CM
+    return phase_subset_stack
