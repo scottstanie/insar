@@ -162,6 +162,10 @@ def prep_igrams_dir(cleanup=False, **kwargs):
         logger.error("%s .geo file in current folder, can't form igram: exiting", num_geos)
         return 1
 
+    # Make vrts of files
+    cmd = "aper save-vrt --rsc-file elevation.dem.rsc *geo"
+    _log_and_run(cmd)
+
     mkdir_p('igrams')
     os.chdir('igrams')
     logger.info("Changed directory to %s", os.path.realpath(os.getcwd()))
