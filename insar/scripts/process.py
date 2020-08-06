@@ -82,26 +82,33 @@ def download_data(mission=None, date=None, **kwargs):
     pass
 
 
-def run_sentinel_stack(unzip=True, **kwargs):
-    """3. Create geocoded slcs as .geo files for each .zip file"""
-    # Download all EOF files
-    _log_and_run("eof")
-
-    # check if we have RAW or SLC type files
+def _get_product_type(path):
+    # check if we have RAW or SLC type files in `path`
     p = None
-    for f in glob.glob("./*"):
+    for f in glob.glob(path):
         try:
             p = Sentinel(f)
             break
         except ValueError:
             continue
-    if p.product_type == "RAW":
-        script_path = os.path.join(SENTINEL_RAW_PATH, "sentinel_stack.py")
-    elif p.product_type == "SLC":
-        script_path = os.path.join(SENTINEL_SLC_PATH, "sentinel_stack.py")
-    else:
-        raise ValueError("Unknown sentinel product type %s of %s" (p.product_type, p.filename))
     logger.info("Found %s product level sentinel files." % p.product_type)
+    if p.product_type not in ("RAW", "SLC"):
+        raise ValueError("Unknown sentinel product type %s of %s" (p.product_type, p.filename))
+    return p.product_type
+
+
+def run_sentinel_stack(unzip=True, product_type="", **kwargs):
+    """3. Create geocoded slcs as .geo files for each .zip file"""
+    # Download all EOF files
+    _log_and_run("eof")
+
+    if not product_type:
+        product_type = _get_product_type("./")
+
+    if product_type == "RAW":
+        script_path = os.path.join(SENTINEL_RAW_PATH, "sentinel_stack.py")
+    elif product_type == "SLC":
+        script_path = os.path.join(SENTINEL_SLC_PATH, "sentinel_stack.py")
 
     unzip_arg = '' if unzip else "--no-unzip"
     cmd = 'python {} {}'.format(script_path, unzip_arg)

@@ -78,6 +78,11 @@ def parse_steps(ctx, param, value):
 @click.option("--unzip/--no-unzip",
               help="Pass to sentinel_stack whether to unzip Sentinel files",
               default=True)
+@click.option("--product-type",
+              type=click.Choice(["RAW", "SLC", ""]),
+              default=None,
+              show_default=True,
+              help="Level of Sentinel product (default='' will auto detect from files)")
 @click.option("--cleanup/--no-cleanup",
               help="Rename .geos and cleanup directory to `extra_files` after .geo processing",
               default=True)
