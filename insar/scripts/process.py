@@ -85,7 +85,7 @@ def download_data(mission=None, date=None, **kwargs):
 def _get_product_type(path):
     # check if we have RAW or SLC type files in `path`
     p = None
-    for f in glob.glob(path):
+    for f in glob.glob(os.path.join(path, "*")):
         try:
             p = Sentinel(f)
             break
