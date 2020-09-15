@@ -93,7 +93,7 @@ def _get_product_type(path):
             continue
     logger.info("Found %s product level sentinel files." % p.product_type)
     if p.product_type not in ("RAW", "SLC"):
-        raise ValueError("Unknown sentinel product type %s of %s" (p.product_type, p.filename))
+        raise ValueError("Unknown sentinel product type %s of %s" % (p.product_type, p.filename))
     return p.product_type
 
 
