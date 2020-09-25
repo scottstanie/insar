@@ -40,12 +40,12 @@ class Tile(object):
         return str(self)
 
     def _form_tilename(self, lat, lon):
-        hemi_ns = 'N' if lat >= 0 else 'S'
-        hemi_ew = 'E' if lon >= 0 else 'W'
+        hemi_ns = "N" if lat >= 0 else "S"
+        hemi_ew = "E" if lon >= 0 else "W"
         # Format to one decimal
-        lat_str = '{}{:02.1f}'.format(hemi_ns, abs(lat))
-        lon_str = '{}{:03.1f}'.format(hemi_ew, abs(lon))
-        latlon_str = '{lat_str}{lon_str}'.format(lat_str=lat_str, lon_str=lon_str)
+        lat_str = "{}{:02.1f}".format(hemi_ns, abs(lat))
+        lon_str = "{}{:03.1f}".format(hemi_ew, abs(lon))
+        latlon_str = "{lat_str}{lon_str}".format(lat_str=lat_str, lon_str=lon_str)
         # Use underscores in the name instead of decimal
         # return latlon_str.replace('.', '_')
         return latlon_str
@@ -65,15 +65,15 @@ class Tile(object):
             (-103.7, 30.8)
 
         """
-        name_regex = r'([NS])([0-9\.]{1,5})([EW])([0-9\.]{1,5})'
+        name_regex = r"([NS])([0-9\.]{1,5})([EW])([0-9\.]{1,5})"
         # Now strip path dependencies and parse
         _, name_clean = os.path.split(os.path.abspath(tilename))
-        re_match = re.match(name_regex, name_clean.strip('./'))
+        re_match = re.match(name_regex, name_clean.strip("./"))
         if re_match is None:
             raise ValueError("%s is not a valid tile name" % tilename)
         hemi_ns, lat_str, hemi_ew, lon_str = re_match.groups()
-        lon_out = float(lon_str) if hemi_ew == 'E' else -1 * float(lon_str)
-        lat_out = float(lat_str) if hemi_ns == 'N' else -1 * float(lat_str)
+        lon_out = float(lon_str) if hemi_ew == "E" else -1 * float(lon_str)
+        lat_out = float(lat_str) if hemi_ns == "N" else -1 * float(lat_str)
         return lon_out, lat_out
 
     def to_geojson(self):
@@ -103,8 +103,7 @@ class Tile(object):
         return (self.lon, self.lon + self.width, self.lat, self.lat + self.height)
 
     def overlaps_with(self, sentinel=None, extent=None):
-        """Returns True if Tile's area overlaps the sentinel extent
-        """
+        """Returns True if Tile's area overlaps the sentinel extent"""
         extent = sentinel.extent if sentinel else extent
         return latlon.intersects(self.extent, extent)
 
@@ -179,7 +178,9 @@ class TileGrid(object):
 
     @property
     def num_tiles(self):
-        return self.calc_num_tiles(self.total_width_height, self.tile_size, self.overlap)
+        return self.calc_num_tiles(
+            self.total_width_height, self.tile_size, self.overlap
+        )
 
     @staticmethod
     def calc_tile_dims(length_arr, tile_size, overlap):
@@ -210,7 +211,9 @@ class TileGrid(object):
 
     @property
     def tile_dims(self):
-        return self.calc_tile_dims(self.total_width_height, self.tile_size, self.overlap)
+        return self.calc_tile_dims(
+            self.total_width_height, self.tile_size, self.overlap
+        )
 
     def make_tiles(self, verbose=False):
         """Divide the extent from the sentinel_list into Tiles
@@ -240,15 +243,23 @@ class TileGrid(object):
 
     def _log_tile_info(self):
         logger.info("Tiles in (lon, lat) directions: (%d, %d)", *self.num_tiles)
-        logger.info("Dimensions of tile in (lon, lat) directions: ({:.2f}, {:.2f})".format(
-            *self.tile_dims))
+        logger.info(
+            "Dimensions of tile in (lon, lat) directions: ({:.2f}, {:.2f})".format(
+                *self.tile_dims
+            )
+        )
         logger.info("Total number of tiles: %d", np.prod(self.num_tiles))
-        logger.info("Total area covered in (lon, lat): ({:.2f}, {:.2f})".format(
-            *self.total_width_height))
-        logger.info("Total extent covered: {:.2f} {:.2f} {:.2f} {:.2f} ".format(*self.extent))
+        logger.info(
+            "Total area covered in (lon, lat): ({:.2f}, {:.2f})".format(
+                *self.total_width_height
+            )
+        )
+        logger.info(
+            "Total extent covered: {:.2f} {:.2f} {:.2f} {:.2f} ".format(*self.extent)
+        )
 
 
-def find_sentinels(data_path, path_num=None, ending='.SAFE'):
+def find_sentinels(data_path, path_num=None, ending=".SAFE"):
     """Find sentinel products in data_path
 
     Optionally filter by ending (.SAFE for directory, .zip for zipped product)
@@ -268,12 +279,14 @@ def find_sentinels(data_path, path_num=None, ending='.SAFE'):
     return sents
 
 
-def create_tiles(data_path=None,
-                 path_num=None,
-                 sentinel_list=None,
-                 tile_size=0.5,
-                 overlap=0.1,
-                 verbose=False):
+def create_tiles(
+    data_path=None,
+    path_num=None,
+    sentinel_list=None,
+    tile_size=0.5,
+    overlap=0.1,
+    verbose=False,
+):
     """Find tiles over a sentinel area, form the tiles/geojsons
 
     Args:
@@ -312,11 +325,11 @@ def plot_tiles(dirlist, gps_station_list=None):
         return len(set(lats)), len(set(lons))
 
     def _read_dirname(dirname):
-        igram_dir = os.path.join(dirname, 'igrams')
-        defo_file = os.path.join(igram_dir, 'deformation.npy')
-        img_data_file = os.path.join(igram_dir, 'dem.rsc')
+        igram_dir = os.path.join(dirname, "igrams")
+        defo_file = os.path.join(igram_dir, "deformation.npy")
+        img_data_file = os.path.join(igram_dir, "dem.rsc")
 
-        print('reading in %s' % defo_file)
+        print("reading in %s" % defo_file)
         defo_img = np.mean(np.load(defo_file)[-3:], axis=0)
         img_data = sario.load(img_data_file)
         return defo_img, img_data
@@ -330,7 +343,8 @@ def plot_tiles(dirlist, gps_station_list=None):
 
     # Sort these in a lat/lon grid from top left to bottom right, row order
     sorted_dirs = sorted(
-        zip(directory_names, lon_lat_list), key=lambda tup: (-tup[1][1], tup[1][0]))
+        zip(directory_names, lon_lat_list), key=lambda tup: (-tup[1][1], tup[1][0])
+    )
 
     defo_img_list = []
     img_data_list = []
@@ -341,8 +355,8 @@ def plot_tiles(dirlist, gps_station_list=None):
 
     vmax = np.nanmax(np.stack(defo_img_list, axis=0))
     vmin = np.nanmin(np.stack(defo_img_list, axis=0))
-    print('vmin, vmax', vmin, vmax)
-    cmap_name = 'seismic'
+    print("vmin, vmax", vmin, vmax)
+    cmap_name = "seismic"
 
     fig, axes = plt.subplots(num_rows, num_cols)
     for idx, (dirname, lon_lat_tup) in enumerate(sorted_dirs):
@@ -378,10 +392,12 @@ def plot_tiles(dirlist, gps_station_list=None):
         )
         cur_ax.set_title(dirname)
 
-        cbar = fig.colorbar(im, ax=cur_ax, boundaries=np.arange(vmin, vmax + 1).astype(int))
+        cbar = fig.colorbar(
+            im, ax=cur_ax, boundaries=np.arange(vmin, vmax + 1).astype(int)
+        )
         cbar.set_clim(vmin, vmax)
         for lon, lat in points:
-            cur_ax.plot(lon, lat, 'X', markersize=15)
+            cur_ax.plot(lon, lat, "X", markersize=15)
         cur_ax.legend(legends)
 
     return fig, axes, defo_img_list, img_data_list
@@ -390,20 +406,22 @@ def plot_tiles(dirlist, gps_station_list=None):
 def find_stations_with_data(gps_dir=None):
     # Now also get gps station list
     if not gps_dir:
-        gps_dir = '/data1/scott/pecos/gps_station_data'
+        gps_dir = "/data1/scott/pecos/gps_station_data"
 
-    all_station_data = read_station_dict(os.path.join(gps_dir, 'texas_stations.csv'))
+    all_station_data = read_station_dict(os.path.join(gps_dir, "texas_stations.csv"))
     station_data_list = find_station_data_files(gps_dir)
-    stations_with_data = [tup for tup in all_station_data if tup[0] in station_data_list]
+    stations_with_data = [
+        tup for tup in all_station_data if tup[0] in station_data_list
+    ]
     return stations_with_data
 
 
 def find_station_data_files(gps_dir):
-    station_files = glob.glob(os.path.join(gps_dir, '*.tenv3'))
+    station_files = glob.glob(os.path.join(gps_dir, "*.tenv3"))
     station_list = []
     for filename in station_files:
         _, name = os.path.split(filename)
-        station_list.append(name.split('.')[0])
+        station_list.append(name.split(".")[0])
     return station_list
 
 
@@ -414,6 +432,6 @@ def read_station_dict(filename):
 
     all_station_data = []
     for row in station_strings:
-        name, lat, lon, _ = row.split(',')  # Ignore altitude
+        name, lat, lon, _ = row.split(",")  # Ignore altitude
         all_station_data.append((name, float(lon), float(lat)))
     return all_station_data

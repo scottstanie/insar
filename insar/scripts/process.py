@@ -19,6 +19,7 @@ import subprocess
 import os
 import glob
 from multiprocessing import cpu_count
+
 # import numpy as np
 # from click import BadOptionUsage
 
@@ -48,15 +49,17 @@ def _log_and_run(cmd, check=True, shell=True):
         return subprocess.run(cmd, shell=shell)
 
 
-def create_dem(left_lon=None,
-               top_lat=None,
-               dlat=None,
-               dlon=None,
-               geojson=None,
-               xrate=1,
-               yrate=2,
-               data_source='NASA',
-               **kwargs):
+def create_dem(
+    left_lon=None,
+    top_lat=None,
+    dlat=None,
+    dlon=None,
+    geojson=None,
+    xrate=1,
+    yrate=2,
+    data_source="NASA",
+    **kwargs
+):
     """1. Download, upsample, and stich a DEM"""
     # TODO:
     _log_and_run("createdem")
@@ -93,7 +96,9 @@ def _get_product_type(path):
             continue
     logger.info("Found %s product level sentinel files." % p.product_type)
     if p.product_type not in ("RAW", "SLC"):
-        raise ValueError("Unknown sentinel product type %s of %s" % (p.product_type, p.filename))
+        raise ValueError(
+            "Unknown sentinel product type %s of %s" % (p.product_type, p.filename)
+        )
     return p.product_type
 
 
@@ -110,8 +115,8 @@ def run_sentinel_stack(unzip=True, product_type="", **kwargs):
     elif product_type == "SLC":
         script_path = os.path.join(SENTINEL_SLC_PATH, "sentinel_stack.py")
 
-    unzip_arg = '' if unzip else "--no-unzip"
-    cmd = 'python {} {}'.format(script_path, unzip_arg)
+    unzip_arg = "" if unzip else "--no-unzip"
+    cmd = "python {} {}".format(script_path, unzip_arg)
     _log_and_run(cmd)
     for f in glob.glob("S*.geo"):
         # make symlinks of rsc file for loading
@@ -129,7 +134,7 @@ def _make_symlinks(geofiles):
         except:
             pass
         # move corresponding orb timing file
-        orbtiming_file = geofile.replace('geo', 'orbtiming')
+        orbtiming_file = geofile.replace("geo", "orbtiming")
         force_symlink(orbtiming_file, new_name + ".orbtiming")
 
 
@@ -139,7 +144,7 @@ def _reorganize_files(new_dir="extra_files"):
 
 def prep_igrams_dir(cleanup=False, **kwargs):
     """4. Reorganize and rename .geo files, stitches .geos, prepare for igrams"""
-    new_dir = 'extra_files'
+    new_dir = "extra_files"
     if cleanup:
         logger.info("Renaming .geo files, creating symlinks")
         if os.path.exists(new_dir):
@@ -156,25 +161,29 @@ def prep_igrams_dir(cleanup=False, **kwargs):
     _make_symlinks(geofiles)
 
     # Move extra useful files back in main directory
-    for fname in ('params', 'elevation.dem', 'elevation.dem.rsc'):
-        force_symlink(os.path.join(new_dir, fname), os.path.join('.', fname))
+    for fname in ("params", "elevation.dem", "elevation.dem.rsc"):
+        force_symlink(os.path.join(new_dir, fname), os.path.join(".", fname))
     for geofile in geofiles:
         force_symlink("elevation.dem.rsc", geofile + ".rsc")
 
     # Now stitch together duplicate dates of .geos
-    apertools.stitching.stitch_same_dates(geo_path="extra_files/", output_path=".", overwrite=False)
+    apertools.stitching.stitch_same_dates(
+        geo_path="extra_files/", output_path=".", overwrite=False
+    )
 
-    num_geos = len(glob.glob('./*.geo'))
+    num_geos = len(glob.glob("./*.geo"))
     if num_geos < 2:  # Can't make igrams
-        logger.error("%s .geo file in current folder, can't form igram: exiting", num_geos)
+        logger.error(
+            "%s .geo file in current folder, can't form igram: exiting", num_geos
+        )
         return 1
 
     # Make vrts of files
     cmd = "aper save-vrt --rsc-file elevation.dem.rsc *geo"
     _log_and_run(cmd)
 
-    mkdir_p('igrams')
-    os.chdir('igrams')
+    mkdir_p("igrams")
+    os.chdir("igrams")
     logger.info("Changed directory to %s", os.path.realpath(os.getcwd()))
 
 
@@ -184,21 +193,24 @@ def create_sbas_list(max_temporal=500, max_spatial=500, **kwargs):
     Uses the outputs of the geo coded SLCS to find files with small baselines
     Searches one directory up from where script is run for .geo files
     """
-    sbas_cmd = '/usr/bin/env python ~/sentinel/sbas_list.py {} {}'.format(max_temporal, max_spatial)
+    sbas_cmd = "/usr/bin/env python ~/sentinel/sbas_list.py {} {}".format(
+        max_temporal, max_spatial
+    )
     _log_and_run(sbas_cmd)
 
 
 def run_ps_sbas_igrams(xrate=1, yrate=1, xlooks=None, ylooks=None, **kwargs):
     """6. run the ps_sbas_igrams script"""
+
     def calc_sizes(xrate, yrate, width, length):
         xsize = int(math.floor(width / xrate) * xrate)
         ysize = int(math.floor(length / yrate) * yrate)
         return (xsize, ysize)
 
     logger.info("Gathering file size info from elevation.dem.rsc")
-    elevation_dem_rsc_file = '../elevation.dem.rsc'
+    elevation_dem_rsc_file = "../elevation.dem.rsc"
     rsc_data = apertools.sario.load(elevation_dem_rsc_file)
-    xsize, ysize = calc_sizes(xrate, yrate, rsc_data['width'], rsc_data['file_length'])
+    xsize, ysize = calc_sizes(xrate, yrate, rsc_data["width"], rsc_data["file_length"])
 
     # the "1 1" is xstart ystart
     # Default number of looks is the upsampling rate so that
@@ -207,11 +219,13 @@ def run_ps_sbas_igrams(xrate=1, yrate=1, xlooks=None, ylooks=None, **kwargs):
     ylooks = ylooks or yrate
     logger.info("Running ps_sbas_igrams.py")
     ps_sbas_cmd = "/usr/bin/env python ~/sentinel/ps_sbas_igrams.py \
-sbas_list {rsc_file} 1 1 {xsize} {ysize} {xlooks} {ylooks}".format(rsc_file=elevation_dem_rsc_file,
-                                                                   xsize=xsize,
-                                                                   ysize=ysize,
-                                                                   xlooks=xlooks,
-                                                                   ylooks=ylooks)
+sbas_list {rsc_file} 1 1 {xsize} {ysize} {xlooks} {ylooks}".format(
+        rsc_file=elevation_dem_rsc_file,
+        xsize=xsize,
+        ysize=ysize,
+        xlooks=xlooks,
+        ylooks=ylooks,
+    )
     _log_and_run(ps_sbas_cmd)
 
     # Also create masks of invalid areas of igrams/.geos
@@ -233,6 +247,7 @@ def run_form_igrams(xlooks=1, ylooks=1, **kwargs):
     #     srcdir, xlooks, ylooks)
     # _log_and_run(cmd)
     from insar import form_igrams
+
     form_igrams.create_igrams(ylooks, xlooks)
 
 
@@ -251,11 +266,11 @@ def run_snaphu(lowpass=None, max_jobs=None, **kwargs):
     Assumes we are in the directory with all .unw files
     """
     # TODO: probably shouldn't call these like this? idk alternative right now
-    igram_rsc = apertools.sario.load('dem.rsc')
-    snaphu_script = os.path.join(SCRIPTS_DIR, 'run_snaphu.sh')
-    snaphu_cmd = '{filepath} {width} {lowpass}'.format(filepath=snaphu_script,
-                                                       width=igram_rsc['width'],
-                                                       lowpass=lowpass)
+    igram_rsc = apertools.sario.load("dem.rsc")
+    snaphu_script = os.path.join(SCRIPTS_DIR, "run_snaphu.sh")
+    snaphu_cmd = "{filepath} {width} {lowpass}".format(
+        filepath=snaphu_script, width=igram_rsc["width"], lowpass=lowpass
+    )
     if max_jobs is not None:
         snaphu_cmd += " {}".format(max_jobs)
     _log_and_run(snaphu_cmd)
@@ -282,14 +297,19 @@ xargs -0 -n1 -I{} --max-procs=50 ln -s dem.rsc {}.rsc """
     _log_and_run(add_cc_rsc, check=False)
 
     # Default name by ps_sbas_igrams
-    igram_rsc = apertools.sario.load('dem.rsc')
+    igram_rsc = apertools.sario.load("dem.rsc")
     # "shopt -s nullglob" skips the for-loop when nothing matches
     convert_ints = """find . -name "*.int" -print0 | \
-xargs -0 -n1 -I{} --max-procs=50 dismphfile {} %s """ % (igram_rsc['width'])
+xargs -0 -n1 -I{} --max-procs=50 dismphfile {} %s """ % (
+        igram_rsc["width"]
+    )
     _log_and_run(convert_ints)
 
     convert_unws = """find . -name "*.unw" -print0 | \
-xargs -0 -n1 -I{} --max-procs=50 dishgtfile {} %s 1 100000 %s """ % (igram_rsc['width'], max_height)
+xargs -0 -n1 -I{} --max-procs=50 dishgtfile {} %s 1 100000 %s """ % (
+        igram_rsc["width"],
+        max_height,
+    )
     # snaphu_script = os.path.join(SCRIPTS_DIR, 'convert_snaphu.py')
     # convert_unws = 'python {filepath} --max-height {hgt}'.format(filepath=snaphu_script,
     #                                                           hgt=max_height)
@@ -301,8 +321,11 @@ xargs -0 -n1 -I{} --max-procs=50 dishgtfile {} %s 1 100000 %s """ % (igram_rsc['
     open("fake.int", "w").close()
     force_symlink("dem.rsc", "fake.int.rsc")
 
-    copyproj_cmd = """find . -name "*.tif" -print0 | \
-xargs -0 -n1 -I{} --max-procs=50 %s fake.int {} """ % projscript
+    copyproj_cmd = (
+        """find . -name "*.tif" -print0 | \
+xargs -0 -n1 -I{} --max-procs=50 %s fake.int {} """
+        % projscript
+    )
     _log_and_run(copyproj_cmd)
 
     os.remove("fake.int")
@@ -310,17 +333,19 @@ xargs -0 -n1 -I{} --max-procs=50 %s fake.int {} """ % projscript
 
 
 # TODO: fix this function for new stuff
-def run_sbas_inversion(ref_row=None,
-                       ref_col=None,
-                       ref_station=None,
-                       window=None,
-                       alpha=0,
-                       constant_velocity=False,
-                       difference=False,
-                       deramp_order=2,
-                       ignore_geos=False,
-                       stackavg=False,
-                       **kwargs):
+def run_sbas_inversion(
+    ref_row=None,
+    ref_col=None,
+    ref_station=None,
+    window=None,
+    alpha=0,
+    constant_velocity=False,
+    difference=False,
+    deramp_order=2,
+    ignore_geos=False,
+    stackavg=False,
+    **kwargs
+):
     """10. Perofrm SBAS inversion, save the deformation as .npy
 
     Assumes we are in the directory with all .unw files"""
@@ -350,8 +375,10 @@ def run_sbas_inversion(ref_row=None,
     # )
     return
 
-    cmd = "julia --start=no /home/scott/repos/InsarTimeseries.jl/src/runcli.jl " \
-          " -o {output_name} --alpha {alpha} "
+    cmd = (
+        "julia --start=no /home/scott/repos/InsarTimeseries.jl/src/runcli.jl "
+        " -o {output_name} --alpha {alpha} "
+    )
     # cmd = "/home/scott/repos/InsarTimeseries.jl/builddir/insarts " \
 
     if ignore_geos:
@@ -386,7 +413,9 @@ STEPS = [
     run_sbas_inversion,
 ]
 # Form string for help function "1:download_eof,2:..."
-STEP_LIST = ',\n'.join("%d:%s" % (num, func.__name__) for (num, func) in enumerate(STEPS, start=1))
+STEP_LIST = ",\n".join(
+    "%d:%s" % (num, func.__name__) for (num, func) in enumerate(STEPS, start=1)
+)
 
 
 @log_runtime
@@ -398,8 +427,10 @@ def main(working_dir, kwargs):
 
     # Use the --step option first, or else use the --start
     # Subtract 1 so that they are list indices, starting at 0
-    step_list = [s - 1 for s in kwargs['step']] or range(kwargs['start'] - 1, len(STEPS))
-    logger.info("Running steps %s", ','.join(str(s + 1) for s in step_list))
+    step_list = [s - 1 for s in kwargs["step"]] or range(
+        kwargs["start"] - 1, len(STEPS)
+    )
+    logger.info("Running steps %s", ",".join(str(s + 1) for s in step_list))
     for stepnum in step_list:
         curfunc = STEPS[stepnum]
         logger.info("Starting step %d: %s", stepnum + 1, curfunc.__name__)

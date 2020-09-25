@@ -78,13 +78,15 @@ def prepare_stacks(
 def create_dset(h5file, dset_name, shape, dtype, chunks=True, compress=True):
     comp_dict = hdf5plugin.Blosc() if compress else dict()
     with h5py.File(h5file, "a") as f:
-        f.create_dataset(dset_name, shape=shape, dtype=dtype, chunks=chunks, **comp_dict)
+        f.create_dataset(
+            dset_name, shape=shape, dtype=dtype, chunks=chunks, **comp_dict
+        )
 
 
 def temporal_baseline(filename):
     fmt = "%Y%m%d"
     fname = os.path.split(filename)[1]
-    datestrs = os.path.splitext(fname)[0].split('_')
+    datestrs = os.path.splitext(fname)[0].split("_")
     igram = [datetime.strptime(t, fmt) for t in datestrs]
     return (igram[1] - igram[0]).days
 
@@ -120,9 +122,15 @@ def deramp_and_shift_unws(
 
     # Save the extra files too
     rsc_data = sario.load(os.path.join(directory, "dem.rsc"))
-    sario.save_dem_to_h5(unw_stack_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite)
-    sario.save_geolist_to_h5(igram_path=directory, out_file=unw_stack_file, overwrite=overwrite)
-    sario.save_intlist_to_h5(igram_path=directory, out_file=unw_stack_file, overwrite=overwrite)
+    sario.save_dem_to_h5(
+        unw_stack_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
+    )
+    sario.save_geolist_to_h5(
+        igram_path=directory, out_file=unw_stack_file, overwrite=overwrite
+    )
+    sario.save_intlist_to_h5(
+        igram_path=directory, out_file=unw_stack_file, overwrite=overwrite
+    )
 
     with h5py.File(unw_stack_file, "r+") as f:
         chunk_shape = f[dset_name].chunks
@@ -130,7 +138,7 @@ def deramp_and_shift_unws(
         # n = n or chunk_size[0]
 
     # While we're iterating, save a stacked average
-    stackavg = np.zeros((rows, cols), dtype='float32')
+    stackavg = np.zeros((rows, cols), dtype="float32")
 
     buf = np.empty((chunk_depth, rows, cols), dtype=dtype)
     win = window // 2
@@ -142,7 +150,7 @@ def deramp_and_shift_unws(
         if idx % chunk_depth == 0 and idx > 0:
             logger.info(f"Writing {lastidx}:{lastidx+chunk_depth}")
             with h5py.File(unw_stack_file, "r+") as f:
-                f[dset_name][lastidx:lastidx + chunk_depth, :, :] = buf
+                f[dset_name][lastidx : lastidx + chunk_depth, :, :] = buf
 
             lastidx = idx
 
@@ -153,7 +161,9 @@ def deramp_and_shift_unws(
             deramped_phase = remove_ramp(phase, deramp_order=deramp_order, mask=mask)
 
             # Now center it on the shift window
-            patch = deramped_phase[ref_row - win:ref_row + win + 1, ref_col - win:ref_col + win + 1]
+            patch = deramped_phase[
+                ref_row - win : ref_row + win + 1, ref_col - win : ref_col + win + 1
+            ]
             if not np.all(np.isnan(patch)):
                 deramped_phase -= np.nanmean(patch)
             else:
@@ -166,7 +176,7 @@ def deramp_and_shift_unws(
             buf[curidx, :, :] = deramped_phase
 
             # sum for the stack, only use non-masked data
-            stackavg[~mask] += (deramped_phase[~mask] / temporal_baseline(in_fname))
+            stackavg[~mask] += deramped_phase[~mask] / temporal_baseline(in_fname)
 
     # Get the projection information to use to write as gtiff
     with rio.open(file_list[0], driver="ROI_PAC") as ds:
@@ -174,16 +184,16 @@ def deramp_and_shift_unws(
         crs = ds.crs
 
     with rio.open(
-            stack_fname,
-            "w",
-            crs=crs,
-            transform=transform,
-            driver="GTiff",
-            height=stackavg.shape[0],
-            width=stackavg.shape[1],
-            count=1,
-            nodata=0,
-            dtype=stackavg.dtype,
+        stack_fname,
+        "w",
+        crs=crs,
+        transform=transform,
+        driver="GTiff",
+        height=stackavg.shape[0],
+        width=stackavg.shape[1],
+        count=1,
+        nodata=0,
+        dtype=stackavg.dtype,
     ) as dst:
         dst.write(stackavg, 1)
 
@@ -201,12 +211,20 @@ def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=
         geo_path = utils.get_parent_dir(igram_path)
 
     # Used to shrink the .geo masks to save size as .int masks
-    row_looks, col_looks = apertools.sario.find_looks_taken(igram_path, geo_path=geo_path)
+    row_looks, col_looks = apertools.sario.find_looks_taken(
+        igram_path, geo_path=geo_path
+    )
 
     rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
-    sario.save_dem_to_h5(mask_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite)
-    sario.save_geolist_to_h5(igram_path=igram_path, out_file=mask_file, overwrite=overwrite)
-    sario.save_intlist_to_h5(igram_path=igram_path, out_file=mask_file, overwrite=overwrite)
+    sario.save_dem_to_h5(
+        mask_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
+    )
+    sario.save_geolist_to_h5(
+        igram_path=igram_path, out_file=mask_file, overwrite=overwrite
+    )
+    sario.save_intlist_to_h5(
+        igram_path=igram_path, out_file=mask_file, overwrite=overwrite
+    )
 
     save_geo_masks(
         geo_path,
@@ -230,19 +248,22 @@ def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=
     return mask_file
 
 
-def save_geo_masks(directory,
-                   mask_file=MASK_FILENAME,
-                   dem_rsc=None,
-                   dset_name=GEO_MASK_DSET,
-                   row_looks=1,
-                   col_looks=1,
-                   overwrite=False):
+def save_geo_masks(
+    directory,
+    mask_file=MASK_FILENAME,
+    dem_rsc=None,
+    dset_name=GEO_MASK_DSET,
+    row_looks=1,
+    col_looks=1,
+    overwrite=False,
+):
     """Creates .mask files for geos where zeros occur
 
     Makes look arguments are to create arrays the same size as the igrams
     Args:
         overwrite (bool): erase the dataset from the file if it exists and recreate
     """
+
     def _get_geo_mask(geo_arr):
         # Uses for removing single mask pixels from nearest neighbor resample
         m = binary_opening(np.abs(geo_arr) == 0, structure=np.ones((3, 3)))
@@ -258,10 +279,12 @@ def save_geo_masks(directory,
     rsc_geo = sario.load(os.path.join(directory, "elevation.dem.rsc"))
     gshape = (rsc_geo["file_length"], rsc_geo["width"])
     geo_file_list = sario.find_files(directory=directory, search_term="*.geo")
-    shape = _find_file_shape(dem_rsc=dem_rsc,
-                             file_list=geo_file_list,
-                             row_looks=row_looks,
-                             col_looks=col_looks)
+    shape = _find_file_shape(
+        dem_rsc=dem_rsc,
+        file_list=geo_file_list,
+        row_looks=row_looks,
+        col_looks=col_looks,
+    )
 
     create_dset(mask_file, dset_name, shape=shape, dtype=bool)
 
@@ -278,9 +301,11 @@ def save_geo_masks(directory,
                     mode="r",
                     shape=gshape,
                 )
-                g_subsample = gmap[(row_looks - 1)::row_looks, (col_looks - 1)::col_looks]
+                g_subsample = gmap[
+                    (row_looks - 1) :: row_looks, (col_looks - 1) :: col_looks
+                ]
                 # ipdb.set_trace()
-                logger.info(f'Saving {geo_fname} to stack')
+                logger.info(f"Saving {geo_fname} to stack")
                 cur_mask = _get_geo_mask(g_subsample)
                 sario.save(mask_name, cur_mask)
             else:
@@ -437,14 +462,16 @@ def estimate_ramp(z, deramp_order):
         c, a, b = coeffs
         # We want full blocks, as opposed to matrix_index flattened
         y_block, x_block = matrix_indices(z.shape, flatten=False)
-        z_fit = (a * x_block + b * y_block + c)
+        z_fit = a * x_block + b * y_block + c
 
     elif deramp_order == 2:
-        A = np.c_[np.ones(xidxs.shape), xidxs, yidxs, xidxs * yidxs, xidxs**2, yidxs**2]
+        A = np.c_[
+            np.ones(xidxs.shape), xidxs, yidxs, xidxs * yidxs, xidxs ** 2, yidxs ** 2
+        ]
         # coeffs will be 6 elements for the quadratic
         coeffs, _, _, _ = np.linalg.lstsq(A[good_idxs], zflat[good_idxs], rcond=None)
         yy, xx = matrix_indices(z.shape, flatten=True)
-        idx_matrix = np.c_[np.ones(xx.shape), xx, yy, xx * yy, xx**2, yy**2]
+        idx_matrix = np.c_[np.ones(xx.shape), xx, yy, xx * yy, xx ** 2, yy ** 2]
         z_fit = np.dot(idx_matrix, coeffs).reshape(z.shape)
 
     return z_fit

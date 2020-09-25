@@ -44,10 +44,11 @@ truth_geos = np.stack(geo_tuple, axis=0)
 print(truth_geos)
 
 import ipdb
+
 # ipdb.set_trace()
 with open("geolist", "w") as f:
     for idx, geo in enumerate(truth_geos):
-        fname = 'S1A_{}.geo'.format(geo_date_list[idx].strftime('%Y%m%d'))
+        fname = "S1A_{}.geo".format(geo_date_list[idx].strftime("%Y%m%d"))
         geo.tofile(fname)
         f.write("%s\n" % fname)
 
@@ -78,7 +79,9 @@ for early_idx, late_idx in itertools.combinations(range(len(truth_geos)), 2):
     igram_complex = late - early
     igram_complex[REF_ROW_COL] = 0
     igram = np.abs(igram_complex)
-    fname = '{}_{}.int'.format(early_date.strftime('%Y%m%d'), late_date.strftime('%Y%m%d'))
+    fname = "{}_{}.int".format(
+        early_date.strftime("%Y%m%d"), late_date.strftime("%Y%m%d")
+    )
     igram_complex.tofile(fname)
 
     # Note: using the 'height" as both amplitude and height
@@ -92,12 +95,12 @@ with open("intlist", "w") as f:
     for ig in igram_fname_list:
         f.write("%s\n" % ig)
 
-mask.save_int_masks(igram_fname_list, igram_date_list, geo_date_list, geo_path='.')
+mask.save_int_masks(igram_fname_list, igram_date_list, geo_date_list, geo_path=".")
 
-geo_masks = sario.load_stack(directory='.', file_ext='.geo.mask.npy')
+geo_masks = sario.load_stack(directory=".", file_ext=".geo.mask.npy")
 geo_mask_columns = timeseries.stack_to_cols(geo_masks)
 
-int_mask_file_names = [f + '.mask.npy' for f in igram_fname_list]
+int_mask_file_names = [f + ".mask.npy" for f in igram_fname_list]
 int_mask_stack = sario.load_stack(file_list=int_mask_file_names)
 igram_stack = np.ma.stack(igram_list, axis=0)
 igram_stack.mask = int_mask_stack

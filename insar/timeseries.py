@@ -28,17 +28,19 @@ logger = get_log()
 
 
 @log_runtime
-def run_inversion(igram_path,
-                  reference=(None, None),
-                  window=None,
-                  constant_vel=False,
-                  alpha=0,
-                  difference=False,
-                  deramp=True,
-                  deramp_order=1,
-                  masking=True,
-                  geolist_ignore_file="geolist_missing.txt",
-                  verbose=False):
+def run_inversion(
+    igram_path,
+    reference=(None, None),
+    window=None,
+    constant_vel=False,
+    alpha=0,
+    difference=False,
+    deramp=True,
+    deramp_order=1,
+    masking=True,
+    geolist_ignore_file="geolist_missing.txt",
+    verbose=False,
+):
     """Runs SBAS inversion on all unwrapped igrams
 
     Args:
@@ -69,22 +71,25 @@ def run_inversion(igram_path,
     if verbose:
         logger.setLevel(10)  # DEBUG
 
-    geolist, intlist = load_geolist_intlist(igram_path,
-                                            geolist_ignore_file=geolist_ignore_file,
-                                            parse=True)
+    geolist, intlist = load_geolist_intlist(
+        igram_path, geolist_ignore_file=geolist_ignore_file, parse=True
+    )
 
     # Prepare B matrix and timediffs used for each pixel inversion
     B = build_B_matrix(geolist, intlist)
     timediffs = find_time_diffs(geolist)
     if B.shape[1] != len(timediffs):
-        raise ValueError("Shapes of B {} and timediffs {} not compatible".format(
-            B.shape, timediffs.shape))
+        raise ValueError(
+            "Shapes of B {} and timediffs {} not compatible".format(
+                B.shape, timediffs.shape
+            )
+        )
 
     logger.debug("Reading unw stack")
     unw_stack, mask_stack, geo_mask_columns = load_unw_masked_stack(
         igram_path,
         num_timediffs=len(timediffs),
-        unw_ext='.unw',
+        unw_ext=".unw",
         deramp=deramp,
         deramp_order=deramp_order,
         masking=masking,
@@ -96,16 +101,18 @@ def run_inversion(igram_path,
     if any(r is None for r in reference):
         # Make a latlon image to check for gps data containment
         # TODO: maybe i need to search for masks? dont wanna pick a garbage one by accident
-        latlon_image = latlon.LatlonImage(data=unw_stack[0],
-                                          dem_rsc_file=os.path.join(igram_path, 'dem.rsc'))
-        ref_row, ref_col = find_reference_location(latlon_image,
-                                                   igram_path,
-                                                   mask_stack,
-                                                   gps_dir=None)
+        latlon_image = latlon.LatlonImage(
+            data=unw_stack[0], dem_rsc_file=os.path.join(igram_path, "dem.rsc")
+        )
+        ref_row, ref_col = find_reference_location(
+            latlon_image, igram_path, mask_stack, gps_dir=None
+        )
     else:
         ref_row, ref_col = reference
 
-    logger.info("Starting shift_stack: using %s, %s as ref_row, ref_col", ref_row, ref_col)
+    logger.info(
+        "Starting shift_stack: using %s, %s as ref_row, ref_col", ref_row, ref_col
+    )
     unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
     logger.info("Shifting stack complete")
 
@@ -162,7 +169,9 @@ def load_geolist_intlist(filepath, geolist_ignore_file=None, parse=True):
     intlist = sario.find_igrams(filepath, parse=parse)
     if geolist_ignore_file is not None:
         ignore_filepath = os.path.join(filepath, geolist_ignore_file)
-        geolist, intlist = ignore_geo_dates(geolist, intlist, ignore_file=ignore_filepath)
+        geolist, intlist = ignore_geo_dates(
+            geolist, intlist, ignore_file=ignore_filepath
+        )
     return geolist, intlist
 
 
@@ -172,7 +181,9 @@ def ignore_geo_dates(geolist, intlist, ignore_file="geolist_missing.txt"):
     logger.info("Ignoreing the following .geo dates:")
     logger.info(sorted(ignore_geos))
     valid_geos = [g for g in geolist if g not in ignore_geos]
-    valid_igrams = [i for i in intlist if i[0] not in ignore_geos and i[1] not in ignore_geos]
+    valid_igrams = [
+        i for i in intlist if i[0] not in ignore_geos and i[1] not in ignore_geos
+    ]
     return valid_geos, valid_igrams
 
 
@@ -272,7 +283,9 @@ def shift_stack(stack, ref_row, ref_col, window=3, window_func=np.mean):
     """
     win = window // 2
     for idx, layer in enumerate(stack):
-        patch = layer[ref_row - win:ref_row + win + 1, ref_col - win:ref_col + win + 1]
+        patch = layer[
+            ref_row - win : ref_row + win + 1, ref_col - win : ref_col + win + 1
+        ]
         stack[idx] -= np.mean(patch)  # yapf: disable
 
     return stack
@@ -297,12 +310,12 @@ def _create_diff_matrix(n, order=1):
 
     """
     if order == 1:
-        diff_matrix = -1 * np.diag(np.ones(n - 1), k=1).astype('int')
+        diff_matrix = -1 * np.diag(np.ones(n - 1), k=1).astype("int")
         np.fill_diagonal(diff_matrix, 1)
         diff_matrix = diff_matrix[:-1, :]
     elif order == 2:
-        diff_matrix = -1 * np.diag(np.ones(n - 1), k=1).astype('int')
-        diff_matrix = diff_matrix + -1 * np.diag(np.ones(n - 1), k=-1).astype('int')
+        diff_matrix = -1 * np.diag(np.ones(n - 1), k=1).astype("int")
+        diff_matrix = diff_matrix + -1 * np.diag(np.ones(n - 1), k=-1).astype("int")
         np.fill_diagonal(diff_matrix, 2)
         diff_matrix[-1, -1] = 1
         diff_matrix[0, 0] = 1
@@ -310,12 +323,9 @@ def _create_diff_matrix(n, order=1):
     return diff_matrix
 
 
-def invert_sbas(delta_phis,
-                B,
-                geo_mask_columns=None,
-                constant_vel=False,
-                alpha=0,
-                difference=False):
+def invert_sbas(
+    delta_phis, B, geo_mask_columns=None, constant_vel=False, alpha=0, difference=False
+):
     """Performs and SBAS inversion on each pixel of unw_stack to find deformation
 
     Solves the least squares equation Bv = dphi
@@ -337,8 +347,11 @@ def invert_sbas(delta_phis,
     Returns:
         ndarray: solution velocity arrary
     """
+
     def _augment_matrices(B, delta_phis, alpha):
-        reg_matrix = _create_diff_matrix(B.shape[1]) if difference else np.eye(B.shape[1])
+        reg_matrix = (
+            _create_diff_matrix(B.shape[1]) if difference else np.eye(B.shape[1])
+        )
         B = np.vstack((B, alpha * reg_matrix))
         # Now make num rows match
         zeros_shape = (B.shape[0] - delta_phis.shape[0], delta_phis.shape[1])
@@ -346,8 +359,11 @@ def invert_sbas(delta_phis,
         return B, delta_phis
 
     if B.shape[0] != delta_phis.shape[0]:
-        raise ValueError("Shapes of B {} and delta_phis {} not compatible".format(
-            B.shape, delta_phis.shape))
+        raise ValueError(
+            "Shapes of B {} and delta_phis {} not compatible".format(
+                B.shape, delta_phis.shape
+            )
+        )
     elif alpha < 0:
         raise ValueError("alpha cannot be negative")
 
@@ -358,7 +374,9 @@ def invert_sbas(delta_phis,
         B = np.expand_dims(np.sum(B, axis=1), axis=1)
     # Add regularization to the solution
     elif alpha > 0:
-        logger.info("Using regularization with alpha=%s, difference=%s", alpha, difference)
+        logger.info(
+            "Using regularization with alpha=%s, difference=%s", alpha, difference
+        )
         # Augment only if regularization requested
         B, delta_phis = _augment_matrices(B, delta_phis, alpha)
 

@@ -3,7 +3,7 @@ import numpy as np
 
 
 def writefile(arr, filename):
-    np.hstack((np.zeros((4, 4)), arr)).astype('float32').tofile(filename)
+    np.hstack((np.zeros((4, 4)), arr)).astype("float32").tofile(filename)
 
 
 # Make 5 dummy 3x2 arrays of phase
@@ -19,11 +19,11 @@ delta_phis = np.dstack((delta_phis, delta_phis))
 print(delta_phis)
 print(delta_phis.shape)
 unwlist = [
-    '20180420_20180422.unw',
-    '20180420_20180428.unw',
-    '20180422_20180428.unw',
-    '20180422_20180502.unw',
-    '20180428_20180502.unw',
+    "20180420_20180422.unw",
+    "20180420_20180428.unw",
+    "20180422_20180428.unw",
+    "20180422_20180502.unw",
+    "20180428_20180502.unw",
 ]
 for idx, name in enumerate(unwlist):
     d = delta_phis[idx, :].reshape((4, 4))

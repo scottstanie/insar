@@ -30,8 +30,7 @@ def unzip_sentinel_files(path=".", delete_zips=False):
         command += 'xargs -0 -I {} --max-procs 10 unzip -n {} "*/preview/*" \
                 "*/annotation/*.xml" "*/measurement/*slc-vv-*.tiff" '
 
-	
-    command += 'xargs -0 -I {} --max-procs 10 unzip -n {} '
+    command += "xargs -0 -I {} --max-procs 10 unzip -n {} "
     logger.info("Running command: %s", command)
     subprocess.check_call(command, shell=True)
 
@@ -39,7 +38,9 @@ def unzip_sentinel_files(path=".", delete_zips=False):
     os.chdir(cur_dir)
 
 
-def create_tile_directories(data_path, path_num=None, tile_size=0.5, overlap=0.1, verbose=False):
+def create_tile_directories(
+    data_path, path_num=None, tile_size=0.5, overlap=0.1, verbose=False
+):
     """Use make_tiles to create a directory structure
 
     Populates the current directory with dirs and .geojson files (e.g.):
@@ -52,23 +53,27 @@ def create_tile_directories(data_path, path_num=None, tile_size=0.5, overlap=0.1
     data_path = os.path.abspath(data_path)
 
     def _write_geojson(filename, geojson):
-        with open(filename, 'w') as f:
+        with open(filename, "w") as f:
             json.dump(geojson, f, indent=2)
 
     sentinel_list = insar.tile.find_sentinels(data_path, path_num)
     if not sentinel_list:
-        logger.error("No sentinel products found in %s for path_num %s", data_path, path_num)
+        logger.error(
+            "No sentinel products found in %s for path_num %s", data_path, path_num
+        )
         return [], []
 
-    tile_grid = insar.tile.create_tiles(sentinel_list=sentinel_list,
-                                        tile_size=tile_size,
-                                        overlap=overlap,
-                                        verbose=verbose)
+    tile_grid = insar.tile.create_tiles(
+        sentinel_list=sentinel_list,
+        tile_size=tile_size,
+        overlap=overlap,
+        verbose=verbose,
+    )
 
     # new_dirs = []
     for tile in tile_grid:
         apertools.utils.mkdir_p(tile.name)
-        filename = os.path.join(tile.name, '{}.geojson'.format(tile.name))
+        filename = os.path.join(tile.name, "{}.geojson".format(tile.name))
         _write_geojson(filename, tile.geojson)
         # new_dirs.append(tile.name)
         # Enter the new directory, link to sentinels, then back out

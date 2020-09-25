@@ -54,7 +54,7 @@ def main(
     # unw_subset.shape, pA.shape
     # ((1170, 120, 156), (51, 1170))
     # So want to multiply first dim by the last dim
-    stack = np.einsum('a b c, d a -> d b c', unw_subset, pA)
+    stack = np.einsum("a b c, d a -> d b c", unw_subset, pA)
     stack *= PHASE_TO_CM
     # import ipdb; ipdb.set_trace()
     with h5py.File(outfile, "w") as f:
@@ -65,11 +65,9 @@ def main(
 
 
 def filter_aps(stack, space_sigma=5, time_sigma=3):
-    """Performes temporal filter in time (axis 0), and spatial filter (axis 1, 2)
-
-    """
+    """Performes temporal filter in time (axis 0), and spatial filter (axis 1, 2)"""
     # First, to HP filt, subtract the LP filt from the original
-    lp_time = gaussian_filter(stack, [time_sigma, 0, 0], mode='constant')
+    lp_time = gaussian_filter(stack, [time_sigma, 0, 0], mode="constant")
     hp_time = stack - lp_time
 
     # Then, low pass filt in space to get the estimate of atmo phase screen
@@ -93,7 +91,7 @@ def solve_linear_offset(unw_file=None, unw_stack=None):
     # print(unw_stack.shape, pA.shape)
     # (465, 720, 720) (2, 465)
     # So want to multiply first dim by the last dim
-    vj = np.einsum('a b c, d a -> d b c', unw_stack, pA)
+    vj = np.einsum("a b c, d a -> d b c", unw_stack, pA)
     with h5py.File("stack_velos_jump.h5", "w") as f:
         f["velos/1"] = vj[0]
         f["jump/1"] = vj[1]

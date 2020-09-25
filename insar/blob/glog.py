@@ -4,13 +4,14 @@ import scipy.ndimage as ndi
 from skimage import morphology
 
 
-def glog(im_input,
-         alpha=1,
-         sigma_range=np.linspace(1.5, 3,
-                                 np.round((3 - 1.5) / 0.2) + 1),
-         dtheta=np.pi / 4,
-         tau=0.6,
-         eps=0.6):
+def glog(
+    im_input,
+    alpha=1,
+    sigma_range=np.linspace(1.5, 3, np.round((3 - 1.5) / 0.2) + 1),
+    dtheta=np.pi / 4,
+    tau=0.6,
+    eps=0.6,
+):
     """Performs generalized Laplacian of Gaussian blob detection.
 
     Parameters
@@ -59,12 +60,18 @@ def glog(im_input,
     Min = np.zeros((len(Sigma), 1))
     Max = np.zeros((len(Sigma), 1))
     for i, s in enumerate(Sigma):
-        Response = s**2 * ndi.filters.gaussian_laplace(
-            im_input, s, output=None, mode='constant', cval=0.0)
+        Response = s ** 2 * ndi.filters.gaussian_laplace(
+            im_input, s, output=None, mode="constant", cval=0.0
+        )
         Min[i] = Response.min()
         Max[i] = Response.max()
         Bins.append(
-            np.arange(0.01 * np.floor(Min[i] / 0.01), 0.01 * np.ceil(Max[i] / 0.01) + 0.01, 0.01))
+            np.arange(
+                0.01 * np.floor(Min[i] / 0.01),
+                0.01 * np.ceil(Max[i] / 0.01) + 0.01,
+                0.01,
+            )
+        )
         Hist = np.histogram(Response, Bins[i])
         H.append(Hist[0])
         if Max[i] > l_g:
@@ -99,9 +106,13 @@ def glog(im_input,
         for sy in SigmaY:
             for theta in Thetas:
                 # Rsum += compute_rsumi(im_input, sx, sy, theta, alpha)
-                results.append(pool.apply_async(compute_rsumi, (im_input, sx, sy, theta, alpha)))
+                results.append(
+                    pool.apply_async(compute_rsumi, (im_input, sx, sy, theta, alpha))
+                )
         # Extra with sx, sx
-        results.append(pool.apply_async(compute_rsumi, (im_input, sx, sx, theta, alpha)))
+        results.append(
+            pool.apply_async(compute_rsumi, (im_input, sx, sx, theta, alpha))
+        )
         # Rsum += compute_rsumi(im_input, sx, sx, theta, alpha)
 
     for res in results:
@@ -118,22 +129,29 @@ def compute_rsumi(im, sx, sy, theta, alpha, verbose=True):
     if verbose:
         print(sx, sy, theta)
     kernel = glogkernel(sx, sy, theta)
-    kernel *= (1 + np.log(sx)**alpha) * (1 + np.log(sy)**alpha)
-    return ndi.convolve(im, kernel, mode='constant', cval=0.0)
+    kernel *= (1 + np.log(sx) ** alpha) * (1 + np.log(sy) ** alpha)
+    return ndi.convolve(im, kernel, mode="constant", cval=0.0)
 
 
 def glogkernel(sigma_x, sigma_y, theta):
 
     N = np.ceil(2 * 3 * sigma_x)
-    X, Y = np.meshgrid(np.linspace(0, N, N + 1) - N / 2, np.linspace(0, N, N + 1) - N / 2)
-    a = np.cos(theta) ** 2 / (2 * sigma_x ** 2) + \
-        np.sin(theta) ** 2 / (2 * sigma_y ** 2)
-    b = -np.sin(2 * theta) / (4 * sigma_x ** 2) + \
-        np.sin(2 * theta) / (4 * sigma_y ** 2)
-    c = np.sin(theta) ** 2 / (2 * sigma_x ** 2) + \
-        np.cos(theta) ** 2 / (2 * sigma_y ** 2)
-    D2Gxx = ((2 * a * X + 2 * b * Y)**2 - 2 * a) * np.exp(-(a * X**2 + 2 * b * X * Y + c * Y**2))
-    D2Gyy = ((2 * b * X + 2 * c * Y)**2 - 2 * c) * np.exp(-(a * X**2 + 2 * b * X * Y + c * Y**2))
-    Gaussian = np.exp(-(a * X**2 + 2 * b * X * Y + c * Y**2))
+    X, Y = np.meshgrid(
+        np.linspace(0, N, N + 1) - N / 2, np.linspace(0, N, N + 1) - N / 2
+    )
+    a = np.cos(theta) ** 2 / (2 * sigma_x ** 2) + np.sin(theta) ** 2 / (
+        2 * sigma_y ** 2
+    )
+    b = -np.sin(2 * theta) / (4 * sigma_x ** 2) + np.sin(2 * theta) / (4 * sigma_y ** 2)
+    c = np.sin(theta) ** 2 / (2 * sigma_x ** 2) + np.cos(theta) ** 2 / (
+        2 * sigma_y ** 2
+    )
+    D2Gxx = ((2 * a * X + 2 * b * Y) ** 2 - 2 * a) * np.exp(
+        -(a * X ** 2 + 2 * b * X * Y + c * Y ** 2)
+    )
+    D2Gyy = ((2 * b * X + 2 * c * Y) ** 2 - 2 * c) * np.exp(
+        -(a * X ** 2 + 2 * b * X * Y + c * Y ** 2)
+    )
+    Gaussian = np.exp(-(a * X ** 2 + 2 * b * X * Y + c * Y ** 2))
     kernel = (D2Gxx + D2Gyy) / np.sum(Gaussian.flatten())
     return kernel

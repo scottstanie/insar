@@ -23,7 +23,7 @@ def on_pick(blobs, patches):
 
 
 def on_press(event):
-    'on button press we will see if the mouse is over us and store some data'
+    "on button press we will see if the mouse is over us and store some data"
     # print("on press event", event)
     # You can either double click or right click to unselect
     if event.button != 3 and not event.dblclick:
@@ -42,7 +42,7 @@ def on_key(event):
     If the key pressed is delete and there is a picked object,
     remove that object from the canvas
     """
-    if event.key == u'delete':
+    if event.key == u"delete":
         ax = event.inaxes
         if ax is not None and ax.picked_object:
             cur_blob = ax.blobs[ax.picked_idx]
@@ -55,16 +55,18 @@ def on_key(event):
             ax.figure.canvas.draw()
 
 
-def plot_blobs(image=None,
-               blobs=None,
-               fig=None,
-               ax=None,
-               color='blue',
-               blob_cmap=None,
-               plot_img=False,
-               delete=False,
-               alpha=.8,
-               **kwargs):
+def plot_blobs(
+    image=None,
+    blobs=None,
+    fig=None,
+    ax=None,
+    color="blue",
+    blob_cmap=None,
+    plot_img=False,
+    delete=False,
+    alpha=0.8,
+    **kwargs
+):
     """Takes the blob results from find_blobs and overlays on image
 
     Can either make new figure of plot on top of existing axes.
@@ -102,7 +104,8 @@ def plot_blobs(image=None,
             linewidth=2,
             alpha=alpha,
             clip_on=False,
-            picker=True)
+            picker=True,
+        )
         ax.add_patch(c)
         patches.append(c)
 
@@ -118,9 +121,9 @@ def plot_blobs(image=None,
     ax.deleted_idxs = set()
 
     pick_handler = on_pick(sorted_blobs, patches)
-    cid_pick = fig.canvas.mpl_connect('pick_event', pick_handler)
-    cid_press = fig.canvas.mpl_connect('button_press_event', on_press)
-    cid_key = fig.canvas.mpl_connect('key_press_event', on_key)
+    cid_pick = fig.canvas.mpl_connect("pick_event", pick_handler)
+    cid_press = fig.canvas.mpl_connect("button_press_event", on_press)
+    cid_key = fig.canvas.mpl_connect("key_press_event", on_key)
 
     plt.show()
 
@@ -171,7 +174,7 @@ def plot_heights(heights_grid):
     X, Y = np.meshgrid(xx, yy)
     fig = plt.figure()
 
-    ax = fig.add_subplot(1, 2, 1, projection='3d')
+    ax = fig.add_subplot(1, 2, 1, projection="3d")
     ax.plot_surface(X, Y, heights_grid)
     ax2 = fig.add_subplot(1, 2, 2)
     axim = ax2.imshow(heights_grid)
@@ -185,12 +188,14 @@ def plot_hist(H, row_edges, col_edges, ax=None):
     else:
         fig = ax.get_figure()
 
-    axes_image = ax.imshow(H, extent=[col_edges[0], col_edges[-1], row_edges[-1], row_edges[0]])
+    axes_image = ax.imshow(
+        H, extent=[col_edges[0], col_edges[-1], row_edges[-1], row_edges[0]]
+    )
     fig.colorbar(axes_image)
     return fig, ax
 
 
-def scatter_blobs(blobs, image=None, axes=None, color='b', label=None):
+def scatter_blobs(blobs, image=None, axes=None, color="b", label=None):
     if axes is None:
         fig, axes = plt.subplots(1, 3)
     else:
@@ -199,7 +204,7 @@ def scatter_blobs(blobs, image=None, axes=None, color='b', label=None):
     if blobs.shape[1] < 6:
         blobs = blob_utils.append_stats(blobs, image)
 
-    print('Taking abs value of blobs')
+    print("Taking abs value of blobs")
     blobs = np.abs(blobs)
 
     # Size vs amplitude
@@ -224,10 +229,10 @@ def scatter_blobs(blobs, image=None, axes=None, color='b', label=None):
     return fig, axes
 
 
-def scatter_blobs_3d(blobs, image=None, ax=None, color='b', label=None, blob_img=None):
+def scatter_blobs_3d(blobs, image=None, ax=None, color="b", label=None, blob_img=None):
     if ax is None:
         fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1, projection='3d')
+        ax = fig.add_subplot(1, 1, 1, projection="3d")
     else:
         fig = ax.get_figure()
 
@@ -243,13 +248,13 @@ def scatter_blobs_3d(blobs, image=None, ax=None, color='b', label=None, blob_img
     vars_ = blobs[:, 4]
     ax.scatter(sizes, mags, vars_, c=color, label=label)
     ax.set_title("Size, mag, var of blobs")
-    ax.set_xlabel('size')
-    ax.set_ylabel('magniture')
-    ax.set_zlabel('variance')
+    ax.set_xlabel("size")
+    ax.set_ylabel("magniture")
+    ax.set_zlabel("variance")
     return fig, ax
 
 
-def plot_hull(regions=None, hull=None, ax=None, linecolor='k-'):
+def plot_hull(regions=None, hull=None, ax=None, linecolor="k-"):
     if ax is None:
         fig, ax = plt.subplots(1, 1)
     if hull is None:
@@ -258,23 +263,23 @@ def plot_hull(regions=None, hull=None, ax=None, linecolor='k-'):
         ax.plot(hull.points[simplex, 0], hull.points[simplex, 1], linecolor)
 
 
-def plot_bbox(bbox, ax=None, linecolor='k-', cv_format=False):
+def plot_bbox(bbox, ax=None, linecolor="k-", cv_format=False):
     for c in blob_utils.bbox_to_coords(bbox, cv_format=cv_format):
         print(c)
-        ax.plot(c[0], c[1], 'rx', markersize=6)
+        ax.plot(c[0], c[1], "rx", markersize=6)
 
 
-def plot_regions(regions, ax=None, linecolor='k-'):
+def plot_regions(regions, ax=None, linecolor="k-"):
     for shape in blob_utils.regions_to_shapes(regions):
         xx, yy = shape.convex_hull.exterior.xy
         ax.plot(xx, yy, linecolor)
 
 
-def plot_tsne(X, y_idxs=None, n_components=2, perplexities=(5, ), colors=('r', 'g')):
+def plot_tsne(X, y_idxs=None, n_components=2, perplexities=(5,), colors=("r", "g")):
     fig, axes = plt.subplots(1, len(perplexities))
     Y_list = []
     for pidx, p in enumerate(perplexities):
-        tsne = manifold.TSNE(n_components=n_components, perplexity=p, init='random')
+        tsne = manifold.TSNE(n_components=n_components, perplexity=p, init="random")
         Y = tsne.fit_transform(X)
         Y_list.append(Y)
 
@@ -284,7 +289,7 @@ def plot_tsne(X, y_idxs=None, n_components=2, perplexities=(5, ), colors=('r', '
                 ax.scatter(Y[idxs, 0], Y[idxs, 1], c=colors[j])
         else:
             ax.scatter(Y[:, 0], Y[:, 1])
-        ax.set_title('perplexity=%s' % p)
+        ax.set_title("perplexity=%s" % p)
 
     return Y_list
 
@@ -316,11 +321,13 @@ def blob_to_geojson(blob_ll):
         d = radius_km * 1000  # meters
         angles = np.linspace(0, 360, n_points)
         polygon = geog.propagate(p, angles, d)
-        gjs.append(json.dumps(shapely.geometry.mapping(shapely.geometry.Polygon(polygon))))
+        gjs.append(
+            json.dumps(shapely.geometry.mapping(shapely.geometry.Polygon(polygon)))
+        )
     return gjs
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # npz = np.load('patches/image_1.npz')
     # image = npz['image']
     # real_blobs = npz['real_blobs']
@@ -329,6 +336,7 @@ if __name__ == '__main__':
     import json
     import geog
     import shapely.geometry
+
     if len(sys.argv) < 4:
         print("python %s lat lon radius(in km)" % sys.argv[0])
     else:

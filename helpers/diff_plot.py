@@ -2,8 +2,11 @@ import apertools.sario as sario
 import apertools.plotting as plotting
 
 
-def diff_plot(f1='velocities_2019_linear_max800.h5', f2='velocities_2018_linear_max800.h5',
-              dset="velos/1"):
+def diff_plot(
+    f1="velocities_2019_linear_max800.h5",
+    f2="velocities_2018_linear_max800.h5",
+    dset="velos/1",
+):
     g1 = sario.load_geolist_from_h5(f1, dset="velos/1")
     g2 = sario.load_geolist_from_h5(f2, dset="velos/1")
     a1 = -sario.load(f1, dset=dset)

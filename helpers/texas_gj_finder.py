@@ -4,10 +4,10 @@ from collections import defaultdict
 from apertools import kml
 from insar import tile
 
-geolist_files = open('geojson_list.txt').read().splitlines()
+geolist_files = open("geojson_list.txt").read().splitlines()
 gjs = {num: json.load(open(gjf)) for num, gjf in enumerate(geolist_files)}
 
-gps_list = tile.read_stations('texas_stations.csv')
+gps_list = tile.read_stations("texas_stations.csv")
 ps = [tup[1:] for tup in gps_list]
 points = [Point(*p) for p in ps]
 
@@ -33,9 +33,9 @@ print(name_to_blocknum)
 print("==========" * 10)
 
 print("%s total geojson blocks" % len(gjs))
-print('%s distinct gps stations within some block:' % len(covered_stations))
+print("%s distinct gps stations within some block:" % len(covered_stations))
 print(covered_stations)
-print('%s blocks with gps:' % len(blocks_with_gps))
+print("%s blocks with gps:" % len(blocks_with_gps))
 print(blocks_with_gps)
 
 print("==========" * 10)
@@ -46,6 +46,6 @@ for name, lat, lon in gps_list:
         lon_lat=(lon, lat),
         title=name,
         desc="GPS station %s" % name,
-        shape='point',
-        kml_out='%s.kml' % name,
+        shape="point",
+        kml_out="%s.kml" % name,
     )

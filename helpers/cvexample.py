@@ -6,10 +6,11 @@ import skimage
 import cv2 as cv
 
 img = cv.cvtColor(
-    cv.cvtColor(cv.imread('/home/scott/Pictures/sunflowers.jpg'), cv.COLOR_BGR2RGB),
-    cv.COLOR_RGB2GRAY)
+    cv.cvtColor(cv.imread("/home/scott/Pictures/sunflowers.jpg"), cv.COLOR_BGR2RGB),
+    cv.COLOR_RGB2GRAY,
+)
 
-defo1 = latlon.LatlonImage(filename='path85_defo.npy', dem_rsc_file='dem.rsc')[:, :1000]
+defo1 = latlon.LatlonImage(filename="path85_defo.npy", dem_rsc_file="dem.rsc")[:, :1000]
 # defo1 = latlon.load_deformation_img('./data/igrams_subset')
 # defo1u = skimage.img_as_ubyte(defo1 / np.nanmax(np.abs(defo1)))
 defo1u = blob.utils.img_as_uint8(defo1)

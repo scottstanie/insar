@@ -1,6 +1,7 @@
 import h5py
 import hdf5plugin
 import os
+
 # import subprocess
 import numpy as np
 from scipy.ndimage.morphology import binary_opening
@@ -15,6 +16,7 @@ import multiprocessing
 # TODO: this is for reading windows of a big ratser, not needed for now
 def all_bands(file_list, band=2, col_off=0, row_off=0, height=20):
     from rasterio.windows import Window
+
     with rio.open(file_list[0]) as src:
         rows, cols = src.shape
         # bshape = src.block_shapes[band-1]  # TODO: use?
@@ -24,13 +26,17 @@ def all_bands(file_list, band=2, col_off=0, row_off=0, height=20):
     for idx, f in enumerate(file_list):
         try:
             with rio.open(f, driver="ROI_PAC") as src:
-                block[idx] = src.read(band, window=Window(col_off, row_off, cols, height))
+                block[idx] = src.read(
+                    band, window=Window(col_off, row_off, cols, height)
+                )
         except Exception as e:
             logger.warning(idx, f, e)
     return block
 
 
-def load_in_chunks(unw_stack_file="unw_stack.h5", flist=[], dset="stack_flat_dset", n=None):
+def load_in_chunks(
+    unw_stack_file="unw_stack.h5", flist=[], dset="stack_flat_dset", n=None
+):
     with h5py.File(unw_stack_file, "r+") as f:
         chunk_size = f[dset].chunks
         dshape = f[dset].shape
@@ -43,7 +49,7 @@ def load_in_chunks(unw_stack_file="unw_stack.h5", flist=[], dset="stack_flat_dse
         if idx % n == 0 and idx > 0:
             logger.info(f"Writing {lastidx}:{lastidx+n}")
             with h5py.File("unw_test.h5", "r+") as f:
-                f[dset][lastidx:lastidx + n, :, :] = buf
+                f[dset][lastidx : lastidx + n, :, :] = buf
             lastidx = idx
 
         with rio.open(fname, driver="ROI_PAC") as src:
@@ -85,18 +91,24 @@ def create_igram_stacks(
         sario.save_intlist_to_h5(igram_path, d["filename"], overwrite=overwrite)
 
     pool = multiprocessing.Pool()
-    results = [pool.apply_async(_run_stack, args=(igram_path, d, overwrite)) for d in stack_dicts]
+    results = [
+        pool.apply_async(_run_stack, args=(igram_path, d, overwrite))
+        for d in stack_dicts
+    ]
     return [res.get() for res in results]
 
 
 @log_runtime
-def create_mask_stacks_gdal(igram_path, mask_filename=None, geo_path=None, overwrite=False):
+def create_mask_stacks_gdal(
+    igram_path, mask_filename=None, geo_path=None, overwrite=False
+):
     """Create mask stacks for areas in .geo and .int using `gdal_translate`
 
     Uses .geo dead areas
     """
     import gdal
     from osgeo import gdalconst  # gdal_array,
+
     if mask_filename is None:
         mask_file = os.path.join(igram_path, MASK_FILENAME)
 
@@ -104,7 +116,9 @@ def create_mask_stacks_gdal(igram_path, mask_filename=None, geo_path=None, overw
         geo_path = utils.get_parent_dir(igram_path)
 
     # Used to shrink the .geo masks to save size as .int masks
-    row_looks, col_looks = apertools.sario.find_looks_taken(igram_path, geo_path=geo_path)
+    row_looks, col_looks = apertools.sario.find_looks_taken(
+        igram_path, geo_path=geo_path
+    )
 
     rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
 
@@ -116,14 +130,16 @@ def create_mask_stacks_gdal(igram_path, mask_filename=None, geo_path=None, overw
     )
 
 
-def create_hdf5_stack(filename=None,
-                      directory=None,
-                      dset=STACK_DSET,
-                      file_ext=None,
-                      create_mean=True,
-                      save_rsc=True,
-                      overwrite=False,
-                      **kwargs):
+def create_hdf5_stack(
+    filename=None,
+    directory=None,
+    dset=STACK_DSET,
+    file_ext=None,
+    create_mean=True,
+    save_rsc=True,
+    overwrite=False,
+    **kwargs,
+):
     """Make stack as hdf5 file from a group of existing files
 
     Args:
@@ -132,6 +148,7 @@ def create_hdf5_stack(filename=None,
     Returns:
         filename
     """
+
     def _create_mean(dset):
         """Used to create a mean without loading all into mem with np.mean"""
         mean_buf = np.zeros((dset.shape[1], dset.shape[2]), dset.dtype)
@@ -168,7 +185,9 @@ def create_hdf5_stack(filename=None,
 
     if save_rsc:
         dem_rsc = sario.load(os.path.join(directory, "dem.rsc"))
-        sario.save_dem_to_h5(filename, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
+        sario.save_dem_to_h5(
+            filename, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite
+        )
 
     if create_mean:
         if not sario.check_dset(filename, STACK_MEAN_DSET, overwrite):
@@ -183,11 +202,13 @@ def create_hdf5_stack(filename=None,
     return filename
 
 
-def save_geo_masks_gdal(directory=".",
-                        mask_file="masks.vrt",
-                        dem_rsc=None,
-                        dset_name=GEO_MASK_DSET,
-                        overwrite=False):
+def save_geo_masks_gdal(
+    directory=".",
+    mask_file="masks.vrt",
+    dem_rsc=None,
+    dset_name=GEO_MASK_DSET,
+    overwrite=False,
+):
     """Creates .mask files for geos where zeros occur
 
     Makes look arguments are to create arrays the same size as the igrams
@@ -196,6 +217,7 @@ def save_geo_masks_gdal(directory=".",
     """
     import gdal
     from osgeo import gdalconst  # gdal_array,
+
     rsc_data = sario.load(dem_rsc)
     save_path = os.path.split(mask_file)[0]
 
@@ -239,7 +261,9 @@ def shift_unw_file(
     overwrite=False,
 ):
     """Runs a reference point shift on flattened stack of unw files stored in .h5"""
-    logger.info("Starting shift_stack: using %s, %s as ref_row, ref_col", ref_row, ref_col)
+    logger.info(
+        "Starting shift_stack: using %s, %s as ref_row, ref_col", ref_row, ref_col
+    )
     if not sario.check_dset(unw_stack_file, out_dset, overwrite):
         return
 
@@ -255,11 +279,15 @@ def shift_unw_file(
         stack_out = f[out_dset]
         for idx, inf in enumerate(in_files):
             layer = sario.load(inf)
-            patch = layer[ref_row - win:ref_row + win + 1, ref_col - win:ref_col + win + 1]
+            patch = layer[
+                ref_row - win : ref_row + win + 1, ref_col - win : ref_col + win + 1
+            ]
             stack_out[idx] = layer - np.mean(patch)
 
     dem_rsc = sario.load("dem.rsc")
-    sario.save_dem_to_h5(unw_stack_file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
+    sario.save_dem_to_h5(
+        unw_stack_file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite
+    )
     logger.info("Shifting stack complete")
 
 
@@ -280,7 +308,9 @@ def shift_stack(stack_in, stack_out, ref_row, ref_col, window=3):
     """
     win = window // 2
     for idx, layer in enumerate(stack_in):
-        patch = layer[ref_row - win:ref_row + win + 1, ref_col - win:ref_col + win + 1]
+        patch = layer[
+            ref_row - win : ref_row + win + 1, ref_col - win : ref_col + win + 1
+        ]
         stack_out[idx] = layer - np.mean(patch)
 
 
@@ -336,7 +366,9 @@ def deramp_stack(
                 try:
                     f[STACK_FLAT_DSET][idx] = remove_ramp(layer, order=order, mask=mask)
                 except np.linalg.linalg.LinAlgError:
-                    logger.info("Failed to estimate ramp on layer %s: setting to 0" % idx)
+                    logger.info(
+                        "Failed to estimate ramp on layer %s: setting to 0" % idx
+                    )
                     f[STACK_FLAT_DSET][idx] = np.zeros_like(layer)
 
 
@@ -482,8 +514,7 @@ def find_reference_location(
     ref_station=None,
     rsc_data=None,
 ):
-    """Find reference pixel on based on GPS availability and mean correlation
-    """
+    """Find reference pixel on based on GPS availability and mean correlation"""
     rsc_data = sario.load_dem_from_h5(h5file=unw_stack_file, dset="dem_rsc")
 
     # CHAGNE

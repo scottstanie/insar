@@ -9,6 +9,7 @@ import numpy as np
 import skimage
 from scipy.ndimage import gaussian_filter
 import cv2 as cv
+
 # from scipy.spatial.qhull import ConvexHull
 # from shapely.geometry import Point, MultiPoint, Polygon, box
 import geog
@@ -33,7 +34,7 @@ def get_center_value(img, patch_size=1, accum_func=np.mean):
     rcent = rows // 2
     ccent = cols // 2
     p = patch_size // 2
-    return accum_func(img[rcent - p:rcent + p + 1, ccent - p:ccent + p + 1])
+    return accum_func(img[rcent - p : rcent + p + 1, ccent - p : ccent + p + 1])
 
 
 def indexes_within_circle(mask_shape=None, center=None, radius=None, blob=None):
@@ -58,7 +59,7 @@ def indexes_within_circle(mask_shape=None, center=None, radius=None, blob=None):
     if radius is None:
         raise ValueError("Need radius if not using `blob` input")
     Y, X = np.ogrid[:height, :width]
-    dist_from_center = np.sqrt((X - cx)**2 + (Y - cy)**2)
+    dist_from_center = np.sqrt((X - cx) ** 2 + (Y - cy) ** 2)
     return dist_from_center <= radius
 
 
@@ -85,7 +86,9 @@ def get_blob_stats(blobs, image, center_only=False, accum_func=np.max):
         return image[coords[:, 0], coords[:, 1]]
 
     # blob: [row, col, radius, [possibly mag]]
-    masks = map(lambda blob: indexes_within_circle(blob=blob, mask_shape=image.shape), blobs)
+    masks = map(
+        lambda blob: indexes_within_circle(blob=blob, mask_shape=image.shape), blobs
+    )
     return np.stack([accum_func(image[mask]) for mask in masks])
 
 
@@ -114,7 +117,7 @@ def crop_image_to_mask(image, mask, crop_val=None, sigma=0):
         masked_out[~mask] = crop_val
     # Now find square border of blob circle and crop
     min_row, max_row, min_col, max_col = mask_border(mask)
-    return masked_out[min_row:max_row + 1, min_col:max_col + 1]
+    return masked_out[min_row : max_row + 1, min_col : max_col + 1]
 
 
 def crop_blob(image, blob, crop_val=None, sigma=0):
@@ -184,7 +187,7 @@ def find_sigma_idxs(blobs, sigma_list):
     """Finds which sigma each blob uses by its index in sigma_list
 
     Assumes blobs already like (r, c, radius,...), where radius=sqrt(2) * sigma"""
-    idxs = np.searchsorted(sigma_list, blobs[:, 2] / np.sqrt(2), 'left')
+    idxs = np.searchsorted(sigma_list, blobs[:, 2] / np.sqrt(2), "left")
     # Clip in case we are passed something larger than any sigma_list
     return np.clip(idxs, 0, len(sigma_list) - 1)
 
@@ -199,7 +202,7 @@ def blobs_to_latlon(blobs, blob_info):
     for blob in blobs:
         row, col, r = blob[:3]
         lat, lon = apertools.latlon.rowcol_to_latlon(row, col, blob_info)
-        new_radius = r * blob_info['x_step']
+        new_radius = r * blob_info["x_step"]
         blobs_latlon.append((lat, lon, new_radius) + tuple(blob[3:]))
 
     return np.array(blobs_latlon)
@@ -214,7 +217,7 @@ def blobs_to_rowcol(blobs, blob_info):
     for blob in blobs:
         lat, lon, r, val = blob
         lat, lon = apertools.latlon.latlon_to_rowcol(lat, lon, blob_info)
-        old_radius = r / blob_info['x_step']
+        old_radius = r / blob_info["x_step"]
         blobs_rowcol.append((lat, lon, old_radius, val))
 
     return np.array(blobs_rowcol)
@@ -229,9 +232,13 @@ def blob_to_geojson(blob_ll):
         d = radius_km * 1000  # meters
         angles = np.linspace(0, 360, n_points)
         polygon = geog.propagate(p, angles, d)
-        blob_polygons.append(shapely.geometry.mapping(shapely.geometry.Polygon(polygon)))
+        blob_polygons.append(
+            shapely.geometry.mapping(shapely.geometry.Polygon(polygon))
+        )
 
-    return geojson.FeatureCollection([geojson.Feature(geometry=gj) for gj in blob_polygons])
+    return geojson.FeatureCollection(
+        [geojson.Feature(geometry=gj) for gj in blob_polygons]
+    )
 
 
 def save_blobs_as_geojson(fname, blobs=None, blob_info=None, blobs_ll=None):
@@ -308,7 +315,8 @@ def prune_regions(regions, bboxes, overlap_thresh=0.5):
     sorted_bbox_regions = sorted(
         zip(bboxes, regions),
         key=lambda tup: apertools.latlon.box_area(cv_bbox_to_extent(tup[0])),
-        reverse=True)
+        reverse=True,
+    )
     # Break apart again
     sorted_bboxes, sorted_regions = zip(*sorted_bbox_regions)
 
@@ -320,12 +328,14 @@ def prune_regions(regions, bboxes, overlap_thresh=0.5):
         if idx in eliminated_idxs:
             continue
         bbig = cv_bbox_to_extent(big_box)
-        for jdx, sbox in enumerate(sorted_bboxes[idx + 1:], start=idx + 1):
+        for jdx, sbox in enumerate(sorted_bboxes[idx + 1 :], start=idx + 1):
             if jdx in eliminated_idxs:
                 continue
             bsmall = cv_bbox_to_extent(sbox)
-            if (apertools.latlon.intersect_area(bbig, bsmall) /
-                    apertools.latlon.box_area(bsmall)) > overlap_thresh:
+            if (
+                apertools.latlon.intersect_area(bbig, bsmall)
+                / apertools.latlon.box_area(bsmall)
+            ) > overlap_thresh:
                 eliminated_idxs.add(jdx)
 
     # Now get the non-eliminated indices
@@ -335,7 +345,7 @@ def prune_regions(regions, bboxes, overlap_thresh=0.5):
     return list(np.array(sorted_regions)[remaining]), np.array(sorted_bboxes)[remaining]
 
 
-def gaussian_filter_nan(image, sigma, mode='constant', **kwargs):
+def gaussian_filter_nan(image, sigma, mode="constant", **kwargs):
     """Apply a gaussian filter to an image with NaNs (avoiding all nans)
 
     The scipy.ndimage `gaussian_filter` will make the output all NaNs if

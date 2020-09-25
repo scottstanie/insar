@@ -6,7 +6,9 @@ from insar.blob import utils as blob_utils
 from insar.blob.skblob import shape_index
 
 
-def shape_index_stat(patch, accum_func, sigma=None, sigma_scale=None, patch_size='auto'):
+def shape_index_stat(
+    patch, accum_func, sigma=None, sigma_scale=None, patch_size="auto"
+):
     """Finds some state about the shape_index of a patch
 
     Args:
@@ -31,20 +33,22 @@ def shape_index_stat(patch, accum_func, sigma=None, sigma_scale=None, patch_size
     if sigma_scale:
         sigma /= sigma_scale
 
-    if patch_size == 'auto':
+    if patch_size == "auto":
         # 2 * because patch size excepts height, not radius
         psize = int(2 * max(3, sigma / 5))
-    elif patch_size == 'full':
+    elif patch_size == "full":
         psize = patch.shape[0]
     else:
         psize = patch_size
     if not isinstance(psize, int):
-        raise ValueError('patch_size must be int')
+        raise ValueError("patch_size must be int")
     # print('psize', psize)
 
     # For all these functions, grab the image of shape indexes to use
     shape_index_arr = shape_index(patch, sigma=sigma)
-    return blob_utils.get_center_value(shape_index_arr, patch_size=psize, accum_func=accum_func)
+    return blob_utils.get_center_value(
+        shape_index_arr, patch_size=psize, accum_func=accum_func
+    )
 
 
 def shape_index_center(patch):
@@ -65,11 +69,12 @@ def shape_index_center_sigma3(patch):
 
 def shape_index_center_min_sigma3(patch):
     """Finds the min shape_index of a 3x3 patch around center pixel, sigma=3"""
-    return shape_index_stat(patch, lambda x:np.min(np.mean(x)), sigma=3, patch_size=3)
+    return shape_index_stat(patch, lambda x: np.min(np.mean(x)), sigma=3, patch_size=3)
+
 
 def shape_index_center_min_sigma1(patch):
     """Finds the min shape_index of a 3x3 patch around center pixel, sigma=3"""
-    return shape_index_stat(patch, lambda x:np.min(np.mean(x)), sigma=1, patch_size=1)
+    return shape_index_stat(patch, lambda x: np.min(np.mean(x)), sigma=1, patch_size=1)
 
 
 def shape_index_variance_patch3_sigma3(patch):
@@ -79,12 +84,12 @@ def shape_index_variance_patch3_sigma3(patch):
 
 def shape_index_variance_patch_full_sigma3(patch):
     """Smooth by a small sigma=3, look at entire patch for variance"""
-    return shape_index_stat(patch, np.var, sigma=3, patch_size='full')
+    return shape_index_stat(patch, np.var, sigma=3, patch_size="full")
 
 
 def shape_index_variance_patch_full(patch):
     """Smooth over a large sigma equal to blob sigma, take variance over all patch"""
-    return shape_index_stat(patch, np.var, sigma=None, patch_size='full')
+    return shape_index_stat(patch, np.var, sigma=None, patch_size="full")
 
 
 def shape_index_ptp_patch3(patch):
@@ -94,13 +99,13 @@ def shape_index_ptp_patch3(patch):
 
 def shape_index_ptp_patch_full(patch):
     """Look in a total patch for large changes in the shape index peak-to-peak"""
-    return shape_index_stat(patch, np.ptp, sigma=None, patch_size='full')
+    return shape_index_stat(patch, np.ptp, sigma=None, patch_size="full")
 
 
-def max_gradient(patch, sigma=.5):
+def max_gradient(patch, sigma=0.5):
     p = blob_utils.gaussian_filter_nan(patch, sigma=sigma)
-    imy = np.abs(ndi.sobel(patch, axis=0, mode='nearest'))
-    imx = np.abs(ndi.sobel(patch, axis=1, mode='nearest'))
+    imy = np.abs(ndi.sobel(patch, axis=0, mode="nearest"))
+    imx = np.abs(ndi.sobel(patch, axis=1, mode="nearest"))
     return max(np.max(imx), np.max(imy))
 
 

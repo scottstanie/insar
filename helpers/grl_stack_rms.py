@@ -1,5 +1,6 @@
 # import h5py
 import apertools.gps as gps
+
 # import numpy as np
 # import pandas as pd
 
@@ -32,7 +33,9 @@ def load_dfs():
     for fn in filenames:
         # with h5py.File(fn) as hf:
         # stacks.append(hf["stack/1"][:])
-        df = gps.create_insar_gps_df(defo_filename=fn, station_name_list=station_name_list78)
+        df = gps.create_insar_gps_df(
+            defo_filename=fn, station_name_list=station_name_list78
+        )
         dfs.append(df)
     return dfs
 
@@ -60,7 +63,9 @@ def find_all_errors():
     for fn in filenames:
         # with h5py.File(fn) as hf:
         # stacks.append(hf["stack/1"][:])
-        df = gps.create_insar_gps_df(defo_filename=fn, station_name_list=station_name_list78)
+        df = gps.create_insar_gps_df(
+            defo_filename=fn, station_name_list=station_name_list78
+        )
         dfs.append(df)
     total_rms, total_max = [], []
     for df in dfs:

@@ -16,7 +16,7 @@ def abs2(x):
     # 13 ms ± 3.31 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
     # %timeit b.real**2 + b.imag**2
     # 1.53 ms ± 2.04 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)
-    return x.real**2 + x.imag**2
+    return x.real ** 2 + x.imag ** 2
 
 
 def make_igam(slc1, slc2, rowlooks, collooks):
@@ -63,7 +63,7 @@ def form_igram_names():
     for line in sbas_lines:
         early_file, late_file, temp, spatial = line.split()
         # "./S1A_20141104.ge
-        igram_name = '_'.join(map(_get_date, [early_file, late_file])) + ".int"
+        igram_name = "_".join(map(_get_date, [early_file, late_file])) + ".int"
         out.append((igram_name, str(early_file), str(late_file)))
 
     # Note: orting so that ALL igrams with `early_file` are formed in a row
@@ -72,7 +72,7 @@ def form_igram_names():
 
 def _get_date(geo_name):
     # "./S1A_20141128.geo" -> "20141128"
-    return geo_name.split('_')[1].split('.')[0]
+    return geo_name.split("_")[1].split(".")[0]
 
 
 def create_igrams(rowlooks=1, collooks=1):

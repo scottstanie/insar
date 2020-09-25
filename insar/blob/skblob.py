@@ -16,20 +16,22 @@ from . import utils as blob_utils
 # Theory behind: http://en.wikipedia.org/wiki/Blob_detection (04.04.2013)
 
 
-def blob_log(image=None,
-             min_sigma=3,
-             max_sigma=60,
-             num_sigma=20,
-             image_cube=None,
-             sigma_list=None,
-             threshold=.5,
-             overlap=.5,
-             sigma_bins=1,
-             prune_edges=True,
-             border_size=2,
-             positive=True,
-             log_scale=False,
-             verbose=0):
+def blob_log(
+    image=None,
+    min_sigma=3,
+    max_sigma=60,
+    num_sigma=20,
+    image_cube=None,
+    sigma_list=None,
+    threshold=0.5,
+    overlap=0.5,
+    sigma_bins=1,
+    prune_edges=True,
+    border_size=2,
+    positive=True,
+    log_scale=False,
+    verbose=0,
+):
     """Finds blobs in the given grayscale image.
 
     Blobs are found using the Laplacian of Gaussian (LoG) method [1]_.
@@ -125,7 +127,8 @@ def blob_log(image=None,
     # Note: we have to use exclude_border=False so that it will output blobs at
     # first and last sigma values (they are part of the "border" of the cube
     local_maxima = peak_local_max(
-        image_cube, threshold_abs=threshold, min_distance=1, exclude_border=False)
+        image_cube, threshold_abs=threshold, min_distance=1, exclude_border=False
+    )
 
     # TODO: something here is hanging if a nan happens... causing all nans
 
@@ -140,29 +143,31 @@ def blob_log(image=None,
     # Multiply each sigma by sqrt(2) to convert sigma to a circle radius
     lm = lm * np.array([1, 1, np.sqrt(2)])
     if verbose > 2:
-        print('initial local max lm:')
+        print("initial local max lm:")
         print(lm)
         print(lm.shape)
     # Now remove first the spatial border blobs
     if border_size > 0:
         lm = prune_border_blobs(image.shape, lm, border_size)
     if verbose > 1:
-        print('lm post prune_border_blobs:')
+        print("lm post prune_border_blobs:")
         print(lm)
         print(lm.shape)
 
     # Next remove blobs that look like edges
-    smoothed_image = gaussian_filter(image, sigma=3, mode='constant')
+    smoothed_image = gaussian_filter(image, sigma=3, mode="constant")
     if prune_edges:
         lm = prune_edge_extrema(smoothed_image, lm, positive=positive, smooth=True)
     if verbose > 0:
-        print('lm post prune_edge_extrema:')
+        print("lm post prune_edge_extrema:")
         print(lm)
         print(lm.shape)
     return prune_overlap_blobs(lm, overlap, sigma_bins=sigma_bins)
 
 
-def create_sigma_list(min_sigma=1, max_sigma=50, num_sigma=20, log_scale=False, **kwargs):
+def create_sigma_list(
+    min_sigma=1, max_sigma=50, num_sigma=20, log_scale=False, **kwargs
+):
     """Make array of sigmas for scale-space.
 
     Example with log_scale:
@@ -181,8 +186,9 @@ def create_sigma_list(min_sigma=1, max_sigma=50, num_sigma=20, log_scale=False, 
     return sigma_list
 
 
-def create_gl_cube(image, sigma_list=None, min_sigma=1, max_sigma=50, num_sigma=20,
-                   log_scale=False):
+def create_gl_cube(
+    image, sigma_list=None, min_sigma=1, max_sigma=50, num_sigma=20, log_scale=False
+):
     """Compute gaussian laplace for a range of sigma on image
 
     Multiplying by s**2 provides scale invariance to Gaussian sizes
@@ -200,11 +206,14 @@ def create_gl_cube(image, sigma_list=None, min_sigma=1, max_sigma=50, num_sigma=
     pool = multiprocessing.Pool()
     for s in sigma_list:
         filtered.append(
-            pool.apply_async(gaussian_laplace, args=(image, s), kwds={
-                'mode': 'reflect'
-            }))
+            pool.apply_async(
+                gaussian_laplace, args=(image, s), kwds={"mode": "reflect"}
+            )
+        )
     # Include -s**2 for scale invariance, searches for positive signal
-    return np.stack([-s**2 * res.get() for res, s in zip(filtered, sigma_list)], axis=-1)
+    return np.stack(
+        [-(s ** 2) * res.get() for res, s in zip(filtered, sigma_list)], axis=-1
+    )
     # Old way:
     # gl_images = [ -gaussian_laplace(im, s)*s**2 for s in sigma_list]
     # return np.stack(gl_images, axis=-1)
@@ -224,11 +233,11 @@ def _compute_disk_overlap(d, r1, r2):
         area (float): area of the overlap between the two disks.
     """
 
-    ratio1 = (d**2 + r1**2 - r2**2) / (2 * d * r1)
+    ratio1 = (d ** 2 + r1 ** 2 - r2 ** 2) / (2 * d * r1)
     ratio1 = np.clip(ratio1, -1, 1)
     acos1 = math.acos(ratio1)
 
-    ratio2 = (d**2 + r2**2 - r1**2) / (2 * d * r2)
+    ratio2 = (d ** 2 + r2 ** 2 - r1 ** 2) / (2 * d * r2)
     ratio2 = np.clip(ratio2, -1, 1)
     acos2 = math.acos(ratio2)
 
@@ -236,16 +245,16 @@ def _compute_disk_overlap(d, r1, r2):
     b = d - r2 + r1
     c = d + r2 - r1
     d = d + r2 + r1
-    area = (r1**2 * acos1 + r2**2 * acos2 - 0.5 * sqrt(abs(a * b * c * d)))
+    area = r1 ** 2 * acos1 + r2 ** 2 * acos2 - 0.5 * sqrt(abs(a * b * c * d))
     return area
 
 
 def _disk_area(r):
-    return math.pi * r**2
+    return math.pi * r ** 2
 
 
 def _sphere_vol(r):
-    return 4. / 3 * math.pi * r**3
+    return 4.0 / 3 * math.pi * r ** 3
 
 
 def _compute_sphere_overlap(d, r1, r2):
@@ -265,13 +274,17 @@ def _compute_sphere_overlap(d, r1, r2):
     See for example http://mathworld.wolfram.com/Sphere-SphereIntersection.html
     for more details.
     """
-    vol = (math.pi / (12 * d) * (r1 + r2 - d) ** 2 *
-           (d ** 2 + 2 * d * (r1 + r2) - 3 * (r1 ** 2 + r2 ** 2) + 6 * r1 * r2))  # yapf:disable
+    vol = (
+        math.pi
+        / (12 * d)
+        * (r1 + r2 - d) ** 2
+        * (d ** 2 + 2 * d * (r1 + r2) - 3 * (r1 ** 2 + r2 ** 2) + 6 * r1 * r2)
+    )  # yapf:disable
     return vol
 
 
 def _blob_dist(blob1, blob2):
-    return sqrt(np.sum((blob1[:2] - blob2[:2])**2))
+    return sqrt(np.sum((blob1[:2] - blob2[:2]) ** 2))
 
 
 def blob_overlap(blob1, blob2):
@@ -407,7 +420,7 @@ def prune_overlap_blobs(blobs_array, overlap, sigma_bins=1):
         return blobs_array
     else:
         # Use in
-        keep_idxs = np.ones((blobs_array.shape[0], )).astype(bool)
+        keep_idxs = np.ones((blobs_array.shape[0],)).astype(bool)
         for (i, j) in pairs:
             blob1, blob2 = blobs_array[i], blobs_array[j]
             if blob_overlap(blob1, blob2) > overlap:
@@ -489,7 +502,7 @@ def get_dist_to_extreme(image=None, blob=None, positive=True, sigma=0, patch=Non
     if patch is None:
         patch = blob_utils.crop_blob(image, blob, crop_val=None)
     if sigma > 0:
-        patch = blob_utils.gaussian_filter_nan(patch, sigma=sigma, mode='nearest')
+        patch = blob_utils.gaussian_filter_nan(patch, sigma=sigma, mode="nearest")
 
     # Remove any bias to just look at peak difference
     if positive:
@@ -512,7 +525,7 @@ def get_dist_to_extreme(image=None, blob=None, positive=True, sigma=0, patch=Non
     # print(local_extreme)
     rows = local_extreme[:, 0]
     cols = local_extreme[:, 1]
-    dist_arr = np.sqrt((rows - midpoint)**2 + (cols - midpoint)**2)
+    dist_arr = np.sqrt((rows - midpoint) ** 2 + (cols - midpoint) ** 2)
     return np.min(dist_arr / blob[2])
 
 
@@ -584,13 +597,15 @@ def bin_blobs(blobs_array, num_radius_bands):
     return out_list
 
 
-def peak_local_max(image,
-                   min_distance=1,
-                   threshold_abs=None,
-                   threshold_rel=None,
-                   exclude_border=True,
-                   num_peaks=np.inf,
-                   footprint=None):
+def peak_local_max(
+    image,
+    min_distance=1,
+    threshold_abs=None,
+    threshold_rel=None,
+    exclude_border=True,
+    num_peaks=np.inf,
+    footprint=None,
+):
     """Find peaks in an image as coordinate list or boolean mask.
 
     Peaks are the local maxima in a region of `2 * min_distance + 1`
@@ -670,18 +685,18 @@ def peak_local_max(image,
     # Non maximum filter
     # Note: constant here is fine since we're looking for extreme values
     if footprint is not None:
-        image_max = maximum_filter(image, footprint=footprint, mode='constant')
+        image_max = maximum_filter(image, footprint=footprint, mode="constant")
     else:
         size = 2 * min_distance + 1
-        image_max = maximum_filter(image, size=size, mode='constant')
+        image_max = maximum_filter(image, size=size, mode="constant")
     mask = image == image_max
 
     if exclude_border:
         # zero out the image borders
         for i in range(mask.ndim):
             mask = mask.swapaxes(0, i)
-            remove = (footprint.shape[i] if footprint is not None else 2 * exclude_border)
-            mask[:remove // 2] = mask[-remove // 2:] = False
+            remove = footprint.shape[i] if footprint is not None else 2 * exclude_border
+            mask[: remove // 2] = mask[-remove // 2 :] = False
             mask = mask.swapaxes(0, i)
 
     # find top peak candidates above a threshold
@@ -717,7 +732,7 @@ def _get_high_intensity_peaks(image, mask, num_peaks):
     return coord[::-1]
 
 
-def shape_index(image, sigma=1, mode='nearest', cval=0, eps=1e-16):
+def shape_index(image, sigma=1, mode="nearest", cval=0, eps=1e-16):
     """Compute the shape index.
 
     The shape index, as defined by Koenderink & van Doorn [1]_, is a
@@ -783,7 +798,7 @@ def shape_index(image, sigma=1, mode='nearest', cval=0, eps=1e-16):
            [ nan,  nan, -0.5,  nan,  nan]])
     """
 
-    H = hessian_matrix(image, sigma=sigma, mode=mode, cval=cval, order='rc')
+    H = hessian_matrix(image, sigma=sigma, mode=mode, cval=cval, order="rc")
     l1, l2 = hessian_matrix_eigvals(H)
     l2_safe = l2 + eps
     num = l2 + l1
