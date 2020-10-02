@@ -50,16 +50,22 @@ def main(
     # phi = np.insert(np.linalg.pinv(A) @ unw_pixel, 0, 0)
 
     unw_subset = unw_stack[valid_idxs]
+    print(f"Selecting subset, shape = {unw_subset.shape}")
     pA = np.linalg.pinv(A)
+    print(f"Forming pseudo-inverse of A")
     # unw_subset.shape, pA.shape
     # ((1170, 120, 156), (51, 1170))
     # So want to multiply first dim by the last dim
+    print("Running Einsum to solve")
     stack = np.einsum("a b c, d a -> d b c", unw_subset, pA)
+    # Add a 0 image for the first date
+    stack = np.concatenate((np.zeros((1, *stack.shape[1:])), stack), axis=0)
     stack *= PHASE_TO_CM
     # import ipdb; ipdb.set_trace()
+    dset = "stack/1"
     with h5py.File(outfile, "w") as f:
-        f["stack/1"] = stack
-    sario.save_geolist_to_h5(out_file=outfile, geo_date_list=geolist)
+        f[dset] = stack
+    sario.save_geolist_to_h5(out_file=outfile, geo_date_list=geolist, dset_name=dset)
     sario.save_dem_to_h5(outfile, dem_rsc)
     return stack
 
