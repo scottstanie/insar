@@ -5,7 +5,7 @@ import h5py
 from insar.stackavg import load_geolist_intlist, find_valid
 import apertools.sario as sario
 from insar import timeseries
-from insar.timeseries import PHASE_TO_CM
+from insar.timeseries import PHASE_TO_CM, cols_to_stack, stack_to_cols
 from scipy.ndimage.filters import gaussian_filter
 
 
@@ -56,10 +56,16 @@ def main(
     # unw_subset.shape, pA.shape
     # ((1170, 120, 156), (51, 1170))
     # So want to multiply first dim by the last dim
-    print("Running Einsum to solve")
-    stack = np.einsum("a b c, d a -> d b c", unw_subset, pA)
+    # print("Running Einsum to solve")
+    # stack = np.einsum("a b c, d a -> d b c", unw_subset, pA)
+    # Quicker than einsum: reshape to cols, one multiply
+    ni, r, c = unw_subset.shape  # igrams, rows, cols
+    stack = cols_to_stack(pA @ stack_to_cols(unw_subset), *unw_subset.shape[1:])
+    # equiv:
+    # stack = (pA @ unw_subset.reshape((ni, -1))).reshape((nd, r, c))
+
     # Add a 0 image for the first date
-    stack = np.concatenate((np.zeros((1, *stack.shape[1:])), stack), axis=0)
+    stack = np.concatenate((np.zeros((1, r, c)), stack), axis=0)
     stack *= PHASE_TO_CM
     # import ipdb; ipdb.set_trace()
     dset = "stack/1"
@@ -94,10 +100,13 @@ def solve_linear_offset(unw_file=None, unw_stack=None):
     J = J.reshape((-1, 1)).astype(int)
     A = np.hstack((T, J))
     pA = np.linalg.pinv(A)
-    # print(unw_stack.shape, pA.shape)
-    # (465, 720, 720) (2, 465)
+
+    # print(pA.shape, unw_stack.shape)
+    # (2, 465) (465, 720, 720)
     # So want to multiply first dim by the last dim
-    vj = np.einsum("a b c, d a -> d b c", unw_stack, pA)
+    # vj = np.einsum("a b c, d a -> d b c", unw_stack, pA)
+    ni, r, c = unw_stack.shape  # igrams, rows, cols
+    vj = cols_to_stack(pA @ stack_to_cols(unw_stack), r, c)
     with h5py.File("stack_velos_jump.h5", "w") as f:
         f["velos/1"] = vj[0]
         f["jump/1"] = vj[1]
