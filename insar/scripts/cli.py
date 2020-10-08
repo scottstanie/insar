@@ -105,6 +105,13 @@ def parse_steps(ctx, param, value):
     help="Level of Sentinel product (default='' will auto detect from files)",
 )
 @click.option(
+    "--gpu",
+    is_flag=True,
+    help="Use the GPU version of the raw processor (not available for level 1 SLC)",
+    default=False,
+    show_default=True,
+)
+@click.option(
     "--cleanup/--no-cleanup",
     help="Rename .geos and cleanup directory to `extra_files` after .geo processing",
     default=True,

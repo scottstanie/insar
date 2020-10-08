@@ -37,6 +37,7 @@ logger = get_log()
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 SENTINEL_SLC_PATH = os.path.expanduser("~/sentinel/")
 SENTINEL_RAW_PATH = os.path.expanduser("~/sentinel_l0/")
+LOS_PATH = os.path.expanduser("~/repos/insar-los/")
 # TODO: Make DEM is 1, download data is 2, then the sentinel raw script gest EOF already
 
 
@@ -102,7 +103,7 @@ def _get_product_type(path):
     return p.product_type
 
 
-def run_sentinel_stack(unzip=True, product_type="", **kwargs):
+def run_sentinel_stack(unzip=True, product_type="", gpu=False, **kwargs):
     """3. Create geocoded slcs as .geo files for each .zip file"""
     # Download all EOF files
     _log_and_run("eof")
@@ -116,7 +117,8 @@ def run_sentinel_stack(unzip=True, product_type="", **kwargs):
         script_path = os.path.join(SENTINEL_SLC_PATH, "sentinel_stack.py")
 
     unzip_arg = "" if unzip else "--no-unzip"
-    cmd = "python {} {}".format(script_path, unzip_arg)
+    gpu_arg = "--gpu" if (gpu and product_type == "RAW") else ""
+    cmd = "python {} {} {}".format(script_path, unzip_arg, gpu_arg)
     _log_and_run(cmd)
     for f in glob.glob("S*.geo"):
         # make symlinks of rsc file for loading
@@ -252,12 +254,19 @@ def run_form_igrams(xlooks=1, ylooks=1, **kwargs):
 
 
 def record_los_vectors(path=".", **kwargs):
-    """7. With .geos processed, record the ENU LOS vector from DEM center to sat"""
+    """7. With .geos processed, record the ENU LOS vector from DEM center to sat
+    for the igrams DEM grid"""
+    # Copy the DEM, downlooked
+    _log_and_run("aper looked-dem", check=False)
+    cmd = os.path.join(LOS_PATH, "create_los_map.py")
+    sent_file = glob.glob("../extra_files/*.SAFE")[0]
+    cmd += " --dem elevation_looked.dem --sentinel-file {}".format(sent_file)
+    print("Creating LOS maps:")
+    _log_and_run(cmd, check=False)
+    subprocess.run(cmd, check=True, shell=True)
+
     # enu_coeffs = apertools.los.find_east_up_coeffs(path)
     # np.save("los_enu_midpoint_vector.npy", enu_coeffs)
-    srcdir = "/home/scott/repos/InsarTimeseries.jl/scripts"
-    cmd = "julia --start=no {}/create_los.jl ".format(srcdir)
-    _log_and_run(cmd, check=False)
 
 
 def run_snaphu(lowpass=None, max_jobs=None, **kwargs):
