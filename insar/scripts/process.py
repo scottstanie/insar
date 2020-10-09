@@ -244,10 +244,6 @@ sbas_list {rsc_file} 1 1 {xsize} {ysize} {xlooks} {ylooks}".format(
 
 
 def run_form_igrams(xlooks=1, ylooks=1, **kwargs):
-    # srcdir = "/home/scott/repos/InsarTimeseries.jl/src"
-    # cmd = "julia --start=no {}/run_form_igrams.jl --xlooks {} --ylooks {}".format(
-    #     srcdir, xlooks, ylooks)
-    # _log_and_run(cmd)
     from insar import form_igrams
 
     form_igrams.create_igrams(ylooks, xlooks)

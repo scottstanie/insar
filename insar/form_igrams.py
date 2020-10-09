@@ -55,7 +55,7 @@ def _make_cor(
 # julia> lines = readlines("sbas_list")
 # 4-element Array{String,1}:
 #  "./S1A_20141104.ge ./S1A_2014128.ge 24.0    29539676548307892     " ...
-def form_igram_names():
+def form_igram_names(igram_ext=".int"):
     with open("sbas_list") as f:
         sbas_lines = f.read().splitlines()
     # TODO: use the parsers to get the dates...
@@ -63,7 +63,7 @@ def form_igram_names():
     for line in sbas_lines:
         early_file, late_file, temp, spatial = line.split()
         # "./S1A_20141104.ge
-        igram_name = "_".join(map(_get_date, [early_file, late_file])) + ".int"
+        igram_name = "_".join(map(_get_date, [early_file, late_file])) + igram_ext
         out.append((igram_name, str(early_file), str(late_file)))
 
     # Note: orting so that ALL igrams with `early_file` are formed in a row
@@ -75,8 +75,15 @@ def _get_date(geo_name):
     return geo_name.split("_")[1].split(".")[0]
 
 
-def create_igrams(rowlooks=1, collooks=1):
-    current_ints = glob("*.int")
+def _load_gdal(fname):
+    import rasterio as rio
+
+    with rio.open(fname) as src:
+        return src.read(1)
+
+
+def create_igrams(rowlooks=1, collooks=1, igram_ext=".int"):
+    current_ints = glob("*" + igram_ext)
     current_cors = glob("*.cc")
 
     fulldemrsc = sario.load("../elevation.dem.rsc")
@@ -85,7 +92,7 @@ def create_igrams(rowlooks=1, collooks=1):
 
     cur_early_file = ""
     for (igram_name, early_file, late_file) in form_igram_names():
-        cor_name = igram_name.replace(".int", ".cc")
+        cor_name = igram_name.replace(igram_ext, ".cc")
         if (igram_name in current_ints) and (cor_name in current_cors):
             logger.debug(f"Skipping {igram_name} and {cor_name}: exists")
             continue
@@ -95,6 +102,7 @@ def create_igrams(rowlooks=1, collooks=1):
         # Keep early in memory for all pairs: only load for new set
         if cur_early_file != early_file:
             logger.debug(f"Loading {early_file}")
+            # early = sario.load(early_file)
             early = sario.load(early_file)
             cur_early_file = early_file
 
