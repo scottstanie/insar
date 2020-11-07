@@ -33,7 +33,7 @@ setuptools.setup(
         "matplotlib",
         "pandas",
         "click",
-        "sardem",
+        # "sardem",
         "sentineleof",
         "apertools",
     ],

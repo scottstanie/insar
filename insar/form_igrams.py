@@ -11,7 +11,7 @@ EPS = np.finfo(np.float32).eps
 
 
 def abs2(x):
-    # Weird, but...
+    # Weird, but it seems to be faster...
     # %timeit np.abs(b)**2
     # 13 ms ± 3.31 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
     # %timeit b.real**2 + b.imag**2
