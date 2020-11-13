@@ -199,7 +199,7 @@ def deramp_and_shift_unws(
 
 
 @log_runtime
-def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=False):
+def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=False,compute_from_geos=False):
     """Create mask stacks for areas in .geo and .int
 
     Uses .geo dead areas as well as correlation
@@ -226,14 +226,15 @@ def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=
         igram_path=igram_path, out_file=mask_file, overwrite=overwrite
     )
 
-    save_geo_masks(
-        geo_path,
-        mask_file,
-        dem_rsc=rsc_data,
-        row_looks=row_looks,
-        col_looks=col_looks,
-        overwrite=overwrite,
-    )
+    if compute_from_geos:
+        save_geo_masks(
+            geo_path,
+            mask_file,
+            dem_rsc=rsc_data,
+            row_looks=row_looks,
+            col_looks=col_looks,
+            overwrite=overwrite,
+        )
 
     compute_int_masks(
         mask_file=mask_file,
@@ -243,6 +244,7 @@ def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=
         col_looks=col_looks,
         dem_rsc=rsc_data,
         overwrite=overwrite,
+        compute_from_geos=compute_from_geos,
     )
     # TODO: now add the correlation check
     return mask_file
@@ -311,6 +313,8 @@ def save_geo_masks(
             else:
                 cur_mask = sario.load(mask_name, rsc_file="dem.rsc")
             dset[idx] = cur_mask
+            if idx % 100 == 0:
+                print(f"Done with {idx} out of {len(geo_file_list)}")
 
         # Also add a composite mask depthwise
         f[GEO_MASK_SUM_DSET] = np.sum(dset, axis=0)
@@ -327,6 +331,9 @@ def compute_int_masks(
     dem_rsc=None,
     dset_name=IGRAM_MASK_DSET,
     overwrite=False,
+    compute_from_geos=False,  # TODO: combine these
+    mask_dem=True,
+    dem_filename="elevation_looked.dem",
 ):
     """Creates igram masks by taking the logical-or of the two .geo files
 
@@ -346,16 +353,25 @@ def compute_int_masks(
     shape = _find_file_shape(dem_rsc=dem_rsc, file_list=int_file_list)
     create_dset(mask_file, dset_name, shape=shape, dtype=bool)
 
+    if mask_dem:
+        dem_mask = sario.load(dem_filename) == 0
+
+
     with h5py.File(mask_file, "a") as f:
         geo_mask_stack = f[GEO_MASK_DSET]
         int_mask_dset = f[dset_name]
         for idx, (early, late) in enumerate(int_date_list):
-            early_idx = geo_date_list.index(early)
-            late_idx = geo_date_list.index(late)
-            early_mask = geo_mask_stack[early_idx]
-            late_mask = geo_mask_stack[late_idx]
+            if compute_from_geos:
+                early_idx = geo_date_list.index(early)
+                late_idx = geo_date_list.index(late)
+                early_mask = geo_mask_stack[early_idx]
+                late_mask = geo_mask_stack[late_idx]
+                int_mask_dset[idx] = np.logical_or(early_mask, late_mask)
+            elif mask_dem:
+                int_mask_dset[idx] = dem_mask
+            else:
+                int_mask_dset[idx] = np.ma.make_mask(m, shrink=False)
 
-            int_mask_dset[idx] = np.logical_or(early_mask, late_mask)
 
         # Also create one image of the total masks
         f[IGRAM_MASK_SUM_DSET] = np.sum(int_mask_dset, axis=0)
