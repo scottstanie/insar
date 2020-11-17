@@ -19,7 +19,7 @@ from apertools.log import get_log, log_runtime
 from .constants import (
     MASK_FILENAME,
     UNW_FILENAME,
-    # CC_FILENAME,
+    COR_FILENAME,
     STACK_FLAT_SHIFTED_DSET,
     GEO_MASK_DSET,
     GEO_MASK_SUM_DSET,
@@ -41,7 +41,7 @@ def prepare_stacks(
     window=5,
     overwrite=False,
 ):
-    # cc_stack_file = os.path.join(igram_path, CC_FILENAME)
+    cc_stack_file = os.path.join(igram_path, COR_FILENAME)
     # mask_stack_file = os.path.join(igram_path, MASK_FILENAME)
     unw_stack_file = os.path.join(igram_path, UNW_FILENAME)
 
@@ -199,7 +199,13 @@ def deramp_and_shift_unws(
 
 
 @log_runtime
-def create_mask_stacks(igram_path, mask_filename=None, geo_path=None, overwrite=False,compute_from_geos=False):
+def create_mask_stacks(
+    igram_path,
+    mask_filename=None,
+    geo_path=None,
+    overwrite=False,
+    compute_from_geos=False,
+):
     """Create mask stacks for areas in .geo and .int
 
     Uses .geo dead areas as well as correlation
@@ -356,7 +362,6 @@ def compute_int_masks(
     if mask_dem:
         dem_mask = sario.load(dem_filename) == 0
 
-
     with h5py.File(mask_file, "a") as f:
         geo_mask_stack = f[GEO_MASK_DSET]
         int_mask_dset = f[dset_name]
@@ -371,7 +376,6 @@ def compute_int_masks(
                 int_mask_dset[idx] = dem_mask
             else:
                 int_mask_dset[idx] = np.ma.make_mask(m, shrink=False)
-
 
         # Also create one image of the total masks
         f[IGRAM_MASK_SUM_DSET] = np.sum(int_mask_dset, axis=0)
