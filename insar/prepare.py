@@ -144,16 +144,19 @@ def deramp_and_shift_unws(
     buf = np.empty((chunk_depth, rows, cols), dtype=dtype)
     win = window // 2
     lastidx = 0
+    cur_chunk_size = 0
     for idx, in_fname in enumerate(file_list):
         if idx % 100 == 0:
             logger.info(f"Processing {in_fname} -> {idx+1} out of {len(file_list)}")
 
         if idx % chunk_depth == 0 and idx > 0:
             logger.info(f"Writing {lastidx}:{lastidx+chunk_depth}")
+            assert cur_chunk_size <= chunk_depth
             with h5py.File(unw_stack_file, "r+") as f:
-                f[dset_name][lastidx : lastidx + chunk_depth, :, :] = buf
+                f[dset_name][lastidx : lastidx + cur_chunk_size, :, :] = buf
 
             lastidx = idx
+            cur_chunk_size = 0
 
         driver = "ROI_PAC" if in_fname.endswith(".unw") else None  # let gdal guess
         with rio.open(in_fname, driver=driver) as inf:
@@ -176,9 +179,17 @@ def deramp_and_shift_unws(
             # now store this in the buffer until emptied
             curidx = idx % chunk_depth
             buf[curidx, :, :] = deramped_phase
+            cur_chunk_size += 1
 
             # sum for the stack, only use non-masked data
             stackavg[~mask] += deramped_phase[~mask] / temporal_baseline(in_fname)
+
+    if cur_chunk_size > 0:
+        # Write the final part of the buffer:
+        with h5py.File(unw_stack_file, "r+") as f:
+            f[dset_name][lastidx : lastidx + cur_chunk_size, :, :] = buf[
+                :cur_chunk_size
+            ]
 
     # Get the projection information to use to write as gtiff
     with rio.open(file_list[0], driver="ROI_PAC") as ds:
