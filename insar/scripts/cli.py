@@ -232,6 +232,7 @@ def process(context, **kwargs):
 
 # COMMAND: view-masks
 @cli.command("view-masks")
+@click.option("--mask-file", "-f", default="masks.h5", help="filename of mask stack")
 @click.option("--downsample", "-d", default=1, help="Amount to downsample image")
 @click.option(
     "--geolist-ignore-file",
@@ -248,14 +249,15 @@ def process(context, **kwargs):
     "--vmin", type=float, default=0, help="Optional: Minimum value for imshow"
 )
 @click.option("--vmax", type=float, help="Optional: Maximum value for imshow")
-@click.pass_obj
-def view_masks(context, downsample, geolist_ignore_file, print_dates, cmap, vmin, vmax):
+def view_masks(
+    mask_file, downsample, geolist_ignore_file, print_dates, cmap, vmin, vmax
+):
     import numpy as np
     import apertools.sario
     import apertools.plotting
     import h5py
 
-    geo_date_list = apertools.sario.load_geolist_from_h5(apertools.sario.MASK_FILENAME)
+    geo_date_list = apertools.sario.load_geolist_from_h5(mask_file)
 
     def _print(series, row, col):
         dstrings = [d.strftime("%Y%m%d") for d in np.array(geo_date_list)[series]]
@@ -272,11 +274,16 @@ def view_masks(context, downsample, geolist_ignore_file, print_dates, cmap, vmin
             for gdate in geo_str_list:
                 f.write("%s\n" % gdate)
 
-    with h5py.File(apertools.sario.MASK_FILENAME) as f:
+    with h5py.File(mask_file) as f:
         geo_dset = f[apertools.sario.GEO_MASK_DSET]
         with geo_dset.astype(np.bool):
             geo_masks = geo_dset[:]
-        composite_mask = f[apertools.sario.GEO_MASK_SUM_DSET][:]
+        composite_mask = np.sum(geo_masks, axis=0)
+
+    # The netcdf will store it row-reversed, since lats go downward...
+    if mask_file.endswith(".nc"):
+        geo_masks = geo_masks[:, ::-1, :]
+        composite_mask = composite_mask[::-1, :]
 
     if print_dates:
         callback = _print

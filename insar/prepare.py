@@ -96,6 +96,7 @@ def deramp_and_shift_unws(
     ref_row,
     ref_col,
     unw_stack_file=UNW_FILENAME,
+    mask_fname=MASK_FILENAME,
     dset_name=STACK_FLAT_SHIFTED_DSET,
     directory=".",
     deramp_order=2,
@@ -154,8 +155,9 @@ def deramp_and_shift_unws(
 
             lastidx = idx
 
-        with rio.open(in_fname, driver="ROI_PAC") as inf:
-            mask = _read_mask_by_idx(idx)
+        driver = "ROI_PAC" if in_fname.endswith(".unw") else None  # let gdal guess
+        with rio.open(in_fname, driver=driver) as inf:
+            mask = _read_mask_by_idx(idx, fname=mask_fname).astype(bool)
             # amp = inf.read(1)
             phase = inf.read(2)
             deramped_phase = remove_ramp(phase, deramp_order=deramp_order, mask=mask)
@@ -425,7 +427,11 @@ def matrix_indices(shape, flatten=True):
 
 def _read_mask_by_idx(idx, fname="masks.h5", dset=IGRAM_MASK_DSET):
     with h5py.File(fname, "r") as f:
-        return f[dset][idx, :, :]
+        m = f[dset][idx, :, :]
+    # if fname.endswith(".nc"):  #
+    # return m[::-1, :]
+    # else:
+    return m
 
 
 def remove_ramp(z, deramp_order=1, mask=np.ma.nomask, copy=False):
@@ -495,3 +501,15 @@ def estimate_ramp(z, deramp_order):
         z_fit = np.dot(idx_matrix, coeffs).reshape(z.shape)
 
     return z_fit
+
+
+# TODO: for mask subsetting...
+# sario.save("dem.rsc", latlon.from_grid(mds.lon.values, mds.lat.values, sparse=True))
+# time gdal_translate -of netCDF -co "FORMAT=NC4" -co "COMPRESS=DEFLATE" -co "ZLEVEL=4"
+# -projwin -103.85 31.6 -102.8 30.8 masks_igram4.nc masks_subset4.nc
+# sario.hdf5_to_netcdf("../igrams_looked_18/masks.h5", stack_dset_list=['igram', 'geo'],
+# stack_dim_list=['idx', 'date'], outname="masks_igram3.nc")
+# sario.save_geolist_to_h5(out_file="masks_subset4.nc",
+# geo_date_list=sario.load_geolist_from_h5("../igrams_looked_18/masks.h5"))
+# sario.save_intlist_to_h5(out_file="masks_subset5.nc",
+# int_date_list=sario.load_intlist_from_h5("../igrams_looked_18/masks.h5"))
