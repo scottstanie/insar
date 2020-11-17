@@ -19,8 +19,8 @@ def stack_igrams(
     ref=(5, 5),
     window=5,
     ignore_geos=True,
-    cc_thresh=None,
-    avg_cc_thresh=0.35,
+    cor_thresh=None,
+    avg_cor_thresh=0.35,
     sigma_filter=0.3,
 ):
 
@@ -38,7 +38,7 @@ def stack_igrams(
 
     dts = [(pair[1] - pair[0]).days for pair in stack_igrams]
 
-    cur_phase_sum, cc_stack = create_stack(
+    cur_phase_sum, cor_stack = create_stack(
         stack_igrams,
         stack_fnames,
         dts,
@@ -46,8 +46,8 @@ def stack_igrams(
         use_cm=use_cm,
         ref=ref,
         window=window,
-        cc_thresh=cc_thresh,
-        avg_cc_thresh=avg_cc_thresh,
+        cor_thresh=cor_thresh,
+        avg_cor_thresh=avg_cor_thresh,
         sigma_filter=sigma_filter,
     )
 
@@ -57,7 +57,7 @@ def stack_igrams(
         with h5py.File(outname, "w") as f:
             f["stackavg"] = cur_phase_sum
         sario.save_dem_to_h5(outname, sario.load("dem.rsc"))
-    return cur_phase_sum, cc_stack
+    return cur_phase_sum, cor_stack
 
 
 def select_igrams(geolist, intlist, event_date, num_igrams=None):
@@ -99,21 +99,21 @@ def create_stack(
     use_cm=True,
     ref=(5, 5),
     window=5,
-    cc_thresh=None,
-    avg_cc_thresh=0.35,
+    cor_thresh=None,
+    avg_cor_thresh=0.35,
     sigma_filter=0.3,
 ):
     cur_phase_sum = np.zeros(sario.load(stack_fnames[0]).shape).astype(float)
-    cc_stack = np.zeros_like(cur_phase_sum)
+    cor_stack = np.zeros_like(cur_phase_sum)
     # for pixels that get masked sometimes, lower that count in the final stack dividing
     pixel_count = np.zeros_like(cur_phase_sum, dtype=int)
     dt_total = 0
     for f, dt in zip(stack_fnames, dts):
         deramped_phase = remove_ramp(sario.load(f), deramp_order=1, mask=np.ma.nomask)
-        cur_cc = sario.load(f.replace(".unw", ".cc"))
+        cur_cor = sario.load(f.replace(".unw", ".cc"))
 
-        if cc_thresh:
-            bad_pixel_mask = cur_cc < cc_thresh
+        if cor_thresh:
+            bad_pixel_mask = cur_cor < cor_thresh
         else:
             # zeros => dont mask any to nan
             bad_pixel_mask = np.zeros_like(deramped_phase, dtype=bool)
@@ -125,7 +125,7 @@ def create_stack(
         pixel_count += (~bad_pixel_mask).astype(int)
         dt_total += (~bad_pixel_mask) * dt
 
-        cc_stack += cur_cc
+        cor_stack += cur_cor
 
     # subtract the reference location:
     ref_row, ref_col = ref
@@ -139,10 +139,10 @@ def create_stack(
         cur_phase_sum /= dt_total
     else:
         cur_phase_sum /= pixel_count
-    cc_stack /= len(stack_fnames)
+    cor_stack /= len(stack_fnames)
 
-    if avg_cc_thresh:
-        cur_phase_sum[cc_stack < avg_cc_thresh] = np.nan
+    if avg_cor_thresh:
+        cur_phase_sum[cor_stack < avg_cor_thresh] = np.nan
 
     if use_cm:
         cur_phase_sum *= PHASE_TO_CM
@@ -152,7 +152,7 @@ def create_stack(
 
         cur_phase_sum = blob_utils.gaussian_filter_nan(cur_phase_sum, sigma_filter)
 
-    return cur_phase_sum, cc_stack
+    return cur_phase_sum, cor_stack
 
 
 def subset_stack(

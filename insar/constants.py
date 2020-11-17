@@ -3,7 +3,7 @@ DATE_FMT = "%Y%m%d"
 MASK_FILENAME = "masks.h5"
 INT_FILENAME = "int_stack.h5"
 UNW_FILENAME = "unw_stack.h5"
-CC_FILENAME = "cc_stack.h5"
+COR_FILENAME = "cor_stack.h5"
 
 # dataset names for general 3D stacks
 STACK_DSET = "stack"
