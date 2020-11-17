@@ -217,7 +217,7 @@ def create_mask_stacks(
     mask_filename=None,
     geo_path=None,
     overwrite=False,
-    compute_from_geos=False,
+    compute_from_geos=True,
 ):
     """Create mask stacks for areas in .geo and .int
 
@@ -350,7 +350,7 @@ def compute_int_masks(
     dem_rsc=None,
     dset_name=IGRAM_MASK_DSET,
     overwrite=False,
-    compute_from_geos=False,  # TODO: combine these
+    compute_from_geos=True,  # TODO: combine these
     mask_dem=True,
     dem_filename="elevation_looked.dem",
 ):
