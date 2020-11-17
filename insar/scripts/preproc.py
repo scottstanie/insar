@@ -30,7 +30,6 @@ def unzip_sentinel_files(path=".", delete_zips=False):
         command += 'xargs -0 -I {} --max-procs 10 unzip -n {} "*/preview/*" \
                 "*/annotation/*.xml" "*/measurement/*slc-vv-*.tiff" '
 
-    command += "xargs -0 -I {} --max-procs 10 unzip -n {} "
     logger.info("Running command: %s", command)
     subprocess.check_call(command, shell=True)
 

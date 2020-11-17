@@ -96,6 +96,7 @@ def parse_steps(ctx, param, value):
     "--unzip/--no-unzip",
     help="Pass to sentinel_stack whether to unzip Sentinel files",
     default=True,
+    show_default=True,
 )
 @click.option(
     "--product-type",
@@ -115,17 +116,20 @@ def parse_steps(ctx, param, value):
     "--cleanup/--no-cleanup",
     help="Rename .geos and cleanup directory to `extra_files` after .geo processing",
     default=True,
+    show_default=True,
 )
 @click.option(
     "--max-temporal",
     type=int,
     default=500,
+    show_default=True,
     help="Maximum temporal baseline for igrams (fed to sbas_list)",
 )
 @click.option(
     "--max-spatial",
     type=int,
     default=500,
+    show_default=True,
     help="Maximum spatial baseline for igrams (fed to sbas_list)",
 )
 @click.option(
@@ -144,6 +148,7 @@ def parse_steps(ctx, param, value):
     "--lowpass",
     type=int,
     default=1,
+    show_default=True,
     help="Size of lowpass filter to use on igrams before unwrapping",
 )
 @click.option(
@@ -156,6 +161,7 @@ def parse_steps(ctx, param, value):
 @click.option(
     "--max-height",
     default=10,
+    show_default=True,
     help="Maximum height/max absolute phase for converting .unw files to .tif"
     " (used for contour_interval option to dishgt)",
 )
@@ -163,6 +169,7 @@ def parse_steps(ctx, param, value):
 @click.option(
     "--ignore-geos",
     is_flag=True,
+    show_default=True,
     help="Use the geolist ignore file to ignore dates "
     "(saved to geolist_ignore.txt from `view-masks`",
 )
@@ -170,6 +177,7 @@ def parse_steps(ctx, param, value):
     "--constant-velocity",
     "-c",
     is_flag=True,
+    show_default=True,
     help="Use a constant velocity for SBAS inversion solution",
 )
 @click.option(
