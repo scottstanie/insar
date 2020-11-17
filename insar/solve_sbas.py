@@ -4,6 +4,7 @@ import numpy as np
 import h5py
 from insar.stackavg import load_geolist_intlist, find_valid
 import apertools.sario as sario
+import apertools.netcdf as netcdf
 from insar import timeseries
 from insar.timeseries import PHASE_TO_CM, cols_to_stack, stack_to_cols
 from scipy.ndimage.filters import gaussian_filter
@@ -32,7 +33,6 @@ def main(
     # r, c = np.unravel_index(np.argmin(velos), velos.shape)
     geolist_full = sario.load_geolist_from_h5(unw_file)
     intlist_full = sario.load_intlist_from_h5(unw_file)
-    dem_rsc = sario.load_dem_from_h5(unw_file)
 
     # geolist, intlist, valid_idxs = load_geolist_intlist("geolist_ignore.txt",
     #                                                     800,
@@ -68,11 +68,17 @@ def main(
     stack = np.concatenate((np.zeros((1, r, c)), stack), axis=0)
     stack *= PHASE_TO_CM
     # import ipdb; ipdb.set_trace()
-    dset = "stack/1"
+    dset = "stack"
     with h5py.File(outfile, "w") as f:
         f[dset] = stack
     sario.save_geolist_to_h5(out_file=outfile, geo_date_list=geolist, dset_name=dset)
+    dem_rsc = sario.load_dem_from_h5(unw_file)
     sario.save_dem_to_h5(outfile, dem_rsc)
+    netcdf.hdf5_to_netcdf(
+        outfile,
+        stack_dset_list=[dset],
+        stack_dim_list=["date"],
+    )
     return stack
 
 

@@ -59,7 +59,7 @@ def create_dem(
     xrate=1,
     yrate=2,
     data_source="NASA",
-    **kwargs
+    **kwargs,
 ):
     """1. Download, upsample, and stich a DEM"""
     # TODO:
@@ -134,10 +134,13 @@ def _make_symlinks(geofiles):
         try:
             force_symlink(geofile, new_name + ".geo")
         except:
-            pass
+            logger.info("{} already exists: skipping".format(new_name))
         # move corresponding orb timing file
         orbtiming_file = geofile.replace("geo", "orbtiming")
-        force_symlink(orbtiming_file, new_name + ".orbtiming")
+        try:
+            force_symlink(orbtiming_file, new_name + ".orbtiming")
+        except ValueError as e:
+            logger.info(f"{new_name} already exists: skipping ({e})")
 
 
 def _reorganize_files(new_dir="extra_files"):
@@ -164,9 +167,17 @@ def prep_igrams_dir(cleanup=False, **kwargs):
 
     # Move extra useful files back in main directory
     for fname in ("params", "elevation.dem", "elevation.dem.rsc"):
-        force_symlink(os.path.join(new_dir, fname), os.path.join(".", fname))
+        try:
+            src, dest = os.path.join(new_dir, fname), os.path.join(".", fname)
+            force_symlink(src, dest)
+        except ValueError as e:
+            logger.info(f"{dest} already exists: skipping ({e})")
+
     for geofile in geofiles:
-        force_symlink("elevation.dem.rsc", geofile + ".rsc")
+        try:
+            force_symlink("elevation.dem.rsc", geofile + ".rsc")
+        except ValueError as e:
+            logger.info(f"{geofile + '.rsc'} already exists: skipping ({e})")
 
     # Now stitch together duplicate dates of .geos
     apertools.stitching.stitch_same_dates(
@@ -236,7 +247,7 @@ sbas_list {rsc_file} 1 1 {xsize} {ysize} {xlooks} {ylooks}".format(
 
     # Uses the computed mask areas to set the .int and .cc bad values to 0
     # (since they are non-zero from FFT smearing rows)
-    # TODO: run the julia script
+
     # insar.prepare.zero_masked_areas(igram_path='.', mask_filename=mask_filename, verbose=True)
     # cmd = "julia --start=no /home/scott/repos/InsarTimeseries.jl/src/runprepare.jl --zero "
     # logger.info(cmd)
@@ -349,7 +360,7 @@ def run_sbas_inversion(
     deramp_order=2,
     ignore_geos=False,
     stackavg=False,
-    **kwargs
+    **kwargs,
 ):
     """10. Perofrm SBAS inversion, save the deformation as .npy
 
