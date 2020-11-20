@@ -76,8 +76,8 @@ def main(
     sario.save_dem_to_h5(outfile, dem_rsc)
     netcdf.hdf5_to_netcdf(
         outfile,
-        stack_dset_list=[dset],
-        stack_dim_list=["date"],
+        dset_name=dset,
+        stack_dim="date",
     )
     return stack
 
