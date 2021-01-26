@@ -226,10 +226,9 @@ def blobs_to_rowcol(blobs, blob_info):
 def blob_to_geojson(blob_ll):
     blob_polygons = []
     for lat, lon, rad_deg, amp in blob_ll:
-        radius_km = apertools.latlon.latlon_to_dist([lat, lon], [lat, lon + rad_deg])
         p = shapely.geometry.Point([lon, lat])
         n_points = 20
-        d = radius_km * 1000  # meters
+        d = apertools.latlon.latlon_to_dist([lat, lon], [lat, lon + rad_deg])  # m
         angles = np.linspace(0, 360, n_points)
         polygon = geog.propagate(p, angles, d)
         blob_polygons.append(

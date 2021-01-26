@@ -315,7 +315,7 @@ def plot_scores(score_arr, nrows=1, y_idxs=None, titles=None):
 def blob_to_geojson(blob_ll):
     gjs = []
     for lat, lon, rad_deg, amp in blob_ll:
-        radius_km = latlon.latlon_to_dist([lat, lon], [lat, lon + rad_deg])
+        radius_km = 1000 * latlon.latlon_to_dist([lat, lon], [lat, lon + rad_deg])
         p = shapely.geometry.Point([lon, lat])
         n_points = 20
         d = radius_km * 1000  # meters
