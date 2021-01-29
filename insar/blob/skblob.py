@@ -415,6 +415,7 @@ def prune_overlap_blobs(blobs_array, overlap, sigma_bins=1):
     max_distance = 2 * sigma * sqrt(blobs_array.shape[1] - 1)
     tree = spatial.cKDTree(blobs_array[:, :-1])
     pairs = np.array(list(tree.query_pairs(max_distance)))
+    print(f"Testing {len(pairs)} out of {len(blobs_array)}")
 
     if len(pairs) == 0:
         return blobs_array
@@ -499,6 +500,8 @@ def get_dist_to_extreme(image=None, blob=None, positive=True, sigma=0, patch=Non
     sigma (float): optional: used to smooth image before finding the
         extreme value
     """
+    # TEST: Just look at max of circle
+    # TODO
     if patch is None:
         patch = blob_utils.crop_blob(image, blob, crop_val=None)
     if sigma > 0:

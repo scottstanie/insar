@@ -42,7 +42,7 @@ def on_key(event):
     If the key pressed is delete and there is a picked object,
     remove that object from the canvas
     """
-    if event.key == u"delete":
+    if event.key == "delete":
         ax = event.inaxes
         if ax is not None and ax.picked_object:
             cur_blob = ax.blobs[ax.picked_idx]
@@ -65,7 +65,7 @@ def plot_blobs(
     plot_img=False,
     delete=False,
     alpha=0.8,
-    **kwargs
+    **kwargs,
 ):
     """Takes the blob results from find_blobs and overlays on image
 
@@ -78,7 +78,7 @@ def plot_blobs(
     if fig and not ax:
         ax = fig.gca()
     if plot_img or not ax:
-        fig, ax_img = plotting.plot_image_shifted(image, fig=fig, ax=ax, **kwargs)
+        fig, ax_img = plotting.plot_image(image, fig=fig, ax=ax, **kwargs)
         # ax_img = ax.imshow(image)
         # fig.colorbar(ax_img)
 
@@ -140,6 +140,59 @@ def plot_blobs(
     fig.canvas.mpl_disconnect(cid_key)
 
     return remaining_blobs, ax
+
+
+def blob_extents(blobs, extra=1.2):
+    sigmas, mags = blobs[:, -2:].T
+    xmin, xmax = np.min(sigmas), extra * np.max(sigmas)
+    ymin, ymax = np.min(mags), extra * np.max(mags)
+    extent = [xmin, xmax, ymin, ymax]
+    return extent
+
+
+def make_kde(
+    blobs,
+    bw_method=None,
+    display=True,
+    ax=None,
+    cmap="gist_earth_r",
+    vm_pct=100,
+):
+    from scipy.stats import gaussian_kde
+
+    extent = blob_extents(blobs, 1.2)
+    [xmin, xmax, ymin, ymax] = extent
+    # X, Y = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
+    # positions = np.vstack([X.ravel(), Y.ravel()])
+
+    bb = blobs[:, -2:].copy()
+    bbm = np.max(bb, axis=0)
+    bb /= bbm
+    kernel = gaussian_kde(bb.T, bw_method=bw_method)
+    X, Y = np.mgrid[0:1:100j, 0:1:100j]
+    positions = np.vstack([X.ravel(), Y.ravel()])
+    Z = np.reshape(kernel(positions).T, X.shape)
+
+    print(f"{extent = }")
+
+    # Z = np.reshape(kernel.logpdf(positions).T, X.shape)
+    if display:
+        fig, ax = plt.subplots()
+        axim = ax.imshow(
+            np.rot90(Z),
+            cmap=cmap,
+            vmax=np.percentile(Z, vm_pct),
+            extent=extent,
+        )
+        plt.axis("auto")
+        fig.colorbar(axim, ax=ax)
+        plt.xlabel(r"$r$ [pixels]")
+        plt.ylabel(r"$A$ [cm]")
+    return Z, kernel, extent
+
+
+# ab = np.vstack((all_blobs, all_blobs2, all_blobs3))
+# Z3, kernel3 = blob.plot.make_kde(np.abs(ab),  vm_pct=90, bw_method=.3)
 
 
 def plot_cropped_blob(image=None, blob=None, patch=None, crop_val=None, sigma=0):

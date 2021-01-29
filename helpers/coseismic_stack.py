@@ -3,7 +3,7 @@ from datetime import date
 import numpy as np
 import apertools.sario as sario
 import apertools.subset as subset
-from insar.prepare import remove_ramp
+from apertools.deramp import remove_ramp
 from insar.timeseries import PHASE_TO_CM
 
 MENTONE_EQ_DATE = date(2020, 3, 26)
