@@ -5,9 +5,10 @@ Preprocessing insar data for timeseries analysis
 Forms stacks as .h5 files for easy access to depth-wise slices
 """
 from datetime import datetime
+import os
+import itertools
 import h5py
 import hdf5plugin
-import os
 import numpy as np
 from scipy.ndimage.morphology import binary_opening
 import rasterio as rio
@@ -127,11 +128,21 @@ def deramp_and_shift_unws(
     sario.save_dem_to_h5(
         unw_stack_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
     )
-    sario.save_geolist_to_h5(
-        igram_path=directory, out_file=unw_stack_file, overwrite=overwrite
+
+    int_date_list = sario.save_intlist_to_h5(
+        igram_path=directory,
+        out_file=unw_stack_file,
+        overwrite=overwrite,
+        igram_ext=".unw",
     )
-    sario.save_intlist_to_h5(
-        igram_path=directory, out_file=unw_stack_file, overwrite=overwrite
+
+    # Only keep the SAR dates which have an interferogram where we're looking
+    geo_date_list = list(sorted(set(itertools.chain.from_iterable(int_date_list))))
+
+    _ = sario.save_geolist_to_h5(
+        geo_date_list=geo_date_list,
+        out_file=unw_stack_file,
+        overwrite=overwrite,
     )
 
     with h5py.File(unw_stack_file, "r+") as f:
@@ -241,18 +252,35 @@ def create_mask_stacks(
     sario.save_dem_to_h5(
         mask_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
     )
-    sario.save_geolist_to_h5(
-        igram_path=igram_path, out_file=mask_file, overwrite=overwrite
+
+    int_date_list = sario.save_intlist_to_h5(
+        igram_path=igram_path,
+        out_file=mask_file,
+        overwrite=overwrite,
+        igram_ext=".unw",
     )
-    sario.save_intlist_to_h5(
-        igram_path=igram_path, out_file=mask_file, overwrite=overwrite
+
+    # Only keep the SAR dates which have an interferogram where we're looking
+    geo_date_list = list(sorted(set(itertools.chain.from_iterable(int_date_list))))
+
+    _ = sario.save_geolist_to_h5(
+        geo_date_list=geo_date_list,
+        out_file=mask_file,
+        overwrite=overwrite,
     )
+
+    all_geo_files = sario.find_geos(directory=geo_path, parse=False)
+    all_geo_dates = sario.find_geos(directory=geo_path)
+    geo_file_list = [
+        gf for gf, gd in zip(all_geo_files, all_geo_dates) if gd in geo_date_list
+    ]
 
     if compute_from_geos:
         save_geo_masks(
             geo_path,
             mask_file,
             dem_rsc=rsc_data,
+            geo_file_list=geo_file_list,
             row_looks=row_looks,
             col_looks=col_looks,
             overwrite=overwrite,
@@ -265,6 +293,7 @@ def create_mask_stacks(
         row_looks=row_looks,
         col_looks=col_looks,
         dem_rsc=rsc_data,
+        geo_date_list=geo_date_list,
         overwrite=overwrite,
         compute_from_geos=compute_from_geos,
     )
@@ -277,6 +306,7 @@ def save_geo_masks(
     mask_file=MASK_FILENAME,
     dem_rsc=None,
     dset_name=GEO_MASK_DSET,
+    geo_file_list=None,
     row_looks=1,
     col_looks=1,
     overwrite=False,
@@ -302,7 +332,9 @@ def save_geo_masks(
     # rsc_geo = sario.load(sario.find_rsc_file(directory=directory))
     rsc_geo = sario.load(os.path.join(directory, "elevation.dem.rsc"))
     gshape = (rsc_geo["file_length"], rsc_geo["width"])
-    geo_file_list = sario.find_files(directory=directory, search_term="*.geo")
+    if geo_file_list is None:
+        geo_file_list = sario.find_files(directory=directory, search_term="*.geo")
+
     shape = _find_file_shape(
         dem_rsc=dem_rsc,
         file_list=geo_file_list,
@@ -341,8 +373,6 @@ def save_geo_masks(
         # Also add a composite mask depthwise
         f[GEO_MASK_SUM_DSET] = np.sum(dset, axis=0)
 
-    # Now stack all these together
-
 
 def compute_int_masks(
     mask_file=None,
@@ -351,6 +381,8 @@ def compute_int_masks(
     row_looks=None,
     col_looks=None,
     dem_rsc=None,
+    igram_ext=".unw",
+    geo_date_list=None,
     dset_name=IGRAM_MASK_DSET,
     overwrite=False,
     compute_from_geos=True,  # TODO: combine these
@@ -366,10 +398,11 @@ def compute_int_masks(
     if not sario.check_dset(mask_file, IGRAM_MASK_SUM_DSET, overwrite):
         return
 
-    int_date_list = sario.find_igrams(directory=igram_path)
-    int_file_list = sario.find_igrams(directory=igram_path, parse=False)
+    int_date_list = sario.find_igrams(directory=igram_path, ext=igram_ext)
+    int_file_list = sario.find_igrams(directory=igram_path, ext=igram_ext, parse=False)
 
-    geo_date_list = sario.find_geos(directory=geo_path)
+    if geo_date_list is None:
+        geo_date_list = sario.find_geos(directory=geo_path)
 
     # Make the empty stack, or delete if exists
     shape = _find_file_shape(dem_rsc=dem_rsc, file_list=int_file_list)

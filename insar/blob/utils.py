@@ -37,6 +37,22 @@ def get_center_value(img, patch_size=1, accum_func=np.mean):
     return accum_func(img[rcent - p : rcent + p + 1, ccent - p : ccent + p + 1])
 
 
+def crop_blob(image, blob, crop_val=None, sigma=0):
+    """Crops an image to the box around a blob with nans outside blob area
+    Args:
+        image:
+        blob: (row, col, radius, ...)
+        crop_val (float or nan): value to make all pixels outside sigma radius
+            e.g with p.nan. default=None, leaves the edges of bbox untouched
+        sigma (float): if provided, smooth by a gaussian filter of size `sigma`
+
+    Returns:
+        ndarray: size = (2r, 2r), r = radius of blob
+    """
+    mask = indexes_within_circle(blob=blob, mask_shape=image.shape)
+    return crop_image_to_mask(image, mask, crop_val=crop_val, sigma=sigma)
+
+
 def indexes_within_circle(mask_shape=None, center=None, radius=None, blob=None):
     """Get a mask of indexes within a circle
 
@@ -110,6 +126,10 @@ def crop_image_to_mask(image, mask, crop_val=None, sigma=0):
             default=np.nan. if None, leaves the edges of bbox untouched
         sigma (float): if provided, smooth by a gaussian filter of size `sigma`
     """
+    if sigma > 0 or crop_val is not None:
+        masked_out = image.copy()
+    else:
+        masked_out = image
     masked_out = image.copy()
     if sigma > 0:
         masked_out = gaussian_filter(masked_out, sigma=sigma)
@@ -118,22 +138,6 @@ def crop_image_to_mask(image, mask, crop_val=None, sigma=0):
     # Now find square border of blob circle and crop
     min_row, max_row, min_col, max_col = mask_border(mask)
     return masked_out[min_row : max_row + 1, min_col : max_col + 1]
-
-
-def crop_blob(image, blob, crop_val=None, sigma=0):
-    """Crops an image to the box around a blob with nans outside blob area
-    Args:
-        image:
-        blob: (row, col, radius, ...)
-        crop_val (float or nan): value to make all pixels outside sigma radius
-            e.g with p.nan. default=None, leaves the edges of bbox untouched
-        sigma (float): if provided, smooth by a gaussian filter of size `sigma`
-
-    Returns:
-        ndarray: size = (2r, 2r), r = radius of blob
-    """
-    mask = indexes_within_circle(blob=blob, mask_shape=image.shape)
-    return crop_image_to_mask(image, mask, crop_val=crop_val, sigma=sigma)
 
 
 def append_stats(blobs, image, stat_funcs=(np.var, np.ptp), center_only=False):

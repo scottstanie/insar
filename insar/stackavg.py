@@ -3,7 +3,7 @@ import rasterio as rio
 from rasterio.errors import RasterioIOError
 import h5py
 import apertools.sario as sario
-from insar.prepare import remove_ramp
+from apertools.deramp import remove_ramp
 from collections import namedtuple
 
 # TODO: do i want this
@@ -223,7 +223,7 @@ def find_valid(
     return valid_geos, valid_igrams, valid_idxs
 
 
-def temporal_baseline(igram: Igram):
+def temporal_baseline(igram):
     return (igram[1] - igram[0]).days
 
 
