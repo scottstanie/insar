@@ -4,6 +4,7 @@ import scipy.ndimage as ndi
 from skimage import morphology
 
 
+# https://github.com/DigitalSlideArchive/HistomicsTK/blob/master/histomicstk/filters/shape/glog.py
 def glog(
     im_input,
     alpha=1,
