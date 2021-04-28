@@ -32,7 +32,7 @@ def run_inversion(
     igram_path,
     reference=(None, None),
     window=None,
-    constant_vel=False,
+    constant_velocity=False,
     alpha=0,
     difference=False,
     deramp=True,
@@ -49,7 +49,7 @@ def run_inversion(
         reference (tuple[int, int]): row and col index of the reference pixel to subtract
         window (int): size of the group around ref pixel to avg for reference.
             if window=1 or None, only the single pixel used to shift the group.
-        constant_vel (bool): force solution to have constant velocity
+        constant_velocity (bool): force solution to have constant velocity
             mutually exclusive with `alpha` option
         alpha (float): nonnegative Tikhonov regularization parameter.
             See https://en.wikipedia.org/wiki/Tikhonov_regularization
@@ -133,7 +133,7 @@ def run_inversion(
             columns,
             B,
             geo_mask_columns=geo_mask_patch,
-            constant_vel=constant_vel,
+            constant_velocity=constant_velocity,
             alpha=alpha,
             difference=difference,
         )
@@ -218,18 +218,6 @@ def build_A_matrix(geolist, intlist):
         A[j, idx_late] = 1
 
     return A
-
-
-def find_time_diffs(geolist):
-    """Finds the number of days between successive .geo files
-
-    Args:
-        geolist (list[date]): dates of the .geo SAR acquisitions
-
-    Returns:
-        np.array: days between each datetime in geolist
-            dtype=int, length is a len(geolist) - 1"""
-    return np.array([difference.days for difference in np.diff(geolist)])
 
 
 def build_B_matrix(geolist, intlist):
@@ -323,8 +311,54 @@ def _create_diff_matrix(n, order=1):
     return diff_matrix
 
 
+def _augment_matrices(B, delta_phis, alpha, difference=False):
+    reg_matrix = _create_diff_matrix(B.shape[1]) if difference else np.eye(B.shape[1])
+    B = np.vstack((B, alpha * reg_matrix))
+    # Now make num rows match
+    zeros_shape = (B.shape[0] - delta_phis.shape[0], delta_phis.shape[1])
+    delta_phis = np.vstack((delta_phis, np.zeros(zeros_shape)))
+    return B, delta_phis
+
+
+def _augment_zeros(B, delta_phis):
+    try:
+        r, c = delta_phis.shape
+    except ValueError:
+        delta_phis = delta_phis.reshape((-1, 1))
+        r, c = delta_phis.shape
+    zeros_shape = (B.shape[0] - r, c)
+    delta_phis = np.vstack((delta_phis, np.zeros(zeros_shape)))
+    return delta_phis
+
+
+def prepB(geolist, intlist, constant_velocity=False, alpha=0, difference=False):
+    """TODO: transfer this to the "invert_sbas"? this is from julia"""
+    B = build_B_matrix(geolist, intlist)
+    # Adjustments to solution:
+    # Force velocity constant across time
+    if constant_velocity is True:
+        logger.info("Using a constant velocity for inversion solutions.")
+        B = np.expand_dims(np.sum(B, axis=1), axis=1)
+    # Add regularization to the solution
+    elif alpha > 0:
+        logger.info(
+            "Using regularization with alpha=%s, difference=%s", alpha, difference
+        )
+        # Augment only if regularization requested
+        reg_matrix = (
+            _create_diff_matrix(B.shape[1]) if difference else np.eye(B.shape[1])
+        )
+        B = np.vstack((B, alpha * reg_matrix))
+    return B
+
+
 def invert_sbas(
-    delta_phis, B, geo_mask_columns=None, constant_vel=False, alpha=0, difference=False
+    delta_phis,
+    B,
+    geo_mask_columns=None,
+    constant_velocity=False,
+    alpha=0,
+    difference=False,
 ):
     """Performs and SBAS inversion on each pixel of unw_stack to find deformation
 
@@ -335,7 +369,7 @@ def invert_sbas(
             Each col is 1 pixel of load_stack along 3rd axis
         B (ndarray): output of build_B_matrix for current set of igrams
         geo_mask_columns (ndarray[bool]): .geo file masks, reshaped to columns
-        constant_vel (bool): force solution to have constant velocity
+        constant_velocity (bool): force solution to have constant velocity
             mutually exclusive with `alpha` option
         alpha (float): nonnegative Tikhonov regularization parameter.
             If alpha > 0, then the equation is instead to minimize
@@ -348,16 +382,6 @@ def invert_sbas(
         ndarray: solution velocity arrary
     """
 
-    def _augment_matrices(B, delta_phis, alpha):
-        reg_matrix = (
-            _create_diff_matrix(B.shape[1]) if difference else np.eye(B.shape[1])
-        )
-        B = np.vstack((B, alpha * reg_matrix))
-        # Now make num rows match
-        zeros_shape = (B.shape[0] - delta_phis.shape[0], delta_phis.shape[1])
-        delta_phis = np.vstack((delta_phis, np.zeros(zeros_shape)))
-        return B, delta_phis
-
     if B.shape[0] != delta_phis.shape[0]:
         raise ValueError(
             "Shapes of B {} and delta_phis {} not compatible".format(
@@ -369,7 +393,7 @@ def invert_sbas(
 
     # Adjustments to solution:
     # Force velocity constant across time
-    if constant_vel is True:
+    if constant_velocity is True:
         logger.info("Using a constant velocity for inversion solutions.")
         B = np.expand_dims(np.sum(B, axis=1), axis=1)
     # Add regularization to the solution
