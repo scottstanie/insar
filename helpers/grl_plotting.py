@@ -211,7 +211,8 @@ def plot_l1_vs_stack(
         )
 
     # No outlier removal linear cases
-    stack, l2, l1 = prunesolve(geolist, intlist, unw_vals, Blin, 1000, shrink=False)
+    stack, l2, l1 = prunesolve(Blin, unw_vals)
+    # stack, l2, l1 = prunesolve(geolist, intlist, unw_vals, Blin, 1000, shrink=False)
     print(f"No outlier, linear: {stack}, {l1=}")
     print(f"Difference: {abs(stack - l1)}")
 
@@ -299,6 +300,13 @@ def plot_l1_vs_stack(
 # TODO: MOVE THESE!!!
 def _set_figsize(fig, h=3, w=3.5):
     return (fig.set_figheight(h), fig.set_figwidth(w))
+
+
+def prunesolve(B, v):
+    stack = p2mm * (sum(v) / sum(B))
+    l2 = p2mm * np.linalg.pinv(B) @ v
+    l1 = 1  # TODO: L1 solver
+    return stack, l2, l1
 
 
 def load_geolist_intlist(
@@ -419,3 +427,77 @@ def _subtract_reference(
         dset=dset,
         reference_station=reference_station,
     )
+
+
+def plot_quals_version():
+    fig, ax = gps.plot_gps_los(
+        "TXSO",
+        end_date=date(2018, 1, 1),
+        insar_mm_list=[-5.2],
+        offset=False,
+        labels=["Linear Estimate"],
+        ylabel="LOS motion [cm]",
+        gps_color=MATLAB_COLORS[2],
+        insar_colors=MATLAB_COLORS[3:4],
+        days_smooth=1,
+        ms=4,
+    )
+    ax.legend()
+    return fig, ax
+
+
+def plot_avg_hist(
+    station="TXSO",
+    max_date="2018-01-01",
+    fname="average_slcs.nc",
+    nbins=20,
+    nsigma=5,
+    outfile=None,
+    plot_cutoffs=True,
+    outparams={},
+):
+    import xarray as xr
+
+    p2c = timeseries.PHASE_TO_CM
+    # plt.style.use("science")
+    plt.style.use(["science", "no-latex"])
+    style_dict = {
+        # "pdf.fonttype": 42,
+        # "ps.fonttype": 42,
+        # "font.family": "Helvetica",
+        "font.size": 16,
+        "font.weight": "normal",
+        # "font.weight": "bold",
+        "axes.linewidth": 2,  # thicker border around axes
+        "grid.linewidth": 0.8,
+    }
+    plt.rcParams.update(style_dict)
+
+    avgs = xr.open_dataset(fname)
+    lon, lat = gps.station_lonlat(station)
+    avg_per_date = avgs["igrams"].sel(lon=lon, lat=lat, method="nearest").loc[:max_date]
+    print(f"Using {len(avg_per_date)} dates")
+
+    fig, ax = plt.subplots(figsize=(5, 5))
+    counts, bins, _ = ax.hist(
+        avg_per_date.values,
+        bins=nbins,
+        facecolor="gray",
+        edgecolor="k",
+        linewidth=0.5,
+        density=True,
+    )
+    if plot_cutoffs:
+        from trodi.core import mad
+
+        cutoff = np.abs(avg_per_date).median() + nsigma * mad(avg_per_date)
+        ax.vlines(cutoff, 0, counts.max(), color=[0.6350, 0.0780, 0.1840, 1], lw=2)
+        ax.vlines(-cutoff, 0, counts.max(), color=[0.6350, 0.0780, 0.1840, 1], lw=2)
+
+    ax.grid(True)
+    ax.minorticks_off()
+    ax.set_xlabel("[cm]")
+    ax.set_ylabel("PDF")
+    if outfile:
+        fig.savefig(outfile, **outparams)
+    return fig, ax
