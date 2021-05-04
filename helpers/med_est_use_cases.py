@@ -2,7 +2,7 @@
 
 from __future__ import division
 import med_trend_est as MTE
-import scipy as sp
+import numpy as np
 import scipy.stats
 import matplotlib.pyplot as plt
 
@@ -11,27 +11,27 @@ nf = 100
 bf = 80
 step = 3
 per = 365 / step
-time = sp.arange(0, 1500, step)
-dat = sp.zeros([len(time), 5])
-noise = nf * sp.rand(len(time)) - (nf / 2)
-snoise = sp.stats.skewnorm.rvs(10, size=len(time))
+time = np.arange(0, 1500, step)
+dat = np.zeros([len(time), 5])
+noise = nf * np.random.rand(len(time)) - (nf / 2)
+snoise = scipy.stats.skewnorm.rvs(10, size=len(time))
 dat[:, 0] = slope * time + noise
-dat[:, 1] = dat[:, 0] + 50 * sp.sin(2 * sp.pi / 365 * time)
-dat[:, 2] = sp.hstack(
+dat[:, 1] = dat[:, 0] + 50 * np.sin(2 * np.pi / 365 * time)
+dat[:, 2] = np.hstack(
     (
         dat[: len(time) // 3, 0],
         dat[len(time) // 3 : 2 * len(time) // 3, 0] + bf,
         dat[2 * len(time) // 3 : len(time), 0] + (2 * bf),
     )
 )
-dat[:, 3] = slope * time + sp.hstack(
+dat[:, 3] = slope * time + np.hstack(
     (
         0.5 * noise[: len(time) // 3],
         noise[len(time) // 3 : 2 * len(time) // 3],
         2 * noise[2 * len(time) // 3 : len(time)],
     )
 )
-dat[:, 4] = slope * time + nf * snoise - sp.median(nf * snoise)
+dat[:, 4] = slope * time + nf * snoise - np.median(nf * snoise)
 lab = (
     "Linear+Noise",
     "Linear+Noise+Annual",
@@ -42,30 +42,30 @@ lab = (
 
 k = 0
 
-indat = sp.column_stack((time, dat[:, k]))
+indat = np.column_stack((time, dat[:, k]))
 
-A = sp.vstack([time, sp.ones(len(time))]).T
-LSout = sp.linalg.lstsq(A, indat[:, 1])[0]
-LSerr = sp.real(
-    sp.sqrt(
-        sp.sum(sp.power(indat[:, 1] - LSout[0] * time, 2))
+A = np.vstack([time, np.ones(len(time))]).T
+LSout = np.linalg.lstsq(A, indat[:, 1])[0]
+LSerr = np.real(
+    np.sqrt(
+        np.sum(np.power(indat[:, 1] - LSout[0] * time, 2))
         / (len(time) - 2)
-        / sp.sum(sp.power(time - sp.mean(time), 2))
+        / np.sum(np.power(time - np.mean(time), 2))
     )
 )
-# LSerr=sp.std(indat[:,1]-LSout[0]*time)/len(time)
+# LSerr=np.std(indat[:,1]-LSout[0]*time)/len(time)
 
 
-B = sp.vstack([time, sp.zeros(len(time))]).T
-LS0out = sp.linalg.lstsq(B, indat[:, 1])[0]
-LS0err = sp.real(
-    sp.sqrt(
-        sp.sum(sp.power(indat[:, 1] - LS0out[0] * time, 2))
+B = np.vstack([time, np.zeros(len(time))]).T
+LS0out = np.linalg.lstsq(B, indat[:, 1])[0]
+LS0err = np.real(
+    np.sqrt(
+        np.sum(np.power(indat[:, 1] - LS0out[0] * time, 2))
         / (len(time) - 2)
-        / sp.sum(sp.power(time - sp.mean(time), 2))
+        / np.sum(np.power(time - np.mean(time), 2))
     )
 )
-# LS0err=sp.std(indat[:,1]-LS0out[0]*time)/sp.sqrt(sp.sum(sp.power((time-sp.mean(time)),2)))
+# LS0err=np.std(indat[:,1]-LS0out[0]*time)/np.sqrt(np.sum(np.power((time-np.mean(time)),2)))
 
 TSout = MTE.main([indat, "-TS", "-h", lab[k] + ".TS"])
 TSIAout = MTE.main(
@@ -113,7 +113,7 @@ leg.get_frame().set_alpha(1)
 ax.grid("on")
 plt.xlim(-150, time[-1] + 50)
 plt.ylim(-50, 1.2 * slope * time[-1] + bf)
-XT = sp.arange(0, sp.ceil(time[-1] / 365), 1)
+XT = np.arange(0, np.ceil(time[-1] / 365), 1)
 plt.xticks(XT * 365, XT)
 plt.xlabel("Time (years)")
 plt.ylabel("Value")
