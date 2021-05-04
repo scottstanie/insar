@@ -30,7 +30,9 @@ def get_cli_args(arg_list=None):
         help="Tolerance for slope estimate (TODO: what is this)",
     )
     parser.add_argument("--hist", help="Save histogram plot to this filename")
-    parser.add_argument("--pr", help="Plot range (Type: integer, or 'auto'. default 4)")
+    parser.add_argument(
+        "--pr", default=4, help="Plot range (Type: integer, or 'auto'. default 4)"
+    )
     args = parser.parse_args()
     if args.estimator in ("TSIA", "MIDAS") and not args.per:
         raise ValueError(
@@ -142,23 +144,8 @@ def main(
     # pull period from arguments
     if estimator in ("TSIA", "MIDAS"):
         per = period
-    # if "-TSIA" in map(str, args) or "-MIDAS" in map(str, args):
-    # perIND = map(str, args).index("-per")
-    # per = float(args[perIND + 1])
-
-    # pull interval from arguments
-    # if "-TSIA" in map(str, args):
-    # intvlIND = map(str, args).index("-int")
-    # intvl = args[intvlIND + 1]
     if estimator == "TSIA":
         intvl = interval
-
-    # pull tolerance from arguments
-    # if "-tol" in map(str, args):
-    #     tolIND = map(str, args).index("-tol")
-    #     tol = float(args[tolIND + 1])
-    # else:
-    #     tol = 0
 
     # find all slopes and timespans
     npoints = len(x)
@@ -227,22 +214,12 @@ def main(
         b = np.median(y - slope2 * x)
 
     # plot histogram
-    # if "-h" in map(str, args):
     if hist:
         # find plot save name
-        # onamIND = map(str, args).index("-h")
-        # onam = args[onamIND + 1]
         onam = hist
         # check for and set plot range
-        if not pr:
-            pr = 4
-        elif pr == "auto":
-            # if "-pr" in map(str, args):
-            # prIND = map(str, args).index("-pr")
-            # pr = args[prIND + 1]
-            # else:
-            # pr = 4
-            # if pr == "auto":
+        if pr == "auto":
+
             cint = np.sort(slopes[:, 0])[: int(0.95 * len(slopes))][
                 int(0.05 * len(slopes)) :
             ]
@@ -271,7 +248,6 @@ def main(
         XL[pr] = "$\hat{m}$"
 
         if estimator == "MIDAS":
-            # if "-MIDAS" in map(str, args):
             # XT=np.append(XT,slope2)
             # XL=np.append(XL,'$\hat{m}_2$')
             s2 = (
@@ -308,7 +284,6 @@ def main(
 
     # change output variables to correct values
     if estimator == "MIDAS":
-        # if "-MIDAS" in map(str, args):
         slope = slope2
         sig = sig2
 
@@ -318,12 +293,6 @@ def main(
 
 if __name__ == "__main__":
     # pass args from CL (except script name) to script
-    # args = sys.argv[1:]
-
-    # load points from file
-    # infile = args[0]
-    # data = np.loadtxt(infile)
-    # args[0] = data
 
     args = get_cli_args()
     # run estimator and print output

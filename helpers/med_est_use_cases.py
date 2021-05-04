@@ -57,11 +57,7 @@ LSerr = np.real(
 
 
 B = np.vstack([time, np.zeros(len(time))]).T
-LS0out = np.linalg.lstsq(
-    B,
-    indat[:, 1],
-    rcond=None,
-)[0]
+LS0out = np.linalg.lstsq(B, indat[:, 1], rcond=None)[0]
 LS0err = np.real(
     np.sqrt(
         np.sum(np.power(indat[:, 1] - LS0out[0] * time, 2))
@@ -71,8 +67,6 @@ LS0err = np.real(
 )
 # LS0err=np.std(indat[:,1]-LS0out[0]*time)/np.sqrt(np.sum(np.power((time-np.mean(time)),2)))
 
-# TSout = MTE.main([indat, "-TS", "-h", lab[k] + ".TS"])
-# args = MTE.get_cli_args([indat, "TS", "--hist", lab[k] + ".TS"])
 TSout = MTE.main("TS", data=indat, hist=lab[k] + ".TS")
 TSIAout = MTE.main(
     "TSIA",
