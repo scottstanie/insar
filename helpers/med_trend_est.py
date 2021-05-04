@@ -2,7 +2,7 @@
 
 from __future__ import division  # changes '/' to normal float division
 import sys
-import scipy as sp
+import numpy as np
 
 if sys.platform == "linux2":
     import matplotlib as mpl
@@ -137,7 +137,7 @@ def main(args):
 
     # find all slopes and timespans
     np = len(x)
-    slopes = sp.zeros([int(np * (np - 1) / 2), 2])
+    slopes = np.zeros([int(np * (np - 1) / 2), 2])
     ct = 0
     for i in range(0, np):
         for j in range(i + 1, np):
@@ -148,11 +148,11 @@ def main(args):
     # Theil-Sen (find median of slopes)
     if "-TS" in map(str, args):
         typ = "Theil-Sen"
-        slope = sp.median(slopes[:, 0])
-        mad = sp.median(sp.absolute(slopes[:, 0] - slope))
+        slope = np.median(slopes[:, 0])
+        mad = np.median(np.absolute(slopes[:, 0] - slope))
         sig = 1.4826 * mad
-        uncertainty = 3 * sp.sqrt(sp.pi / 2) * sig / sp.sqrt(slopes.shape[0] / 4)
-        b = sp.median(y - slope * x)
+        uncertainty = 3 * np.sqrt(np.pi / 2) * sig / np.sqrt(slopes.shape[0] / 4)
+        b = np.median(y - slope * x)
 
     # Theil-Sen Interannual (find median of slopes spanning integer number of <period>)
     if "-TSIA" in map(str, args):
@@ -169,12 +169,12 @@ def main(args):
                     per * intvl + tol
                 ):
                     remIND.append(k)
-        slopes = sp.delete(slopes, remIND, 0)
-        slope = sp.median(slopes[:, 0])
-        mad = sp.median(sp.absolute(slopes[:, 0] - slope))
+        slopes = np.delete(slopes, remIND, 0)
+        slope = np.median(slopes[:, 0])
+        mad = np.median(np.absolute(slopes[:, 0] - slope))
         sig = 1.4826 * mad
-        uncertainty = 3 * sp.sqrt(sp.pi / 2) * sig / sp.sqrt(slopes.shape[0] / 4)
-        b = sp.median(y - slope * x)
+        uncertainty = 3 * np.sqrt(np.pi / 2) * sig / np.sqrt(slopes.shape[0] / 4)
+        b = np.median(y - slope * x)
 
     # MIDAS (find median of slopes spaning <period>, remove 2 sigma outliers, and iterate)
     if "-MIDAS" in map(str, args):
@@ -183,20 +183,20 @@ def main(args):
         for k in range(0, slopes.shape[0]):
             if slopes[k, 1] < (per - tol) or slopes[k, 1] > (per + tol):
                 remIND.append(k)
-        slopes = sp.delete(slopes, remIND, 0)
-        slope = sp.median(slopes[:, 0])
-        mad = sp.median(sp.absolute(slopes[:, 0] - slope))
+        slopes = np.delete(slopes, remIND, 0)
+        slope = np.median(slopes[:, 0])
+        mad = np.median(np.absolute(slopes[:, 0] - slope))
         sig = 1.4826 * mad
         remIND = []
         for k in range(0, slopes.shape[0]):
             if slopes[k, 0] < slope - 2 * sig or slopes[k, 0] > slope + 2 * sig:
                 remIND.append(k)
-        slopes2 = sp.delete(slopes, remIND, 0)
-        slope2 = sp.median(slopes2[:, 0])
-        mad2 = sp.median(sp.absolute(slopes2[:, 0] - slope2))
+        slopes2 = np.delete(slopes, remIND, 0)
+        slope2 = np.median(slopes2[:, 0])
+        mad2 = np.median(np.absolute(slopes2[:, 0] - slope2))
         sig2 = 1.4826 * mad2
-        uncertainty = 3 * sp.sqrt(sp.pi / 2) * sig2 / sp.sqrt(slopes2.shape[0] / 4)
-        b = sp.median(y - slope2 * x)
+        uncertainty = 3 * np.sqrt(np.pi / 2) * sig2 / np.sqrt(slopes2.shape[0] / 4)
+        b = np.median(y - slope2 * x)
 
     # plot histogram
     if "-h" in map(str, args):
@@ -210,16 +210,16 @@ def main(args):
         else:
             pr = 4
         if pr == "auto":
-            cint = sp.sort(slopes[:, 0])[: int(0.95 * len(slopes))][
+            cint = np.sort(slopes[:, 0])[: int(0.95 * len(slopes))][
                 int(0.05 * len(slopes)) :
             ]
-            pr = int(sp.ceil((cint.max() - slope) / sig))
+            pr = int(np.ceil((cint.max() - slope) / sig))
         else:
             pr = int(pr)
         plt.ioff()
         count, bins, patches = plt.hist(
             slopes[:, 0],
-            bins=sp.arange(
+            bins=np.arange(
                 slope - pr * sig,
                 slope + pr * sig + 2 * pr * sig / (pr * 8),
                 2 * pr * sig / (pr * 8),
@@ -230,15 +230,15 @@ def main(args):
         plt.text(
             slope - (pr - 0.5) * sig, count.max() - count.max() / 6, s, fontsize=12
         )
-        XT = sp.arange(slope - pr * sig, slope + (pr + 0.01) * sig, sig)
-        XLP = sp.arange(-pr, pr + 1, 1)
+        XT = np.arange(slope - pr * sig, slope + (pr + 0.01) * sig, sig)
+        XLP = np.arange(-pr, pr + 1, 1)
         XL = []
         for k in XLP:
             XL.append("$" + str(k) + "\sigma$")
         XL[pr] = "$\hat{m}$"
         if "-MIDAS" in map(str, args):
-            # XT=sp.append(XT,slope2)
-            # XL=sp.append(XL,'$\hat{m}_2$')
+            # XT=np.append(XT,slope2)
+            # XL=np.append(XL,'$\hat{m}_2$')
             s2 = (
                 "$\hat{m}_2$: "
                 + str("%.3g" % slope2)
@@ -286,7 +286,7 @@ if __name__ == "__main__":
 
     # load points from file
     infile = args[0]
-    data = sp.loadtxt(infile)
+    data = np.loadtxt(infile)
     args[0] = data
 
     # run estimator and print output

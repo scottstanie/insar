@@ -2,30 +2,30 @@
 
 from __future__ import division
 import med_trend_est as MTE
-import scipy as sp
+import numpy as np
 import matplotlib.pyplot as plt
 import copy
 
 # Repeat Literature Example
-time = sp.arange(0, 85, 2)
-dat = (10 / 12) * time + 2 * sp.sin(2 * sp.pi / 12 * time)
+time = np.arange(0, 85, 2)
+dat = (10 / 12) * time + 2 * np.sin(2 * np.pi / 12 * time)
 truth = copy.copy(dat)
 dat[18:] = dat[18:] + 10
 dat[30:] = dat[30:] + 10
-noise = 5 * sp.rand(len(time)) - 2.5
+noise = 5 * np.rand(len(time)) - 2.5
 ndat = dat + noise
 ntruth = truth + noise
-indat = sp.column_stack((time, ndat))
+indat = np.column_stack((time, ndat))
 
-A = sp.vstack([time, sp.ones(len(time))]).T
-LSout = sp.linalg.lstsq(A, ndat)[0]
-# LSerr=sp.real(sp.sqrt(sp.sum(sp.power(ndat-LSout[0]*time,2))/(len(time)-2)/sp.sum(sp.power(time-sp.mean(time),2))))
-LSerr = sp.std(ndat - LSout[0] * time) / sp.sqrt(len(time))
+A = np.vstack([time, np.ones(len(time))]).T
+LSout = np.linalg.lstsq(A, ndat)[0]
+# LSerr=np.real(np.sqrt(np.sum(np.power(ndat-LSout[0]*time,2))/(len(time)-2)/np.sum(np.power(time-np.mean(time),2))))
+LSerr = np.std(ndat - LSout[0] * time) / np.sqrt(len(time))
 
-B = sp.vstack([time, sp.zeros(len(time))]).T
-LS0out = sp.linalg.lstsq(B, ndat)[0]
-# LS0err=sp.real(sp.sqrt(sp.sum(sp.power(ndat-LS0out[0]*time,2))/(len(time)-2)/sp.sum(sp.power(time-sp.mean(time),2))))
-LS0err = sp.std(ndat - LS0out[0] * time) / sp.sqrt(len(time))
+B = np.vstack([time, np.zeros(len(time))]).T
+LS0out = np.linalg.lstsq(B, ndat)[0]
+# LS0err=np.real(np.sqrt(np.sum(np.power(ndat-LS0out[0]*time,2))/(len(time)-2)/np.sum(np.power(time-np.mean(time),2))))
+LS0err = np.std(ndat - LS0out[0] * time) / np.sqrt(len(time))
 
 TSIAout = MTE.main([indat, "-TSIA", "-h", "LitRep.TSIA", "-per", "12", "-int", str(1)])
 MIDASout = MTE.main([indat, "-MIDAS", "-h", "LitRep.MIDAS", "-per", "12"])
@@ -66,7 +66,7 @@ leg = ax.legend(
 leg.get_frame().set_alpha(1)
 ax.grid("on")
 plt.ylim(-5, 110)
-XT = sp.arange(0, 8, 1)
+XT = np.arange(0, 8, 1)
 plt.xticks(XT * 12, XT)
 plt.xlabel("Time (years)")
 plt.ylabel("Position (mm)")
