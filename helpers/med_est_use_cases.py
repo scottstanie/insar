@@ -67,7 +67,9 @@ LS0err = np.real(
 )
 # LS0err=np.std(indat[:,1]-LS0out[0]*time)/np.sqrt(np.sum(np.power((time-np.mean(time)),2)))
 
-TSout = MTE.main([indat, "-TS", "-h", lab[k] + ".TS"])
+# TSout = MTE.main([indat, "-TS", "-h", lab[k] + ".TS"])
+# args = MTE.get_cli_args([indat, "TS", "--hist", lab[k] + ".TS"])
+TSout = MTE.main("TS", data=indat, hist=lab[k] + ".TS")
 TSIAout = MTE.main(
     [
         indat,
