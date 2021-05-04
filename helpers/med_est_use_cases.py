@@ -45,7 +45,7 @@ k = 0
 indat = np.column_stack((time, dat[:, k]))
 
 A = np.vstack([time, np.ones(len(time))]).T
-LSout = np.linalg.lstsq(A, indat[:, 1])[0]
+LSout = np.linalg.lstsq(A, indat[:, 1], rcond=None)[0]
 LSerr = np.real(
     np.sqrt(
         np.sum(np.power(indat[:, 1] - LSout[0] * time, 2))
@@ -57,7 +57,11 @@ LSerr = np.real(
 
 
 B = np.vstack([time, np.zeros(len(time))]).T
-LS0out = np.linalg.lstsq(B, indat[:, 1])[0]
+LS0out = np.linalg.lstsq(
+    B,
+    indat[:, 1],
+    rcond=None,
+)[0]
 LS0err = np.real(
     np.sqrt(
         np.sum(np.power(indat[:, 1] - LS0out[0] * time, 2))
@@ -71,22 +75,14 @@ LS0err = np.real(
 # args = MTE.get_cli_args([indat, "TS", "--hist", lab[k] + ".TS"])
 TSout = MTE.main("TS", data=indat, hist=lab[k] + ".TS")
 TSIAout = MTE.main(
-    [
-        indat,
-        "-TSIA",
-        "-h",
-        lab[k] + ".TSIA",
-        "-per",
-        str(per),
-        "-int",
-        "N",
-        "-tol",
-        "10",
-    ]
+    "TSIA",
+    data=indat,
+    hist=lab[k] + ".TSIA",
+    period=per,
+    interval="N",
+    tol=10,
 )
-MIDASout = MTE.main(
-    [indat, "-MIDAS", "-h", lab[k] + ".MIDAS", "-per", str(per), "-tol", "10"]
-)
+MIDASout = MTE.main("MIDAS", data=indat, hist=lab[k] + ".MIDAS", period=per, tol=10)
 
 fig = plt.figure()
 ax = fig.add_subplot(1, 1, 1)

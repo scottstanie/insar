@@ -45,7 +45,16 @@ def get_cli_args(arg_list=None):
     return args
 
 
-def main(estimator, infile=None, data=None, period=0.0, hist=None, pr=None):
+def main(
+    estimator,
+    infile=None,
+    data=None,
+    period=0.0,
+    interval=None,
+    tol=0.0,
+    hist=None,
+    pr=None,
+):
     """Median Trend Estimators:
         Author: Ben Krichman
         Created: 02/07/2018
@@ -123,40 +132,16 @@ def main(estimator, infile=None, data=None, period=0.0, hist=None, pr=None):
 
     # import data to x and y arrays
     # data = args[0]
-    data = np.loadtxt(args.infile)
+    if data is None:
+        if infile is None:
+            raise ValueError("Need either infile or data")
+        data = np.loadtxt(args.infile)
     x = data[:, 0]
     y = data[:, 1]
 
-    # Argparse handles all this checking:
-    # check required arguments
-    # if "-TS" in map(str, args) and "-TSIA" in map(str, args):
-    #     sys.exit(
-    #         "ERROR: selected Thiel-Sen and Thiel-Sen Interannual - can only select one method"
-    #     )
-    # if "-TS" in map(str, args) and "-MIDAS" in map(str, args):
-    #     sys.exit("ERROR: selected Thiel-Sen and MIDAS - can only select one method")
-    # if "-TSIA" in map(str, args) and "-MIDAS" in map(str, args):
-    #     sys.exit(
-    #         "ERROR: selected Thiel-Sen Interannual and MIDAS - can only select one method"
-    #     )
-    # if (
-    #     "-TS" not in map(str, args)
-    #     and "-TSIA" not in map(str, args)
-    #     and "-MIDAS" not in map(str, args)
-    # ):
-    #     sys.exit("ERROR: must select an estimator from [-TS, -TSIA, -MIDAS]")
-
-    # if "-TSIA" in map(str, args) and "-per" not in map(str, args):
-    #     sys.exit("ERROR: -TSIA requires a period of variation to be specified")
-    # if "-MIDAS" in map(str, args) and "-per" not in map(str, args):
-    #     sys.exit("ERROR: -MIDAS requires a period of variation to be specified")
-
-    # if "-TSIA" in map(str, args) and "-int" not in map(str, args):
-    # sys.exit("ERROR: -TSIA requires an interval to be specified")
-
     # pull period from arguments
-    if args.estimator in ("TSIA", "MIDAS"):
-        per = args.period
+    if estimator in ("TSIA", "MIDAS"):
+        per = period
     # if "-TSIA" in map(str, args) or "-MIDAS" in map(str, args):
     # perIND = map(str, args).index("-per")
     # per = float(args[perIND + 1])
@@ -165,8 +150,8 @@ def main(estimator, infile=None, data=None, period=0.0, hist=None, pr=None):
     # if "-TSIA" in map(str, args):
     # intvlIND = map(str, args).index("-int")
     # intvl = args[intvlIND + 1]
-    if args.estimator == "TSIA":
-        intvl = args.interval
+    if estimator == "TSIA":
+        intvl = interval
 
     # pull tolerance from arguments
     # if "-tol" in map(str, args):
@@ -174,7 +159,6 @@ def main(estimator, infile=None, data=None, period=0.0, hist=None, pr=None):
     #     tol = float(args[tolIND + 1])
     # else:
     #     tol = 0
-    tol = args.tol
 
     # find all slopes and timespans
     npoints = len(x)
@@ -188,7 +172,7 @@ def main(estimator, infile=None, data=None, period=0.0, hist=None, pr=None):
 
     # Theil-Sen (find median of slopes)
     # if "-TS" in map(str, args):
-    if args.estimator == "TS":
+    if estimator == "TS":
         typ = "Theil-Sen"
         slope = np.median(slopes[:, 0])
         mad = np.median(np.absolute(slopes[:, 0] - slope))
@@ -198,7 +182,7 @@ def main(estimator, infile=None, data=None, period=0.0, hist=None, pr=None):
 
     # Theil-Sen Interannual (find median of slopes spanning integer number of <period>)
     # if "-TSIA" in map(str, args):
-    if args.estimator == "TSIA":
+    if estimator == "TSIA":
         typ = "Theil-Sen Interannual"
         remIND = []
         if intvl == "N":
@@ -221,7 +205,7 @@ def main(estimator, infile=None, data=None, period=0.0, hist=None, pr=None):
 
     # MIDAS (find median of slopes spaning <period>, remove 2 sigma outliers, and iterate)
     # if "-MIDAS" in map(str, args):
-    if args.estimator == "MIDAS":
+    if estimator == "MIDAS":
         typ = "MIDAS"
         remIND = []
         for k in range(0, slopes.shape[0]):
@@ -244,13 +228,12 @@ def main(estimator, infile=None, data=None, period=0.0, hist=None, pr=None):
 
     # plot histogram
     # if "-h" in map(str, args):
-    if args.hist:
+    if hist:
         # find plot save name
         # onamIND = map(str, args).index("-h")
         # onam = args[onamIND + 1]
-        onam = args.hist
+        onam = hist
         # check for and set plot range
-        pr = args.pr
         if not pr:
             pr = 4
         elif pr == "auto":
@@ -287,7 +270,7 @@ def main(estimator, infile=None, data=None, period=0.0, hist=None, pr=None):
             XL.append("$" + str(k) + "\sigma$")
         XL[pr] = "$\hat{m}$"
 
-        if args.estimator == "MIDAS":
+        if estimator == "MIDAS":
             # if "-MIDAS" in map(str, args):
             # XT=np.append(XT,slope2)
             # XL=np.append(XL,'$\hat{m}_2$')
@@ -324,7 +307,7 @@ def main(estimator, infile=None, data=None, period=0.0, hist=None, pr=None):
         plt.gcf().clear()
 
     # change output variables to correct values
-    if args.estimator == "MIDAS":
+    if estimator == "MIDAS":
         # if "-MIDAS" in map(str, args):
         slope = slope2
         sig = sig2
