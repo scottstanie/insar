@@ -475,7 +475,7 @@ def plot_avg_hist(
 
     avgs = xr.open_dataset(fname)
     lon, lat = gps.station_lonlat(station)
-    avg_per_date = avgs["igrams"].sel(lon=lon, lat=lat, method="nearest").loc[:max_date]
+    avg_per_date = p2c * avgs["igrams"].sel(lon=lon, lat=lat, method="nearest").loc[:max_date]
     print(f"Using {len(avg_per_date)} dates")
 
     fig, ax = plt.subplots(figsize=(5, 5))
