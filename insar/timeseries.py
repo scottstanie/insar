@@ -151,16 +151,16 @@ def run_inversion(
     return (geolist, phi_arr, deformation)
 
 
-def find_time_diffs(geo_date_list):
-    """Finds the number of days between successive .geo files
+def find_time_diffs(date_list):
+    """Finds the number of days between successive files
 
     Args:
-        geo_date_list (list[date]): dates of the .geo SAR acquisitions
+        date_list (list[date]): dates of the SAR acquisitions
 
     Returns:
-        np.array: days between each datetime in geo_date_list
-            dtype=int, length is a len(geo_date_list) - 1"""
-    return np.array([difference.days for difference in np.diff(geo_date_list)])
+        np.array: days between each datetime in date_list
+            dtype=int, length is a len(date_list) - 1"""
+    return np.array([d.days for d in np.diff(date_list)])
 
 
 def load_geolist_intlist(filepath, geolist_ignore_file=None, parse=True):
@@ -187,57 +187,56 @@ def ignore_geo_dates(geolist, intlist, ignore_file="geolist_missing.txt"):
     return valid_geos, valid_igrams
 
 
-def build_A_matrix(geolist, intlist):
+def build_A_matrix(sar_date_list, ifg_date_list):
     """Takes the list of igram dates and builds the SBAS A matrix
 
     Args:
-        geolist (list[date]): datetimes of the .geo acquisitions
-        intlist (list[tuple(date, date)])
+        sar_date_list (list[date]): datetimes of the acquisitions
+        ifg_date_list (list[tuple(date, date)])
 
     Returns:
         np.array 2D: the incident-like matrix from the SBAS paper: A*phi = dphi
-            Each row corresponds to an igram, each column to a .geo
-            value will be -1 on the early (slave) igrams, +1 on later (master)
+            Each row corresponds to an igram, each column to a SAR date
+            value will be -1 on the early (reference) igrams, +1 on later (secondary)
     """
     # We take the first .geo to be time 0, leave out of matrix
     # Match on date (not time) to find indices
-    geolist = geolist[1:]
-    M = len(intlist)  # Number of igrams, number of rows
-    N = len(geolist)
+    sar_date_list = sar_date_list[1:]
+    M = len(ifg_date_list)  # Number of igrams, number of rows
+    N = len(sar_date_list)
     A = np.zeros((M, N))
     for j in range(M):
-        early_igram, late_igram = intlist[j]
+        early_igram, late_igram = ifg_date_list[j]
 
         try:
-            idx_early = geolist.index(early_igram)
+            idx_early = sar_date_list.index(early_igram)
             A[j, idx_early] = -1
         except ValueError:  # The first SLC will not be in the matrix
             pass
 
-        idx_late = geolist.index(late_igram)
+        idx_late = sar_date_list.index(late_igram)
         A[j, idx_late] = 1
 
     return A
 
 
-def build_B_matrix(geolist, intlist):
+def build_B_matrix(sar_date_list, ifg_date_list):
     """Takes the list of igram dates and builds the SBAS B (velocity coeff) matrix
 
     Args:
-        geolist (list[date]): dates of the .geo SAR acquisitions
-        intlist (list[tuple(date, date)])
+        sar_date_list (list[date]): dates of the SAR acquisitions
+        ifg_date_list (list[tuple(date, date)])
 
     Returns:
         np.array: 2D array of the velocity coefficient matrix from the SBAS paper:
                 Bv = dphi
-            Each row corresponds to an igram, each column to a .geo
+            Each row corresponds to an igram, each column to a SAR date
             value will be t_k+1 - t_k for columns after the -1 in A,
             up to and including the +1 entry
     """
-    # TODO: get rid of A matrix building first
-    timediffs = find_time_diffs(geolist)
+    timediffs = find_time_diffs(sar_date_list)
 
-    A = build_A_matrix(geolist, intlist)
+    A = build_A_matrix(sar_date_list, ifg_date_list)
     B = np.zeros_like(A)
 
     for j, row in enumerate(A):
