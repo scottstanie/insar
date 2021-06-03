@@ -311,10 +311,8 @@ def prunesolve(B, v):
 
 def load_geolist_intlist(
     igram_dir=None,
-    geo_dir=None,
     h5file=None,
     geolist_ignore_file=None,
-    igram_ext=".int",
     parse=True,
     min_date=None,
     max_date=None,

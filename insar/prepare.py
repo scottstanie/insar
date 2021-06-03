@@ -378,8 +378,6 @@ def compute_int_masks(
     mask_file=None,
     igram_path=None,
     geo_path=None,
-    row_looks=None,
-    col_looks=None,
     dem_rsc=None,
     igram_ext=".unw",
     geo_date_list=None,
@@ -443,34 +441,6 @@ def _find_file_shape(dem_rsc=None, file_list=None, row_looks=None, col_looks=Non
         return (len(file_list), g.shape[0], g.shape[1])
     else:
         return (len(file_list), dem_rsc["file_length"], dem_rsc["width"])
-
-
-def matrix_indices(shape, flatten=True):
-    """Returns a pair of vectors for all indices of a 2D array
-
-    Convenience function to help remembed mgrid syntax
-
-    Example:
-        >>> a = np.arange(12).reshape((4, 3))
-        >>> print(a)
-        [[ 0  1  2]
-         [ 3  4  5]
-         [ 6  7  8]
-         [ 9 10 11]]
-        >>> rs, cs = matrix_indices(a.shape)
-        >>> rs
-        array([0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3])
-        >>> cs
-        array([0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2])
-        >>> print(a[rs[1], cs[1]] == a[0, 1])
-        True
-    """
-    nrows, ncols = shape
-    row_block, col_block = np.mgrid[0:nrows, 0:ncols]
-    if flatten:
-        return row_block.flatten(), col_block.flatten()
-    else:
-        return row_block, col_block
 
 
 def _read_mask_by_idx(idx, fname="masks.h5", dset=IGRAM_MASK_DSET):
