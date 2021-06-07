@@ -4,6 +4,7 @@ import numpy as np
 import h5py
 from insar.stackavg import load_geolist_intlist, find_valid
 import apertools.sario as sario
+import apertools.utils as utils
 import apertools.netcdf as netcdf
 from insar import timeseries
 from insar.timeseries import PHASE_TO_CM, cols_to_stack, stack_to_cols
@@ -22,6 +23,7 @@ def main(
     unw_stack=None,
     max_date=None,
     max_temporal_baseline=800,
+    max_bandwidth=100,
     outfile="stack_final.h5",
 ):
     unw_stack = _load_unw_stack(unw_file, unw_stack)
@@ -31,25 +33,35 @@ def main(
     # with rio.open("velocities_201706_linear_max800_noprune_170_5.tif") as src:
     # velos = src.read(2)
     # r, c = np.unravel_index(np.argmin(velos), velos.shape)
-    geolist_full = sario.load_geolist_from_h5(unw_file)
-    intlist_full = sario.load_intlist_from_h5(unw_file)
+    # geolist_full = sario.load_geolist_from_h5(unw_file)
+    # intlist_full = sario.load_intlist_from_h5(unw_file)
+    geolist, intlist = sario.load_geolist_intlist(
+        h5file=unw_file, geolist_ignore_file="geolist_ignore.txt"
+    )
 
     # geolist, intlist, valid_idxs = load_geolist_intlist("geolist_ignore.txt",
     #                                                     800,
     #                                                     max_date=datetime.date(2018, 1, 1))
-    geolist, intlist, valid_idxs = find_valid(
-        geolist_full,
-        intlist_full,
+    # valid_sar_date, valid_ifg_dates, valid_ifg_idxs = utils.filter_geolist_intlist(
+    geolist, intlist, valid_ifg_idxs = utils.filter_geolist_intlist(
+        ifg_date_list=intlist,
         max_date=max_date,
-        ignore_geo_file="geolist_ignore.txt",
         max_temporal_baseline=max_temporal_baseline,
+        max_bandwidth=max_bandwidth,
     )
+    # geolist, intlist, valid_idxs = find_valid(
+    # geolist_full,
+    # intlist_full,
+    # max_date=max_date,
+    # ignore_geo_file="geolist_ignore.txt",
+    # max_temporal_baseline=max_temporal_baseline,
+    # )
     A = timeseries.build_A_matrix(geolist, intlist)
     # r, c = 300, 300
     # unw_pixel = unw_stack[valid_idxs, r, c]
     # phi = np.insert(np.linalg.pinv(A) @ unw_pixel, 0, 0)
 
-    unw_subset = unw_stack[valid_idxs]
+    unw_subset = unw_stack[valid_ifg_idxs]
     print(f"Selecting subset, shape = {unw_subset.shape}")
     pA = np.linalg.pinv(A)
     print(f"Forming pseudo-inverse of A")
@@ -119,5 +131,42 @@ def solve_linear_offset(unw_file=None, unw_stack=None):
     return vj
 
 
-# if __name__ == "__main__":
-# main(unw_stack)
+def solve_multiple_bandwidths(unw_stack, bandwidths, rr, cc, max_date=None):
+    ifg_dates_all = sario.load_intlist_from_h5("unw_stack.h5")
+    phi_list = []
+    sar_date_list = []
+    for bw in bandwidths:
+        geolist, intlist, valid_idx = utils.filter_geolist_intlist(
+            ifg_date_list=ifg_dates_all,
+            max_date=max_date,
+            max_bandwidth=bw,
+            ignore_file="geolist_ignore.txt",
+        )
+        A = timeseries.build_A_matrix(geolist, intlist)
+
+        unw_pixel = unw_stack[valid_idx, rr, cc]
+        # phi = pA @ unw_subset
+        phi = np.insert(np.linalg.pinv(A) @ unw_pixel, 0, 0)
+        phi_list.append(phi * PHASE_TO_CM)
+        sar_date_list.append(geolist)
+    return sar_date_list, phi_list
+
+
+def plot_bw(sar_date_list, phi_list, bandwidths):
+    import matplotlib.pyplot as plt
+
+    bw_phi = sorted(zip(bandwidths, phi_list), key=lambda tup: tup[0], reverse=True)
+    fig, axes = plt.subplots(1, 2)
+    for idx, (bw, p) in enumerate(bw_phi):
+        dates = sar_date_list[idx]
+        ax = axes[0]
+        ax.plot(dates, p, "-x", label=bw)
+
+        ax = axes[1]
+        ax.plot(dates, p - bw_phi[0][1], "-x", label=bw)
+    ax.legend()
+    ax.grid(True)
+    
+
+    # if __name__ == "__main__":
+    # main(unw_stack)

@@ -18,7 +18,6 @@ import os
 import numpy as np
 
 from apertools import sario, latlon
-from insar import mask
 from apertools.log import get_log, log_runtime
 
 SENTINEL_WAVELENGTH = 5.5465763  # cm
@@ -405,7 +404,8 @@ def invert_sbas(
 
     # Velocity will be result of the inversion
     # velocity_array, _, rank_B, sing_vals_B = np.linalg.lstsq(B, delta_phis, rcond=None)
-    velocity_array = mask.masked_lstsq(B, delta_phis, geo_mask_columns)
+    # velocity_array = mask.masked_lstsq(B, delta_phis, geo_mask_columns)
+    raise ValueError()
 
     # velocity array entries: v_j = (phi_j - phi_j-1)/(t_j - t_j-1)
     if velocity_array.ndim == 1:
