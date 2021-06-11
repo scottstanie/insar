@@ -1,6 +1,7 @@
 import datetime
 import rasterio as rio
 import numpy as np
+from numpy.polynomial.polynomial import polyfit
 import h5py
 from insar.stackavg import load_geolist_intlist, find_valid
 import apertools.sario as sario
@@ -64,7 +65,7 @@ def main(
     unw_subset = unw_stack[valid_ifg_idxs]
     print(f"Selecting subset, shape = {unw_subset.shape}")
     pA = np.linalg.pinv(A)
-    print(f"Forming pseudo-inverse of A")
+    print("Forming pseudo-inverse of A")
     # unw_subset.shape, pA.shape
     # ((1170, 120, 156), (51, 1170))
     # So want to multiply first dim by the last dim
@@ -152,6 +153,75 @@ def solve_multiple_bandwidths(unw_stack, bandwidths, rr, cc, max_date=None):
     return sar_date_list, phi_list
 
 
+def solve_stack_bandwidths(
+    unw_stack,
+    max_date=datetime.date(2018, 1, 1),
+    bandwidths=[1, 2, 5, 10, 100],
+    outfile="stack_bw_{bw}.h5",
+):
+    ifg_dates_all = sario.load_intlist_from_h5("unw_stack.h5")
+    for bw in bandwidths:
+        print(f"Solving using bandwidth {bw = }")
+        geolist, intlist, valid_ifg_idxs = utils.filter_geolist_intlist(
+            ifg_date_list=ifg_dates_all,
+            max_date=max_date,
+            max_bandwidth=bw,
+            ignore_file="geolist_ignore.txt",
+        )
+        date_offsets = [(g - geolist[0]).days for g in geolist]
+        A = timeseries.build_A_matrix(geolist, intlist)
+
+        unw_subset = unw_stack[valid_ifg_idxs]
+        print(f"Selecting subset, shape = {unw_subset.shape}")
+        pA = np.linalg.pinv(A)
+        print(f"Forming pseudo-inverse of A, shape = {pA.shape}")
+        ni, r, c = unw_subset.shape  # igrams, rows, cols
+        unw_cols = stack_to_cols(unw_subset)
+        phi_soln = pA @ unw_cols
+        # Add a 0 image for the first date
+        phi_soln = np.vstack((np.zeros(phi_soln.shape[1]), phi_soln))
+
+        # Avoid feeding nans to polyfit
+        # velo_per_pixel = np.zeros(phi_soln.shape[1])
+        # _, goodcols = np.where(~np.isnan(phi_soln))
+        # goodcols = np.sort(np.unique(goodcols))
+        # velo_fits = polyfit(date_offsets, phi_soln[:, goodcols], 1)[1]
+        # velo_per_pixel[goodcols] = velo_fits
+        phi_nonan = np.where(np.isnan(phi_soln), 0, phi_soln)
+        velo_per_pixel = polyfit(date_offsets, phi_nonan, 1)[1]
+
+        # Also solve using the Bv = dphi method
+        Blin = timeseries.build_B_matrix(geolist, intlist, model='linear')
+        pB = np.linalg.pinv(Blin)
+        v_soln = pB @ unw_cols
+
+        stack = phi_soln.reshape((-1, *unw_subset.shape[1:]))
+        # stack = np.concatenate((np.zeros((1, r, c)), stack), axis=0)
+        stack *= PHASE_TO_CM
+        print(f"Output stack shape = {stack.shape}")
+
+        velo_img = velo_per_pixel.reshape(unw_subset.shape[1:])
+        velo_img *= PHASE_TO_CM
+
+        velo_img_b = v_soln.reshape(unw_subset.shape[1:])
+        velo_img_b *= PHASE_TO_CM
+
+        cur_of = outfile.format(bw=bw)
+        dset = "stack"
+        with h5py.File(cur_of, "w") as f:
+            f[dset] = stack
+            f["velos"] = velo_img
+            f["velos_b"] = velo_img_b
+        sario.save_geolist_to_h5(out_file=cur_of, geo_date_list=geolist, dset_name=dset)
+        dem_rsc = sario.load_dem_from_h5("unw_stack.h5")
+        sario.save_dem_to_h5(cur_of, dem_rsc)
+        netcdf.hdf5_to_netcdf(
+            cur_of,
+            dset_name=dset,
+            stack_dim="date",
+        )
+
+
 def plot_bw(sar_date_list, phi_list, bandwidths):
     import matplotlib.pyplot as plt
 
@@ -166,7 +236,6 @@ def plot_bw(sar_date_list, phi_list, bandwidths):
         ax.plot(dates, p - bw_phi[0][1], "-x", label=bw)
     ax.legend()
     ax.grid(True)
-    
 
     # if __name__ == "__main__":
     # main(unw_stack)

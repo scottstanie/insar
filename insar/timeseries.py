@@ -219,12 +219,13 @@ def build_A_matrix(sar_date_list, ifg_date_list):
     return A
 
 
-def build_B_matrix(sar_date_list, ifg_date_list):
+def build_B_matrix(sar_dates, ifg_date_list, model=None):
     """Takes the list of igram dates and builds the SBAS B (velocity coeff) matrix
 
     Args:
         sar_date_list (list[date]): dates of the SAR acquisitions
         ifg_date_list (list[tuple(date, date)])
+        model (str): If 'linear', creates the M x 1 matrix for linear velo model
 
     Returns:
         np.array: 2D array of the velocity coefficient matrix from the SBAS paper:
@@ -233,9 +234,13 @@ def build_B_matrix(sar_date_list, ifg_date_list):
             value will be t_k+1 - t_k for columns after the -1 in A,
             up to and including the +1 entry
     """
-    timediffs = find_time_diffs(sar_date_list)
+    try:
+        sar_dates = sar_dates.date
+    except AttributeError:
+        pass
+    timediffs = np.array([difference.days for difference in np.diff(sar_dates)])
 
-    A = build_A_matrix(sar_date_list, ifg_date_list)
+    A = build_A_matrix(sar_dates, ifg_date_list)
     B = np.zeros_like(A)
 
     for j, row in enumerate(A):
@@ -248,7 +253,10 @@ def build_B_matrix(sar_date_list, ifg_date_list):
         # to the later igram index
         B[j][start_idx:end_idx] = timediffs[start_idx:end_idx]
 
-    return B
+    if model == "linear":
+        return B.sum(axis=1, keepdims=True)
+    else:
+        return B
 
 
 def shift_stack(stack, ref_row, ref_col, window=3, window_func=np.mean):
