@@ -126,3 +126,17 @@ def create_igrams(rowlooks=1, collooks=1, igram_ext=".int"):
         logger.info(f"Saving {cor_name}, {igram_name}")
         sario.save(cor_name, np.stack([amp, cor], axis=0))
         sario.save(igram_name, igram)
+
+
+def _get_weights(wsize):
+    return 1 - np.abs(2 * (np.arange(wsize) - wsize // 2)) / (wsize + 1)
+
+
+def make_igram_gpu(early_filename, late_filename):
+    from apertools.utils import read_blocks
+    import cupy as cp
+    from cupyx.scipy.ndimage import correlate as correlate_gpu
+
+    blks1 = read_blocks(early_filename)
+    blks2 = read_blocks(early_filename)
+    pass
