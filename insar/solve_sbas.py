@@ -12,7 +12,7 @@ from insar.timeseries import PHASE_TO_CM, cols_to_stack, stack_to_cols
 from scipy.ndimage.filters import gaussian_filter
 
 
-def _load_unw_stack(unw_file, unw_stack):
+def _load_unw_stack(unw_file, unw_stack=None):
     if unw_stack is None:
         with h5py.File(unw_file) as f:
             unw_stack = f["stack_flat_shifted"][:]
@@ -105,18 +105,36 @@ def filter_aps(stack, space_sigma=5, time_sigma=3):
     return gaussian_filter(hp_time, [0, space_sigma, space_sigma])
 
 
-def solve_linear_offset(unw_file=None, unw_stack=None):
+def solve_linear_offset(
+    unw_file=None,
+    unw_stack=None,
+    eq_date=datetime.date(2020, 3, 26),
+    labels_file="labels.nc",
+):
+    import xarray as xr
+    from apertools.correlation import cov_matrix_tropo
+
     unw_stack = _load_unw_stack(unw_file, unw_stack)
-    eq_date = datetime.date(2020, 3, 26)
     # geo_date_list = sario.load_geolist_from_h5(unw_file)
-    igram_date_list = sario.load_intlist_from_h5(unw_file)
+    ifg_date_list = sario.load_intlist_from_h5(unw_file)
 
     # TODO: valid idx stuff
     # Temporal matrix, for constant velo estimate
-    T = np.array([(ifg[1] - ifg[0]).days for ifg in igram_date_list]).reshape((-1, 1))
+    T = np.array([(ifg[1] - ifg[0]).days for ifg in ifg_date_list]).reshape((-1, 1))
     # "jump" matrix: indicator 1 if ifg contains eq
-    J = np.array([(ifg[0] < eq_date and ifg[1] > eq_date) for ifg in igram_date_list])
+    J = np.array([(ifg[0] < eq_date and ifg[1] > eq_date) for ifg in ifg_date_list])
     J = J.reshape((-1, 1)).astype(int)
+    print(f"{J.sum()} / {len(ifg_date_list)} ifgs cross the date {eq_date}")
+
+    labels = xr.open_dataset(labels_file)
+    variances = labels.data.data
+    Sigma = cov_matrix_tropo(ifg_date_list=ifg_date_list, sar_date_variances=variances)
+    # TODO: should their be large negative eigenvalues??
+    min_eig = (np.linalg.eig(Sigma)[0].round(5)).min().astype(float)
+    if min_eig < 0:
+        Sigma += 1.1*(-min_eig) * np.eye(len(ifg_date_list))
+    C = np.linalg.cholesky(Sigma)
+
     A = np.hstack((T, J))
     pA = np.linalg.pinv(A)
 
@@ -191,7 +209,7 @@ def solve_stack_bandwidths(
         velo_per_pixel = polyfit(date_offsets, phi_nonan, 1)[1]
 
         # Also solve using the Bv = dphi method
-        Blin = timeseries.build_B_matrix(geolist, intlist, model='linear')
+        Blin = timeseries.build_B_matrix(geolist, intlist, model="linear")
         pB = np.linalg.pinv(Blin)
         v_soln = pB @ unw_cols
 
