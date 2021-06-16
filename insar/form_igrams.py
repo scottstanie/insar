@@ -141,6 +141,7 @@ def _get_weights_square(wsize):
 import numba
 import cupy as cp
 from cupyx.scipy.ndimage import correlate as correlate_gpu
+from scipy.ndimage import correlate
 from apertools.utils import read_blocks, block_iterator
 
 
@@ -176,11 +177,14 @@ def make_igram_gpu(
 
     w_cpu = _get_weights_square(wsize)
     w = cp.asarray(w_cpu)
+    # w = w_cpu
 
     for slc1_cpu, slc2_cpu, win_slice in zip(blks1, blks2, blk_slices):
         print(f"Forming {win_slice = }")
-        slc1 = cp.asarray(slc1_cpu)
-        slc2 = cp.asarray(slc2_cpu)
+        # slc1 = cp.asarray(slc1_cpu)
+        # slc2 = cp.asarray(slc2_cpu)
+        slc1 = slc1_cpu
+        slc2 = slc2_cpu
 
         ifg = slc1 * slc2.conj()
 
@@ -189,11 +193,14 @@ def make_igram_gpu(
         amp2 = slc2.real ** 2 + slc2.imag ** 2
         denom = correlate_gpu(cp.sqrt(amp1 * amp2), w)
         numer = correlate_gpu(cp.abs(ifg), w)
+        # denom = correlate(np.sqrt(amp1 * amp2), w)
+        # numer = correlate(np.abs(ifg), w)
         cor = numer / (EPS + denom)
 
         ifg_cpu = cp.asnumpy(ifg)
         cor_cpu = cp.asnumpy(cor)
-        # print(ifg_cpu[:4, :4])
+        # ifg_cpu = ifg
+        # cor_cpu = cor
 
         _write(
             out_ifg,
