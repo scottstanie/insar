@@ -61,7 +61,8 @@ def form_igram_names(igram_ext=".int"):
     # TODO: use the parsers to get the dates...
     out = []
     for line in sbas_lines:
-        early_file, late_file, temp, spatial = line.split()
+        # early_file, late_file, temp, spatial = line.split()
+        early_file, late_file, _, _ = line.split()
         # "./S1A_20141104.ge
         igram_name = "_".join(map(_get_date, [early_file, late_file])) + igram_ext
         out.append((igram_name, str(early_file), str(late_file)))
