@@ -290,8 +290,6 @@ def create_mask_stacks(
         mask_file=mask_file,
         igram_path=igram_path,
         geo_path=geo_path,
-        row_looks=row_looks,
-        col_looks=col_looks,
         dem_rsc=rsc_data,
         geo_date_list=geo_date_list,
         overwrite=overwrite,

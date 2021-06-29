@@ -127,3 +127,119 @@ def create_igrams(rowlooks=1, collooks=1, igram_ext=".int"):
         logger.info(f"Saving {cor_name}, {igram_name}")
         sario.save(cor_name, np.stack([amp, cor], axis=0))
         sario.save(igram_name, igram)
+
+
+def _get_weights(wsize):
+    assert wsize % 2 == 1
+    return 1 - np.abs(2 * (np.arange(wsize) - wsize // 2)) / (wsize + 1)
+
+
+def _get_weights_square(wsize):
+    w = _get_weights(wsize)
+    return w.reshape((-1, 1)) * w.reshape((1, -1))
+
+
+import numba
+import cupy as cp
+from cupyx.scipy.ndimage import correlate as correlate_gpu
+from scipy.ndimage import correlate
+from apertools.utils import read_blocks, block_iterator
+
+
+def softplus(x):
+    xp = cp.get_array_module(x)
+    return xp.maximum(0, x) + xp.log1p(xp.exp(-abs(x)))
+
+
+def make_igram_gpu(
+    early_filename,
+    late_filename,
+    block_size=(500, 500),
+    overlaps=None,
+    wsize=5,
+    out_ifg="out.int",
+    out_cor="out.cor",
+):
+    from rasterio.windows import Window
+    import rasterio as rio
+
+    if overlaps is None:
+        overlaps = (wsize // 2, wsize // 2)
+
+    out_cor = "testcor.tif"
+    with rio.open(early_filename) as src:
+        full_shape = src.shape
+    blks1 = read_blocks(early_filename, window_shape=block_size, overlaps=overlaps)
+    blks2 = read_blocks(late_filename, window_shape=block_size, overlaps=overlaps)
+    blk_slices = block_iterator(src.shape, block_size, overlaps=overlaps)
+    # Write empty file
+    _write(out_ifg, None, early_filename, "ROI_PAC", dtype=np.complex64)
+    _write(out_cor, None, early_filename, "GTiff", dtype=np.float32)
+
+    w_cpu = _get_weights_square(wsize)
+    w = cp.asarray(w_cpu)
+    # w = w_cpu
+
+    for slc1_cpu, slc2_cpu, win_slice in zip(blks1, blks2, blk_slices):
+        print(f"Forming {win_slice = }")
+        # slc1 = cp.asarray(slc1_cpu)
+        # slc2 = cp.asarray(slc2_cpu)
+        slc1 = slc1_cpu
+        slc2 = slc2_cpu
+
+        ifg = slc1 * slc2.conj()
+
+        # Correlation
+        amp1 = slc1.real ** 2 + slc1.imag ** 2
+        amp2 = slc2.real ** 2 + slc2.imag ** 2
+        denom = correlate_gpu(cp.sqrt(amp1 * amp2), w)
+        numer = correlate_gpu(cp.abs(ifg), w)
+        # denom = correlate(np.sqrt(amp1 * amp2), w)
+        # numer = correlate(np.abs(ifg), w)
+        cor = numer / (EPS + denom)
+
+        ifg_cpu = cp.asnumpy(ifg)
+        cor_cpu = cp.asnumpy(cor)
+        # ifg_cpu = ifg
+        # cor_cpu = cor
+
+        _write(
+            out_ifg,
+            ifg_cpu,
+            early_filename,
+            "ROI_PAC",
+            window=Window.from_slices(*win_slice),
+            mode="r+",
+        )
+        _write(
+            out_cor,
+            cor_cpu,
+            early_filename,
+            "GTiff",
+            window=Window.from_slices(*win_slice),
+            mode="r+",
+        )
+
+
+def _write(outname, img, in_name, driver, mode="w", window=None, dtype=None):
+    import rasterio as rio
+
+    if dtype is None:
+        dtype = img.dtype
+    with rio.open(in_name) as src:
+        full_height, full_width = src.shape
+        transform, crs, nodata = src.transform, src.crs, src.nodata
+    with rio.open(
+        outname,
+        mode,
+        driver=driver,
+        width=full_width,
+        height=full_height,
+        count=1,
+        dtype=dtype,
+        transform=transform,
+        crs=crs,
+        nodata=nodata,
+    ) as dst:
+        if img is not None:
+            dst.write(img, window=window, indexes=1)
