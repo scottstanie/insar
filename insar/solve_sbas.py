@@ -8,7 +8,7 @@ import apertools.sario as sario
 import apertools.utils as utils
 import apertools.netcdf as netcdf
 from insar import timeseries
-from insar.timeseries import PHASE_TO_CM, cols_to_stack, stack_to_cols
+from insar.timeseries import PHASE_TO_CM, cols_to_stack, stack_to_cols, integrate_velocities
 from scipy.ndimage.filters import gaussian_filter
 
 
@@ -210,8 +210,8 @@ def solve_stack_bandwidths(
 
         # Also solve using the Bv = dphi method
         Blin = timeseries.build_B_matrix(geolist, intlist, model="linear")
-        pB = np.linalg.pinv(Blin)
-        v_soln = pB @ unw_cols
+        pBlin = np.linalg.pinv(Blin)
+        v_soln = pBlin @ unw_cols
 
         stack = phi_soln.reshape((-1, *unw_subset.shape[1:]))
         # stack = np.concatenate((np.zeros((1, r, c)), stack), axis=0)
@@ -224,20 +224,37 @@ def solve_stack_bandwidths(
         velo_img_b = v_soln.reshape(unw_subset.shape[1:])
         velo_img_b *= PHASE_TO_CM
 
+        # # This turns out identical to the A version
+        # B = timeseries.build_B_matrix(geolist, intlist)
+        # pB = np.linalg.pinv(B)
+        # v_soln_B = pB @ unw_cols
+        # timediffs = np.array([d.days for d in np.diff(geolist)])
+        # phi_soln_B = integrate_velocities(v_soln_B, timediffs)
+        # stack_B = phi_soln_B.reshape((-1, *unw_subset.shape[1:]))
+        # stack_B *= PHASE_TO_CM
+
         cur_of = outfile.format(bw=bw)
-        dset = "stack"
+        stack_dset = "stack"
         with h5py.File(cur_of, "w") as f:
-            f[dset] = stack
+            f[stack_dset] = stack
+            # f["stack_B"] = stack_B
             f["velos"] = velo_img
             f["velos_b"] = velo_img_b
-        sario.save_geolist_to_h5(out_file=cur_of, geo_date_list=geolist, dset_name=dset)
+        sario.save_geolist_to_h5(out_file=cur_of, geo_date_list=geolist, dset_name=stack_dset)
+        # sario.save_geolist_to_h5(out_file=cur_of, geo_date_list=geolist, dset_name="stack_B")
         dem_rsc = sario.load_dem_from_h5("unw_stack.h5")
         sario.save_dem_to_h5(cur_of, dem_rsc)
         netcdf.hdf5_to_netcdf(
             cur_of,
-            dset_name=dset,
+            dset_name=stack_dset,
             stack_dim="date",
         )
+        # netcdf.hdf5_to_netcdf(
+        #     cur_of,
+        #     dset_name="stack_B",
+        #     stack_dim="date",
+        #     outname=cur_of.replace("stack", "stack_B").replace(".h5", ".nc"),
+        # )
 
 
 def plot_bw(sar_date_list, phi_list, bandwidths):
