@@ -3,7 +3,7 @@ import rasterio as rio
 import numpy as np
 from numpy.polynomial.polynomial import polyfit
 import h5py
-from insar.stackavg import load_geolist_intlist, find_valid
+from insar.stackavg import load_slclist_ifglist, find_valid
 import apertools.sario as sario
 import apertools.utils as utils
 import apertools.netcdf as netcdf
@@ -34,30 +34,30 @@ def main(
     # with rio.open("velocities_201706_linear_max800_noprune_170_5.tif") as src:
     # velos = src.read(2)
     # r, c = np.unravel_index(np.argmin(velos), velos.shape)
-    # geolist_full = sario.load_geolist_from_h5(unw_file)
-    # intlist_full = sario.load_intlist_from_h5(unw_file)
-    geolist, intlist = sario.load_geolist_intlist(
-        h5file=unw_file, geolist_ignore_file="geolist_ignore.txt"
+    # slclist_full = sario.load_slclist_from_h5(unw_file)
+    # ifglist_full = sario.load_ifglist_from_h5(unw_file)
+    slclist, ifglist = sario.load_slclist_ifglist(
+        h5file=unw_file, slclist_ignore_file="slclist_ignore.txt"
     )
 
-    # geolist, intlist, valid_idxs = load_geolist_intlist("geolist_ignore.txt",
+    # slclist, ifglist, valid_idxs = load_slclist_ifglist("slclist_ignore.txt",
     #                                                     800,
     #                                                     max_date=datetime.date(2018, 1, 1))
-    # valid_sar_date, valid_ifg_dates, valid_ifg_idxs = utils.filter_geolist_intlist(
-    geolist, intlist, valid_ifg_idxs = utils.filter_geolist_intlist(
-        ifg_date_list=intlist,
+    # valid_sar_date, valid_ifg_dates, valid_ifg_idxs = utils.filter_slclist_ifglist(
+    slclist, ifglist, valid_ifg_idxs = utils.filter_slclist_ifglist(
+        ifg_date_list=ifglist,
         max_date=max_date,
         max_temporal_baseline=max_temporal_baseline,
         max_bandwidth=max_bandwidth,
     )
-    # geolist, intlist, valid_idxs = find_valid(
-    # geolist_full,
-    # intlist_full,
+    # slclist, ifglist, valid_idxs = find_valid(
+    # slclist_full,
+    # ifglist_full,
     # max_date=max_date,
-    # ignore_geo_file="geolist_ignore.txt",
+    # ignore_geo_file="slclist_ignore.txt",
     # max_temporal_baseline=max_temporal_baseline,
     # )
-    A = timeseries.build_A_matrix(geolist, intlist)
+    A = timeseries.build_A_matrix(slclist, ifglist)
     # r, c = 300, 300
     # unw_pixel = unw_stack[valid_idxs, r, c]
     # phi = np.insert(np.linalg.pinv(A) @ unw_pixel, 0, 0)
@@ -84,7 +84,7 @@ def main(
     dset = "stack"
     with h5py.File(outfile, "w") as f:
         f[dset] = stack
-    sario.save_geolist_to_h5(out_file=outfile, geo_date_list=geolist, dset_name=dset)
+    sario.save_slclist_to_h5(out_file=outfile, geo_date_list=slclist, dset_name=dset)
     dem_rsc = sario.load_dem_from_h5(unw_file)
     sario.save_dem_to_h5(outfile, dem_rsc)
     netcdf.hdf5_to_netcdf(
@@ -115,8 +115,8 @@ def solve_linear_offset(
     from apertools.correlation import cov_matrix_tropo
 
     unw_stack = _load_unw_stack(unw_file, unw_stack)
-    # geo_date_list = sario.load_geolist_from_h5(unw_file)
-    ifg_date_list = sario.load_intlist_from_h5(unw_file)
+    # geo_date_list = sario.load_slclist_from_h5(unw_file)
+    ifg_date_list = sario.load_ifglist_from_h5(unw_file)
 
     # TODO: valid idx stuff
     # Temporal matrix, for constant velo estimate
@@ -151,23 +151,23 @@ def solve_linear_offset(
 
 
 def solve_multiple_bandwidths(unw_stack, bandwidths, rr, cc, max_date=None):
-    ifg_dates_all = sario.load_intlist_from_h5("unw_stack.h5")
+    ifg_dates_all = sario.load_ifglist_from_h5("unw_stack.h5")
     phi_list = []
     sar_date_list = []
     for bw in bandwidths:
-        geolist, intlist, valid_idx = utils.filter_geolist_intlist(
+        slclist, ifglist, valid_idx = utils.filter_slclist_ifglist(
             ifg_date_list=ifg_dates_all,
             max_date=max_date,
             max_bandwidth=bw,
-            ignore_file="geolist_ignore.txt",
+            ignore_file="slclist_ignore.txt",
         )
-        A = timeseries.build_A_matrix(geolist, intlist)
+        A = timeseries.build_A_matrix(slclist, ifglist)
 
         unw_pixel = unw_stack[valid_idx, rr, cc]
         # phi = pA @ unw_subset
         phi = np.insert(np.linalg.pinv(A) @ unw_pixel, 0, 0)
         phi_list.append(phi * PHASE_TO_CM)
-        sar_date_list.append(geolist)
+        sar_date_list.append(slclist)
     return sar_date_list, phi_list
 
 
@@ -177,17 +177,17 @@ def solve_stack_bandwidths(
     bandwidths=[1, 2, 5, 10, 100],
     outfile="stack_bw_{bw}.h5",
 ):
-    ifg_dates_all = sario.load_intlist_from_h5("unw_stack.h5")
+    ifg_dates_all = sario.load_ifglist_from_h5("unw_stack.h5")
     for bw in bandwidths:
         print(f"Solving using bandwidth {bw = }")
-        geolist, intlist, valid_ifg_idxs = utils.filter_geolist_intlist(
+        slclist, ifglist, valid_ifg_idxs = utils.filter_slclist_ifglist(
             ifg_date_list=ifg_dates_all,
             max_date=max_date,
             max_bandwidth=bw,
-            ignore_file="geolist_ignore.txt",
+            ignore_file="slclist_ignore.txt",
         )
-        date_offsets = [(g - geolist[0]).days for g in geolist]
-        A = timeseries.build_A_matrix(geolist, intlist)
+        date_offsets = [(g - slclist[0]).days for g in slclist]
+        A = timeseries.build_A_matrix(slclist, ifglist)
 
         unw_subset = unw_stack[valid_ifg_idxs]
         print(f"Selecting subset, shape = {unw_subset.shape}")
@@ -209,7 +209,7 @@ def solve_stack_bandwidths(
         velo_per_pixel = polyfit(date_offsets, phi_nonan, 1)[1]
 
         # Also solve using the Bv = dphi method
-        Blin = timeseries.build_B_matrix(geolist, intlist, model="linear")
+        Blin = timeseries.build_B_matrix(slclist, ifglist, model="linear")
         pBlin = np.linalg.pinv(Blin)
         v_soln = pBlin @ unw_cols
 
@@ -225,10 +225,10 @@ def solve_stack_bandwidths(
         velo_img_b *= PHASE_TO_CM
 
         # # This turns out identical to the A version
-        # B = timeseries.build_B_matrix(geolist, intlist)
+        # B = timeseries.build_B_matrix(slclist, ifglist)
         # pB = np.linalg.pinv(B)
         # v_soln_B = pB @ unw_cols
-        # timediffs = np.array([d.days for d in np.diff(geolist)])
+        # timediffs = np.array([d.days for d in np.diff(slclist)])
         # phi_soln_B = integrate_velocities(v_soln_B, timediffs)
         # stack_B = phi_soln_B.reshape((-1, *unw_subset.shape[1:]))
         # stack_B *= PHASE_TO_CM
@@ -240,8 +240,8 @@ def solve_stack_bandwidths(
             # f["stack_B"] = stack_B
             f["velos"] = velo_img
             f["velos_b"] = velo_img_b
-        sario.save_geolist_to_h5(out_file=cur_of, geo_date_list=geolist, dset_name=stack_dset)
-        # sario.save_geolist_to_h5(out_file=cur_of, geo_date_list=geolist, dset_name="stack_B")
+        sario.save_slclist_to_h5(out_file=cur_of, geo_date_list=slclist, dset_name=stack_dset)
+        # sario.save_slclist_to_h5(out_file=cur_of, geo_date_list=slclist, dset_name="stack_B")
         dem_rsc = sario.load_dem_from_h5("unw_stack.h5")
         sario.save_dem_to_h5(cur_of, dem_rsc)
         netcdf.hdf5_to_netcdf(

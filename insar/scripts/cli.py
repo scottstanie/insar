@@ -170,8 +170,8 @@ def parse_steps(ctx, param, value):
     "--ignore-geos",
     is_flag=True,
     show_default=True,
-    help="Use the geolist ignore file to ignore dates "
-    "(saved to geolist_ignore.txt from `view-masks`",
+    help="Use the slclist ignore file to ignore dates "
+    "(saved to slclist_ignore.txt from `view-masks`",
 )
 @click.option(
     "--constant-velocity",
@@ -235,8 +235,8 @@ def process(context, **kwargs):
 @click.option("--mask-file", "-f", default="masks.h5", help="filename of mask stack")
 @click.option("--downsample", "-d", default=1, help="Amount to downsample image")
 @click.option(
-    "--geolist-ignore-file",
-    default="geolist_ignore.txt",
+    "--slclist-ignore-file",
+    default="slclist_ignore.txt",
     help="File to save date of missing .geos on click",
 )
 @click.option(
@@ -250,14 +250,14 @@ def process(context, **kwargs):
 )
 @click.option("--vmax", type=float, help="Optional: Maximum value for imshow")
 def view_masks(
-    mask_file, downsample, geolist_ignore_file, print_dates, cmap, vmin, vmax
+    mask_file, downsample, slclist_ignore_file, print_dates, cmap, vmin, vmax
 ):
     import numpy as np
     import apertools.sario
     import apertools.plotting
     import h5py
 
-    geo_date_list = apertools.sario.load_geolist_from_h5(mask_file)
+    geo_date_list = apertools.sario.load_slclist_from_h5(mask_file)
 
     def _print(series, row, col):
         dstrings = [d.strftime("%Y%m%d") for d in np.array(geo_date_list)[series]]
@@ -269,7 +269,7 @@ def view_masks(
             g.strftime(apertools.sario.DATE_FMT)
             for g in np.array(geo_date_list)[series]
         ]
-        with open(geolist_ignore_file, "w") as f:
+        with open(slclist_ignore_file, "w") as f:
             print("Writing %s dates: %s" % (len(geo_str_list), geo_str_list))
             for gdate in geo_str_list:
                 f.write("%s\n" % gdate)
@@ -287,14 +287,14 @@ def view_masks(
 
     if print_dates:
         callback = _print
-    elif geolist_ignore_file:
-        print("Saving to %s" % geolist_ignore_file)
+    elif slclist_ignore_file:
+        print("Saving to %s" % slclist_ignore_file)
         callback = _save_missing_geos
 
     apertools.plotting.view_stack(
         geo_masks,
         display_img=composite_mask,
-        geolist=geo_date_list,
+        slclist=geo_date_list,
         cmap=cmap,
         label="is masked",
         title="Number of dates of missing .geo data",
@@ -361,7 +361,7 @@ def blob(
 ):
     """Find and view blobs in deformation
 
-    If deformation.npy and geolist.npy or .unw files are not in current directory,
+    If deformation.npy and slclist.npy or .unw files are not in current directory,
     use the --path option:
 
         insar --path /path/to/igrams blob

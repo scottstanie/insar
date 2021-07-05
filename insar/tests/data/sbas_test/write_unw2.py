@@ -46,7 +46,7 @@ print(truth_geos)
 import ipdb
 
 # ipdb.set_trace()
-with open("geolist", "w") as f:
+with open("slclist", "w") as f:
     for idx, geo in enumerate(truth_geos):
         fname = "S1A_{}.geo".format(geo_date_list[idx].strftime("%Y%m%d"))
         geo.tofile(fname)
@@ -91,7 +91,7 @@ for early_idx, late_idx in itertools.combinations(range(len(truth_geos)), 2):
     igram_fname_list.append(fname)
     igram_list.append(igram)
 
-with open("intlist", "w") as f:
+with open("ifglist", "w") as f:
     for ig in igram_fname_list:
         f.write("%s\n" % ig)
 

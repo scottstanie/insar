@@ -2,15 +2,15 @@
 Functions for performing time series analysis of unwrapped interferograms
 
 files in the igrams folder:
-    geolist, intlist, sbas_list
-scott@lidar igrams]$ head geolist
+    slclist, ifglist, sbas_list
+scott@lidar igrams]$ head slclist
 ../S1A_IW_SLC__1SDV_20180420T043026_20180420T043054_021546_025211_81BE.SAFE.geo
 ../S1A_IW_SLC__1SDV_20180502T043026_20180502T043054_021721_025793_5C18.SAFE.geo
 [scott@lidar igrams]$ head sbas_list
 ../S1A_IW_SLC__1SDV_20180420T043026_20180420T043054_021546_025211_81BE.SAFE.geo \
         ../S1A_IW_SLC__1SDV_20180502T043026_20180502T043054_021721_025793_5C18.SAFE.geo 12.0   \
         -16.733327776024169
-[scott@lidar igrams]$ head intlist
+[scott@lidar igrams]$ head ifglist
 20180420_20180502.int
 
 """
@@ -37,13 +37,13 @@ def run_inversion(
     deramp=True,
     deramp_order=1,
     masking=True,
-    geolist_ignore_file="geolist_missing.txt",
+    slclist_ignore_file="slclist_missing.txt",
     verbose=False,
 ):
     """Runs SBAS inversion on all unwrapped igrams
 
     Args:
-        igram_path (str): path to the directory containing `intlist`,
+        igram_path (str): path to the directory containing `ifglist`,
             the .int filenames, the .unw files, and the dem.rsc file
         reference (tuple[int, int]): row and col index of the reference pixel to subtract
         window (int): size of the group around ref pixel to avg for reference.
@@ -57,26 +57,40 @@ def run_inversion(
         deramp (bool): Fits plane to each igram and subtracts (to remove orbital error)
         deramp_order (int): order of polynomial to use when removing phase
             from unwrapped igram
-        geolist_ignore_file (str): text file with list of .geo files to ignore
+        slclist_ignore_file (str): text file with list of .geo files to ignore
             Removes the .geo and and igrams with these date
         masking (bool): flag to load stack of .int.mask files to mask invalid areas
         verbose (bool): print extra timing and debug info
 
     Returns:
-        geolist (list[datetime]): dates of each SAR acquisition from find_geos
+        slclist (list[datetime]): dates of each SAR acquisition from find_geos
         phi_arr (ndarray): absolute phases of every pixel at each time
         deformation (ndarray): matrix of deformations at each pixel and time
     """
     if verbose:
         logger.setLevel(10)  # DEBUG
 
-    geolist, intlist = load_geolist_intlist(
-        igram_path, geolist_ignore_file=geolist_ignore_file, parse=True
+    slclist, ifglist = load_slclist_ifglist(
+        igram_path, slclist_ignore_file=slclist_ignore_file, parse=True
+    )
+    slclist, ifglist = sario.load_slclist_ifglist(
+        h5file=unw_file, slclist_ignore_file="slclist_ignore.txt"
+    )
+
+    # slclist, ifglist, valid_idxs = load_slclist_ifglist("slclist_ignore.txt",
+    #                                                     800,
+    #                                                     max_date=datetime.date(2018, 1, 1))
+    # valid_sar_date, valid_ifg_dates, valid_ifg_idxs = utils.filter_slclist_ifglist(
+    slclist, ifglist, valid_ifg_idxs = utils.filter_slclist_ifglist(
+        ifg_date_list=ifglist,
+        max_date=max_date,
+        max_temporal_baseline=max_temporal_baseline,
+        max_bandwidth=max_bandwidth,
     )
 
     # Prepare B matrix and timediffs used for each pixel inversion
-    B = build_B_matrix(geolist, intlist)
-    timediffs = find_time_diffs(geolist)
+    B = build_B_matrix(slclist, ifglist)
+    timediffs = find_time_diffs(slclist)
     if B.shape[1] != len(timediffs):
         raise ValueError(
             "Shapes of B {} and timediffs {} not compatible".format(
@@ -147,7 +161,7 @@ def run_inversion(
     # Now reshape all outputs that should be in stack form
     phi_arr = cols_to_stack(phi_arr, rows, cols)
     deformation = cols_to_stack(deformation, rows, cols).filled(np.NaN)
-    return (geolist, phi_arr, deformation)
+    return (slclist, phi_arr, deformation)
 
 
 def find_time_diffs(date_list):
@@ -160,30 +174,6 @@ def find_time_diffs(date_list):
         np.array: days between each datetime in date_list
             dtype=int, length is a len(date_list) - 1"""
     return np.array([d.days for d in np.diff(date_list)])
-
-
-def load_geolist_intlist(filepath, geolist_ignore_file=None, parse=True):
-    """Load the geolist and intlist from a directory with igrams"""
-    geolist = sario.find_geos(filepath, parse=parse)
-    intlist = sario.find_igrams(filepath, parse=parse)
-    if geolist_ignore_file is not None:
-        ignore_filepath = os.path.join(filepath, geolist_ignore_file)
-        geolist, intlist = ignore_geo_dates(
-            geolist, intlist, ignore_file=ignore_filepath
-        )
-    return geolist, intlist
-
-
-def ignore_geo_dates(geolist, intlist, ignore_file="geolist_missing.txt"):
-    """Read extra file to ignore certain dates of interferograms"""
-    ignore_geos = set(sario.find_geos(ignore_file))
-    logger.info("Ignoreing the following .geo dates:")
-    logger.info(sorted(ignore_geos))
-    valid_geos = [g for g in geolist if g not in ignore_geos]
-    valid_igrams = [
-        i for i in intlist if i[0] not in ignore_geos and i[1] not in ignore_geos
-    ]
-    return valid_geos, valid_igrams
 
 
 def build_A_matrix(sar_date_list, ifg_date_list):
@@ -337,9 +327,9 @@ def _augment_zeros(B, delta_phis):
     return delta_phis
 
 
-def prepB(geolist, intlist, constant_velocity=False, alpha=0, difference=False):
+def prepB(slclist, ifglist, constant_velocity=False, alpha=0, difference=False):
     """TODO: transfer this to the "invert_sbas"? this is from julia"""
-    B = build_B_matrix(geolist, intlist)
+    B = build_B_matrix(slclist, ifglist)
     # Adjustments to solution:
     # Force velocity constant across time
     if constant_velocity is True:
@@ -440,7 +430,7 @@ def integrate_velocities(velocity_array, timediffs):
 
     # Now the final phase results are the cumulative sum of delta phis
     phi_arr = np.ma.cumsum(phi_diffs, axis=0)
-    # Add 0 as first entry of phase array to match geolist length on each col
+    # Add 0 as first entry of phase array to match slclist length on each col
     phi_arr = np.ma.vstack((np.zeros(phi_arr.shape[1]), phi_arr))
 
     return phi_arr

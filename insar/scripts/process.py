@@ -398,7 +398,7 @@ def run_sbas_inversion(
     # cmd = "/home/scott/repos/InsarTimeseries.jl/builddir/insarts " \
 
     if ignore_geos:
-        cmd += " --ignore geolist_ignore.txt "
+        cmd += " --ignore slclist_ignore.txt "
 
     if constant_velocity:
         output_name = "deformation_linear.h5"

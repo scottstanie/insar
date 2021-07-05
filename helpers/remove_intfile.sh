@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Removes references to a bad .geo date within the intlist and geolist
+# Removes references to a bad .geo date within the ifglist and slclist
 # Used when there is any reason to completely remove all igrams
 # for one specific date
 # If no path specified, igrams assumed to be in current directory
@@ -23,25 +23,25 @@ else
 	DIR="$2"
 fi
 
-if [ ! -f "$DIR/intlist" ]; then
-	echo "File $DIR/intlist does not exist."
+if [ ! -f "$DIR/ifglist" ]; then
+	echo "File $DIR/ifglist does not exist."
 	exit 1
 fi
 
 
-NUMLINES=$(grep -c "$RMDATE" "$DIR/intlist")
+NUMLINES=$(grep -c "$RMDATE" "$DIR/ifglist")
 if [ $NUMLINES -gt 0 ]; then
-	echo "Removing $NUMLINES lines from $DIR/intlist that match $RMDATE"
-	grep -v "$RMDATE" "$DIR/intlist" > /tmp/intremove && mv /tmp/intremove "$DIR/intlist"
+	echo "Removing $NUMLINES lines from $DIR/ifglist that match $RMDATE"
+	grep -v "$RMDATE" "$DIR/ifglist" > /tmp/intremove && mv /tmp/intremove "$DIR/ifglist"
 else
-	echo "No lines matching $RMDATE in the $DIR/intlist."
+	echo "No lines matching $RMDATE in the $DIR/ifglist."
 fi
 
 
-NUMLINES=$(grep -c "$RMDATE" "$DIR/geolist")
+NUMLINES=$(grep -c "$RMDATE" "$DIR/slclist")
 if [ $NUMLINES -gt 0 ]; then
-	echo "Removing $NUMLINES lines from $DIR/geolist that match $RMDATE"
-	grep -v "$RMDATE" "$DIR/geolist" > /tmp/intremove && mv /tmp/intremove "$DIR/geolist"
+	echo "Removing $NUMLINES lines from $DIR/slclist that match $RMDATE"
+	grep -v "$RMDATE" "$DIR/slclist" > /tmp/intremove && mv /tmp/intremove "$DIR/slclist"
 else
-	echo "No lines matching $RMDATE in the $DIR/geolist."
+	echo "No lines matching $RMDATE in the $DIR/slclist."
 fi

@@ -6,10 +6,10 @@ import glob
 import sys
 
 try:
-    geolist = glob.glob(sys.argv[1])
-    print("loading from", geolist)
-    g1 = sario.load(geolist[0])
-    g2 = sario.load(geolist[1])
+    slclist = glob.glob(sys.argv[1])
+    print("loading from", slclist)
+    g1 = sario.load(slclist[0])
+    g2 = sario.load(slclist[1])
 except IndexError:
     dpath = "/data3/scott/pecos/stitch-test/"
     print("loading from", dpath)
