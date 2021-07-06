@@ -18,10 +18,12 @@ call_snaphu() {
         echo "$OUTNAME exists already. Skipping unwrapping $INTFILE"
     else
         if [ $WIDTH -gt 1000 ]; then
+            echo "$PHASE_UNWRAP_DIR/snaphu -s $INTFILE $WIDTH -c $CORNAME -o $OUTNAME -S --tile 3 3 30 30 --nproc 9"
             $PHASE_UNWRAP_DIR/snaphu -s $INTFILE $WIDTH -c $CORNAME -o $OUTNAME -S --tile 3 3 30 30 --nproc 9;
         # elif [ $WIDTH -gt 500 ]; then
         #     $PHASE_UNWRAP_DIR/snaphu -s $INTFILE $WIDTH -c $CORNAME -o $OUTNAME -S --tile 2 2 30 30 --nproc 4;
         else
+            echo "$PHASE_UNWRAP_DIR/snaphu -s $INTFILE $WIDTH -c $CORNAME -o $OUTNAME" ;
             $PHASE_UNWRAP_DIR/snaphu -s $INTFILE $WIDTH -c $CORNAME -o $OUTNAME ;
         fi
         echo "Finished unwrapping $INTFILE "
