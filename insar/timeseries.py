@@ -15,10 +15,12 @@ scott@lidar igrams]$ head slclist
 
 """
 import os
+import math
 import hdf5plugin
 import h5py
 import numpy as np
 
+from matplotlib.dates import date2num
 from apertools import sario, latlon, utils, gps
 from apertools.log import get_log, log_runtime
 from .prepare import create_dset
@@ -145,11 +147,12 @@ def run_inversion(
     velo_file_out = run_sbas(
         unw_stack_file,
         input_dset,
+        valid_ifg_idxs,
         outfile,
         output_dset,
         block_shape,
-        slclist,
-        ifglist,
+        date2num(slclist),
+        date2num(ifglist),
         valid_ifg_idxs,
         constant_velocity,
         alpha,
@@ -167,28 +170,10 @@ def run_inversion(
     # return (slclist, phi_arr, deformation)
 
 
-def _get_block_shape(full_shape, chunk_size, block_size_max=1e9, nbytes=4):
-    import copy
-
-    chunks_per_block = block_size_max / (np.prod(chunk_size) * nbytes)
-    row_chunks, col_chunks = 1, 1
-    cur_block_shape = copy.copy(chunk_size)
-    while chunks_per_block > 1:
-        if row_chunks * chunk_size[1] < full_shape[1]:
-            row_chunks += 1
-            cur_block_shape[1] = row_chunks * chunk_size[1]
-        elif col_chunks * chunk_size[2] < full_shape[2]:
-            col_chunks += 1
-            cur_block_shape[2] = col_chunks * chunk_size[2]
-        else:
-            break
-        chunks_per_block = block_size_max / (np.prod(cur_block_shape) * nbytes)
-    return cur_block_shape
-
-
 def run_sbas(
     unw_stack_file,
     input_dset,
+    valid_ifg_idxs,
     outfile,
     output_dset,
     block_shape,
@@ -226,13 +211,35 @@ def run_sbas(
         nstack, nrows, ncols = hf[input_dset].shape
 
     print(nrows, ncols, block_shape)
+
+    threadsperblock = (16, 16)
+    blockspergrid_x = math.ceil(block_shape[-2] / threadsperblock[0])
+    blockspergrid_y = math.ceil(block_shape[-1] / threadsperblock[1])
+    blockspergrid = (blockspergrid_x, blockspergrid_y)
+    print(blockspergrid, threadsperblock)
+
     blk_slices = utils.block_iterator((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
+
     for (rows, cols) in blk_slices:
         with h5py.File(unw_stack_file) as hf:
             nstack, nrows, ncols = hf[input_dset].shape
-            unw_chunk = hf[input_dset][:, rows[0] : rows[1], cols[0] : cols[1]]
-            out_chunk = calc_soln(unw_chunk)
-            write_out_chunk(out_chunk, outfile, output_dset)
+            logger.info(f"Loading chunk {rows}, {cols}")
+            unw_chunk = hf[input_dset][
+                valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]
+            ]
+            try:
+                calc_func = calc_soln[blockspergrid, threadsperblock]
+            except Exception as e:
+                print(e)
+                calc_func = calc_soln
+            out_chunk = calc_func(
+                unw_chunk,
+                slclist,
+                ifglist,
+                alpha,
+                constant_velocity,
+            )
+            write_out_chunk(out_chunk, outfile, output_dset, rows, cols)
 
     # if alpha > 0:
     #     logger.info(
@@ -242,6 +249,28 @@ def run_sbas(
     #     B, delta_phis = _augment_matrices(B, delta_phis, alpha)
 
 
+def write_out_chunk(chunk, outfile, output_dset, rows=None, cols=None):
+    rows = rows or [0, None]
+    cols = cols or [0, None]
+    with h5py.File(outfile, "r+") as hf:
+        hf[output_dset][:, rows[0] : rows[1], cols[0] : cols[1]] = chunk
+
+
+import numba
+
+try:
+    from .ts_numba import build_B_matrix, build_A_matrix
+
+    if numba.cuda.is_available():
+        deco = numba.cuda.jit
+    else:
+        deco = numba.jit
+        # raise ImportError()
+except:
+    from .ts_utils import build_B_matrix
+
+
+@deco
 def calc_soln(
     unw_chunk,
     slclist,
@@ -249,189 +278,37 @@ def calc_soln(
     alpha,
     constant_velocity,
     # L1 = True,
-    cor_pixel=None,
-    cor_thresh=0.0,
-    prune_outliers=True,
-    outlier_sigma=4,
+    # outlier_sigma=4,
 ):
     slcs_clean, ifglist_clean, unw_clean = slclist, ifglist, unw_chunk
     # if outlier_sigma > 0:
     #     slc_clean, ifglist_clean, unw_clean = remove_outliers(
     #         slc_clean, ifglist_clean, unw_clean, mean_sigma_cutoff=sigma
     #     )
-    igram_count = len(unw_clean)
+    # igram_count = len(unw_clean)
 
     # Last, pad with zeros if doing Tikh. regularization
     # unw_final = alpha > 0 ? augment_zeros(B, unw_clean) : unw_clean
 
-    # Prepare B matrix and timediffs used for each pixel inversion
-    # B = prepB(slc_clean, ifglist_clean, constant_velocity, alpha)
-    B = build_B_matrix(slcs_clean, ifglist_clean, model="linear" if constant_velocity else None)
-    timediffs = find_time_diffs(slclist)
+    # # Prepare B matrix and timediffs used for each pixel inversion
+    # # B = prepB(slc_clean, ifglist_clean, constant_velocity, alpha)
+    # B = build_B_matrix(
+    #     slcs_clean, ifglist_clean, model="linear" if constant_velocity else None
+    # )
+    # timediffs = np.array([d.days for d in np.diff(slclist)])
+    A = build_A_matrix(
+        slcs_clean, ifglist_clean, model="linear" if constant_velocity else None
+    )
+    pA = np.linalg.pinv(A)
+    nstack, nrow, ncol = unw_clean.shape
+    # stack = cols_to_stack(pA @ stack_to_cols(unw_subset), *unw_subset.shape[1:])
+    # equiv:
+    stack = (pA @ unw_clean.reshape((nstack, -1))).reshape((-1, nrow, ncol))
 
-
-
-def find_time_diffs(date_list):
-    """Finds the number of days between successive files
-
-    Args:
-        date_list (list[date]): dates of the SAR acquisitions
-
-    Returns:
-        np.array: days between each datetime in date_list
-            dtype=int, length is a len(date_list) - 1"""
-    return np.array([d.days for d in np.diff(date_list)])
-
-
-def build_A_matrix(sar_date_list, ifg_date_list):
-    """Takes the list of igram dates and builds the SBAS A matrix
-
-    Args:
-        sar_date_list (list[date]): datetimes of the acquisitions
-        ifg_date_list (list[tuple(date, date)])
-
-    Returns:
-        np.array 2D: the incident-like matrix from the SBAS paper: A*phi = dphi
-            Each row corresponds to an igram, each column to a SAR date
-            value will be -1 on the early (reference) igrams, +1 on later (secondary)
-    """
-    # We take the first .geo to be time 0, leave out of matrix
-    # Match on date (not time) to find indices
-    sar_date_list = sar_date_list[1:]
-    M = len(ifg_date_list)  # Number of igrams, number of rows
-    N = len(sar_date_list)
-    A = np.zeros((M, N))
-    for j in range(M):
-        early_igram, late_igram = ifg_date_list[j]
-
-        try:
-            idx_early = sar_date_list.index(early_igram)
-            A[j, idx_early] = -1
-        except ValueError:  # The first SLC will not be in the matrix
-            pass
-
-        idx_late = sar_date_list.index(late_igram)
-        A[j, idx_late] = 1
-
-    return A
-
-
-def build_B_matrix(sar_dates, ifg_date_list, model=None):
-    """Takes the list of igram dates and builds the SBAS B (velocity coeff) matrix
-
-    Args:
-        sar_date_list (list[date]): dates of the SAR acquisitions
-        ifg_date_list (list[tuple(date, date)])
-        model (str): If 'linear', creates the M x 1 matrix for linear velo model
-
-    Returns:
-        np.array: 2D array of the velocity coefficient matrix from the SBAS paper:
-                Bv = dphi
-            Each row corresponds to an igram, each column to a SAR date
-            value will be t_k+1 - t_k for columns after the -1 in A,
-            up to and including the +1 entry
-    """
-    try:
-        sar_dates = sar_dates.date
-    except AttributeError:
-        pass
-    timediffs = np.array([difference.days for difference in np.diff(sar_dates)])
-
-    A = build_A_matrix(sar_dates, ifg_date_list)
-    B = np.zeros_like(A)
-
-    for j, row in enumerate(A):
-        # if no -1 entry, start at index 0. Otherwise, add 1 to exclude the -1 index
-        start_idx = list(row).index(-1) + 1 if (-1 in row) else 0
-        # End index is inclusive of the +1
-        end_idx = np.where(row == 1)[0][0] + 1  # +1 will always exist in row
-
-        # Now only fill in the time diffs in the range from the early igram index
-        # to the later igram index
-        B[j][start_idx:end_idx] = timediffs[start_idx:end_idx]
-
-    if model == "linear":
-        return B.sum(axis=1, keepdims=True)
-    else:
-        return B
-
-
-def shift_stack(stack, ref_row, ref_col, window=3, window_func=np.mean):
-    """Subtracts reference pixel group from each layer
-
-    Args:
-        stack (ndarray): 3D array of images, stacked along axis=0
-        ref_row (int): row index of the reference pixel to subtract
-        ref_col (int): col index of the reference pixel to subtract
-        window (int): size of the group around ref pixel to avg for reference.
-            if window=1 or None, only the single pixel used to shift the group.
-        window_func (str): default='mean', choices ='max', 'min', 'mean'
-            numpy function to use on window. With 'mean', takes the mean of the
-            window and subtracts value from rest of layer.
-
-    Raises:
-        ValueError: if window is not a positive int, or if ref pixel out of bounds
-    """
-    win = window // 2
-    for idx, layer in enumerate(stack):
-        patch = layer[
-            ref_row - win : ref_row + win + 1, ref_col - win : ref_col + win + 1
-        ]
-        stack[idx] -= np.mean(patch)  # yapf: disable
-
+    # Add a 0 image for the first date
+    stack = np.concatenate((np.zeros((1, nrow, ncol)), stack), axis=0)
+    stack *= PHASE_TO_CM
     return stack
-    # means = apertools.utils.window_stack(stack, ref_row, ref_col, window, window_func)
-    # return stack - means[:, np.newaxis, np.newaxis]  # pad with axes to broadcast
-
-
-def _create_diff_matrix(n, order=1):
-    """Creates n x n matrix subtracting adjacent vector elements
-
-    Example:
-        >>> print(_create_diff_matrix(4, order=1))
-        [[ 1 -1  0  0]
-         [ 0  1 -1  0]
-         [ 0  0  1 -1]]
-
-        >>> print(_create_diff_matrix(4, order=2))
-        [[ 1 -1  0  0]
-         [-1  2 -1  0]
-         [ 0 -1  2 -1]
-         [ 0  0 -1  1]]
-
-    """
-    if order == 1:
-        diff_matrix = -1 * np.diag(np.ones(n - 1), k=1).astype("int")
-        np.fill_diagonal(diff_matrix, 1)
-        diff_matrix = diff_matrix[:-1, :]
-    elif order == 2:
-        diff_matrix = -1 * np.diag(np.ones(n - 1), k=1).astype("int")
-        diff_matrix = diff_matrix + -1 * np.diag(np.ones(n - 1), k=-1).astype("int")
-        np.fill_diagonal(diff_matrix, 2)
-        diff_matrix[-1, -1] = 1
-        diff_matrix[0, 0] = 1
-
-    return diff_matrix
-
-
-def _augment_matrices(B, delta_phis, alpha, difference=False):
-    reg_matrix = _create_diff_matrix(B.shape[1]) if difference else np.eye(B.shape[1])
-    B = np.vstack((B, alpha * reg_matrix))
-    # Now make num rows match
-    zeros_shape = (B.shape[0] - delta_phis.shape[0], delta_phis.shape[1])
-    delta_phis = np.vstack((delta_phis, np.zeros(zeros_shape)))
-    return B, delta_phis
-
-
-def _augment_zeros(B, delta_phis):
-    try:
-        r, c = delta_phis.shape
-    except ValueError:
-        delta_phis = delta_phis.reshape((-1, 1))
-        r, c = delta_phis.shape
-    zeros_shape = (B.shape[0] - r, c)
-    delta_phis = np.vstack((delta_phis, np.zeros(zeros_shape)))
-    return delta_phis
 
 
 def prepB(slclist, ifglist, constant_velocity=False, alpha=0, difference=False):
@@ -453,6 +330,25 @@ def prepB(slclist, ifglist, constant_velocity=False, alpha=0, difference=False):
         )
         B = np.vstack((B, alpha * reg_matrix))
     return B
+
+
+def _get_block_shape(full_shape, chunk_size, block_size_max=1e9, nbytes=4):
+    import copy
+
+    chunks_per_block = block_size_max / (np.prod(chunk_size) * nbytes)
+    row_chunks, col_chunks = 1, 1
+    cur_block_shape = copy.copy(chunk_size)
+    while chunks_per_block > 1:
+        if row_chunks * chunk_size[1] < full_shape[1]:
+            row_chunks += 1
+            cur_block_shape[1] = row_chunks * chunk_size[1]
+        elif col_chunks * chunk_size[2] < full_shape[2]:
+            col_chunks += 1
+            cur_block_shape[2] = col_chunks * chunk_size[2]
+        else:
+            break
+        chunks_per_block = block_size_max / (np.prod(cur_block_shape) * nbytes)
+    return cur_block_shape
 
 
 def _record_run_params(paramfile, **kwargs):

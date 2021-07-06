@@ -1,8 +1,8 @@
 import numpy as np
-import numba
+from numba import njit, cuda
 
 
-@numba.njit
+@njit
 def build_A_matrix(sar_dates, ifg_dates):
     """Takes the list of igram dates and builds the SBAS A matrix
 
@@ -33,13 +33,13 @@ def build_A_matrix(sar_dates, ifg_dates):
     return A
 
 
-@numba.njit
+@njit
 def build_B_matrix(sar_dates, ifg_dates, model=None):
     """Takes the list of igram dates and builds the SBAS B (velocity coeff) matrix
 
     Args:
-        sar_dates (list[date]): dates of the SAR acquisitions
-        ifg_dates (list[tuple(date, date)])
+        sar_dates (ndarray[int]): num2date(date) of the acquisitions
+        ifg_dates (ndarray[tuple(int, int)])
         model (str): If 'linear', creates the M x 1 matrix for linear velo model
 
     Returns:
