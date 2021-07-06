@@ -14,8 +14,8 @@ class TestInvertSbas(unittest.TestCase):
     def setUp(self):
         # self.jsonfile = tempfile.NamedTemporaryFile(mode='w+')
         self.igram_path = join(dirname(__file__), "data", "sbas_test")
-        self.geolist_path = join(self.igram_path, "geolist")
-        self.intlist_path = join(self.igram_path, "intlist")
+        self.slclist_path = join(self.igram_path, "slclist")
+        self.ifglist_path = join(self.igram_path, "ifglist")
         self.actual_time_diffs = np.array([2, 6, 4])
 
     def tearDown(self):
@@ -23,22 +23,22 @@ class TestInvertSbas(unittest.TestCase):
             os.remove(f)
 
     def test_time_diff(self):
-        geolist = sario.find_geos(self.geolist_path)
-        time_diffs = timeseries.find_time_diffs(geolist)
+        slclist = sario.find_geos(self.slclist_path)
+        time_diffs = timeseries.find_time_diffs(slclist)
         assert_array_equal(self.actual_time_diffs, time_diffs)
 
-    def test_read_geolist(self):
-        geolist = sario.find_geos(self.geolist_path)
+    def test_read_slclist(self):
+        slclist = sario.find_geos(self.slclist_path)
         expected = [
             date(2018, 4, 20),
             date(2018, 4, 22),
             date(2018, 4, 28),
             date(2018, 5, 2),
         ]
-        self.assertEqual(geolist, expected)
+        self.assertEqual(slclist, expected)
 
-    def test_read_intlist(self):
-        intlist = sario.find_igrams(self.intlist_path)
+    def test_read_ifglist(self):
+        ifglist = sario.find_igrams(self.ifglist_path)
         expected = [
             (date(2018, 4, 20), date(2018, 4, 22)),
             (date(2018, 4, 20), date(2018, 4, 28)),
@@ -46,7 +46,7 @@ class TestInvertSbas(unittest.TestCase):
             (date(2018, 4, 22), date(2018, 5, 2)),
             (date(2018, 4, 28), date(2018, 5, 2)),
         ]
-        self.assertEqual(intlist, expected)
+        self.assertEqual(ifglist, expected)
 
         expected = [
             "data/sbas_test/20180420_20180422.int",
@@ -56,14 +56,14 @@ class TestInvertSbas(unittest.TestCase):
             "data/sbas_test/20180428_20180502.int",
         ]
 
-        igram_files = sario.find_igrams(self.intlist_path, parse=False)
+        igram_files = sario.find_igrams(self.ifglist_path, parse=False)
         # Remove all but last part to ignore where we are running this
         igram_files = [os.sep.join(f.split(os.sep)[-3:]) for f in igram_files]
         self.assertEqual(igram_files, expected)
 
     def test_build_A_matrix(self):
-        geolist = sario.find_geos(self.geolist_path)
-        intlist = sario.find_igrams(self.intlist_path)
+        slclist = sario.find_geos(self.slclist_path)
+        ifglist = sario.find_igrams(self.ifglist_path)
         expected_A = np.array(
             [
                 [1, 0, 0],
@@ -73,22 +73,22 @@ class TestInvertSbas(unittest.TestCase):
                 [0, -1, 1],
             ]
         )
-        A = timeseries.build_A_matrix(geolist, intlist)
+        A = timeseries.build_A_matrix(slclist, ifglist)
         assert_array_equal(expected_A, A)
 
     def test_find_time_diffs(self):
-        geolist = [
+        slclist = [
             date(2018, 4, 20),
             date(2018, 4, 22),
             date(2018, 4, 28),
             date(2018, 5, 2),
         ]
         expected = np.array([2, 6, 4])
-        assert_array_equal(expected, timeseries.find_time_diffs(geolist))
+        assert_array_equal(expected, timeseries.find_time_diffs(slclist))
 
     def test_build_B_matrix(self):
-        geolist = sario.find_geos(self.geolist_path)
-        intlist = sario.find_igrams(self.intlist_path)
+        slclist = sario.find_geos(self.slclist_path)
+        ifglist = sario.find_igrams(self.ifglist_path)
         expected_B = np.array(
             [
                 [2, 0, 0],
@@ -98,7 +98,7 @@ class TestInvertSbas(unittest.TestCase):
                 [0, 0, 4],
             ]
         )
-        B = timeseries.build_B_matrix(geolist, intlist)
+        B = timeseries.build_B_matrix(slclist, ifglist)
         assert_array_equal(expected_B, B)
 
     def test_invert_sbas_errors(self):
@@ -120,11 +120,11 @@ class TestInvertSbas(unittest.TestCase):
 
         delta_phis = np.array([2, 14, 12, 14, 2]).reshape((-1, 1))
 
-        geolist = sario.find_geos(self.geolist_path)
-        intlist = sario.find_igrams(self.intlist_path)
+        slclist = sario.find_geos(self.slclist_path)
+        ifglist = sario.find_igrams(self.ifglist_path)
 
-        timediffs = timeseries.find_time_diffs(geolist)
-        B = timeseries.build_B_matrix(geolist, intlist)
+        timediffs = timeseries.find_time_diffs(slclist)
+        B = timeseries.build_B_matrix(slclist, ifglist)
 
         velocity_array = timeseries.invert_sbas(delta_phis, B)
         assert_array_almost_equal(velocity_array, actual_velocity_array)

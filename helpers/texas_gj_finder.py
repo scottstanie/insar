@@ -4,8 +4,8 @@ from collections import defaultdict
 from apertools import kml
 from insar import tile
 
-geolist_files = open("geojson_list.txt").read().splitlines()
-gjs = {num: json.load(open(gjf)) for num, gjf in enumerate(geolist_files)}
+slclist_files = open("geojson_list.txt").read().splitlines()
+gjs = {num: json.load(open(gjf)) for num, gjf in enumerate(slclist_files)}
 
 gps_list = tile.read_stations("texas_stations.csv")
 ps = [tup[1:] for tup in gps_list]

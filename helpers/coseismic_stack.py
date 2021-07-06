@@ -24,13 +24,13 @@ def stack_igrams(
     sigma_filter=0.3,
 ):
 
-    gi_file = "geolist_ignore.txt" if ignore_geos else None
-    geolist, intlist = sario.load_geolist_intlist(".", geolist_ignore_file=gi_file)
-    # stack_igrams = select_igrams(geolist, intlist, event_date, num_igrams=num_igrams)
-    stack_igrams = select_pre_event(geolist, intlist, event_date)
-    # stack_igrams = select_post_event(geolist, intlist, event_date)
+    gi_file = "slclist_ignore.txt" if ignore_geos else None
+    slclist, ifglist = sario.load_slclist_ifglist(".", slclist_ignore_file=gi_file)
+    # stack_igrams = select_igrams(slclist, ifglist, event_date, num_igrams=num_igrams)
+    stack_igrams = select_pre_event(slclist, ifglist, event_date)
+    # stack_igrams = select_post_event(slclist, ifglist, event_date)
 
-    stack_fnames = sario.intlist_to_filenames(stack_igrams, ".unw")
+    stack_fnames = sario.ifglist_to_filenames(stack_igrams, ".unw")
     if verbose:
         print("Using the following igrams in stack:")
         for f in stack_fnames:
@@ -60,26 +60,26 @@ def stack_igrams(
     return cur_phase_sum, cor_stack
 
 
-def select_igrams(geolist, intlist, event_date, num_igrams=None):
+def select_igrams(slclist, ifglist, event_date, num_igrams=None):
 
-    insert_idx = np.searchsorted(geolist, event_date)
-    num_igrams = num_igrams or len(geolist) - insert_idx
+    insert_idx = np.searchsorted(slclist, event_date)
+    num_igrams = num_igrams or len(slclist) - insert_idx
 
     # Since `event_date` will fit in the sorted array at `insert_idx`, then
-    # geolist[insert_idx] is the first date AFTER the event
-    geo_subset = geolist[insert_idx - num_igrams : insert_idx + num_igrams]
+    # slclist[insert_idx] is the first date AFTER the event
+    geo_subset = slclist[insert_idx - num_igrams : insert_idx + num_igrams]
 
     stack_igrams = list(zip(geo_subset[:num_igrams], geo_subset[num_igrams:]))
     return stack_igrams
 
 
-def select_pre_event(geolist, intlist, event_date, min_date=None):
-    ifgs = [ifg for ifg in intlist if (ifg[0] < event_date and ifg[1] < event_date)]
+def select_pre_event(slclist, ifglist, event_date, min_date=None):
+    ifgs = [ifg for ifg in ifglist if (ifg[0] < event_date and ifg[1] < event_date)]
     return _filter_min_max_date(ifgs, min_date, None)
 
 
-def select_post_event(geolist, intlist, event_date, max_date=None):
-    ifgs = [ifg for ifg in intlist if (ifg[0] > event_date and ifg[1] > event_date)]
+def select_post_event(slclist, ifglist, event_date, max_date=None):
+    ifgs = [ifg for ifg in ifglist if (ifg[0] > event_date and ifg[1] > event_date)]
     return _filter_min_max_date(ifgs, None, max_date)
 
 
@@ -165,16 +165,16 @@ def subset_stack(
     min_date=None,
     max_date=None,
 ):
-    gi_file = "geolist_ignore.txt" if ignore_geos else None
-    geolist, intlist = sario.load_geolist_intlist(".", geolist_ignore_file=gi_file)
+    gi_file = "slclist_ignore.txt" if ignore_geos else None
+    slclist, ifglist = sario.load_slclist_ifglist(".", slclist_ignore_file=gi_file)
 
-    # stack_igrams = select_igrams(geolist, intlist, event_date, nigrams)
-    # stack_igrams = select_pre_event(geolist, intlist, event_date, min_date=date(2019, 7, 1))
+    # stack_igrams = select_igrams(slclist, ifglist, event_date, nigrams)
+    # stack_igrams = select_pre_event(slclist, ifglist, event_date, min_date=date(2019, 7, 1))
     stack_igrams = select_post_event(
-        geolist, intlist, event_date, max_date=date(2020, 5, 1)
+        slclist, ifglist, event_date, max_date=date(2020, 5, 1)
     )
 
-    stack_fnames = sario.intlist_to_filenames(stack_igrams, ".unw")
+    stack_fnames = sario.ifglist_to_filenames(stack_igrams, ".unw")
     # dts = [(pair[1] - pair[0]).days for pair in stack_igrams]
     phase_subset_stack = []
     for f in stack_fnames:

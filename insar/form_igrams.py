@@ -139,10 +139,13 @@ def _get_weights_square(wsize):
     return w.reshape((-1, 1)) * w.reshape((1, -1))
 
 
-import numba
-import cupy as cp
-from cupyx.scipy.ndimage import correlate as correlate_gpu
-from scipy.ndimage import correlate
+try:
+    import numba
+    import cupy as cp
+    from cupyx.scipy.ndimage import correlate as correlate_gpu
+    from scipy.ndimage import correlate
+except ImportError:
+    print("cupy/numba not installed, no gpu")
 from apertools.utils import read_blocks, block_iterator
 
 
@@ -243,3 +246,27 @@ def _write(outname, img, in_name, driver, mode="w", window=None, dtype=None):
     ) as dst:
         if img is not None:
             dst.write(img, window=window, indexes=1)
+
+
+from apertools.utils import memmap_blocks
+
+
+def make_igram_blocks(
+    early_filename,
+    late_filename,
+    full_shape,
+    looks=(1, 1),
+    block_rows=1000,
+    out_ifg="out.int",
+    out_cor="out.cor",
+):
+
+    blks1 = memmap_blocks(early_filename, full_shape, block_rows, "complex64")
+    blks2 = memmap_blocks(late_filename, full_shape, block_rows, "complex64")
+
+    with open("testifg.int", "wb") as f:
+        for idx, (slc1, slc2) in enumerate(zip(blks1, blks2)):
+            print(f"Forming {idx = }")
+
+            ifg = slc1 * slc2.conj()
+            take_looks(ifg, *looks).tofile(f)

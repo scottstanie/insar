@@ -144,15 +144,15 @@ def plot_l1_vs_stack(
     # yrs = (date(2015), date(2016), date(2017), date(2018))
 
     input_dset = "stack_flat_shifted"
-    geolist, intlist, igram_idxs = load_geolist_intlist(
+    slclist, ifglist, igram_idxs = load_slclist_ifglist(
         h5file=unwfile,
-        geolist_ignore_file="geolist_ignore.txt",
+        slclist_ignore_file="slclist_ignore.txt",
         max_temporal_baseline=800,
         max_date=date(yy, 1, 1),
     )
-    Blin = np.sum(timeseries.prepB(geolist, intlist), axis=1, keepdims=1)
+    Blin = np.sum(timeseries.prepB(slclist, ifglist), axis=1, keepdims=1)
 
-    timediffs = timeseries.find_time_diffs(geolist)
+    timediffs = timeseries.find_time_diffs(slclist)
     unw_vals = get_stack_vals(
         unwfile,
         station_name=station,
@@ -162,7 +162,7 @@ def plot_l1_vs_stack(
     )
 
     # Timeseries: unregularized, with all outliers (noisiest)
-    B = timeseries.prepB(geolist, intlist, False, 0)
+    B = timeseries.prepB(slclist, ifglist, False, 0)
     print(f"{B.shape = }")
     # vv = np.linalg.lstsq(B, unw_vals, rcond=None)[0]
     vv = np.linalg.pinv(B) @ unw_vals
@@ -171,7 +171,7 @@ def plot_l1_vs_stack(
     )
 
     # Timeseries: regularized, but with all outliers
-    Ba = timeseries.prepB(geolist, intlist, False, alpha)
+    Ba = timeseries.prepB(slclist, ifglist, False, alpha)
     unw_vals_a = timeseries._augment_zeros(Ba, unw_vals)
     # vv_a = np.linalg.lstsq(Ba, unw_vals_a, rcond=None)[0]
     vv_a = np.linalg.pinv(Ba) @ unw_vals_a
@@ -191,8 +191,8 @@ def plot_l1_vs_stack(
         ms=ms,
     )
 
-    ax.plot(geolist, unregged, "-x", lw=3, c=MATLAB_COLORS[3], label="Unregularized")
-    ax.plot(geolist, regged, "-x", lw=3, c=MATLAB_COLORS[4], label="Regularized")
+    ax.plot(slclist, unregged, "-x", lw=3, c=MATLAB_COLORS[3], label="Unregularized")
+    ax.plot(slclist, regged, "-x", lw=3, c=MATLAB_COLORS[4], label="Regularized")
     ax.format_xdata = years_fmt
     ax.xaxis.set_major_locator(years)
     ax.xaxis.set_major_formatter(years_fmt)
@@ -212,7 +212,7 @@ def plot_l1_vs_stack(
 
     # No outlier removal linear cases
     stack, l2, l1 = prunesolve(Blin, unw_vals)
-    # stack, l2, l1 = prunesolve(geolist, intlist, unw_vals, Blin, 1000, shrink=False)
+    # stack, l2, l1 = prunesolve(slclist, ifglist, unw_vals, Blin, 1000, shrink=False)
     print(f"No outlier, linear: {stack}, {l1=}")
     print(f"Difference: {abs(stack - l1)}")
 
@@ -229,9 +229,9 @@ def plot_l1_vs_stack(
         ms=ms,
     )
 
-    # ax.plot(geolist, regged, "-x", lw=3, label="reg")
-    ax.plot(geolist, unregged, "-x", lw=3, c=MATLAB_COLORS[3], label="Unregularized")
-    ax.plot(geolist, regged, "-x", lw=3, c=MATLAB_COLORS[4], label="Regularized")
+    # ax.plot(slclist, regged, "-x", lw=3, label="reg")
+    ax.plot(slclist, unregged, "-x", lw=3, c=MATLAB_COLORS[3], label="Unregularized")
+    ax.plot(slclist, regged, "-x", lw=3, c=MATLAB_COLORS[4], label="Regularized")
     ax.format_xdata = years_fmt
     ax.xaxis.set_major_locator(years)
     ax.xaxis.set_major_formatter(years_fmt)
@@ -249,23 +249,23 @@ def plot_l1_vs_stack(
 
     ###### Outlier remove cases ################
     # timeseries: regularized with outliers removed
-    geo_clean, intlist_clean, unw_clean = remove_outliers(
-        geolist, intlist, unw_vals, mean_sigma_cutoff=4
+    geo_clean, ifglist_clean, unw_clean = remove_outliers(
+        slclist, ifglist, unw_vals, mean_sigma_cutoff=4
     )
-    B2 = timeseries.prepB(geo_clean, intlist_clean, False, 0)
+    B2 = timeseries.prepB(geo_clean, ifglist_clean, False, 0)
     td_clean = timeseries.find_time_diffs(geo_clean)
     unregged2 = timeseries.PHASE_TO_CM * timeseries.integrate_velocities(
         np.linalg.lstsq(B2, unw_clean, rcond=None)[0], td_clean
     )
 
-    Ba2 = timeseries.prepB(geo_clean, intlist_clean, False, alpha)
+    Ba2 = timeseries.prepB(geo_clean, ifglist_clean, False, alpha)
     unw_vals_a2 = timeseries._augment_zeros(Ba2, unw_clean)
     regged2 = timeseries.PHASE_TO_CM * timeseries.integrate_velocities(
         np.linalg.lstsq(Ba2, unw_vals_a2, rcond=None)[0], td_clean
     )
 
     # linear solves with outlier removal
-    stack2, l22, l12 = prunesolve(geolist, intlist, unw_vals, Blin, 4, shrink=False)
+    stack2, l22, l12 = prunesolve(slclist, ifglist, unw_vals, Blin, 4, shrink=False)
 
     # PLOT:
     fig, ax = gps.plot_gps_los(
@@ -309,10 +309,10 @@ def prunesolve(B, v):
     return stack, l2, l1
 
 
-def load_geolist_intlist(
+def load_slclist_ifglist(
     igram_dir=None,
     h5file=None,
-    geolist_ignore_file=None,
+    slclist_ignore_file=None,
     parse=True,
     min_date=None,
     max_date=None,
@@ -320,11 +320,11 @@ def load_geolist_intlist(
 ):
     import apertools.utils
 
-    ifg_date_list = sario.load_intlist_from_h5(h5file, parse=parse)
-    geo_date_list = sario.load_geolist_from_h5(h5file, parse=parse)
+    ifg_date_list = sario.load_ifglist_from_h5(h5file, parse=parse)
+    geo_date_list = sario.load_slclist_from_h5(h5file, parse=parse)
 
-    if geolist_ignore_file is not None:
-        ignore_filepath = os.path.join(igram_dir or ".", geolist_ignore_file)
+    if slclist_ignore_file is not None:
+        ignore_filepath = os.path.join(igram_dir or ".", slclist_ignore_file)
         valid_geo_dates, valid_ifg_dates = sario.ignore_geo_dates(
             geo_date_list, ifg_date_list, ignore_file=ignore_filepath, parse=parse
         )
@@ -349,8 +349,8 @@ def load_geolist_intlist(
     valid_geo_dates = list(sorted(set(itertools.chain.from_iterable(valid_ifg_dates))))
     # valid_geo_idxs = np.searchsorted(geo_date_list, valid_geo_dates)
     valid_ifg_idxs = np.searchsorted(
-        sario.intlist_to_filenames(ifg_date_list),
-        sario.intlist_to_filenames(valid_ifg_dates),
+        sario.ifglist_to_filenames(ifg_date_list),
+        sario.ifglist_to_filenames(valid_ifg_dates),
     )
     # return valid_geo_idxs, valid_ifg_idxs
     return valid_geo_dates, valid_ifg_dates, valid_ifg_idxs

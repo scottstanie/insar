@@ -63,8 +63,8 @@ def _run_stack(igram_path, d, overwrite):
         return
     logger.info("Creating hdf5 stack %s" % d["filename"])
     create_hdf5_stack(directory=igram_path, overwrite=overwrite, **d)
-    sario.save_geolist_to_h5(igram_path, d["filename"], overwrite=overwrite)
-    sario.save_intlist_to_h5(igram_path, d["filename"], overwrite=overwrite)
+    sario.save_slclist_to_h5(igram_path, d["filename"], overwrite=overwrite)
+    sario.save_ifglist_to_h5(igram_path, d["filename"], overwrite=overwrite)
 
 
 @log_runtime
@@ -87,8 +87,8 @@ def create_igram_stacks(
             continue
         logger.info("Creating hdf5 stack %s" % d["filename"])
         create_hdf5_stack(directory=igram_path, overwrite=overwrite, **d)
-        sario.save_geolist_to_h5(igram_path, d["filename"], overwrite=overwrite)
-        sario.save_intlist_to_h5(igram_path, d["filename"], overwrite=overwrite)
+        sario.save_slclist_to_h5(igram_path, d["filename"], overwrite=overwrite)
+        sario.save_ifglist_to_h5(igram_path, d["filename"], overwrite=overwrite)
 
     pool = multiprocessing.Pool()
     results = [
@@ -420,7 +420,7 @@ def deramp_stack(
 #     if mask_filename is None:
 #         mask_filename = os.path.join(igram_path, MASK_FILENAME)
 #
-#     int_date_list = sario.load_intlist_from_h5(mask_filename)
+#     int_date_list = sario.load_ifglist_from_h5(mask_filename)
 #
 #     with h5py.File(mask_filename, "r") as f:
 #         igram_mask_dset = f[IGRAM_MASK_DSET]
@@ -483,25 +483,25 @@ def deramp_stack(
 #     geo_dset1 = f1[GEO_MASK_DSET]
 #     geo_dset2 = f2[GEO_MASK_DSET]
 #
-#     intlist1 = sario.load_intlist_from_h5(filename1)
-#     intlist2 = sario.load_intlist_from_h5(filename2)
-#     geolist1 = sario.load_geolist_from_h5(filename1)
-#     geolist2 = sario.load_geolist_from_h5(filename2)
-#     merged_intlist = sorted(set(intlist1) | set(intlist2))
-#     merged_geolist = sorted(set(geolist1) | set(geolist2))
+#     ifglist1 = sario.load_ifglist_from_h5(filename1)
+#     ifglist2 = sario.load_ifglist_from_h5(filename2)
+#     slclist1 = sario.load_slclist_from_h5(filename1)
+#     slclist2 = sario.load_slclist_from_h5(filename2)
+#     merged_ifglist = sorted(set(ifglist1) | set(ifglist2))
+#     merged_slclist = sorted(set(slclist1) | set(slclist2))
 #
-#     sario.save_intlist_to_h5(out_file=new_filename, overwrite=True, int_date_list=merged_intlist)
-#     sario.save_geolist_to_h5(out_file=new_filename, overwrite=True, geo_date_list=merged_geolist)
+#     sario.save_ifglist_to_h5(out_file=new_filename, overwrite=True, int_date_list=merged_ifglist)
+#     sario.save_slclist_to_h5(out_file=new_filename, overwrite=True, geo_date_list=merged_slclist)
 #
-#     new_geo_shape = (len(merged_geolist), geo_dset1.shape[1], geo_dset1.shape[2])
+#     new_geo_shape = (len(merged_slclist), geo_dset1.shape[1], geo_dset1.shape[2])
 #     create_dset(new_filename, GEO_MASK_DSET, new_geo_shape, dtype=igram_dset1.dtype)
-#     new_igram_shape = (len(merged_intlist), igram_dset1.shape[1], igram_dset1.shape[2])
+#     new_igram_shape = (len(merged_ifglist), igram_dset1.shape[1], igram_dset1.shape[2])
 #     create_dset(new_filename, IGRAM_MASK_DSET, new_igram_shape, dtype=igram_dset1.dtype)
 #
 #     fnew = h5py.File(new_filename, "a")
 #     try:
-#         _merge_lists(geolist1, geolist2, merged_geolist, GEO_MASK_DSET, geo_dset1, geo_dset2)
-#        _merge_lists(intlist1, intlist2, merged_intlist, IGRAM_MASK_DSET, igram_dset1, igram_dset2)
+#         _merge_lists(slclist1, slclist2, merged_slclist, GEO_MASK_DSET, geo_dset1, geo_dset2)
+#        _merge_lists(ifglist1, ifglist2, merged_ifglist, IGRAM_MASK_DSET, igram_dset1, igram_dset2)
 #
 #     finally:
 #         f1.close()

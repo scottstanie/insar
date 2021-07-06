@@ -129,7 +129,7 @@ def deramp_and_shift_unws(
         unw_stack_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
     )
 
-    int_date_list = sario.save_intlist_to_h5(
+    int_date_list = sario.save_ifglist_to_h5(
         igram_path=directory,
         out_file=unw_stack_file,
         overwrite=overwrite,
@@ -139,7 +139,7 @@ def deramp_and_shift_unws(
     # Only keep the SAR dates which have an interferogram where we're looking
     geo_date_list = list(sorted(set(itertools.chain.from_iterable(int_date_list))))
 
-    _ = sario.save_geolist_to_h5(
+    _ = sario.save_slclist_to_h5(
         geo_date_list=geo_date_list,
         out_file=unw_stack_file,
         overwrite=overwrite,
@@ -253,7 +253,7 @@ def create_mask_stacks(
         mask_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
     )
 
-    int_date_list = sario.save_intlist_to_h5(
+    int_date_list = sario.save_ifglist_to_h5(
         igram_path=igram_path,
         out_file=mask_file,
         overwrite=overwrite,
@@ -263,7 +263,7 @@ def create_mask_stacks(
     # Only keep the SAR dates which have an interferogram where we're looking
     geo_date_list = list(sorted(set(itertools.chain.from_iterable(int_date_list))))
 
-    _ = sario.save_geolist_to_h5(
+    _ = sario.save_slclist_to_h5(
         geo_date_list=geo_date_list,
         out_file=mask_file,
         overwrite=overwrite,
@@ -456,7 +456,7 @@ def _read_mask_by_idx(idx, fname="masks.h5", dset=IGRAM_MASK_DSET):
 # -projwin -103.85 31.6 -102.8 30.8 masks_igram4.nc masks_subset4.nc
 # sario.hdf5_to_netcdf("../igrams_looked_18/masks.h5", stack_dset_list=['igram', 'geo'],
 # stack_dim_list=['idx', 'date'], outname="masks_igram3.nc")
-# sario.save_geolist_to_h5(out_file="masks_subset4.nc",
-# geo_date_list=sario.load_geolist_from_h5("../igrams_looked_18/masks.h5"))
-# sario.save_intlist_to_h5(out_file="masks_subset5.nc",
-# int_date_list=sario.load_intlist_from_h5("../igrams_looked_18/masks.h5"))
+# sario.save_slclist_to_h5(out_file="masks_subset4.nc",
+# geo_date_list=sario.load_slclist_from_h5("../igrams_looked_18/masks.h5"))
+# sario.save_ifglist_to_h5(out_file="masks_subset5.nc",
+# int_date_list=sario.load_ifglist_from_h5("../igrams_looked_18/masks.h5"))

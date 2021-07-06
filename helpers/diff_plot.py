@@ -7,8 +7,8 @@ def diff_plot(
     f2="velocities_2018_linear_max800.h5",
     dset="velos/1",
 ):
-    g1 = sario.load_geolist_from_h5(f1, dset="velos/1")
-    g2 = sario.load_geolist_from_h5(f2, dset="velos/1")
+    g1 = sario.load_slclist_from_h5(f1, dset="velos/1")
+    g2 = sario.load_slclist_from_h5(f2, dset="velos/1")
     a1 = -sario.load(f1, dset=dset)
     a2 = sario.load(f2, dset=dset)
     c1 = a1 / 3650 * ((g1[-1] - g1[0]).days)

@@ -52,6 +52,13 @@ def sum_phase(filenames, band=2):
     return out
 
 
+    # TODO: 
+    # # Use the given reference, or find one on based on max correlation
+    # if reference_station is not None:
+    #     ref_row, ref_col = gps.station_rowcol(station_name=reference_station, rsc_data=rsc_data)
+    # else:
+    #     ref_row, ref_col = reference
+
 def run_stack(
     # unw_stack_file="unw_stack.vrt",
     outfile=None,
@@ -72,7 +79,7 @@ def run_stack(
     # input_dset = STACK_FLAT_DSET
 
     # Filter igrams and dates down from baselines/bad data
-    geolist, intlist, valid_idxs = load_geolist_intlist(  # unw_stack_file,
+    slclist, ifglist, valid_idxs = load_slclist_ifglist(  # unw_stack_file,
         ignore_geo_file,
         max_temporal_baseline,
         geo_dir=geo_dir,
@@ -81,7 +88,7 @@ def run_stack(
         max_date=max_date,
     )
 
-    unw_files = sario.intlist_to_filenames(intlist, ext)
+    unw_files = sario.ifglist_to_filenames(ifglist, ext)
     if not unw_files:
         print(f"no files with {ext} here, exiting.")
         return
@@ -92,7 +99,7 @@ def run_stack(
 
     phase_sum = remove_ramp(phase_sum, order=ramp_order, mask=np.ma.nomask)
 
-    timediffs = [temporal_baseline(ig) for ig in intlist]  # units: days
+    timediffs = [temporal_baseline(ig) for ig in ifglist]  # units: days
     avg_velo = phase_sum / np.sum(timediffs)  # phase / day
     avg_velo2 = phase_sum / len(timediffs)  # phase / day
     out = (P2MM * avg_velo).astype("float32")  # MM / year
@@ -106,8 +113,8 @@ def run_stack(
         f.create_dataset(outdset, data=out)
 
     sario.save_dem_to_h5(outfile, sario.load("dem.rsc"))
-    # TODO: save Igram pairs to vrt, geolist to vrt?
-    # geolist = sario.find_geos(directory=igram_dir, parse=True)
+    # TODO: save Igram pairs to vrt, slclist to vrt?
+    # slclist = sario.find_geos(directory=igram_dir, parse=True)
 
     # Finally, save as a mm/year velocity
 
@@ -121,7 +128,7 @@ def run_stack(
     return out
 
 
-def load_geolist_intlist(
+def load_slclist_ifglist(
     # unw_stack_file,
     ignore_geo_file,
     max_temporal_baseline,
@@ -130,18 +137,18 @@ def load_geolist_intlist(
     min_date=None,
     max_date=None,
 ):
-    geolist = sario.find_geos(directory=geo_dir, parse=True)
-    intlist = sario.find_igrams(directory=igram_dir, parse=True)
-    # geolist = sario.load_geolist_from_h5(unw_stack_file)
-    # intlist = sario.load_intlist_from_h5(unw_stack_file)
+    slclist = sario.find_geos(directory=geo_dir, parse=True)
+    ifglist = sario.find_igrams(directory=igram_dir, parse=True)
+    # slclist = sario.load_slclist_from_h5(unw_stack_file)
+    # ifglist = sario.load_ifglist_from_h5(unw_stack_file)
 
     # If we are ignoreing some indices, remove them from for all pixels
-    # geo_idxs, igram_idxs = find_valid_indices(geolist, intlist, min_date, max_date,...
-    # return geolist[geo_idxs], intlist[igram_idxs], igram_idxs
+    # geo_idxs, igram_idxs = find_valid_indices(slclist, ifglist, min_date, max_date,...
+    # return slclist[geo_idxs], ifglist[igram_idxs], igram_idxs
     # TODO GET INDEXES FOR UNWS
     return find_valid(
-        geolist,
-        intlist,
+        slclist,
+        ifglist,
         min_date,
         max_date,
         ignore_geo_file,
@@ -217,8 +224,8 @@ def find_valid(
     # used for subselecting from the unw_stack by a pixel
 
     valid_idxs = np.searchsorted(
-        sario.intlist_to_filenames(igram_date_list),
-        sario.intlist_to_filenames(valid_igrams),
+        sario.ifglist_to_filenames(igram_date_list),
+        sario.ifglist_to_filenames(valid_igrams),
     )
     return valid_geos, valid_igrams, valid_idxs
 
