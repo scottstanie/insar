@@ -116,7 +116,7 @@ def run_inversion(
         output_shape = (nrows, ncols)
     else:
         # proc_func = proc_pixel_daily
-        output_shape = (nrows, ncols, len(slclist))
+        output_shape = (len(slclist), nrows, ncols)
 
     paramfile = "{}_run_params".format(outfile).replace(".", "_") + ".toml"
     # Saves all desried run variables and objects into a .toml file
@@ -233,10 +233,11 @@ def run_sbas(
                 print(e)
                 calc_func = calc_soln
             out_chunk = calc_func(
+            # out_chunk = calc_soln(
                 unw_chunk,
                 slclist,
                 ifglist,
-                alpha,
+                # alpha,
                 constant_velocity,
             )
             write_out_chunk(out_chunk, outfile, output_dset, rows, cols)
@@ -252,22 +253,26 @@ def run_sbas(
 def write_out_chunk(chunk, outfile, output_dset, rows=None, cols=None):
     rows = rows or [0, None]
     cols = cols or [0, None]
+    logger.info(f"Writing out chunk {chunk.shape = }")
     with h5py.File(outfile, "r+") as hf:
         hf[output_dset][:, rows[0] : rows[1], cols[0] : cols[1]] = chunk
 
 
-import numba
 
 try:
+    import numba
     from .ts_numba import build_B_matrix, build_A_matrix
+    deco = numba.jit
 
-    if numba.cuda.is_available():
-        deco = numba.cuda.jit
-    else:
-        deco = numba.jit
-        # raise ImportError()
+    # if numba.cuda.is_available() or False:
+    #     deco = numba.cuda.jit
+    # else:
+    #     deco = numba.jit
+    #     # raise ImportError()
 except:
     from .ts_utils import build_B_matrix
+    # Identity decorator if the numba.jit ones fail
+    deco = lambda func: func
 
 
 @deco
@@ -275,7 +280,7 @@ def calc_soln(
     unw_chunk,
     slclist,
     ifglist,
-    alpha,
+    # alpha,
     constant_velocity,
     # L1 = True,
     # outlier_sigma=4,
@@ -296,10 +301,8 @@ def calc_soln(
     #     slcs_clean, ifglist_clean, model="linear" if constant_velocity else None
     # )
     # timediffs = np.array([d.days for d in np.diff(slclist)])
-    A = build_A_matrix(
-        slcs_clean, ifglist_clean, model="linear" if constant_velocity else None
-    )
-    pA = np.linalg.pinv(A)
+    A = build_A_matrix(slcs_clean, ifglist_clean)
+    pA = np.linalg.pinv(A).astype(unw_clean.dtype)
     nstack, nrow, ncol = unw_clean.shape
     # stack = cols_to_stack(pA @ stack_to_cols(unw_subset), *unw_subset.shape[1:])
     # equiv:
