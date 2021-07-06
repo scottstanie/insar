@@ -107,7 +107,7 @@ def run_inversion(
 
     # Figure out how much to load at 1 time, staying at ~`block_size_max` bytes of RAM
     block_shape = _get_block_shape(
-        full_shape, chunk_size, block_size_max=500e6, nbytes=nbytes
+        full_shape, chunk_size, block_size_max=100e6, nbytes=nbytes
     )
     if constant_velocity:
         # proc_func = proc_pixel_linear
@@ -116,8 +116,8 @@ def run_inversion(
         # proc_func = proc_pixel_daily
         output_shape = (len(slclist), nrows, ncols)
 
-    paramfile = "{}_run_params".format(outfile).replace(".", "_") + ".toml"
-    # Saves all desried run variables and objects into a .toml file
+    paramfile = "{}_run_params".format(outfile).replace(".", "_") + ".yml"
+    # Saves all desried run variables and objects into a yaml file
     _record_run_params(
         paramfile,
         outfile=outfile,
@@ -136,13 +136,14 @@ def run_inversion(
         block_shape=block_shape,
     )
 
-    # if os.path.exists(outfile):
-    sario.check_dset(outfile, output_dset, overwrite)
-    create_dset(
-        outfile, output_dset, output_shape, np.float32, chunks=True, compress=True
-    )
+    if sario.check_dset(outfile, output_dset, overwrite):
+        create_dset(
+            outfile, output_dset, output_shape, np.float32, chunks=True, compress=True
+        )
+    else:
+        raise ValueError(f"{outfile}:/{output_dset} exists, {overwrite = }")
 
-    velo_file_out = run_sbas(
+    run_sbas(
         unw_stack_file,
         input_dset,
         valid_ifg_idxs,
@@ -207,28 +208,21 @@ def run_sbas(
 
     print(nrows, ncols, block_shape)
 
-    threadsperblock = (16, 16)
-    blockspergrid_x = math.ceil(block_shape[-2] / threadsperblock[0])
-    blockspergrid_y = math.ceil(block_shape[-1] / threadsperblock[1])
-    blockspergrid = (blockspergrid_x, blockspergrid_y)
-    print(blockspergrid, threadsperblock)
-
     blk_slices = utils.block_iterator((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
-    blk_slices = list(blk_slices)
+    # blk_slices = list(blk_slices)[:6]
 
     with ProcessPoolExecutor(max_workers=4) as executor:
         # for (rows, cols) in blk_slices:
         future_to_block = {
             executor.submit(
-                _run_and_save(
-                    blk,
-                    unw_stack_file,
-                    input_dset,
-                    valid_ifg_idxs,
-                    slclist,
-                    ifglist,
-                    constant_velocity,
-                )
+                _run_and_save,
+                blk,
+                unw_stack_file,
+                input_dset,
+                valid_ifg_idxs,
+                slclist,
+                ifglist,
+                constant_velocity,
             ): blk
             for blk in blk_slices
         }
@@ -247,12 +241,7 @@ def _run_and_save(
         nstack, nrows, ncols = hf[input_dset].shape
         logger.info(f"Loading chunk {rows}, {cols}")
         unw_chunk = hf[input_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
-        # try:
-        #     calc_func = calc_soln[blockspergrid, threadsperblock]
-        # except Exception as e:
-        #     print(e)
-        calc_func = calc_soln
-        out_chunk = calc_func(
+        out_chunk = calc_soln(
             # out_chunk = calc_soln(
             unw_chunk,
             slclist,
@@ -261,18 +250,12 @@ def _run_and_save(
             constant_velocity,
         )
         return out_chunk
-    # if alpha > 0:
-    #     logger.info(
-    #         "Using regularization with alpha=%s, difference=%s", alpha, difference
-    #     )
-    #     # Augment only if regularization requested
-    #     B, delta_phis = _augment_matrices(B, delta_phis, alpha)
 
 
 def write_out_chunk(chunk, outfile, output_dset, rows=None, cols=None):
     rows = rows or [0, None]
     cols = cols or [0, None]
-    logger.info(f"Writing out chunk to {outfile}:/{output_dset}")
+    logger.info(f"Writing out ({rows = }, {cols = }) chunk to {outfile}:/{output_dset}")
     with h5py.File(outfile, "r+") as hf:
         hf[output_dset][:, rows[0] : rows[1], cols[0] : cols[1]] = chunk
 
@@ -283,11 +266,6 @@ try:
 
     deco = numba.njit
 
-    # if numba.cuda.is_available() or False:
-    #     deco = numba.cuda.jit
-    # else:
-    #     deco = numba.jit
-    #     # raise ImportError()
 except:
     from .ts_utils import build_B_matrix
 
@@ -378,10 +356,11 @@ def _get_block_shape(full_shape, chunk_size, block_size_max=10e6, nbytes=4):
 
 
 def _record_run_params(paramfile, **kwargs):
-    import toml
+    from ruamel.yaml import YAML
+    yaml = YAML()
 
     with open(paramfile, "w") as f:
-        toml.dump(kwargs, f)
+        yaml.dump(kwargs, f)
 
 
 def integrate_velocities(velocity_array, timediffs):
