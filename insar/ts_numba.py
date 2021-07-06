@@ -3,6 +3,7 @@ from numba import njit, cuda
 
 
 @njit
+# @cuda.jit
 def build_A_matrix(sar_dates, ifg_dates):
     """Takes the list of igram dates and builds the SBAS A matrix
 
