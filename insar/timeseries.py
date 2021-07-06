@@ -233,7 +233,7 @@ def run_sbas(
                 print(e)
                 calc_func = calc_soln
             out_chunk = calc_func(
-            # out_chunk = calc_soln(
+                # out_chunk = calc_soln(
                 unw_chunk,
                 slclist,
                 ifglist,
@@ -253,15 +253,15 @@ def run_sbas(
 def write_out_chunk(chunk, outfile, output_dset, rows=None, cols=None):
     rows = rows or [0, None]
     cols = cols or [0, None]
-    logger.info(f"Writing out chunk {chunk.shape = }")
+    logger.info(f"Writing out chunk to {outfile}:/{output_dset}")
     with h5py.File(outfile, "r+") as hf:
         hf[output_dset][:, rows[0] : rows[1], cols[0] : cols[1]] = chunk
-
 
 
 try:
     import numba
     from .ts_numba import build_B_matrix, build_A_matrix
+
     deco = numba.njit
 
     # if numba.cuda.is_available() or False:
@@ -271,6 +271,7 @@ try:
     #     # raise ImportError()
 except:
     from .ts_utils import build_B_matrix
+
     # Identity decorator if the numba.jit ones fail
     deco = lambda func: func
 
@@ -383,4 +384,3 @@ def integrate_velocities(velocity_array, timediffs):
     phi_arr = np.ma.vstack((np.zeros(phi_arr.shape[1]), phi_arr))
 
     return phi_arr
-
