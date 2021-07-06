@@ -209,13 +209,13 @@ def run_sbas(
     print(nrows, ncols, block_shape)
 
     blk_slices = utils.block_iterator((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
-    # blk_slices = list(blk_slices)[:6]
+    # blk_slices = list(blk_slices)[:6]  # Test small area
 
     with ProcessPoolExecutor(max_workers=4) as executor:
         # for (rows, cols) in blk_slices:
         future_to_block = {
             executor.submit(
-                _run_and_save,
+                _load_and_run,
                 blk,
                 unw_stack_file,
                 input_dset,
@@ -233,7 +233,7 @@ def run_sbas(
             write_out_chunk(out_chunk, outfile, output_dset, rows, cols)
 
 
-def _run_and_save(
+def _load_and_run(
     blk, unw_stack_file, input_dset, valid_ifg_idxs, slclist, ifglist, constant_velocity
 ):
     rows, cols = blk
@@ -242,7 +242,6 @@ def _run_and_save(
         logger.info(f"Loading chunk {rows}, {cols}")
         unw_chunk = hf[input_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
         out_chunk = calc_soln(
-            # out_chunk = calc_soln(
             unw_chunk,
             slclist,
             ifglist,
