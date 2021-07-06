@@ -38,7 +38,6 @@ def run_inversion(
     input_dset=constants.STACK_FLAT_SHIFTED_DSET,
     outfile="deformation_stack.h5",
     overwrite=False,
-    dem_rsc_file="dem.rsc",
     min_date=None,
     max_date=None,
     stack_average=False,
@@ -85,7 +84,6 @@ def run_inversion(
     # averaging or linear means output will is 3D array (not just map of velocities)
     is_3d = not (stack_average or constant_velocity)
     output_dset = "stack" if is_3d else "velos"
-    rsc_data = sario.load(dem_rsc_file)
 
     slclist, ifglist = sario.load_slclist_ifglist(
         h5file=unw_stack_file,
@@ -107,9 +105,9 @@ def run_inversion(
         chunk_size = list(hf[input_dset].chunks) or [nstack, 10, 10]
         chunk_size[0] = nstack  # always load a full depth slice at once
 
-    # Figure out how much to load at 1 type
+    # Figure out how much to load at 1 time, staying at ~`block_size_max` bytes of RAM
     block_shape = _get_block_shape(
-        full_shape, chunk_size, block_size_max=1e9, nbytes=nbytes
+        full_shape, chunk_size, block_size_max=500e6, nbytes=nbytes
     )
     if constant_velocity:
         # proc_func = proc_pixel_linear
@@ -153,21 +151,19 @@ def run_inversion(
         block_shape,
         date2num(slclist),
         date2num(ifglist),
-        valid_ifg_idxs,
         constant_velocity,
         alpha,
         # L1,
         outlier_sigma,
     )
+    sario.save_slclist_to_h5(
+        out_file=outfile, slc_date_list=slclist, dset_name=output_dset
+    )
+    dem_rsc = sario.load_dem_from_h5("unw_stack.h5")
+    sario.save_dem_to_h5(outfile, dem_rsc)
 
-    # # Multiple by wavelength ratio to go from phase to cm
-    # deformation = PHASE_TO_CM * phi_arr
 
-    # num_ints, rows, cols = unw_stack.shape
-    # # Now reshape all outputs that should be in stack form
-    # phi_arr = cols_to_stack(phi_arr, rows, cols)
-    # deformation = cols_to_stack(deformation, rows, cols).filled(np.NaN)
-    # return (slclist, phi_arr, deformation)
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 
 def run_sbas(
@@ -179,7 +175,6 @@ def run_sbas(
     block_shape,
     slclist,
     ifglist,
-    valid_ifg_i,
     constant_velocity,
     alpha,
     # L1,
@@ -219,29 +214,53 @@ def run_sbas(
     print(blockspergrid, threadsperblock)
 
     blk_slices = utils.block_iterator((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
+    blk_slices = list(blk_slices)
 
-    for (rows, cols) in blk_slices:
-        with h5py.File(unw_stack_file) as hf:
-            nstack, nrows, ncols = hf[input_dset].shape
-            logger.info(f"Loading chunk {rows}, {cols}")
-            unw_chunk = hf[input_dset][
-                valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]
-            ]
-            try:
-                calc_func = calc_soln[blockspergrid, threadsperblock]
-            except Exception as e:
-                print(e)
-                calc_func = calc_soln
-            out_chunk = calc_func(
-                # out_chunk = calc_soln(
-                unw_chunk,
-                slclist,
-                ifglist,
-                # alpha,
-                constant_velocity,
-            )
+    with ProcessPoolExecutor(max_workers=4) as executor:
+        # for (rows, cols) in blk_slices:
+        future_to_block = {
+            executor.submit(
+                _run_and_save(
+                    blk,
+                    unw_stack_file,
+                    input_dset,
+                    valid_ifg_idxs,
+                    slclist,
+                    ifglist,
+                    constant_velocity,
+                )
+            ): blk
+            for blk in blk_slices
+        }
+        for future in as_completed(future_to_block):
+            blk = future_to_block[future]
+            out_chunk = future.result()
+            rows, cols = blk
             write_out_chunk(out_chunk, outfile, output_dset, rows, cols)
 
+
+def _run_and_save(
+    blk, unw_stack_file, input_dset, valid_ifg_idxs, slclist, ifglist, constant_velocity
+):
+    rows, cols = blk
+    with h5py.File(unw_stack_file) as hf:
+        nstack, nrows, ncols = hf[input_dset].shape
+        logger.info(f"Loading chunk {rows}, {cols}")
+        unw_chunk = hf[input_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
+        # try:
+        #     calc_func = calc_soln[blockspergrid, threadsperblock]
+        # except Exception as e:
+        #     print(e)
+        calc_func = calc_soln
+        out_chunk = calc_func(
+            # out_chunk = calc_soln(
+            unw_chunk,
+            slclist,
+            ifglist,
+            # alpha,
+            constant_velocity,
+        )
+        return out_chunk
     # if alpha > 0:
     #     logger.info(
     #         "Using regularization with alpha=%s, difference=%s", alpha, difference
@@ -336,19 +355,22 @@ def prepB(slclist, ifglist, constant_velocity=False, alpha=0, difference=False):
     return B
 
 
-def _get_block_shape(full_shape, chunk_size, block_size_max=1e9, nbytes=4):
+def _get_block_shape(full_shape, chunk_size, block_size_max=10e6, nbytes=4):
+    """Find a size of a data cube less than `block_size_max` in increments of `chunk_size`"""
     import copy
 
     chunks_per_block = block_size_max / (np.prod(chunk_size) * nbytes)
     row_chunks, col_chunks = 1, 1
     cur_block_shape = copy.copy(chunk_size)
     while chunks_per_block > 1:
+        # First keep incrementing the number of rows we grab at once time
         if row_chunks * chunk_size[1] < full_shape[1]:
             row_chunks += 1
-            cur_block_shape[1] = max(row_chunks * chunk_size[1], full_shape[1])
+            cur_block_shape[1] = min(row_chunks * chunk_size[1], full_shape[1])
+        # Then increase the column size if still haven't hit `block_size_max`
         elif col_chunks * chunk_size[2] < full_shape[2]:
             col_chunks += 1
-            cur_block_shape[2] = max(col_chunks * chunk_size[2], full_shape[2])
+            cur_block_shape[2] = min(col_chunks * chunk_size[2], full_shape[2])
         else:
             break
         chunks_per_block = block_size_max / (np.prod(cur_block_shape) * nbytes)
