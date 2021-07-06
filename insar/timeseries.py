@@ -262,7 +262,7 @@ def write_out_chunk(chunk, outfile, output_dset, rows=None, cols=None):
 try:
     import numba
     from .ts_numba import build_B_matrix, build_A_matrix
-    deco = numba.jit
+    deco = numba.njit
 
     # if numba.cuda.is_available() or False:
     #     deco = numba.cuda.jit
@@ -344,10 +344,10 @@ def _get_block_shape(full_shape, chunk_size, block_size_max=1e9, nbytes=4):
     while chunks_per_block > 1:
         if row_chunks * chunk_size[1] < full_shape[1]:
             row_chunks += 1
-            cur_block_shape[1] = row_chunks * chunk_size[1]
+            cur_block_shape[1] = max(row_chunks * chunk_size[1], full_shape[1])
         elif col_chunks * chunk_size[2] < full_shape[2]:
             col_chunks += 1
-            cur_block_shape[2] = col_chunks * chunk_size[2]
+            cur_block_shape[2] = max(col_chunks * chunk_size[2], full_shape[2])
         else:
             break
         chunks_per_block = block_size_max / (np.prod(cur_block_shape) * nbytes)
@@ -384,62 +384,3 @@ def integrate_velocities(velocity_array, timediffs):
 
     return phi_arr
 
-
-def stack_to_cols(stacked):
-    """Takes a 3D array, makes vectors along the 3D axes into cols
-
-    The reverse function of cols_to_stack
-
-    Args:
-        stacked (ndarray): 3D array, each [idx, :, :] is an array of interest
-
-    Returns:
-        ndarray: a 2D array where each of the stacked[:, i, j] is
-            now a column
-
-    Raises:
-        ValueError: if input shape is not 3D
-
-    Example:
-        >>> a = np.arange(18).reshape((2, 3, 3))
-        >>> cols = stack_to_cols(a)
-        >>> print(cols)
-        [[ 0  1  2  3  4  5  6  7  8]
-         [ 9 10 11 12 13 14 15 16 17]]
-    """
-    if len(stacked.shape) != 3:
-        raise ValueError("Must be a 3D ndarray")
-
-    num_stacks = stacked.shape[0]
-    return stacked.reshape((num_stacks, -1))
-
-
-def cols_to_stack(columns, rows, cols):
-    """Takes a 2D array of columns, reshapes to cols along 3rd axis
-
-    The reverse function of stack_to_cols
-
-    Args:
-        stacked (ndarray): 2D array of columns of data
-        rows (int): number of rows of original stack
-        cols (int): number of rows of original stack
-
-    Returns:
-        ndarray: a 2D array where each output[idx, :, :] was column idx
-
-    Raises:
-        ValueError: if input shape is not 2D
-
-    Example:
-        >>> a = np.arange(18).reshape((2, 3, 3))
-        >>> cols = stack_to_cols(a)
-        >>> print(cols)
-        [[ 0  1  2  3  4  5  6  7  8]
-         [ 9 10 11 12 13 14 15 16 17]]
-        >>> print(np.all(cols_to_stack(cols, 3, 3) == a))
-        True
-    """
-    if len(columns.shape) != 2:
-        raise ValueError("Must be a 2D ndarray")
-
-    return columns.reshape((-1, rows, cols))

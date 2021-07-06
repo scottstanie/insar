@@ -120,3 +120,63 @@ def _augment_zeros(B, delta_phis):
     zeros_shape = (B.shape[0] - r, c)
     delta_phis = np.vstack((delta_phis, np.zeros(zeros_shape)))
     return delta_phis
+
+
+def stack_to_cols(stacked):
+    """Takes a 3D array, makes vectors along the 3D axes into cols
+
+    The reverse function of cols_to_stack
+
+    Args:
+        stacked (ndarray): 3D array, each [idx, :, :] is an array of interest
+
+    Returns:
+        ndarray: a 2D array where each of the stacked[:, i, j] is
+            now a column
+
+    Raises:
+        ValueError: if input shape is not 3D
+
+    Example:
+        >>> a = np.arange(18).reshape((2, 3, 3))
+        >>> cols = stack_to_cols(a)
+        >>> print(cols)
+        [[ 0  1  2  3  4  5  6  7  8]
+         [ 9 10 11 12 13 14 15 16 17]]
+    """
+    if len(stacked.shape) != 3:
+        raise ValueError("Must be a 3D ndarray")
+
+    num_stacks = stacked.shape[0]
+    return stacked.reshape((num_stacks, -1))
+
+
+def cols_to_stack(columns, rows, cols):
+    """Takes a 2D array of columns, reshapes to cols along 3rd axis
+
+    The reverse function of stack_to_cols
+
+    Args:
+        stacked (ndarray): 2D array of columns of data
+        rows (int): number of rows of original stack
+        cols (int): number of rows of original stack
+
+    Returns:
+        ndarray: a 2D array where each output[idx, :, :] was column idx
+
+    Raises:
+        ValueError: if input shape is not 2D
+
+    Example:
+        >>> a = np.arange(18).reshape((2, 3, 3))
+        >>> cols = stack_to_cols(a)
+        >>> print(cols)
+        [[ 0  1  2  3  4  5  6  7  8]
+         [ 9 10 11 12 13 14 15 16 17]]
+        >>> print(np.all(cols_to_stack(cols, 3, 3) == a))
+        True
+    """
+    if len(columns.shape) != 2:
+        raise ValueError("Must be a 2D ndarray")
+
+    return columns.reshape((-1, rows, cols))
