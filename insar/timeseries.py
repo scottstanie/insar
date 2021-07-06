@@ -87,13 +87,13 @@ def run_inversion(
 
     slclist, ifglist = sario.load_slclist_ifglist(
         h5file=unw_stack_file,
-        slclist_ignore_file=slclist_ignore_file,
     )
 
     slclist, ifglist, valid_ifg_idxs = utils.filter_slclist_ifglist(
         ifg_date_list=ifglist,
         min_date=min_date,
         max_date=max_date,
+        slclist_ignore_file=slclist_ignore_file,
         max_temporal_baseline=max_temporal_baseline,
         max_bandwidth=max_temporal_bandwidth,
     )
@@ -242,6 +242,7 @@ def _load_and_run(
         logger.info(f"Loading chunk {rows}, {cols}")
         unw_chunk = hf[input_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
         out_chunk = calc_soln(
+        # out_chunk = calc_soln_pixelwise(
             unw_chunk,
             slclist,
             ifglist,
@@ -311,6 +312,40 @@ def calc_soln(
     return stack
 
 
+# @deco
+@numba.njit(fastmath=True, parallel=True, cache=True, nogil=True)
+def calc_soln_pixelwise(
+    unw_chunk,
+    slclist,
+    ifglist,
+    # alpha,
+    constant_velocity,
+    # L1 = True,
+    # outlier_sigma=4,
+):
+    slcs_clean, ifglist_clean, unw_clean = slclist, ifglist, unw_chunk
+
+    nsar = len(slclist)
+    _, nrow, ncol = unw_clean.shape
+
+    stack = np.zeros((nsar, nrow, ncol))
+
+    for idx in range(nrow):
+        for jdx in range(ncol):
+            A = build_A_matrix(slcs_clean, ifglist_clean)
+            pA = np.linalg.pinv(A).astype(unw_clean.dtype)
+            # the slice would not be contiguous, which makes @ slower
+            cur_pixel = np.ascontiguousarray(unw_clean[:, idx, jdx])
+            cur_soln = pA @ cur_pixel
+            # first date is 0
+            stack[1:, idx, jdx] = cur_soln
+
+    # stack = (pA @ unw_clean.reshape((nstack, -1))).reshape((-1, nrow, ncol))
+
+    stack *= PHASE_TO_CM
+    return stack
+
+
 def prepB(slclist, ifglist, constant_velocity=False, alpha=0, difference=False):
     """TODO: transfer this to the "run_sbas"? this is from julia"""
     B = build_B_matrix(slclist, ifglist)
@@ -356,6 +391,7 @@ def _get_block_shape(full_shape, chunk_size, block_size_max=10e6, nbytes=4):
 
 def _record_run_params(paramfile, **kwargs):
     from ruamel.yaml import YAML
+
     yaml = YAML()
 
     with open(paramfile, "w") as f:
