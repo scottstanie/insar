@@ -52,6 +52,13 @@ def sum_phase(filenames, band=2):
     return out
 
 
+    # TODO: 
+    # # Use the given reference, or find one on based on max correlation
+    # if reference_station is not None:
+    #     ref_row, ref_col = gps.station_rowcol(station_name=reference_station, rsc_data=rsc_data)
+    # else:
+    #     ref_row, ref_col = reference
+
 def run_stack(
     # unw_stack_file="unw_stack.vrt",
     outfile=None,

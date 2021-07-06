@@ -19,8 +19,8 @@ IGRAM_MASK_SUM_DSET = "igram_sum"
 
 DEM_RSC_DSET = "dem_rsc"
 
-slclist_DSET = "geo_dates"
-ifglist_DSET = "int_dates"
+SLCLIST_DSET = "geo_dates"
+IFGLIST_DSET = "int_dates"
 
 REFERENCE_ATTR = "reference"
 REFERENCE_STATION_ATTR = "reference_station"
