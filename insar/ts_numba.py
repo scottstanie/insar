@@ -73,3 +73,10 @@ def build_B_matrix(sar_dates, ifg_dates, model=None):
         return BB.reshape((-1, 1))
     else:
         return B
+
+# TODO: jit...
+# @njit
+def subset_A(A, full_slclist, full_ifglist, slclist, ifglist, valid_ifg):
+    # TODO: valid_ifg in here...
+    valid_slc = np.searchsorted(full_slclist[1:], slclist)
+    return A[valid_ifg][:, valid_slc][:, 1:]
