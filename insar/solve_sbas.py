@@ -84,7 +84,7 @@ def main(
     dset = "stack"
     with h5py.File(outfile, "w") as f:
         f[dset] = stack
-    sario.save_slclist_to_h5(out_file=outfile, geo_date_list=slclist, dset_name=dset)
+    sario.save_slclist_to_h5(out_file=outfile, slc_date_list=slclist, dset_name=dset)
     dem_rsc = sario.load_dem_from_h5(unw_file)
     sario.save_dem_to_h5(outfile, dem_rsc)
     netcdf.hdf5_to_netcdf(
