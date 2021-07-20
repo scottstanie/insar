@@ -1,3 +1,8 @@
+from math import pi
+SENTINEL_WAVELENGTH = 5.5465763  # cm
+PHASE_TO_CM = SENTINEL_WAVELENGTH / (4 * pi)
+
+
 DATE_FMT = "%Y%m%d"
 
 MASK_FILENAME = "masks.h5"

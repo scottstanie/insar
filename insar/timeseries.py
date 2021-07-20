@@ -16,7 +16,7 @@ scott@lidar igrams]$ head slclist
 """
 import os
 import math
-import hdf5plugin
+import hdf5plugin  # noqa
 import h5py
 import numpy as np
 
@@ -25,9 +25,6 @@ from apertools import sario, latlon, utils, gps
 from apertools.log import get_log, log_runtime
 from .prepare import create_dset
 from . import constants
-
-SENTINEL_WAVELENGTH = 5.5465763  # cm
-PHASE_TO_CM = SENTINEL_WAVELENGTH / (4 * np.pi)
 
 logger = get_log()
 
@@ -308,7 +305,7 @@ def calc_soln(
 
     # Add a 0 image for the first date
     stack = np.concatenate((np.zeros((1, nrow, ncol)), stack), axis=0)
-    stack *= PHASE_TO_CM
+    stack *= constants.PHASE_TO_CM
     return stack
 
 
@@ -342,7 +339,7 @@ def calc_soln_pixelwise(
 
     # stack = (pA @ unw_clean.reshape((nstack, -1))).reshape((-1, nrow, ncol))
 
-    stack *= PHASE_TO_CM
+    stack *= constants.PHASE_TO_CM
     return stack
 
 
