@@ -1,3 +1,5 @@
+import numpy as np
+
 
 def build_A_matrix(sar_date_list, ifg_date_list):
     """Takes the list of igram dates and builds the SBAS A matrix
