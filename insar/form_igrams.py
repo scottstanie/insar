@@ -46,7 +46,7 @@ def _make_cor(
 ):
     ampslc1 = sqrt(powlooks(slc1, rowlooks, collooks))
     ampslc2 = sqrt(powlooks(slc2, rowlooks, collooks))
-    amp = real(np.abs(igram))
+    amp = np.abs(igram)
     # @show extrema(ampslc1), extrema(ampslc2), extrema(amp)
     cor = real(amp / (EPS + (ampslc1 * ampslc2)))
     return cor, amp, igram

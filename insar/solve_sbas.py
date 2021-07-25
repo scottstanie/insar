@@ -219,10 +219,10 @@ def solve_stack_bandwidths(
         print(f"Output stack shape = {stack.shape}")
 
         velo_img = velo_per_pixel.reshape(unw_subset.shape[1:])
-        velo_img *= PHASE_TO_CM
+        velo_img *= (PHASE_TO_CM * 365 * 10)
 
         velo_img_b = v_soln.reshape(unw_subset.shape[1:])
-        velo_img_b *= PHASE_TO_CM
+        velo_img_b *= (PHASE_TO_CM * 365 * 10)
 
         # # This turns out identical to the A version
         # B = timeseries.build_B_matrix(slclist, ifglist)
