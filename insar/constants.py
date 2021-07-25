@@ -17,8 +17,8 @@ STACK_FLAT_DSET = "stack_flat"
 STACK_FLAT_SHIFTED_DSET = "stack_flat_shifted"
 
 # Mask file datasets
-GEO_MASK_DSET = "geo"
-GEO_MASK_SUM_DSET = "geo_sum"
+SLC_MASK_DSET = "geo"
+SLC_MASK_SUM_DSET = "geo_sum"
 IGRAM_MASK_DSET = "igram"
 IGRAM_MASK_SUM_DSET = "igram_sum"
 

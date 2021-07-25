@@ -23,8 +23,8 @@ from .constants import (
     UNW_FILENAME,
     # COR_FILENAME,
     STACK_FLAT_SHIFTED_DSET,
-    GEO_MASK_DSET,
-    GEO_MASK_SUM_DSET,
+    SLC_MASK_DSET,
+    SLC_MASK_SUM_DSET,
     IGRAM_MASK_DSET,
     IGRAM_MASK_SUM_DSET,
     DEM_RSC_DSET,
@@ -137,10 +137,10 @@ def deramp_and_shift_unws(
     )
 
     # Only keep the SAR dates which have an interferogram where we're looking
-    geo_date_list = list(sorted(set(itertools.chain.from_iterable(int_date_list))))
+    slc_date_list = list(sorted(set(itertools.chain.from_iterable(int_date_list))))
 
     _ = sario.save_slclist_to_h5(
-        geo_date_list=geo_date_list,
+        slc_date_list=slc_date_list,
         out_file=unw_stack_file,
         overwrite=overwrite,
     )
@@ -229,9 +229,9 @@ def deramp_and_shift_unws(
 def create_mask_stacks(
     igram_path,
     mask_filename=None,
-    geo_path=None,
+    slc_path=None,
     overwrite=False,
-    compute_from_geos=True,
+    compute_from_slcs=True,
 ):
     """Create mask stacks for areas in .geo and .int
 
@@ -240,12 +240,12 @@ def create_mask_stacks(
     if mask_filename is None:
         mask_file = os.path.join(igram_path, MASK_FILENAME)
 
-    if geo_path is None:
-        geo_path = utils.get_parent_dir(igram_path)
+    if slc_path is None:
+        slc_path = utils.get_parent_dir(igram_path)
 
     # Used to shrink the .geo masks to save size as .int masks
     row_looks, col_looks = apertools.sario.find_looks_taken(
-        igram_path, geo_path=geo_path
+        igram_path, slc_path=slc_path
     )
 
     rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
@@ -261,26 +261,26 @@ def create_mask_stacks(
     )
 
     # Only keep the SAR dates which have an interferogram where we're looking
-    geo_date_list = list(sorted(set(itertools.chain.from_iterable(int_date_list))))
+    slc_date_list = list(sorted(set(itertools.chain.from_iterable(int_date_list))))
 
     _ = sario.save_slclist_to_h5(
-        geo_date_list=geo_date_list,
+        slc_date_list=slc_date_list,
         out_file=mask_file,
         overwrite=overwrite,
     )
 
-    all_geo_files = sario.find_geos(directory=geo_path, parse=False)
-    all_geo_dates = sario.find_geos(directory=geo_path)
-    geo_file_list = [
-        gf for gf, gd in zip(all_geo_files, all_geo_dates) if gd in geo_date_list
+    all_slc_files = sario.find_slcs(directory=slc_path, parse=False)
+    all_slc_dates = sario.find_slcs(directory=slc_path)
+    slc_file_list = [
+        gf for gf, gd in zip(all_slc_files, all_slc_dates) if gd in slc_date_list
     ]
 
-    if compute_from_geos:
-        save_geo_masks(
-            geo_path,
+    if compute_from_slcs:
+        save_slc_masks(
+            slc_path,
             mask_file,
             dem_rsc=rsc_data,
-            geo_file_list=geo_file_list,
+            slc_file_list=slc_file_list,
             row_looks=row_looks,
             col_looks=col_looks,
             overwrite=overwrite,
@@ -289,53 +289,53 @@ def create_mask_stacks(
     compute_int_masks(
         mask_file=mask_file,
         igram_path=igram_path,
-        geo_path=geo_path,
+        slc_path=slc_path,
         dem_rsc=rsc_data,
-        geo_date_list=geo_date_list,
+        slc_date_list=slc_date_list,
         overwrite=overwrite,
-        compute_from_geos=compute_from_geos,
+        compute_from_slcs=compute_from_slcs,
     )
     # TODO: now add the correlation check
     return mask_file
 
 
-def save_geo_masks(
+def save_slc_masks(
     directory,
     mask_file=MASK_FILENAME,
     dem_rsc=None,
-    dset_name=GEO_MASK_DSET,
-    geo_file_list=None,
+    dset_name=SLC_MASK_DSET,
+    slc_file_list=None,
     row_looks=1,
     col_looks=1,
     overwrite=False,
 ):
-    """Creates .mask files for geos where zeros occur
+    """Creates .mask files for slc where zeros occur
 
     Makes look arguments are to create arrays the same size as the igrams
     Args:
         overwrite (bool): erase the dataset from the file if it exists and recreate
     """
 
-    def _get_geo_mask(geo_arr):
+    def _get_slc_mask(slc_arr):
         # Uses for removing single mask pixels from nearest neighbor resample
-        m = binary_opening(np.abs(geo_arr) == 0, structure=np.ones((3, 3)))
+        m = binary_opening(np.abs(slc_arr) == 0, structure=np.ones((3, 3)))
         return np.ma.make_mask(m, shrink=False)
 
     # Make the empty stack, or delete if exists
     if not sario.check_dset(mask_file, dset_name, overwrite):
         return
-    if not sario.check_dset(mask_file, GEO_MASK_SUM_DSET, overwrite):
+    if not sario.check_dset(mask_file, SLC_MASK_SUM_DSET, overwrite):
         return
 
-    # rsc_geo = sario.load(sario.find_rsc_file(directory=directory))
-    rsc_geo = sario.load(os.path.join(directory, "elevation.dem.rsc"))
-    gshape = (rsc_geo["file_length"], rsc_geo["width"])
-    if geo_file_list is None:
-        geo_file_list = sario.find_files(directory=directory, search_term="*.geo")
+    # rsc_slc = sario.load(sario.find_rsc_file(directory=directory))
+    rsc_slc = sario.load(os.path.join(directory, "elevation.dem.rsc"))
+    big_shape = (rsc_slc["file_length"], rsc_slc["width"])
+    if slc_file_list is None:
+        slc_file_list = sario.find_slcs(directory=directory)
 
     shape = _find_file_shape(
         dem_rsc=dem_rsc,
-        file_list=geo_file_list,
+        file_list=slc_file_list,
         row_looks=row_looks,
         col_looks=col_looks,
     )
@@ -344,50 +344,50 @@ def save_geo_masks(
 
     with h5py.File(mask_file, "a") as f:
         dset = f[dset_name]
-        for idx, geo_fname in enumerate(geo_file_list):
+        for idx, slc_fname in enumerate(slc_file_list):
             # save as an individual file too
-            mask_name = os.path.split(geo_fname)[1] + ".mask"
+            mask_name = os.path.split(slc_fname)[1] + ".mask"
             if not os.path.exists(mask_name):
-                # g = sario.load(geo_fname, looks=(row_looks, col_looks))
+                # g = sario.load(slc_fname, looks=(row_looks, col_looks))
                 gmap = np.memmap(
-                    geo_fname,
+                    slc_fname,
                     dtype="complex64",
                     mode="r",
-                    shape=gshape,
+                    shape=big_shape,
                 )
                 g_subsample = gmap[
                     (row_looks - 1) :: row_looks, (col_looks - 1) :: col_looks
                 ]
                 # ipdb.set_trace()
-                logger.info(f"Saving {geo_fname} to stack")
-                cur_mask = _get_geo_mask(g_subsample)
+                logger.info(f"Saving {slc_fname} to stack")
+                cur_mask = _get_slc_mask(g_subsample)
                 sario.save(mask_name, cur_mask)
             else:
                 cur_mask = sario.load(mask_name, rsc_file="dem.rsc")
             dset[idx] = cur_mask
             if idx % 100 == 0:
-                print(f"Done with {idx} out of {len(geo_file_list)}")
+                print(f"Done with {idx} out of {len(slc_file_list)}")
 
         # Also add a composite mask depthwise
-        f[GEO_MASK_SUM_DSET] = np.sum(dset, axis=0)
+        f[SLC_MASK_SUM_DSET] = np.sum(dset, axis=0)
 
 
 def compute_int_masks(
     mask_file=None,
     igram_path=None,
-    geo_path=None,
+    slc_path=None,
     dem_rsc=None,
     igram_ext=".unw",
-    geo_date_list=None,
+    slc_date_list=None,
     dset_name=IGRAM_MASK_DSET,
     overwrite=False,
-    compute_from_geos=True,  # TODO: combine these
+    compute_from_slcs=True,  # TODO: combine these
     mask_dem=True,
     dem_filename="elevation_looked.dem",
 ):
     """Creates igram masks by taking the logical-or of the two .geo files
 
-    Assumes save_geo_masks already run
+    Assumes save_slc_masks already run
     """
     if not sario.check_dset(mask_file, dset_name, overwrite):
         return
@@ -397,8 +397,8 @@ def compute_int_masks(
     int_date_list = sario.find_igrams(directory=igram_path, ext=igram_ext)
     int_file_list = sario.find_igrams(directory=igram_path, ext=igram_ext, parse=False)
 
-    if geo_date_list is None:
-        geo_date_list = sario.find_geos(directory=geo_path)
+    if slc_date_list is None:
+        slc_date_list = sario.find_slcs(directory=slc_path)
 
     # Make the empty stack, or delete if exists
     shape = _find_file_shape(dem_rsc=dem_rsc, file_list=int_file_list)
@@ -408,14 +408,14 @@ def compute_int_masks(
         dem_mask = sario.load(dem_filename) == 0
 
     with h5py.File(mask_file, "a") as f:
-        geo_mask_stack = f[GEO_MASK_DSET]
+        slc_mask_stack = f[SLC_MASK_DSET]
         int_mask_dset = f[dset_name]
         for idx, (early, late) in enumerate(int_date_list):
-            if compute_from_geos:
-                early_idx = geo_date_list.index(early)
-                late_idx = geo_date_list.index(late)
-                early_mask = geo_mask_stack[early_idx]
-                late_mask = geo_mask_stack[late_idx]
+            if compute_from_slcs:
+                early_idx = slc_date_list.index(early)
+                late_idx = slc_date_list.index(late)
+                early_mask = slc_mask_stack[early_idx]
+                late_mask = slc_mask_stack[late_idx]
                 int_mask_dset[idx] = np.logical_or(early_mask, late_mask)
             elif mask_dem:
                 int_mask_dset[idx] = dem_mask
@@ -432,7 +432,7 @@ def _find_file_shape(dem_rsc=None, file_list=None, row_looks=None, col_looks=Non
         try:
             g = sario.load(file_list[0], looks=(row_looks, col_looks))
         except IndexError:
-            raise ValueError("No .geo files found in s")
+            raise ValueError("No .geo files found ")
         except TypeError:
             raise ValueError("Need file_list if no dem_rsc")
 
@@ -457,6 +457,6 @@ def _read_mask_by_idx(idx, fname="masks.h5", dset=IGRAM_MASK_DSET):
 # sario.hdf5_to_netcdf("../igrams_looked_18/masks.h5", stack_dset_list=['igram', 'geo'],
 # stack_dim_list=['idx', 'date'], outname="masks_igram3.nc")
 # sario.save_slclist_to_h5(out_file="masks_subset4.nc",
-# geo_date_list=sario.load_slclist_from_h5("../igrams_looked_18/masks.h5"))
+# slc_date_list=sario.load_slclist_from_h5("../igrams_looked_18/masks.h5"))
 # sario.save_ifglist_to_h5(out_file="masks_subset5.nc",
 # int_date_list=sario.load_ifglist_from_h5("../igrams_looked_18/masks.h5"))
