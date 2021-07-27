@@ -181,6 +181,7 @@ def run_inversion(
 
         netcdf.hdf5_to_netcdf(
             outfile,
+            outname=constants.DEFORMATION_FILENAME_NC,
             dset_name=output_dset,
             stack_dim="date",
         )
@@ -391,3 +392,52 @@ def _record_run_params(paramfile, **kwargs):
 
     with open(paramfile, "w") as f:
         yaml.dump(kwargs, f)
+
+
+def fit_poly_to_stack(
+    stack_fname=constants.DEFORMATION_FILENAME_NC,
+    stack_dset=constants.STACK_DSET,
+    degree=1,
+    save=True,
+    overwrite=True,
+):
+    import xarray as xr
+
+    ds = xr.open_dataset(stack_fname)
+    stack_da = ds[stack_dset]
+    stack_poly = stack_da.polyfit("date", deg=degree)
+    print(stack_da.max())
+    print(xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)[-1].max())
+
+    # stack_poly["polyfit_coefficients"][0] is the offset/y-intercept
+    # stack_poly["polyfit_coefficients"][1] is the rate
+    velocities_cm_per_ns = stack_poly["polyfit_coefficients"][1]
+    print(stack_poly["polyfit_coefficients"][0].max())
+    print(stack_poly["polyfit_coefficients"][1].max())
+    # Note: xarray converts the dates to "nanoseconds sicne 1970"
+    # https://github.com/pydata/xarray/blob/main/xarray/core/missing.py#L273-L280
+    # So the rate is "radians / nanosecond" (pecos is +/- 75 ish)
+    velocities_cm_per_year = velocities_cm_per_ns * 1e-9 * 86400 * 365.25
+    ds.close()
+    if save:
+        # ds[constants.VELOCITIES_DSET] = velocities_cm_per_year
+        # ds[constants.VELOCITIES_DSET].units = "cm per year"
+        dsname = constants.VELOCITIES_DSET
+        if sario.check_dset(stack_fname, dsname, overwrite):
+            logger.info("Saving linear velocities to %s", dsname)
+            velo_ds = velocities_cm_per_year.to_dataset(name=dsname)
+            velo_ds.attrs['units'] = "cm per year"
+            velo_ds.to_netcdf(stack_fname, mode="a")
+
+        dsname = constants.CUMULATIVE_LINEAR_DEFO_DSET
+        if sario.check_dset(stack_fname, dsname, overwrite):
+            logger.info("Saving cumulative linear velocity to %s", dsname)
+            cumulative = xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)[-1]
+            cumulative.attrs['units'] = "cm"
+            cum_ds = cumulative.to_dataset(name=dsname)
+            cum_ds.to_netcdf(stack_fname, mode="a")
+        # ds[constants.CUMULATIVE_LINEAR_DEFO_DSET] = cumulative
+        # ds[constants.CUMULATIVE_LINEAR_DEFO_DSET].units = "cm"
+
+    # For an easy cumulative:
+    return velocities_cm_per_year

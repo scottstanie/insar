@@ -25,6 +25,9 @@ IGRAM_MASK_SUM_DSET = "igram_sum"
 
 # output file
 DEFORMATION_FILENAME = "deformation.h5"
+DEFORMATION_FILENAME_NC = "deformation.nc"
+VELOCITIES_DSET = "linear_velocity"
+CUMULATIVE_LINEAR_DEFO_DSET = "cumulative_linear_defo"
 
 DEM_RSC_DSET = "dem_rsc"
 
