@@ -395,6 +395,122 @@ def _record_run_params(paramfile, **kwargs):
     with open(paramfile, "w") as f:
         yaml.dump(kwargs, f)
 
+def _confirm_closed(fname):
+    """Weird hack to make sure file handles are closed
+    https://github.com/h5py/h5py/issues/1090#issuecomment-608485873"""
+    xr.open_dataset(fname).close()
+
+
+def calc_model_fit_deformation(
+    stack_fname=constants.DEFORMATION_FILENAME_NC,
+    stack_dset=constants.STACK_DSET,
+    degree=3,
+    remove_day1_atmo=True,
+    reweight_by_atmo_var=True,
+    outname=None,
+    overwrite=False,
+):
+    """Calculate a cumulative deformation by fitting a model to noisy timseries per-pixel
+
+    Args:
+        stack_fname (str): Name of the .nc file (default=`constants.DEFORMATION_FILENAME_NC`)
+        stack_dset (str): Name of dataset within `stack_fname` containing cumulative
+            deformation+(atmospheric noise) timeseries (default=`constants.STACK_DSET`)
+        degree (int): Polynomial degree to fit to each pixel's timeseries to model
+            the deformation. This fit is removed to estimate the day 1 atmosphere
+        remove_day1_atmo (bool): default True. Estimates and removes the first date's
+            atmospheric phase screen. See `Notes` for details. 
+        reweight_by_atmo_var (bool): default True. Performs weighted least squares
+            to refit model from residual variances. See `Notes` for details.
+        outname (str): Name of dataset to save atmo estimattion within `stack_fname`
+            (default= constants.ATMO_DAY1_DSET)
+        overwrite (bool): If True, delete (if exists) the output
+
+    Returns:
+        avg_atmo (xr.DataArray): 2D array with the estiamted first day's atmospheric phase
+
+    Notes:
+    `remove_day1_atmo` gives the option to estimate atmospheric phase on the SAR first date.
+    To find the first date's atmosphere, uses the (model-removed) daily phase timeseries,
+    and recomputes the difference between each day and day1, then averages.
+    Since the differences have been converted (through `run_inversion`) into phases
+    on each date (consisting of (atmospheric delay + deformation)), we can just
+    average each date's image after removing the linear trend.
+
+    `reweight_by_atmo_var` first performs ordinary least squares to fit the model to
+    the timeseries, then finds the residuals on each date. This will be mostly the
+    atmospher noise on each date (though not perfect, as some deformation/other noises
+    will be mixed in). Then the total variance of each date's image is used as the "sigma**2"
+    value to perform weighted least squares.
+    This will generally help ignore very noisy atmospheric days.
+
+    """
+    model_str = "polynomial_deg{}".format(degree)
+    if outname is None:
+        outname = constants.CUMULATIVE_MODEL_DEFO_DSET.format(model=model_str)
+        # polyfit_outname = 
+    _confirm_closed(stack_fname)
+
+    if sario.check_dset(stack_fname, outname, overwrite) is False:  # already exists:
+        with xr.open_dataset(stack_fname) as ds:
+            # TODO: save the poly, also load that
+            return ds[outname]
+
+    with xr.open_dataset(stack_fname) as ds:
+        stack_da = ds[stack_dset]
+        # Fit a polynomial along the "date" dimension (1 per pixel)
+        stack_poly = stack_da.polyfit("date", deg=degree)
+        # This is the "modeled" deformation
+
+        # Get expected ifg deformation phase from the polynomial velocity fit
+        cumulative_model_defo = xr.polyval(
+            stack_da.date, stack_poly.polyfit_coefficients
+        )
+
+        if remove_day1_atmo:
+            logger.info("Compensating day1 atmosphere")
+            # take difference of `linear_ifgs` and SBAS cumulative
+            cum_detrend = cumulative_model_defo - stack_da
+            # Then reconstruct the ifgs containing the day 0
+            reconstructed_ifgs = cum_detrend[1:] - cum_detrend[0]
+            # add -1 so that it has same sign as the timeseries, which
+            # makes the compensation is (stack_da - avg_atmo)
+            avg_atmo = -1 * reconstructed_ifgs.mean(dim="date")
+            avg_atmo.attrs["units"] = "cm"
+
+            cumulative_model_defo = cumulative_model_defo - avg_atmo
+            # Still first the first day to 0
+            cumulative_model_defo[0] = 0
+            cumulative_model_defo.attrs["units"] = "cm"
+
+        if reweight_by_atmo_var:
+            atmo_variances = (cumulative_model_defo - stack_da).var(dim=("lat", "lon"))
+            weights = 1 / atmo_variances
+            weights[0] = 1 / np.var(avg_atmo)
+            stack_poly = stack_da.polyfit(
+                "date",
+                deg=degree,
+                w=weights,
+                full=True,
+                cov="unscaled",
+            )
+            cumulative_model_defo = xr.polyval(
+                stack_da.date, stack_poly.polyfit_coefficients
+            )
+
+    logger.info("Saving cumulative model-fit deformation to %s", outname)
+    model_ds = cumulative_model_defo.to_dataset(name=outname)
+
+    _confirm_closed(stack_fname)
+    model_ds.to_netcdf(stack_fname, mode="a")
+
+
+    # logger.info("Saving cumulative linear velocity to %s", outname)
+    # atmo_ds = avg_atmo.to_dataset(name=outname)
+    # atmo_ds.to_netcdf(stack_fname, mode="a")
+
+    return cumulative_model_defo, stack_poly
+
 
 def fit_poly_to_stack(
     stack_fname=constants.DEFORMATION_FILENAME_NC,
@@ -436,140 +552,3 @@ def fit_poly_to_stack(
     # cum_ds.to_netcdf(stack_fname, mode="a")
 
     return velocities  # , cumulative_da
-
-
-def calc_day1_atmo(
-    stack_fname=constants.DEFORMATION_FILENAME_NC,
-    stack_dset=constants.STACK_DSET,
-    degree=3,
-    outname=constants.ATMO_DAY1_DSET,
-    overwrite=False,
-):
-    """Estimate the atmospheric phase screen on the SAR first date
-
-    Uses the (trend-removed) daily phase timeseries, recomputes the difference
-    between each day and day1.
-    Since the differences have been converted (through `run_inversion`) into phases
-    on each date (consisting of (atmospheric delay + deformation)), we can just
-    average each date's image after removing the linear trend.
-
-    Args:
-        stack_fname (str): Name of the .nc file (default=`constants.DEFORMATION_FILENAME_NC`)
-        stack_dset (str): Name of dataset within `stack_fname` containing cumulative
-            deformation+(atmospheric noise) timeseries (default=`constants.STACK_DSET`)
-        degree (int): Polynomial degree to fit to each pixel's timeseries to model
-            the deformation. This fit is removed to estimate the day 1 atmosphere
-        outname (str): Name of dataset to save atmo estimattion within `stack_fname`
-            (default= constants.ATMO_DAY1_DSET)
-        overwrite (bool): If True, delete (if exists) the output
-    Returns:
-        avg_atmo (xr.DataArray): 2D array with the estiamted first day's atmospheric phase
-
-    """
-    if sario.check_dset(stack_fname, outname, overwrite) is False:  # already exists:
-        with xr.open_dataset(stack_fname) as ds:
-            return ds[outname]
-
-    with xr.open_dataset(stack_fname) as ds:
-        stack_da = ds[stack_dset]
-        # Fit a polynomial along the "date" dimension (1 per pixel)
-        stack_poly = stack_da.polyfit("date", deg=degree)
-        # This is the "modeled" deformation
-
-        # Get expected ifg deformation phase from the polynomial velocity fit
-        cumulative_model_defo = xr.polyval(
-            stack_da.date, stack_poly.polyfit_coefficients
-        )
-        # take difference of `linear_ifgs` and SBAS cumulative
-        cum_detrend = cumulative_model_defo - stack_da
-        # Then reconstruct the ifgs containing the day 0
-        reconstructed_ifgs = cum_detrend[1:] - cum_detrend[0]
-        # add -1 so that it has same sign as the timeseries, which
-        # makes the compensation is (stack_da - avg_atmo)
-        avg_atmo = -1 * reconstructed_ifgs.mean(dim="date")
-        avg_atmo.attrs["units"] = "cm"
-
-    logger.info("Saving cumulative linear velocity to %s", outname)
-    atmo_ds = avg_atmo.to_dataset(name=outname)
-    atmo_ds.to_netcdf(stack_fname, mode="a")
-
-    return avg_atmo
-
-
-def _confirm_closed(fname):
-    """Weird hack to make sure file handles are closed
-    https://github.com/h5py/h5py/issues/1090#issuecomment-608485873"""
-    xr.open_dataset(fname).close()
-
-
-def calc_model_fit_deformation(
-    stack_fname=constants.DEFORMATION_FILENAME_NC,
-    stack_dset=constants.STACK_DSET,
-    compensate_atmo=True,
-    degree=3,
-    outname=None,
-    overwrite=False,
-    weights=None,
-):
-    model_str = "polynomial_deg{}".format(degree)
-    if outname is None:
-        outname = constants.CUMULATIVE_MODEL_DEFO_DSET.format(model=model_str)
-    _confirm_closed(stack_fname)
-
-    if sario.check_dset(stack_fname, outname, overwrite) is False:  # already exists:
-        with xr.open_dataset(stack_fname) as ds:
-            # TODO: save the poly, also load that
-            return ds[outname]
-
-    with xr.open_dataset(stack_fname) as ds:
-        stack_da = ds[stack_dset]
-        # Fit a polynomial along the "date" dimension (1 per pixel)
-        stack_poly = stack_da.polyfit(
-            "date",
-            deg=degree,
-            w=weights,
-            full=True,
-            # cov=True,
-            cov="unscaled",
-        )
-        # This is the "modeled" deformation
-
-        # Get expected ifg deformation phase from the polynomial velocity fit
-        cumulative_model_defo = xr.polyval(
-            stack_da.date, stack_poly.polyfit_coefficients
-        )
-    if compensate_atmo:
-        logger.info("Compensating day1 atmosphere")
-        avg_atmo = calc_day1_atmo(
-            stack_fname=stack_fname, stack_dset=stack_dset, overwrite=False
-        )
-
-    cumulative_model_defo = cumulative_model_defo - avg_atmo
-    # Still first the first day to 0
-    cumulative_model_defo[0] = 0
-    cumulative_model_defo.attrs["units"] = "cm"
-
-    logger.info("Saving cumulative model-fit deformation to %s", outname)
-    model_ds = cumulative_model_defo.to_dataset(name=outname)
-
-    _confirm_closed(stack_fname)
-    model_ds.to_netcdf(stack_fname, mode="a")
-    return cumulative_model_defo, stack_poly
-
-
-def calc_atmo_variance(
-    stack_fname=constants.DEFORMATION_FILENAME_NC,
-    stack_dset=constants.STACK_DSET,
-    degree=3,
-):
-    _confirm_closed(stack_fname)
-    model_defo = calc_model_fit_deformation(
-        stack_fname=stack_fname,
-        stack_dset=stack_dset,
-        compensate_atmo=True,
-        degree=degree,
-        overwrite=False,
-    )
-    with xr.open_dataset(stack_fname) as ds:
-        stack_da = ds[stack_dset]
-        return (model_defo - stack_da).var(dim=("lat", "lon"))
