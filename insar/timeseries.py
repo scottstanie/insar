@@ -48,7 +48,7 @@ except:
 def run_inversion(
     unw_stack_file=constants.UNW_FILENAME,
     input_dset=constants.STACK_FLAT_SHIFTED_DSET,
-    outfile=constants.DEFORMATION_FILENAME,
+    outfile=constants.DEFO_FILENAME,
     output_dset=constants.STACK_DSET,
     overwrite=False,
     min_date=None,
@@ -182,7 +182,7 @@ def run_inversion(
 
         netcdf.hdf5_to_netcdf(
             outfile,
-            outname=constants.DEFORMATION_FILENAME_NC,
+            outname=constants.DEFO_FILENAME_NC,
             dset_name=output_dset,
             stack_dim="date",
             data_units="cm",
@@ -401,8 +401,8 @@ def _confirm_closed(fname):
 
 
 def calc_model_fit_deformation(
-    stack_fname=constants.DEFORMATION_FILENAME_NC,
-    stack_dset=constants.STACK_DSET,
+    defo_fname=constants.DEFO_FILENAME_NC,
+    orig_dset=constants.DEFO_ORIG_DSET,
     degree=3,
     remove_day1_atmo=True,
     reweight_by_atmo_var=True,
@@ -412,16 +412,16 @@ def calc_model_fit_deformation(
     """Calculate a cumulative deformation by fitting a model to noisy timseries per-pixel
 
     Args:
-        stack_fname (str): Name of the .nc file (default=`constants.DEFORMATION_FILENAME_NC`)
-        stack_dset (str): Name of dataset within `stack_fname` containing cumulative
-            deformation+(atmospheric noise) timeseries (default=`constants.STACK_DSET`)
+        defo_fname (str): Name of the .nc file (default=`constants.DEFO_FILENAME_NC`)
+        orig_dset (str): Name of dataset within `defo_fname` containing cumulative
+            deformation+(atmospheric noise) timeseries (default=`constants.DEFO_ORIG_DSET`)
         degree (int): Polynomial degree to fit to each pixel's timeseries to model
             the deformation. This fit is removed to estimate the day 1 atmosphere
         remove_day1_atmo (bool): default True. Estimates and removes the first date's
             atmospheric phase screen. See `Notes` for details.
         reweight_by_atmo_var (bool): default True. Performs weighted least squares
             to refit model from residual variances. See `Notes` for details.
-        outname (str): Name of dataset to save atmo estimattion within `stack_fname`
+        outname (str): Name of dataset to save atmo estimattion within `defo_fname`
             (default= constants.ATMO_DAY1_DSET)
         overwrite (bool): If True, delete (if exists) the output
 
@@ -448,15 +448,15 @@ def calc_model_fit_deformation(
     if outname is None:
         outname = constants.MODEL_DEFO_DSET.format(model=model_str)
         # polyfit_outname =
-    _confirm_closed(stack_fname)
+    _confirm_closed(defo_fname)
 
-    if sario.check_dset(stack_fname, outname, overwrite) is False:  # already exists:
-        with xr.open_dataset(stack_fname) as ds:
+    if sario.check_dset(defo_fname, outname, overwrite) is False:  # already exists:
+        with xr.open_dataset(defo_fname) as ds:
             # TODO: save the poly, also load that
             return ds[outname]
 
-    with xr.open_dataset(stack_fname) as ds:
-        stack_da = ds[stack_dset]
+    with xr.open_dataset(defo_fname) as ds:
+        stack_da = ds[orig_dset]
         # Fit a polynomial along the "date" dimension (1 per pixel)
         polyfit_ds = stack_da.polyfit("date", deg=degree)
         # This is the "modeled" deformation
@@ -512,19 +512,19 @@ def calc_model_fit_deformation(
     logger.info("Saving cumulative model-fit deformation to %s", outname)
     model_ds = model_defo.to_dataset(name=outname)
 
-    _confirm_closed(stack_fname)
-    model_ds.to_netcdf(stack_fname, mode="a")
+    _confirm_closed(defo_fname)
+    model_ds.to_netcdf(defo_fname, mode="a")
 
     if remove_day1_atmo:
         out = constants.ATMO_DAY1_DSET
         logger.info("Saving day1 atmo estimation to %s", out)
-        if sario.check_dset(stack_fname, out, overwrite):
-            avg_atmo.to_dataset(name=out).to_netcdf(stack_fname, mode="a")
+        if sario.check_dset(defo_fname, out, overwrite):
+            avg_atmo.to_dataset(name=out).to_netcdf(defo_fname, mode="a")
 
     group = "polyfit_results"
-    logger.info("Saving polyfit results to stack_fname:/%s", group)
-    if sario.check_dset(stack_fname, group, overwrite):
-        polyfit_ds.to_netcdf(stack_fname, group=group, mode="a")
+    logger.info("Saving polyfit results to defo_fname:/%s", group)
+    if sario.check_dset(defo_fname, group, overwrite):
+        polyfit_ds.to_netcdf(defo_fname, group=group, mode="a")
 
     return model_defo
 

@@ -23,12 +23,10 @@ IGRAM_MASK_DSET = "igram"
 IGRAM_MASK_SUM_DSET = "igram_sum"
 
 # output file
-DEFORMATION_FILENAME = "deformation.h5"
-DEFORMATION_FILENAME_NC = "deformation.nc"
+DEFO_FILENAME = "deformation.h5"
+DEFO_FILENAME_NC = "deformation.nc"
+DEFO_ORIG_DSET = "defo_orig"
 MODEL_DEFO_DSET = "defo_{model}"
-# VELOCITIES_DSET = "linear_velocity"
-# CUMULATIVE_LINEAR_DEFO_DSET = "defo_linear"
-POLYFIT_MODEL = "polyfit_results_{model}"
 ATMO_DAY1_DSET = "atmo_day1"
 
 DEM_RSC_DSET = "dem_rsc"
