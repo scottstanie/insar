@@ -151,12 +151,12 @@ def run_inversion(
         block_shape=block_shape,
     )
 
-    if sario.check_dset(outfile, output_dset, overwrite):
-        create_dset(
-            outfile, output_dset, output_shape, np.float32, chunks=True, compress=True
-        )
-    else:
+    if sario.check_dset(outfile, output_dset, overwrite) is False:
         raise ValueError(f"{outfile}:/{output_dset} exists, {overwrite = }")
+
+    create_dset(
+        outfile, output_dset, output_shape, np.float32, chunks=True, compress=True
+    )
 
     run_sbas(
         unw_stack_file,
@@ -403,7 +403,7 @@ def fit_poly_to_stack(
     overwrite=True,
 ):
     outname = constants.VELOCITIES_DSET
-    if not sario.check_dset(stack_fname, outname, overwrite):
+    if sario.check_dset(stack_fname, outname, overwrite) is False:
         with xr.open_dataset(stack_fname) as ds:
             return ds[outname]
 
@@ -419,9 +419,9 @@ def fit_poly_to_stack(
         velocities_cm_per_ns = stack_poly["polyfit_coefficients"][-2]
         velocities = velocities_cm_per_ns * constants.NS_PER_YEAR
         velocities.attrs["units"] = "cm per year"
-        # Now use the poly coeffs to get the linear fit. Take the final point
-        cumulative_da = xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)[-1]
-        cumulative_da.attrs["units"] = "cm"
+        # # Now use the poly coeffs to get the linear fit. Take the final point
+        # cumulative_da = xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)[-1]
+        # cumulative_da.attrs["units"] = "cm"
 
     # Save for the velocity map, and the cumulative model map
     logger.info("Saving linear velocities to %s", outname)
@@ -430,12 +430,12 @@ def fit_poly_to_stack(
     velo_ds = velocities.drop_vars("degree").to_dataset(name=outname)
     velo_ds.to_netcdf(stack_fname, mode="a")
 
-    out_name2 = constants.CUMULATIVE_LINEAR_DEFO_DSET
-    logger.info("Saving cumulative linear velocity to %s", out_name2)
-    cum_ds = cumulative_da.drop_vars("date").to_dataset(name=out_name2)
-    cum_ds.to_netcdf(stack_fname, mode="a")
+    # out_name2 = constants.CUMULATIVE_LINEAR_DEFO_DSET
+    # logger.info("Saving cumulative linear velocity to %s", out_name2)
+    # cum_ds = cumulative_da.drop_vars("date").to_dataset(name=out_name2)
+    # cum_ds.to_netcdf(stack_fname, mode="a")
 
-    return velo_ds, cum_ds
+    return velocities  # , cumulative_da
 
 
 def calc_day1_atmo(
@@ -466,7 +466,7 @@ def calc_day1_atmo(
         avg_atmo (xr.DataArray): 2D array with the estiamted first day's atmospheric phase
 
     """
-    if not sario.check_dset(stack_fname, outname, overwrite):  # already exists:
+    if sario.check_dset(stack_fname, outname, overwrite) is False:  # already exists:
         with xr.open_dataset(stack_fname) as ds:
             return ds[outname]
 
@@ -509,20 +509,29 @@ def calc_model_fit_deformation(
     degree=3,
     outname=None,
     overwrite=False,
+    weights=None,
 ):
     model_str = "polynomial_deg{}".format(degree)
     if outname is None:
         outname = constants.CUMULATIVE_MODEL_DEFO_DSET.format(model=model_str)
     _confirm_closed(stack_fname)
 
-    if not sario.check_dset(stack_fname, outname, overwrite):  # already exists:
+    if sario.check_dset(stack_fname, outname, overwrite) is False:  # already exists:
         with xr.open_dataset(stack_fname) as ds:
+            # TODO: save the poly, also load that
             return ds[outname]
 
     with xr.open_dataset(stack_fname) as ds:
         stack_da = ds[stack_dset]
         # Fit a polynomial along the "date" dimension (1 per pixel)
-        stack_poly = stack_da.polyfit("date", deg=degree, full=True, cov=True)
+        stack_poly = stack_da.polyfit(
+            "date",
+            deg=degree,
+            w=weights,
+            full=True,
+            # cov=True,
+            cov="unscaled",
+        )
         # This is the "modeled" deformation
 
         # Get expected ifg deformation phase from the polynomial velocity fit
@@ -546,3 +555,21 @@ def calc_model_fit_deformation(
     _confirm_closed(stack_fname)
     model_ds.to_netcdf(stack_fname, mode="a")
     return cumulative_model_defo, stack_poly
+
+
+def calc_atmo_variance(
+    stack_fname=constants.DEFORMATION_FILENAME_NC,
+    stack_dset=constants.STACK_DSET,
+    degree=3,
+):
+    _confirm_closed(stack_fname)
+    model_defo = calc_model_fit_deformation(
+        stack_fname=stack_fname,
+        stack_dset=stack_dset,
+        compensate_atmo=True,
+        degree=degree,
+        overwrite=False,
+    )
+    with xr.open_dataset(stack_fname) as ds:
+        stack_da = ds[stack_dset]
+        return (model_defo - stack_da).var(dim=("lat", "lon"))
