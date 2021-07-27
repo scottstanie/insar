@@ -414,11 +414,10 @@ def fit_poly_to_stack(
 
         # stack_poly["polyfit_coefficients"][0] is the offset/y-intercept
         # stack_poly["polyfit_coefficients"][1] is the rate
-        velocities_cm_per_ns = stack_poly["polyfit_coefficients"][1]
         # Note: xarray converts the dates to "nanoseconds sicne 1970"
-        # https://github.com/pydata/xarray/blob/main/xarray/core/missing.py#L273-L280
-        # So the rate is "radians / nanosecond" (pecos is +/- 75 ish)
-        velocities = velocities_cm_per_ns * 1e-9 * 86400 * 365.25
+        # So the unit for, e.g., coeff1 is "cm / nanosecond"
+        velocities_cm_per_ns = stack_poly["polyfit_coefficients"][-2]
+        velocities = velocities_cm_per_ns * constants.NS_PER_YEAR
         velocities.attrs["units"] = "cm per year"
         # Now use the poly coeffs to get the linear fit. Take the final point
         cumulative_da = xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)[-1]
@@ -523,7 +522,7 @@ def calc_model_fit_deformation(
     with xr.open_dataset(stack_fname) as ds:
         stack_da = ds[stack_dset]
         # Fit a polynomial along the "date" dimension (1 per pixel)
-        stack_poly = stack_da.polyfit("date", deg=degree)
+        stack_poly = stack_da.polyfit("date", deg=degree, full=True, cov=True)
         # This is the "modeled" deformation
 
         # Get expected ifg deformation phase from the polynomial velocity fit
@@ -546,4 +545,4 @@ def calc_model_fit_deformation(
 
     _confirm_closed(stack_fname)
     model_ds.to_netcdf(stack_fname, mode="a")
-    return cumulative_model_defo
+    return cumulative_model_defo, stack_poly
