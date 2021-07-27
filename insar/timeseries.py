@@ -424,7 +424,6 @@ def fit_poly_to_stack(
         if sario.check_dset(stack_fname, dsname, overwrite):
             logger.info("Saving linear velocities to %s", dsname)
             velo_ds = velocities.drop_vars("degree").to_dataset(name=dsname)
-            velo_ds.attrs['units'] = "cm per year"
             velo_ds.to_netcdf(stack_fname, mode="a")
 
         dsname = constants.CUMULATIVE_LINEAR_DEFO_DSET
@@ -437,3 +436,4 @@ def fit_poly_to_stack(
 
     # For an easy cumulative:
     return velo_ds, cum_ds
+    
