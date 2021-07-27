@@ -28,6 +28,7 @@ DEFORMATION_FILENAME = "deformation.h5"
 DEFORMATION_FILENAME_NC = "deformation.nc"
 VELOCITIES_DSET = "linear_velocity"
 CUMULATIVE_LINEAR_DEFO_DSET = "cumulative_linear_defo"
+ATMO_DAY1_DSET = "atmo_day1"
 
 DEM_RSC_DSET = "dem_rsc"
 

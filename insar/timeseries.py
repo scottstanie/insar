@@ -405,6 +405,7 @@ def fit_poly_to_stack(
 
     ds = xr.open_dataset(stack_fname)
     stack_da = ds[stack_dset]
+    # Fit a polynomial along the "date" dimension (1 per pixel)
     stack_poly = stack_da.polyfit("date", deg=degree)
 
     # stack_poly["polyfit_coefficients"][0] is the offset/y-intercept
@@ -414,10 +415,10 @@ def fit_poly_to_stack(
     # https://github.com/pydata/xarray/blob/main/xarray/core/missing.py#L273-L280
     # So the rate is "radians / nanosecond" (pecos is +/- 75 ish)
     velocities = velocities_cm_per_ns * 1e-9 * 86400 * 365.25
-    velocities.attrs['units'] = "cm per year"
+    velocities.attrs["units"] = "cm per year"
     # Now use the poly coeffs to get the linear fit. Take the final point
-    cumulative = xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)[-1]
-    cumulative.attrs['units'] = "cm"
+    cumulative_da = xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)[-1]
+    cumulative_da.attrs["units"] = "cm"
     ds.close()
     if save:
         dsname = constants.VELOCITIES_DSET
@@ -429,11 +430,46 @@ def fit_poly_to_stack(
         dsname = constants.CUMULATIVE_LINEAR_DEFO_DSET
         if sario.check_dset(stack_fname, dsname, overwrite):
             logger.info("Saving cumulative linear velocity to %s", dsname)
-            cum_ds = cumulative.drop_vars("date").to_dataset(name=dsname)
+            cum_ds = cumulative_da.drop_vars("date").to_dataset(name=dsname)
             # note: need to get rid of the "date" dim, since it's 2D
             # otherwise it overwrites all dates to the final one
             cum_ds.to_netcdf(stack_fname, mode="a")
 
-    # For an easy cumulative:
     return velo_ds, cum_ds
-    
+
+
+def calc_day1_atmo(
+    stack_fname=constants.DEFORMATION_FILENAME_NC,
+    stack_dset=constants.STACK_DSET,
+    degree=1,
+    save=True,
+    overwrite=True,
+):
+    """Estimate the atmospheric phase screen on the SAR first date
+
+    Uses the (trend-removed) daily phase timeseries, recomputes the difference
+    between each day and day1.
+    Since the differences have been converted (through `run_inversion`) into phases
+    on each date (consisting of (atmospheric delay + deformation)), we can just
+    average each date's image after removing the linear trend.
+    """
+    import xarray as xr
+
+    ds = xr.open_dataset(stack_fname)
+    stack_da = ds[stack_dset]
+    # Fit a polynomial along the "date" dimension (1 per pixel)
+    stack_poly = stack_da.polyfit("date", deg=degree)
+    cumulative_da = xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)
+    avg_atmo = (stack_da - cumulative_da).mean(dim="date")
+    ds.close()
+    return stack_da, cumulative_da
+    # return avg_atmo
+
+    if save:
+        dsname = constants.ATMO_DAY1_DSET
+        if sario.check_dset(stack_fname, dsname, overwrite):
+            logger.info("Saving cumulative linear velocity to %s", dsname)
+            atmo_ds = avg_atmo.to_dataset(name=dsname)
+            # note: need to get rid of the "date" dim, since it's 2D
+            # otherwise it overwrites all dates to the final one
+            atmo_ds.to_netcdf(stack_fname, mode="a")
