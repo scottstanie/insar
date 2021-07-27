@@ -359,8 +359,6 @@ def calc_soln_pixelwise(
             # first date is 0
             stack[1:, idx, jdx] = cur_soln
 
-    # stack = (pA @ unw_clean.reshape((nstack, -1))).reshape((-1, nrow, ncol))
-
     stack *= constants.PHASE_TO_CM
     return stack
 
@@ -395,6 +393,7 @@ def _record_run_params(paramfile, **kwargs):
     with open(paramfile, "w") as f:
         yaml.dump(kwargs, f)
 
+
 def _confirm_closed(fname):
     """Weird hack to make sure file handles are closed
     https://github.com/h5py/h5py/issues/1090#issuecomment-608485873"""
@@ -419,7 +418,7 @@ def calc_model_fit_deformation(
         degree (int): Polynomial degree to fit to each pixel's timeseries to model
             the deformation. This fit is removed to estimate the day 1 atmosphere
         remove_day1_atmo (bool): default True. Estimates and removes the first date's
-            atmospheric phase screen. See `Notes` for details. 
+            atmospheric phase screen. See `Notes` for details.
         reweight_by_atmo_var (bool): default True. Performs weighted least squares
             to refit model from residual variances. See `Notes` for details.
         outname (str): Name of dataset to save atmo estimattion within `stack_fname`
@@ -447,8 +446,8 @@ def calc_model_fit_deformation(
     """
     model_str = "polynomial_deg{}".format(degree)
     if outname is None:
-        outname = constants.CUMULATIVE_MODEL_DEFO_DSET.format(model=model_str)
-        # polyfit_outname = 
+        outname = constants.MODEL_DEFO_DSET.format(model=model_str)
+        # polyfit_outname =
     _confirm_closed(stack_fname)
 
     if sario.check_dset(stack_fname, outname, overwrite) is False:  # already exists:
@@ -463,14 +462,12 @@ def calc_model_fit_deformation(
         # This is the "modeled" deformation
 
         # Get expected ifg deformation phase from the polynomial velocity fit
-        cumulative_model_defo = xr.polyval(
-            stack_da.date, stack_poly.polyfit_coefficients
-        )
+        model_defo = xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)
 
         if remove_day1_atmo:
             logger.info("Compensating day1 atmosphere")
             # take difference of `linear_ifgs` and SBAS cumulative
-            cum_detrend = cumulative_model_defo - stack_da
+            cum_detrend = model_defo - stack_da
             # Then reconstruct the ifgs containing the day 0
             reconstructed_ifgs = cum_detrend[1:] - cum_detrend[0]
             # add -1 so that it has same sign as the timeseries, which
@@ -478,38 +475,46 @@ def calc_model_fit_deformation(
             avg_atmo = -1 * reconstructed_ifgs.mean(dim="date")
             avg_atmo.attrs["units"] = "cm"
 
-            cumulative_model_defo = cumulative_model_defo - avg_atmo
+            model_defo = model_defo - avg_atmo
             # Still first the first day to 0
-            cumulative_model_defo[0] = 0
-            cumulative_model_defo.attrs["units"] = "cm"
+            model_defo[0] = 0
+            model_defo.attrs["units"] = "cm"
 
         if reweight_by_atmo_var:
-            atmo_variances = (cumulative_model_defo - stack_da).var(dim=("lat", "lon"))
+            atmo_variances = (model_defo - stack_da).var(dim=("lat", "lon"))
             weights = 1 / atmo_variances
+            if not remove_day1_atmo:  # Make sure the avg_atmo variable is defined
+                avg_atmo = 1
             weights[0] = 1 / np.var(avg_atmo)
-            stack_poly = stack_da.polyfit(
+            stack_poly_redo = stack_da.polyfit(
                 "date",
                 deg=degree,
                 w=weights,
                 full=True,
                 cov="unscaled",
             )
-            cumulative_model_defo = xr.polyval(
-                stack_da.date, stack_poly.polyfit_coefficients
-            )
-
-    logger.info("Saving cumulative model-fit deformation to %s", outname)
-    model_ds = cumulative_model_defo.to_dataset(name=outname)
+            model_defo = xr.polyval(stack_da.date, stack_poly_redo.polyfit_coefficients)
 
     _confirm_closed(stack_fname)
+    logger.info("Saving cumulative model-fit deformation to %s", outname)
+    model_ds = model_defo.to_dataset(name=outname)
     model_ds.to_netcdf(stack_fname, mode="a")
 
+    group = "polyfit_results"
+    logger.info("Saving unweighted polyfit results to stack_fname/%s", group)
+    stack_poly.to_dataset().to_netcdf(stack_fname, group=group, mode="a")
 
-    # logger.info("Saving cumulative linear velocity to %s", outname)
-    # atmo_ds = avg_atmo.to_dataset(name=outname)
-    # atmo_ds.to_netcdf(stack_fname, mode="a")
+    if remove_day1_atmo:
+        out = constants.ATMO_DAY1_DSET
+        logger.info("Saving day1 atmo estimation to %s", out)
+        avg_atmo.to_dataset(name=out).to_netcdf(stack_fname, mode="a")
 
-    return cumulative_model_defo, stack_poly
+    if reweight_by_atmo_var:
+        group = "polyfit_results_reweight"
+        logger.info("Saving weighted polyfit to stack_fname/%s", group)
+        stack_poly_redo.to_dataset().to_netcdf(stack_fname, group=group, mode="a")
+
+    return model_defo
 
 
 def fit_poly_to_stack(
