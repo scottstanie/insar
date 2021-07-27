@@ -17,6 +17,7 @@ scott@lidar igrams]$ head slclist
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import hdf5plugin  # noqa
 import h5py
+import xarray as xr
 import numpy as np
 from matplotlib.dates import date2num
 
@@ -400,12 +401,10 @@ def fit_poly_to_stack(
     degree=1,
     overwrite=True,
 ):
-    import xarray as xr
-
-    out_name = constants.VELOCITIES_DSET
-    if not sario.check_dset(stack_fname, out_name, overwrite):
+    outname = constants.VELOCITIES_DSET
+    if not sario.check_dset(stack_fname, outname, overwrite):
         with xr.open_dataset(stack_fname) as ds:
-            return ds[out_name]
+            return ds[outname]
 
     with xr.open_dataset(stack_fname) as ds:
         stack_da = ds[stack_dset]
@@ -425,10 +424,10 @@ def fit_poly_to_stack(
         cumulative_da.attrs["units"] = "cm"
 
     # Save for the velocity map, and the cumulative model map
-    logger.info("Saving linear velocities to %s", out_name)
+    logger.info("Saving linear velocities to %s", outname)
     # note: need to get rid of the "date" dim, since it's 2D
     # otherwise it overwrites all dates to the final one
-    velo_ds = velocities.drop_vars("degree").to_dataset(name=out_name)
+    velo_ds = velocities.drop_vars("degree").to_dataset(name=outname)
     velo_ds.to_netcdf(stack_fname, mode="a")
 
     out_name2 = constants.CUMULATIVE_LINEAR_DEFO_DSET
@@ -442,7 +441,8 @@ def fit_poly_to_stack(
 def calc_day1_atmo(
     stack_fname=constants.DEFORMATION_FILENAME_NC,
     stack_dset=constants.STACK_DSET,
-    degree=2,
+    degree=3,
+    outname=constants.ATMO_DAY1_DSET,
     overwrite=False,
 ):
     """Estimate the atmospheric phase screen on the SAR first date
@@ -452,13 +452,23 @@ def calc_day1_atmo(
     Since the differences have been converted (through `run_inversion`) into phases
     on each date (consisting of (atmospheric delay + deformation)), we can just
     average each date's image after removing the linear trend.
-    """
-    import xarray as xr
 
-    out_name = constants.ATMO_DAY1_DSET
-    if not sario.check_dset(stack_fname, out_name, overwrite):  # already exists:
+    Args:
+        stack_fname (str): Name of the .nc file (default=`constants.DEFORMATION_FILENAME_NC`)
+        stack_dset (str): Name of dataset within `stack_fname` containing cumulative
+            deformation+(atmospheric noise) timeseries (default=`constants.STACK_DSET`)
+        degree (int): Polynomial degree to fit to each pixel's timeseries to model
+            the deformation. This fit is removed to estimate the day 1 atmosphere
+        outname (str): Name of dataset to save atmo estimattion within `stack_fname`
+            (default= constants.ATMO_DAY1_DSET)
+        overwrite (bool): If True, delete (if exists) the output
+    Returns:
+        avg_atmo (xr.DataArray): 2D array with the estiamted first day's atmospheric phase
+
+    """
+    if not sario.check_dset(stack_fname, outname, overwrite):  # already exists:
         with xr.open_dataset(stack_fname) as ds:
-            return ds[out_name]
+            return ds[outname]
 
     with xr.open_dataset(stack_fname) as ds:
         stack_da = ds[stack_dset]
@@ -467,16 +477,72 @@ def calc_day1_atmo(
         # This is the "modeled" deformation
 
         # Get expected ifg deformation phase from the polynomial velocity fit
-        cumulative_model_defo = xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)
+        cumulative_model_defo = xr.polyval(
+            stack_da.date, stack_poly.polyfit_coefficients
+        )
         # take difference of `linear_ifgs` and SBAS cumulative
         cum_detrend = cumulative_model_defo - stack_da
         # Then reconstruct the ifgs containing the day 0
         reconstructed_ifgs = cum_detrend[1:] - cum_detrend[0]
-        # add -1 so that the compensation is (deformation - avg_atmo)
+        # add -1 so that it has same sign as the timeseries, which
+        # makes the compensation is (stack_da - avg_atmo)
         avg_atmo = -1 * reconstructed_ifgs.mean(dim="date")
+        avg_atmo.attrs["units"] = "cm"
 
-    logger.info("Saving cumulative linear velocity to %s", out_name)
-    atmo_ds = avg_atmo.to_dataset(name=out_name)
+    logger.info("Saving cumulative linear velocity to %s", outname)
+    atmo_ds = avg_atmo.to_dataset(name=outname)
     atmo_ds.to_netcdf(stack_fname, mode="a")
 
     return avg_atmo
+
+
+def _confirm_closed(fname):
+    """Weird hack to make sure file handles are closed
+    https://github.com/h5py/h5py/issues/1090#issuecomment-608485873"""
+    xr.open_dataset(fname).close()
+
+
+def calc_model_fit_deformation(
+    stack_fname=constants.DEFORMATION_FILENAME_NC,
+    stack_dset=constants.STACK_DSET,
+    compensate_atmo=True,
+    degree=3,
+    outname=None,
+    overwrite=False,
+):
+    model_str = "polynomial_deg{}".format(degree)
+    if outname is None:
+        outname = constants.CUMULATIVE_MODEL_DEFO_DSET.format(model=model_str)
+    _confirm_closed(stack_fname)
+
+    if not sario.check_dset(stack_fname, outname, overwrite):  # already exists:
+        with xr.open_dataset(stack_fname) as ds:
+            return ds[outname]
+
+    with xr.open_dataset(stack_fname) as ds:
+        stack_da = ds[stack_dset]
+        # Fit a polynomial along the "date" dimension (1 per pixel)
+        stack_poly = stack_da.polyfit("date", deg=degree)
+        # This is the "modeled" deformation
+
+        # Get expected ifg deformation phase from the polynomial velocity fit
+        cumulative_model_defo = xr.polyval(
+            stack_da.date, stack_poly.polyfit_coefficients
+        )
+    if compensate_atmo:
+        logger.info("Compensating day1 atmosphere")
+        avg_atmo = calc_day1_atmo(
+            stack_fname=stack_fname, stack_dset=stack_dset, overwrite=False
+        )
+
+    cumulative_model_defo = cumulative_model_defo - avg_atmo
+    # Still first the first day to 0
+    cumulative_model_defo[0] = 0
+    cumulative_model_defo.attrs["units"] = "cm"
+
+    logger.info("Saving cumulative model-fit deformation to %s", outname)
+    model_ds = cumulative_model_defo.to_dataset(name=outname)
+
+    _confirm_closed(stack_fname)
+    model_ds.to_netcdf(stack_fname, mode="a")
+    return cumulative_model_defo
