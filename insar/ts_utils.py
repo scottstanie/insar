@@ -253,3 +253,20 @@ def _augment_zeros(B, delta_phis):
     zeros_shape = (B.shape[0] - r, c)
     delta_phis = np.vstack((delta_phis, np.zeros(zeros_shape)))
     return delta_phis
+
+
+def ptp_by_date(da):
+    import xarray as xr
+
+    return xr.apply_ufunc(
+        np.ptp, da, input_core_dims=[["lat", "lon"]], kwargs={"axis": (-2, -1)}
+    )
+
+
+def ptp_by_date_pct(da, low=0.05, high=0.95):
+    """Find the peak-to-peak amplitude per image, based on the `high`/`low` percentiles"""
+    import xarray as xr
+
+    high_q = da.quantile(high, dim=("lat", "lon"))
+    low_q = da.quantile(low, dim=("lat", "lon"))
+    return high_q - low_q

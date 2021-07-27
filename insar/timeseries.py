@@ -481,10 +481,19 @@ def calc_model_fit_deformation(
             model_defo[0] = 0
 
         if reweight_by_atmo_var:
-            atmo_stddevs = (model_defo - stack_da).std(dim=("lat", "lon"))
+            # from .ts_utils import ptp_by_date, ptp_by_date_pct
+            resids = model_defo - stack_da
             # polyfit wants to have the std dev. of variances, if known
+            atmo_stddevs = resids.std(dim=("lat", "lon"))
+            weights = 1 / atmo_stddevs
             # To more heavily beat down the noisy days, square these values
-            weights = (1 / atmo_stddevs) ** 2
+            # weights = (1 / atmo_stddevs) ** 2
+            # atmo_ptps = ptp_by_date(resids)
+            # atmo_ptp_qt = ptp_by_date_pct(resids, 0.05, 0.95)
+            # atmo_ptp_qt = ptp_by_date_pct(resids, 0.02, 0.98)
+            # weights = 1 / atmo_ptp_qt
+            # return atmo_stddevs, atmo_ptps, atmo_ptp_qt, atmo_ptp_qt2
+
             if not remove_day1_atmo:  # Make sure the avg_atmo variable is defined
                 avg_atmo = 1
             weights[0] = 1 / np.var(avg_atmo)
