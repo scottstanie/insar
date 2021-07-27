@@ -14,11 +14,12 @@ scott@lidar igrams]$ head slclist
 20180420_20180502.int
 
 """
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import hdf5plugin  # noqa
 import h5py
 import numpy as np
-
 from matplotlib.dates import date2num
+
 from apertools import sario, utils
 from apertools.log import get_log, log_runtime
 from .prepare import create_dset
@@ -29,13 +30,13 @@ logger = get_log()
 # Import numba if available; otherwise, just use python-only version
 try:
     import numba
-    from .ts_numba import build_B_matrix, build_A_matrix
+    from .ts_numba import build_A_matrix
 
     jit_decorator = numba.njit
 
 except:
     logger.info("Numba not avialable, falling back to python-only")
-    from .ts_utils import build_B_matrix, build_A_matrix
+    from .ts_utils import build_A_matrix
 
     # Identity decorator if the numba.jit ones fail
     def jit_decorator(func):
@@ -44,14 +45,15 @@ except:
 
 @log_runtime
 def run_inversion(
-    unw_stack_file="unw_stack.h5",
+    unw_stack_file=constants.UNW_FILENAME,
     input_dset=constants.STACK_FLAT_SHIFTED_DSET,
-    outfile="deformation_stack.h5",
+    outfile=constants.DEFORMATION_FILENAME,
+    output_dset=constants.STACK_DSET,
     overwrite=False,
     min_date=None,
     max_date=None,
     stack_average=False,
-    constant_velocity=False,
+    # constant_velocity=False,
     max_temporal_baseline=800,
     max_temporal_bandwidth=None,  # TODO
     outlier_sigma=0,  # TODO: outlier outlier_sigma. Use trodi
@@ -92,8 +94,8 @@ def run_inversion(
         logger.setLevel(10)  # DEBUG
 
     # averaging or linear means output will is 3D array (not just map of velocities)
-    is_3d = not (stack_average or constant_velocity)
-    output_dset = "stack" if is_3d else "velos"
+    # is_3d = not (stack_average or constant_velocity)
+    # output_dset = "stack" if is_3d else "velos"
 
     slclist, ifglist = sario.load_slclist_ifglist(h5file=unw_stack_file)
 
@@ -117,12 +119,13 @@ def run_inversion(
     block_shape = _get_block_shape(
         full_shape, chunk_size, block_size_max=100e6, nbytes=nbytes
     )
-    if constant_velocity:
-        # proc_func = proc_pixel_linear
-        output_shape = (nrows, ncols)
-    else:
-        # proc_func = proc_pixel_daily
-        output_shape = (len(slclist), nrows, ncols)
+
+    # if constant_velocity:
+    # proc_func = proc_pixel_linear
+    # output_shape = (nrows, ncols)
+    # else:
+    # proc_func = proc_pixel_daily
+    output_shape = (len(slclist), nrows, ncols)
 
     paramfile = "{}_run_params".format(outfile).replace(".", "_") + ".yml"
     # Saves all desried run variables and objects into a yaml file
@@ -160,7 +163,7 @@ def run_inversion(
         block_shape,
         date2num(slclist),
         date2num(ifglist),
-        constant_velocity,
+        # constant_velocity,
         alpha,
         # L1,
         outlier_sigma,
@@ -170,9 +173,6 @@ def run_inversion(
     )
     dem_rsc = sario.load_dem_from_h5(unw_stack_file)
     sario.save_dem_to_h5(outfile, dem_rsc)
-
-
-from concurrent.futures import ProcessPoolExecutor, as_completed
 
 
 def run_sbas(
@@ -246,7 +246,6 @@ def _load_and_run(
 ):
     rows, cols = blk
     with h5py.File(unw_stack_file) as hf:
-        nstack, nrows, ncols = hf[input_dset].shape
         logger.info(f"Loading chunk {rows}, {cols}")
         unw_chunk = hf[input_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
         # TODO: get rid of nan pixels at edge! dont let it ruin the whole chunk
@@ -256,7 +255,7 @@ def _load_and_run(
             slclist,
             ifglist,
             # alpha,
-            constant_velocity,
+            # constant_velocity,
         )
         return out_chunk
 
@@ -275,7 +274,7 @@ def calc_soln(
     slclist,
     ifglist,
     # alpha,
-    constant_velocity,
+    # constant_velocity,
     # L1 = True,
     # outlier_sigma=4,
 ):
@@ -324,7 +323,7 @@ def calc_soln_pixelwise(
     slclist,
     ifglist,
     # alpha,
-    constant_velocity,
+    # constant_velocity,
     # L1 = True,
     # outlier_sigma=4,
 ):
