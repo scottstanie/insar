@@ -484,11 +484,11 @@ def calc_model_fit_deformation(
             atmo_stddevs = (model_defo - stack_da).std(dim=("lat", "lon"))
             # polyfit wants to have the std dev. of variances, if known
             # To more heavily beat down the noisy days, square these values
-            weights = (1 / atmo_stddevs)**2
+            weights = (1 / atmo_stddevs) ** 2
             if not remove_day1_atmo:  # Make sure the avg_atmo variable is defined
                 avg_atmo = 1
             weights[0] = 1 / np.var(avg_atmo)
-            polyfit_redo_ds = stack_da.polyfit(
+            polyfit_ds = stack_da.polyfit(
                 "date",
                 deg=degree,
                 w=weights,
@@ -496,7 +496,7 @@ def calc_model_fit_deformation(
                 # cov="unscaled",
                 cov="full",
             )
-            model_defo = xr.polyval(stack_da.date, polyfit_redo_ds.polyfit_coefficients)
+            model_defo = xr.polyval(stack_da.date, polyfit_ds.polyfit_coefficients)
 
     model_defo.attrs["units"] = "cm"
     model_defo = model_defo.astype("float32")
@@ -506,21 +506,16 @@ def calc_model_fit_deformation(
     _confirm_closed(stack_fname)
     model_ds.to_netcdf(stack_fname, mode="a")
 
-    group = "polyfit_results"
-    logger.info("Saving unweighted polyfit results to stack_fname/%s", group)
-    polyfit_ds.to_netcdf(stack_fname, group=group, mode="a")
-
     if remove_day1_atmo:
         out = constants.ATMO_DAY1_DSET
         logger.info("Saving day1 atmo estimation to %s", out)
         if sario.check_dset(stack_fname, out, overwrite):
             avg_atmo.to_dataset(name=out).to_netcdf(stack_fname, mode="a")
 
-    if reweight_by_atmo_var:
-        group = "polyfit_results_reweight"
-        logger.info("Saving weighted polyfit to stack_fname/%s", group)
-        if sario.check_dset(stack_fname, group, overwrite):
-            polyfit_redo_ds.to_netcdf(stack_fname, group=group, mode="a")
+    group = "polyfit_results"
+    logger.info("Saving polyfit results to stack_fname:/%s", group)
+    if sario.check_dset(stack_fname, group, overwrite):
+        polyfit_ds.to_netcdf(stack_fname, group=group, mode="a")
 
     return model_defo
 
