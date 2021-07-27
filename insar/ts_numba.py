@@ -74,6 +74,7 @@ def build_B_matrix(sar_dates, ifg_dates, model=None):
     else:
         return B
 
+
 # TODO: jit...
 # @njit
 def subset_A(A, full_slclist, full_ifglist, slclist, ifglist, valid_ifg):

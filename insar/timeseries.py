@@ -26,6 +26,21 @@ from . import constants
 
 logger = get_log()
 
+# Import numba if available; otherwise, just use python-only version
+try:
+    import numba
+    from .ts_numba import build_B_matrix, build_A_matrix
+
+    jit_decorator = numba.njit
+
+except:
+    logger.info("Numba not avialable, falling back to python-only")
+    from .ts_utils import build_B_matrix, build_A_matrix
+
+    # Identity decorator if the numba.jit ones fail
+    def jit_decorator(func):
+        return func
+
 
 @log_runtime
 def run_inversion(
@@ -254,20 +269,7 @@ def write_out_chunk(chunk, outfile, output_dset, rows=None, cols=None):
         hf[output_dset][:, rows[0] : rows[1], cols[0] : cols[1]] = chunk
 
 
-try:
-    import numba
-    from .ts_numba import build_B_matrix, build_A_matrix
-
-    deco = numba.njit
-
-except:
-    from .ts_utils import build_B_matrix
-
-    # Identity decorator if the numba.jit ones fail
-    deco = lambda func: func
-
-
-@deco
+@jit_decorator
 def calc_soln(
     unw_chunk,
     slclist,
@@ -277,7 +279,17 @@ def calc_soln(
     # L1 = True,
     # outlier_sigma=4,
 ):
+    # TODO: this is where i'd get rid of specific dates/ifgs
     slcs_clean, ifglist_clean, unw_clean = slclist, ifglist, unw_chunk
+
+    nstack, nrow, ncol = unw_clean.shape
+    unw_cols = unw_clean.reshape((nstack, -1))
+    nan_idxs = np.isnan(unw_cols)
+    unw_cols_nonan = np.where(nan_idxs, 0, unw_cols)
+    # skip any all 0 blocks:
+    if unw_cols_nonan.sum() == 0:
+        return np.zeros((len(slcs_clean), nrow, ncol), dtype=unw_clean.dtype)
+
     # if outlier_sigma > 0:
     #     slc_clean, ifglist_clean, unw_clean = remove_outliers(
     #         slc_clean, ifglist_clean, unw_clean, mean_sigma_cutoff=sigma
@@ -295,10 +307,9 @@ def calc_soln(
     # timediffs = np.array([d.days for d in np.diff(slclist)])
     A = build_A_matrix(slcs_clean, ifglist_clean)
     pA = np.linalg.pinv(A).astype(unw_clean.dtype)
-    nstack, nrow, ncol = unw_clean.shape
     # stack = cols_to_stack(pA @ stack_to_cols(unw_subset), *unw_subset.shape[1:])
     # equiv:
-    stack = (pA @ unw_clean.reshape((nstack, -1))).reshape((-1, nrow, ncol))
+    stack = (pA @ unw_cols_nonan).reshape((-1, nrow, ncol))
 
     # Add a 0 image for the first date
     stack = np.concatenate((np.zeros((1, nrow, ncol)), stack), axis=0)
@@ -306,7 +317,7 @@ def calc_soln(
     return stack
 
 
-# @deco
+# @jit_decorator
 @numba.njit(fastmath=True, parallel=True, cache=True, nogil=True)
 def calc_soln_pixelwise(
     unw_chunk,
@@ -340,27 +351,6 @@ def calc_soln_pixelwise(
     return stack
 
 
-def prepB(slclist, ifglist, constant_velocity=False, alpha=0, difference=False):
-    """TODO: transfer this to the "run_sbas"? this is from julia"""
-    B = build_B_matrix(slclist, ifglist)
-    # Adjustments to solution:
-    # Force velocity constant across time
-    if constant_velocity is True:
-        logger.info("Using a constant velocity for inversion solutions.")
-        B = np.expand_dims(np.sum(B, axis=1), axis=1)
-    # Add regularization to the solution
-    elif alpha > 0:
-        logger.info(
-            "Using regularization with alpha=%s, difference=%s", alpha, difference
-        )
-        # Augment only if regularization requested
-        reg_matrix = (
-            _create_diff_matrix(B.shape[1]) if difference else np.eye(B.shape[1])
-        )
-        B = np.vstack((B, alpha * reg_matrix))
-    return B
-
-
 def _get_block_shape(full_shape, chunk_size, block_size_max=10e6, nbytes=4):
     """Find a size of a data cube less than `block_size_max` in increments of `chunk_size`"""
     import copy
@@ -390,27 +380,3 @@ def _record_run_params(paramfile, **kwargs):
 
     with open(paramfile, "w") as f:
         yaml.dump(kwargs, f)
-
-
-def integrate_velocities(velocity_array, timediffs):
-    """Takes SBAS velocity output and finds phases
-
-    Args:
-        velocity_array (ndarray): output of run_sbas, velocities at
-            each point in time
-        timediffs (np.array): dtype=int, days between each SAR acquisitions
-            length will be 1 less than num SAR acquisitions
-
-    Returns:
-        ndarray: integrated phase array
-
-    """
-    # multiply each column of vel array: each col is a separate solution
-    phi_diffs = timediffs.reshape((-1, 1)) * velocity_array
-
-    # Now the final phase results are the cumulative sum of delta phis
-    phi_arr = np.ma.cumsum(phi_diffs, axis=0)
-    # Add 0 as first entry of phase array to match slclist length on each col
-    phi_arr = np.ma.vstack((np.zeros(phi_arr.shape[1]), phi_arr))
-
-    return phi_arr
