@@ -61,6 +61,7 @@ def run_inversion(
     # L1=False, # TODO
     # difference=False,
     slclist_ignore_file="slclist_ignore.txt",
+    save_as_netcdf=True,
     verbose=False,
 ):
     """Runs SBAS inversion on all unwrapped igrams
@@ -68,21 +69,23 @@ def run_inversion(
     Args:
         unw_stack_file (str): path to the directory containing `unw_stack`,
             the .int filenames, the .unw files, and the dem.rsc file
-        reference (tuple[int, int]): row and col index of the reference pixel to subtract
-        window (int): size of the group around ref pixel to avg for reference.
-            if window=1 or None, only the single pixel used to shift the group.
-        constant_velocity (bool): force solution to have constant velocity
-            mutually exclusive with `alpha` option
+        input_dset (str): input dataset in the `unw_stack_file`
+            default: `constants.UNW_FILENAME`
+        outfile (str): Name of HDF5 output file
+        output_dset (str): name of dataset within `outfile` to store data
+        overwrite (bool): If True, clobber `outfile:/output_dset`
+        min_date (datetime.date): only take ifgs from `unw_stack_file` *after* this date
+        max_date (datetime.date): only take ifgs from `unw_stack_file` *before* this date
+        max_temporal_baseline (int): limit ifgs from `unw_stack_file` to be
+            shorter in temporal baseline
         alpha (float): nonnegative Tikhonov regularization parameter.
             See https://en.wikipedia.org/wiki/Tikhonov_regularization
         difference (bool): for regularization, penalize differences in velocity
             Used to make a smoother final solution
-        deramp (bool): Fits plane to each igram and subtracts (to remove orbital error)
-        deramp_order (int): order of polynomial to use when removing phase
-            from unwrapped igram
         slclist_ignore_file (str): text file with list of .geo files to ignore
             Removes the .geo and and igrams with these date
-        masking (bool): flag to load stack of .int.mask files to mask invalid areas
+        save_as_netcdf (bool): if true, also save the `outfile` as `outfile`.nc for
+            easier manipulation with xarray
         verbose (bool): print extra timing and debug info
 
     Returns:
@@ -173,6 +176,14 @@ def run_inversion(
     )
     dem_rsc = sario.load_dem_from_h5(unw_stack_file)
     sario.save_dem_to_h5(outfile, dem_rsc)
+    if save_as_netcdf:
+        from apertools import netcdf
+
+        netcdf.hdf5_to_netcdf(
+            outfile,
+            dset_name=output_dset,
+            stack_dim="date",
+        )
 
 
 def run_sbas(
@@ -280,14 +291,15 @@ def calc_soln(
 ):
     # TODO: this is where i'd get rid of specific dates/ifgs
     slcs_clean, ifglist_clean, unw_clean = slclist, ifglist, unw_chunk
+    dtype = unw_clean.dtype
 
     nstack, nrow, ncol = unw_clean.shape
     unw_cols = unw_clean.reshape((nstack, -1))
     nan_idxs = np.isnan(unw_cols)
-    unw_cols_nonan = np.where(nan_idxs, 0, unw_cols)
+    unw_cols_nonan = np.where(nan_idxs, 0, unw_cols).astype(dtype)
     # skip any all 0 blocks:
     if unw_cols_nonan.sum() == 0:
-        return np.zeros((len(slcs_clean), nrow, ncol), dtype=unw_clean.dtype)
+        return np.zeros((len(slcs_clean), nrow, ncol), dtype=dtype)
 
     # if outlier_sigma > 0:
     #     slc_clean, ifglist_clean, unw_clean = remove_outliers(
@@ -305,13 +317,13 @@ def calc_soln(
     # )
     # timediffs = np.array([d.days for d in np.diff(slclist)])
     A = build_A_matrix(slcs_clean, ifglist_clean)
-    pA = np.linalg.pinv(A).astype(unw_clean.dtype)
+    pA = np.linalg.pinv(A).astype(dtype)
     # stack = cols_to_stack(pA @ stack_to_cols(unw_subset), *unw_subset.shape[1:])
     # equiv:
-    stack = (pA @ unw_cols_nonan).reshape((-1, nrow, ncol))
+    stack = (pA @ unw_cols_nonan).reshape((-1, nrow, ncol)).astype(dtype)
 
     # Add a 0 image for the first date
-    stack = np.concatenate((np.zeros((1, nrow, ncol)), stack), axis=0)
+    stack = np.concatenate((np.zeros((1, nrow, ncol), dtype=dtype), stack), axis=0)
     stack *= constants.PHASE_TO_CM
     return stack
 
