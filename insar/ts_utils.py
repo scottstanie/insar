@@ -1,4 +1,5 @@
 import numpy as np
+from matplotlib.dates import date2num
 
 
 def build_A_matrix(sar_date_list, ifg_date_list):
@@ -40,7 +41,7 @@ def build_B_matrix(sar_dates, ifg_date_list, model=None):
     Args:
         sar_date_list (list[date]): dates of the SAR acquisitions
         ifg_date_list (list[tuple(date, date)])
-        model (str): If 'linear', creates the M x 1 matrix for linear velo model
+        model (str): If "linear", creates the M x 1 matrix for linear velo model
 
     Returns:
         np.array: 2D array of the velocity coefficient matrix from the SBAS paper:
@@ -72,6 +73,19 @@ def build_B_matrix(sar_dates, ifg_date_list, model=None):
         return B.sum(axis=1, keepdims=True)
     else:
         return B
+
+
+def A_polynomial(sar_dates, degree=1):
+    """System matrix for a polynomial fit to data
+
+    Args:
+        sar_dates (iterable[date]): dates of the SAR acquisitions
+    
+    Returns:
+        A, size=(len(sar_date_list)) 2D Vandermonde array to solve for the polynomial coefficients
+    """
+    date_nums = date2num(sar_dates)
+    return np.polynomial.polynomial.polyvander(date_nums, degree)
 
 
 def _create_diff_matrix(n, order=1):

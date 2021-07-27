@@ -14,14 +14,12 @@ scott@lidar igrams]$ head slclist
 20180420_20180502.int
 
 """
-import os
-import math
 import hdf5plugin  # noqa
 import h5py
 import numpy as np
 
 from matplotlib.dates import date2num
-from apertools import sario, latlon, utils, gps
+from apertools import sario, utils
 from apertools.log import get_log, log_runtime
 from .prepare import create_dset
 from . import constants
@@ -82,9 +80,7 @@ def run_inversion(
     is_3d = not (stack_average or constant_velocity)
     output_dset = "stack" if is_3d else "velos"
 
-    slclist, ifglist = sario.load_slclist_ifglist(
-        h5file=unw_stack_file,
-    )
+    slclist, ifglist = sario.load_slclist_ifglist(h5file=unw_stack_file)
 
     slclist, ifglist, valid_ifg_idxs = utils.filter_slclist_ifglist(
         ifg_date_list=ifglist,
@@ -238,8 +234,9 @@ def _load_and_run(
         nstack, nrows, ncols = hf[input_dset].shape
         logger.info(f"Loading chunk {rows}, {cols}")
         unw_chunk = hf[input_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
+        # TODO: get rid of nan pixels at edge! dont let it ruin the whole chunk
         out_chunk = calc_soln(
-        # out_chunk = calc_soln_pixelwise(
+            # out_chunk = calc_soln_pixelwise(
             unw_chunk,
             slclist,
             ifglist,
