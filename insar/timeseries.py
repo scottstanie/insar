@@ -459,11 +459,15 @@ def calc_day1_atmo(
     stack_da = ds[stack_dset]
     # Fit a polynomial along the "date" dimension (1 per pixel)
     stack_poly = stack_da.polyfit("date", deg=degree)
-    cumulative_da = xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)
-    avg_atmo = (stack_da - cumulative_da).mean(dim="date")
+
+    # Get expected ifg deformation phase from the linear velocity
+    cumulative_lin = xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)
+    # take difference of `linear_ifgs` and SBAS cumulative
+    cum_detrend = cumulative_lin - stack_da
+    # Then reconstruct the ifgs containing the day 0
+    reconstructed_ifgs = cum_detrend[1:] - cum_detrend[0]
+    avg_atmo = reconstructed_ifgs.mean(dim="date")
     ds.close()
-    return stack_da, cumulative_da
-    # return avg_atmo
 
     if save:
         dsname = constants.ATMO_DAY1_DSET
@@ -473,3 +477,5 @@ def calc_day1_atmo(
             # note: need to get rid of the "date" dim, since it's 2D
             # otherwise it overwrites all dates to the final one
             atmo_ds.to_netcdf(stack_fname, mode="a")
+
+    return avg_atmo
