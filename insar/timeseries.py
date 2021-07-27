@@ -185,6 +185,7 @@ def run_inversion(
             outname=constants.DEFORMATION_FILENAME_NC,
             dset_name=output_dset,
             stack_dim="date",
+            data_units="cm",
         )
 
 
