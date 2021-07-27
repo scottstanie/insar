@@ -458,11 +458,11 @@ def calc_model_fit_deformation(
     with xr.open_dataset(stack_fname) as ds:
         stack_da = ds[stack_dset]
         # Fit a polynomial along the "date" dimension (1 per pixel)
-        stack_poly = stack_da.polyfit("date", deg=degree)
+        polyfit_ds = stack_da.polyfit("date", deg=degree)
         # This is the "modeled" deformation
 
         # Get expected ifg deformation phase from the polynomial velocity fit
-        model_defo = xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)
+        model_defo = xr.polyval(stack_da.date, polyfit_ds.polyfit_coefficients)
 
         if remove_day1_atmo:
             logger.info("Compensating day1 atmosphere")
@@ -474,45 +474,53 @@ def calc_model_fit_deformation(
             # makes the compensation is (stack_da - avg_atmo)
             avg_atmo = -1 * reconstructed_ifgs.mean(dim="date")
             avg_atmo.attrs["units"] = "cm"
+            avg_atmo = avg_atmo.astype("float32")
 
             model_defo = model_defo - avg_atmo
             # Still first the first day to 0
             model_defo[0] = 0
-            model_defo.attrs["units"] = "cm"
 
         if reweight_by_atmo_var:
-            atmo_variances = (model_defo - stack_da).var(dim=("lat", "lon"))
-            weights = 1 / atmo_variances
+            atmo_stddevs = (model_defo - stack_da).std(dim=("lat", "lon"))
+            # polyfit wants to have the std dev. of variances, if known
+            # To more heavily beat down the noisy days, square these values
+            weights = (1 / atmo_stddevs)**2
             if not remove_day1_atmo:  # Make sure the avg_atmo variable is defined
                 avg_atmo = 1
             weights[0] = 1 / np.var(avg_atmo)
-            stack_poly_redo = stack_da.polyfit(
+            polyfit_redo_ds = stack_da.polyfit(
                 "date",
                 deg=degree,
                 w=weights,
                 full=True,
-                cov="unscaled",
+                # cov="unscaled",
+                cov="full",
             )
-            model_defo = xr.polyval(stack_da.date, stack_poly_redo.polyfit_coefficients)
+            model_defo = xr.polyval(stack_da.date, polyfit_redo_ds.polyfit_coefficients)
 
-    _confirm_closed(stack_fname)
+    model_defo.attrs["units"] = "cm"
+    model_defo = model_defo.astype("float32")
     logger.info("Saving cumulative model-fit deformation to %s", outname)
     model_ds = model_defo.to_dataset(name=outname)
+
+    _confirm_closed(stack_fname)
     model_ds.to_netcdf(stack_fname, mode="a")
 
     group = "polyfit_results"
     logger.info("Saving unweighted polyfit results to stack_fname/%s", group)
-    stack_poly.to_dataset().to_netcdf(stack_fname, group=group, mode="a")
+    polyfit_ds.to_netcdf(stack_fname, group=group, mode="a")
 
     if remove_day1_atmo:
         out = constants.ATMO_DAY1_DSET
         logger.info("Saving day1 atmo estimation to %s", out)
-        avg_atmo.to_dataset(name=out).to_netcdf(stack_fname, mode="a")
+        if sario.check_dset(stack_fname, out, overwrite):
+            avg_atmo.to_dataset(name=out).to_netcdf(stack_fname, mode="a")
 
     if reweight_by_atmo_var:
         group = "polyfit_results_reweight"
         logger.info("Saving weighted polyfit to stack_fname/%s", group)
-        stack_poly_redo.to_dataset().to_netcdf(stack_fname, group=group, mode="a")
+        if sario.check_dset(stack_fname, group, overwrite):
+            polyfit_redo_ds.to_netcdf(stack_fname, group=group, mode="a")
 
     return model_defo
 
@@ -531,17 +539,17 @@ def fit_poly_to_stack(
     with xr.open_dataset(stack_fname) as ds:
         stack_da = ds[stack_dset]
         # Fit a polynomial along the "date" dimension (1 per pixel)
-        stack_poly = stack_da.polyfit("date", deg=degree)
+        polyfit_ds = stack_da.polyfit("date", deg=degree)
 
-        # stack_poly["polyfit_coefficients"][0] is the offset/y-intercept
-        # stack_poly["polyfit_coefficients"][1] is the rate
+        # polyfit_ds["polyfit_coefficients"][0] is the offset/y-intercept
+        # polyfit_ds["polyfit_coefficients"][1] is the rate
         # Note: xarray converts the dates to "nanoseconds sicne 1970"
         # So the unit for, e.g., coeff1 is "cm / nanosecond"
-        velocities_cm_per_ns = stack_poly["polyfit_coefficients"][-2]
+        velocities_cm_per_ns = polyfit_ds["polyfit_coefficients"][-2]
         velocities = velocities_cm_per_ns * constants.NS_PER_YEAR
         velocities.attrs["units"] = "cm per year"
         # # Now use the poly coeffs to get the linear fit. Take the final point
-        # cumulative_da = xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)[-1]
+        # cumulative_da = xr.polyval(stack_da.date, polyfit_ds.polyfit_coefficients)[-1]
         # cumulative_da.attrs["units"] = "cm"
 
     # Save for the velocity map, and the cumulative model map
