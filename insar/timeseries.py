@@ -398,42 +398,43 @@ def fit_poly_to_stack(
     stack_fname=constants.DEFORMATION_FILENAME_NC,
     stack_dset=constants.STACK_DSET,
     degree=1,
-    save=True,
     overwrite=True,
 ):
     import xarray as xr
 
-    ds = xr.open_dataset(stack_fname)
-    stack_da = ds[stack_dset]
-    # Fit a polynomial along the "date" dimension (1 per pixel)
-    stack_poly = stack_da.polyfit("date", deg=degree)
+    out_name = constants.VELOCITIES_DSET
+    if not sario.check_dset(stack_fname, out_name, overwrite):
+        with xr.open_dataset(stack_fname) as ds:
+            return ds[out_name]
 
-    # stack_poly["polyfit_coefficients"][0] is the offset/y-intercept
-    # stack_poly["polyfit_coefficients"][1] is the rate
-    velocities_cm_per_ns = stack_poly["polyfit_coefficients"][1]
-    # Note: xarray converts the dates to "nanoseconds sicne 1970"
-    # https://github.com/pydata/xarray/blob/main/xarray/core/missing.py#L273-L280
-    # So the rate is "radians / nanosecond" (pecos is +/- 75 ish)
-    velocities = velocities_cm_per_ns * 1e-9 * 86400 * 365.25
-    velocities.attrs["units"] = "cm per year"
-    # Now use the poly coeffs to get the linear fit. Take the final point
-    cumulative_da = xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)[-1]
-    cumulative_da.attrs["units"] = "cm"
-    ds.close()
-    if save:
-        dsname = constants.VELOCITIES_DSET
-        if sario.check_dset(stack_fname, dsname, overwrite):
-            logger.info("Saving linear velocities to %s", dsname)
-            velo_ds = velocities.drop_vars("degree").to_dataset(name=dsname)
-            velo_ds.to_netcdf(stack_fname, mode="a")
+    with xr.open_dataset(stack_fname) as ds:
+        stack_da = ds[stack_dset]
+        # Fit a polynomial along the "date" dimension (1 per pixel)
+        stack_poly = stack_da.polyfit("date", deg=degree)
 
-        dsname = constants.CUMULATIVE_LINEAR_DEFO_DSET
-        if sario.check_dset(stack_fname, dsname, overwrite):
-            logger.info("Saving cumulative linear velocity to %s", dsname)
-            cum_ds = cumulative_da.drop_vars("date").to_dataset(name=dsname)
-            # note: need to get rid of the "date" dim, since it's 2D
-            # otherwise it overwrites all dates to the final one
-            cum_ds.to_netcdf(stack_fname, mode="a")
+        # stack_poly["polyfit_coefficients"][0] is the offset/y-intercept
+        # stack_poly["polyfit_coefficients"][1] is the rate
+        velocities_cm_per_ns = stack_poly["polyfit_coefficients"][1]
+        # Note: xarray converts the dates to "nanoseconds sicne 1970"
+        # https://github.com/pydata/xarray/blob/main/xarray/core/missing.py#L273-L280
+        # So the rate is "radians / nanosecond" (pecos is +/- 75 ish)
+        velocities = velocities_cm_per_ns * 1e-9 * 86400 * 365.25
+        velocities.attrs["units"] = "cm per year"
+        # Now use the poly coeffs to get the linear fit. Take the final point
+        cumulative_da = xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)[-1]
+        cumulative_da.attrs["units"] = "cm"
+
+    # Save for the velocity map, and the cumulative model map
+    logger.info("Saving linear velocities to %s", out_name)
+    # note: need to get rid of the "date" dim, since it's 2D
+    # otherwise it overwrites all dates to the final one
+    velo_ds = velocities.drop_vars("degree").to_dataset(name=out_name)
+    velo_ds.to_netcdf(stack_fname, mode="a")
+
+    out_name2 = constants.CUMULATIVE_LINEAR_DEFO_DSET
+    logger.info("Saving cumulative linear velocity to %s", out_name2)
+    cum_ds = cumulative_da.drop_vars("date").to_dataset(name=out_name2)
+    cum_ds.to_netcdf(stack_fname, mode="a")
 
     return velo_ds, cum_ds
 
@@ -441,9 +442,8 @@ def fit_poly_to_stack(
 def calc_day1_atmo(
     stack_fname=constants.DEFORMATION_FILENAME_NC,
     stack_dset=constants.STACK_DSET,
-    degree=1,
-    save=True,
-    overwrite=True,
+    degree=2,
+    overwrite=False,
 ):
     """Estimate the atmospheric phase screen on the SAR first date
 
@@ -455,27 +455,28 @@ def calc_day1_atmo(
     """
     import xarray as xr
 
-    ds = xr.open_dataset(stack_fname)
-    stack_da = ds[stack_dset]
-    # Fit a polynomial along the "date" dimension (1 per pixel)
-    stack_poly = stack_da.polyfit("date", deg=degree)
+    out_name = constants.ATMO_DAY1_DSET
+    if not sario.check_dset(stack_fname, out_name, overwrite):  # already exists:
+        with xr.open_dataset(stack_fname) as ds:
+            return ds[out_name]
 
-    # Get expected ifg deformation phase from the linear velocity
-    cumulative_lin = xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)
-    # take difference of `linear_ifgs` and SBAS cumulative
-    cum_detrend = cumulative_lin - stack_da
-    # Then reconstruct the ifgs containing the day 0
-    reconstructed_ifgs = cum_detrend[1:] - cum_detrend[0]
-    avg_atmo = reconstructed_ifgs.mean(dim="date")
-    ds.close()
+    with xr.open_dataset(stack_fname) as ds:
+        stack_da = ds[stack_dset]
+        # Fit a polynomial along the "date" dimension (1 per pixel)
+        stack_poly = stack_da.polyfit("date", deg=degree)
+        # This is the "modeled" deformation
 
-    if save:
-        dsname = constants.ATMO_DAY1_DSET
-        if sario.check_dset(stack_fname, dsname, overwrite):
-            logger.info("Saving cumulative linear velocity to %s", dsname)
-            atmo_ds = avg_atmo.to_dataset(name=dsname)
-            # note: need to get rid of the "date" dim, since it's 2D
-            # otherwise it overwrites all dates to the final one
-            atmo_ds.to_netcdf(stack_fname, mode="a")
+        # Get expected ifg deformation phase from the polynomial velocity fit
+        cumulative_model_defo = xr.polyval(stack_da.date, stack_poly.polyfit_coefficients)
+        # take difference of `linear_ifgs` and SBAS cumulative
+        cum_detrend = cumulative_model_defo - stack_da
+        # Then reconstruct the ifgs containing the day 0
+        reconstructed_ifgs = cum_detrend[1:] - cum_detrend[0]
+        # add -1 so that the compensation is (deformation - avg_atmo)
+        avg_atmo = -1 * reconstructed_ifgs.mean(dim="date")
+
+    logger.info("Saving cumulative linear velocity to %s", out_name)
+    atmo_ds = avg_atmo.to_dataset(name=out_name)
+    atmo_ds.to_netcdf(stack_fname, mode="a")
 
     return avg_atmo
