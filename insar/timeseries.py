@@ -49,7 +49,7 @@ def run_inversion(
     unw_stack_file=constants.UNW_FILENAME,
     input_dset=constants.STACK_FLAT_SHIFTED_DSET,
     outfile=constants.DEFO_FILENAME,
-    output_dset=constants.STACK_DSET,
+    output_dset=constants.DEFO_NOISY_DSET,
     overwrite=False,
     min_date=None,
     max_date=None,
@@ -402,7 +402,7 @@ def _confirm_closed(fname):
 
 def calc_model_fit_deformation(
     defo_fname=constants.DEFO_FILENAME_NC,
-    orig_dset=constants.DEFO_ORIG_DSET,
+    orig_dset=constants.DEFO_NOISY_DSET,
     degree=3,
     remove_day1_atmo=True,
     reweight_by_atmo_var=True,
@@ -414,7 +414,7 @@ def calc_model_fit_deformation(
     Args:
         defo_fname (str): Name of the .nc file (default=`constants.DEFO_FILENAME_NC`)
         orig_dset (str): Name of dataset within `defo_fname` containing cumulative
-            deformation+(atmospheric noise) timeseries (default=`constants.DEFO_ORIG_DSET`)
+            deformation+(atmospheric noise) timeseries (default=`constants.DEFO_NOISY_DSET`)
         degree (int): Polynomial degree to fit to each pixel's timeseries to model
             the deformation. This fit is removed to estimate the day 1 atmosphere
         remove_day1_atmo (bool): default True. Estimates and removes the first date's

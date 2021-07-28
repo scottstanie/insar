@@ -25,7 +25,7 @@ IGRAM_MASK_SUM_DSET = "igram_sum"
 # output file
 DEFO_FILENAME = "deformation.h5"
 DEFO_FILENAME_NC = "deformation.nc"
-DEFO_ORIG_DSET = "defo_orig"
+DEFO_NOISY_DSET = "defo_noisy"
 MODEL_DEFO_DSET = "defo_{model}"
 ATMO_DAY1_DSET = "atmo_day1"
 
