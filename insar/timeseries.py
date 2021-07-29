@@ -458,7 +458,9 @@ def calc_model_fit_deformation(
     with xr.open_dataset(defo_fname) as ds:
         noisy_da = ds[orig_dset]
 
-        logger.info("Fitting degree %s polynomial to %s/%s", degree, defo_fname, orig_dset)
+        logger.info(
+            "Fitting degree %s polynomial to %s/%s", degree, defo_fname, orig_dset
+        )
         # Fit a polynomial along the "date" dimension (1 per pixel)
         polyfit_ds = noisy_da.polyfit("date", deg=degree)
         # This is the "modeled" deformation
@@ -472,19 +474,22 @@ def calc_model_fit_deformation(
             cum_detrend = model_defo - noisy_da
             # Then reconstruct the ifgs containing the day 0
             reconstructed_ifgs = cum_detrend[1:] - cum_detrend[0]
+            # print(reconstructed_ifgs.max(), reconstructed_ifgs.min(), reconstructed_ifgs.mean())
             # add -1 so that it has same sign as the timeseries, which
             # makes the compensation is (noisy_da - avg_atmo)
             avg_atmo = -1 * reconstructed_ifgs.mean(dim="date")
             avg_atmo.attrs["units"] = "cm"
             avg_atmo = avg_atmo.astype("float32")
+            # print(avg_atmo.max(), avg_atmo.min(), avg_atmo.mean())
 
-            model_defo = model_defo - avg_atmo
-            # Still first the first day to 0
-            model_defo[0] = 0
+            # model_defo = model_defo - avg_atmo
+            # # Still first the first day to 0
+            # model_defo[0] = 0
 
         if reweight_by_atmo_var:
             logger.info("Refitting polynomial model using variances as weights")
             from .ts_utils import ptp_by_date, ptp_by_date_pct
+
             resids = model_defo - noisy_da
             # polyfit wants to have the std dev. of variances, if known
             # atmo_stddevs = resids.std(dim=("lat", "lon"))
@@ -497,10 +502,13 @@ def calc_model_fit_deformation(
             weights = 1 / atmo_ptp_qt
             # return atmo_stddevs, atmo_ptps, atmo_ptp_qt, atmo_ptp_qt2
 
-            if remove_day1_atmo:  # Make sure the avg_atmo variable is defined
-                weights[0] = 1 / np.var(avg_atmo)
-            else:
-                weights[0] = 1
+            print(np.min(weights), weights[0])
+            # if remove_day1_atmo:  # Make sure the avg_atmo variable is defined
+                # weights[0] = 1 / np.var(avg_atmo)
+                # weights[0] = 1 / ptp_by_date_pct(avg_atmo)
+                # weights[0] = 1
+            # else:
+                # weights[0] = 1
             # Deep copy is done cuz of this: https://github.com/pydata/xarray/issues/5644
             polyfit_ds = (noisy_da.copy(True)).polyfit(
                 "date",
@@ -512,14 +520,33 @@ def calc_model_fit_deformation(
             )
             model_defo = xr.polyval(noisy_da.date, polyfit_ds.polyfit_coefficients)
 
+        if remove_day1_atmo:
+            logger.info("Compensating day1 atmosphere")
+            # # take difference of `linear_ifgs` and SBAS cumulative
+            # cum_detrend = model_defo - noisy_da
+            # # Then reconstruct the ifgs containing the day 0
+            # reconstructed_ifgs = cum_detrend[1:] - cum_detrend[0]
+            # print(reconstructed_ifgs.max(), reconstructed_ifgs.min(), reconstructed_ifgs.mean())
+            # # add -1 so that it has same sign as the timeseries, which
+            # # makes the compensation is (noisy_da - avg_atmo)
+            # avg_atmo = -1 * reconstructed_ifgs.mean(dim="date")
+            # avg_atmo.attrs["units"] = "cm"
+            # avg_atmo = avg_atmo.astype("float32")
+            # print(avg_atmo.max(), avg_atmo.min(), avg_atmo.mean())
+
+            model_defo = model_defo - avg_atmo
+            # Still first the first day to 0
+            model_defo[0] = 0
+
         if save_linear_fit:
             logger.info("Finding linear velocity estimate using deg 1 polynomial")
+            if not reweight_by_atmo_var:
+                weights = None
             polyfit_lin = (noisy_da.copy(True)).polyfit("date", deg=1, w=weights)
             velocities_cm_per_ns = polyfit_lin["polyfit_coefficients"][-2]
             velocities = velocities_cm_per_ns * constants.NS_PER_YEAR
             velocities = velocities.drop_vars("degree").astype("float32")
             velocities.attrs["units"] = "cm per year"
-
 
     model_defo.attrs["units"] = "cm"
     model_defo = model_defo.astype("float32")
