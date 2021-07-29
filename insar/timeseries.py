@@ -504,19 +504,18 @@ def calc_model_fit_deformation(
 
             print(np.min(weights), weights[0])
             # if remove_day1_atmo:  # Make sure the avg_atmo variable is defined
-                # weights[0] = 1 / np.var(avg_atmo)
-                # weights[0] = 1 / ptp_by_date_pct(avg_atmo)
-                # weights[0] = 1
+            # weights[0] = 1 / np.var(avg_atmo)
+            # weights[0] = 1 / ptp_by_date_pct(avg_atmo)
+            # weights[0] = 1
             # else:
-                # weights[0] = 1
+            # weights[0] = 1
             # Deep copy is done cuz of this: https://github.com/pydata/xarray/issues/5644
             polyfit_ds = (noisy_da.copy(True)).polyfit(
                 "date",
                 deg=degree,
                 w=weights,
-                full=True,
                 # cov="unscaled",
-                cov="full",
+                cov=True,
             )
             model_defo = xr.polyval(noisy_da.date, polyfit_ds.polyfit_coefficients)
 
@@ -542,11 +541,22 @@ def calc_model_fit_deformation(
             logger.info("Finding linear velocity estimate using deg 1 polynomial")
             if not reweight_by_atmo_var:
                 weights = None
-            polyfit_lin = (noisy_da.copy(True)).polyfit("date", deg=1, w=weights)
+            polyfit_lin = (noisy_da.copy(True)).polyfit(
+                "date",
+                deg=1,
+                w=weights,
+                # cov=True
+                cov="unscaled",
+            )
             velocities_cm_per_ns = polyfit_lin["polyfit_coefficients"][-2]
             velocities = velocities_cm_per_ns * constants.NS_PER_YEAR
             velocities = velocities.drop_vars("degree").astype("float32")
             velocities.attrs["units"] = "cm per year"
+
+            logger.info("Uncertainty results from linear poly fit:")
+            sigma_velo_cm_ns = np.sqrt(polyfit_lin["polyfit_covariance"][0, 0])
+            sigma_velo_cm_yr = float(sigma_velo_cm_ns) * constants.NS_PER_YEAR
+            logger.info("%.2f cm / year", sigma_velo_cm_yr)
 
     model_defo.attrs["units"] = "cm"
     model_defo = model_defo.astype("float32")
@@ -573,5 +583,10 @@ def calc_model_fit_deformation(
     logger.info("Saving polyfit results to %s:/%s", defo_fname, group)
     if sario.check_dset(defo_fname, group, overwrite):
         polyfit_ds.to_netcdf(defo_fname, group=group, mode="a")
+
+    group = "polyfit_lin_results"
+    logger.info("Saving polyfit results to %s:/%s", defo_fname, group)
+    if sario.check_dset(defo_fname, group, overwrite):
+        polyfit_lin.to_netcdf(defo_fname, group=group, mode="a")
 
     return model_defo
