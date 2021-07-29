@@ -227,8 +227,7 @@ def run_sbas(
 
     with h5py.File(unw_stack_file) as hf:
         nstack, nrows, ncols = hf[input_dset].shape
-
-    print(nrows, ncols, block_shape)
+        # print(nrows, ncols, block_shape)
 
     blk_slices = utils.block_iterator((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
     # blk_slices = list(blk_slices)[:6]  # Test small area
@@ -403,9 +402,10 @@ def _confirm_closed(fname):
 def calc_model_fit_deformation(
     defo_fname=constants.DEFO_FILENAME_NC,
     orig_dset=constants.DEFO_NOISY_DSET,
-    degree=3,
+    degree=2,
     remove_day1_atmo=True,
     reweight_by_atmo_var=True,
+    save_linear_fit=True,
     outname=None,
     overwrite=False,
 ):
@@ -456,22 +456,24 @@ def calc_model_fit_deformation(
             return ds[outname]
 
     with xr.open_dataset(defo_fname) as ds:
-        stack_da = ds[orig_dset]
+        noisy_da = ds[orig_dset]
+
+        logger.info("Fitting degree %s polynomial to %s/%s", degree, defo_fname, orig_dset)
         # Fit a polynomial along the "date" dimension (1 per pixel)
-        polyfit_ds = stack_da.polyfit("date", deg=degree)
+        polyfit_ds = noisy_da.polyfit("date", deg=degree)
         # This is the "modeled" deformation
 
         # Get expected ifg deformation phase from the polynomial velocity fit
-        model_defo = xr.polyval(stack_da.date, polyfit_ds.polyfit_coefficients)
+        model_defo = xr.polyval(noisy_da.date, polyfit_ds.polyfit_coefficients)
 
         if remove_day1_atmo:
             logger.info("Compensating day1 atmosphere")
             # take difference of `linear_ifgs` and SBAS cumulative
-            cum_detrend = model_defo - stack_da
+            cum_detrend = model_defo - noisy_da
             # Then reconstruct the ifgs containing the day 0
             reconstructed_ifgs = cum_detrend[1:] - cum_detrend[0]
             # add -1 so that it has same sign as the timeseries, which
-            # makes the compensation is (stack_da - avg_atmo)
+            # makes the compensation is (noisy_da - avg_atmo)
             avg_atmo = -1 * reconstructed_ifgs.mean(dim="date")
             avg_atmo.attrs["units"] = "cm"
             avg_atmo = avg_atmo.astype("float32")
@@ -481,23 +483,26 @@ def calc_model_fit_deformation(
             model_defo[0] = 0
 
         if reweight_by_atmo_var:
-            # from .ts_utils import ptp_by_date, ptp_by_date_pct
-            resids = model_defo - stack_da
+            logger.info("Refitting polynomial model using variances as weights")
+            from .ts_utils import ptp_by_date, ptp_by_date_pct
+            resids = model_defo - noisy_da
             # polyfit wants to have the std dev. of variances, if known
-            atmo_stddevs = resids.std(dim=("lat", "lon"))
-            weights = 1 / atmo_stddevs
+            # atmo_stddevs = resids.std(dim=("lat", "lon"))
+            # weights = 1 / atmo_stddevs
             # To more heavily beat down the noisy days, square these values
             # weights = (1 / atmo_stddevs) ** 2
             # atmo_ptps = ptp_by_date(resids)
             # atmo_ptp_qt = ptp_by_date_pct(resids, 0.05, 0.95)
-            # atmo_ptp_qt = ptp_by_date_pct(resids, 0.02, 0.98)
-            # weights = 1 / atmo_ptp_qt
+            atmo_ptp_qt = ptp_by_date_pct(resids, 0.02, 0.98)
+            weights = 1 / atmo_ptp_qt
             # return atmo_stddevs, atmo_ptps, atmo_ptp_qt, atmo_ptp_qt2
 
-            if not remove_day1_atmo:  # Make sure the avg_atmo variable is defined
-                avg_atmo = 1
-            weights[0] = 1 / np.var(avg_atmo)
-            polyfit_ds = stack_da.polyfit(
+            if remove_day1_atmo:  # Make sure the avg_atmo variable is defined
+                weights[0] = 1 / np.var(avg_atmo)
+            else:
+                weights[0] = 1
+            # Deep copy is done cuz of this: https://github.com/pydata/xarray/issues/5644
+            polyfit_ds = (noisy_da.copy(True)).polyfit(
                 "date",
                 deg=degree,
                 w=weights,
@@ -505,7 +510,16 @@ def calc_model_fit_deformation(
                 # cov="unscaled",
                 cov="full",
             )
-            model_defo = xr.polyval(stack_da.date, polyfit_ds.polyfit_coefficients)
+            model_defo = xr.polyval(noisy_da.date, polyfit_ds.polyfit_coefficients)
+
+        if save_linear_fit:
+            logger.info("Finding linear velocity estimate using deg 1 polynomial")
+            polyfit_lin = (noisy_da.copy(True)).polyfit("date", deg=1, w=weights)
+            velocities_cm_per_ns = polyfit_lin["polyfit_coefficients"][-2]
+            velocities = velocities_cm_per_ns * constants.NS_PER_YEAR
+            velocities = velocities.drop_vars("degree").astype("float32")
+            velocities.attrs["units"] = "cm per year"
+
 
     model_defo.attrs["units"] = "cm"
     model_defo = model_defo.astype("float32")
@@ -521,10 +535,16 @@ def calc_model_fit_deformation(
         if sario.check_dset(defo_fname, out, overwrite):
             avg_atmo.to_dataset(name=out).to_netcdf(defo_fname, mode="a")
 
+    if save_linear_fit:
+        # out = constants.ATMO_DAY1_DSET
+        out = "linear_velocity"
+        logger.info("Saving linear velocity fit to %s", out)
+        if sario.check_dset(defo_fname, out, overwrite):
+            velocities.to_dataset(name=out).to_netcdf(defo_fname, mode="a")
+
     group = "polyfit_results"
-    logger.info("Saving polyfit results to defo_fname:/%s", group)
+    logger.info("Saving polyfit results to %s:/%s", defo_fname, group)
     if sario.check_dset(defo_fname, group, overwrite):
         polyfit_ds.to_netcdf(defo_fname, group=group, mode="a")
 
     return model_defo
-
