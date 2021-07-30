@@ -25,6 +25,7 @@ from apertools import sario, utils
 from apertools.log import get_log, log_runtime
 from .prepare import create_dset
 from . import constants
+from .ts_utils import ptp_by_date, ptp_by_date_pct
 
 logger = get_log()
 
@@ -472,6 +473,7 @@ def calc_model_fit_deformation(
             logger.info("Compensating day1 atmosphere")
             # take difference of `linear_ifgs` and SBAS cumulative
             cum_detrend = model_defo - noisy_da
+            # print(ptp_by_date_pct(cum_detrend, 0.02, 0.98)[:3])
             # Then reconstruct the ifgs containing the day 0
             reconstructed_ifgs = cum_detrend[1:] - cum_detrend[0]
             # print(reconstructed_ifgs.max(), reconstructed_ifgs.min(), reconstructed_ifgs.mean())
@@ -488,9 +490,9 @@ def calc_model_fit_deformation(
 
         if reweight_by_atmo_var:
             logger.info("Refitting polynomial model using variances as weights")
-            from .ts_utils import ptp_by_date, ptp_by_date_pct
 
             resids = model_defo - noisy_da
+            # print(ptp_by_date_pct(resids, 0.02, 0.98)[:3])
             # polyfit wants to have the std dev. of variances, if known
             # atmo_stddevs = resids.std(dim=("lat", "lon"))
             # weights = 1 / atmo_stddevs
@@ -502,7 +504,7 @@ def calc_model_fit_deformation(
             weights = 1 / atmo_ptp_qt
             # return atmo_stddevs, atmo_ptps, atmo_ptp_qt, atmo_ptp_qt2
 
-            print(np.min(weights), weights[0])
+            # print(np.min(weights), weights[0])
             # if remove_day1_atmo:  # Make sure the avg_atmo variable is defined
             # weights[0] = 1 / np.var(avg_atmo)
             # weights[0] = 1 / ptp_by_date_pct(avg_atmo)
@@ -535,13 +537,15 @@ def calc_model_fit_deformation(
 
             model_defo = model_defo - avg_atmo
             # Still first the first day to 0
-            model_defo[0] = 0
+            # model_defo[0] = 0
 
         if save_linear_fit:
             logger.info("Finding linear velocity estimate using deg 1 polynomial")
             if not reweight_by_atmo_var:
                 weights = None
-            polyfit_lin = (noisy_da.copy(True)).polyfit(
+            nda = noisy_da.copy(True)
+            # print(nda.date[-1], (nda.date[-1] - nda.date[0]).dt.days)
+            polyfit_lin = nda.polyfit(
                 "date",
                 deg=1,
                 w=weights,
