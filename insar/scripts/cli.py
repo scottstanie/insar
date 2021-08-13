@@ -257,32 +257,32 @@ def view_masks(
     import apertools.plotting
     import h5py
 
-    geo_date_list = apertools.sario.load_slclist_from_h5(mask_file)
+    slc_date_list = apertools.sario.load_slclist_from_h5(mask_file)
 
     def _print(series, row, col):
-        dstrings = [d.strftime("%Y%m%d") for d in np.array(geo_date_list)[series]]
+        dstrings = [d.strftime("%Y%m%d") for d in np.array(slc_date_list)[series]]
         print(".geos missing at (%s, %s)" % (row, col))
         print("%s" % "\n".join(dstrings))
 
     def _save_missing_geos(series, row, col):
-        geo_str_list = [
+        slc_str_list = [
             g.strftime(apertools.sario.DATE_FMT)
-            for g in np.array(geo_date_list)[series]
+            for g in np.array(slc_date_list)[series]
         ]
         with open(slclist_ignore_file, "w") as f:
-            print("Writing %s dates: %s" % (len(geo_str_list), geo_str_list))
-            for gdate in geo_str_list:
+            print("Writing %s dates: %s" % (len(slc_str_list), slc_str_list))
+            for gdate in slc_str_list:
                 f.write("%s\n" % gdate)
 
     with h5py.File(mask_file) as f:
-        geo_dset = f[apertools.sario.GEO_MASK_DSET]
-        with geo_dset.astype(np.bool):
-            geo_masks = geo_dset[:]
-        composite_mask = np.sum(geo_masks, axis=0)
+        slc_dset = f[apertools.sario.SLC_MASK_DSET]
+        with slc_dset.astype(np.bool):
+            slc_masks = slc_dset[:]
+        composite_mask = np.sum(slc_masks, axis=0)
 
     # The netcdf will store it row-reversed, since lats go downward...
     if mask_file.endswith(".nc"):
-        geo_masks = geo_masks[:, ::-1, :]
+        slc_masks = slc_masks[:, ::-1, :]
         composite_mask = composite_mask[::-1, :]
 
     if print_dates:
@@ -292,9 +292,9 @@ def view_masks(
         callback = _save_missing_geos
 
     apertools.plotting.view_stack(
-        geo_masks,
+        slc_masks,
         display_img=composite_mask,
-        slclist=geo_date_list,
+        slclist=slc_date_list,
         cmap=cmap,
         label="is masked",
         title="Number of dates of missing .geo data",
@@ -426,19 +426,19 @@ def _save_npy_file(
     import numpy as np
 
     try:
-        geo_date_list, image = apertools.sario.load_deformation(
+        slc_date_list, image = apertools.sario.load_deformation(
             ".", filename=imgfile, **kwargs
         )
     except ValueError:
         image = apertools.sario.load(imgfile, **kwargs)
-        geo_date_list, use_mask = None, False
+        slc_date_list, use_mask = None, False
 
     if image.ndim > 2:
         # For 3D stack, assume we just want the final image
         image = image[-1]
 
     stack_mask = apertools.sario.load_mask(
-        geo_date_list=geo_date_list, perform_mask=use_mask
+        slc_date_list=slc_date_list, perform_mask=use_mask
     )
     image[stack_mask] = np.nan
     image[image == 0] = np.nan
@@ -464,7 +464,7 @@ def _save_npy_file(
 
 # COMMAND: validate
 @cli.command()
-@click.argument("geo_path")
+@click.argument("slc_path")
 @click.argument("defo_filename")
 @click.option(
     "--kind", type=click.Choice(["errorbar", "slope", "line"]), default="errorbar"
@@ -477,11 +477,11 @@ def _save_npy_file(
 @click.option(
     "--linear", is_flag=True, default=False, help="Erase current files and reprocess"
 )
-def validate(geo_path, defo_filename, kind, reference_station, linear):
+def validate(slc_path, defo_filename, kind, reference_station, linear):
     import apertools.gps
 
     apertools.gps.plot_insar_vs_gps(
-        geo_path=geo_path,
+        slc_path=slc_path,
         defo_filename=defo_filename,
         kind=kind,
         reference_station=reference_station,
