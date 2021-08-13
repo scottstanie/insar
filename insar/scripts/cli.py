@@ -261,10 +261,10 @@ def view_masks(
 
     def _print(series, row, col):
         dstrings = [d.strftime("%Y%m%d") for d in np.array(slc_date_list)[series]]
-        print(".geos missing at (%s, %s)" % (row, col))
+        print("slcs missing at (%s, %s)" % (row, col))
         print("%s" % "\n".join(dstrings))
 
-    def _save_missing_geos(series, row, col):
+    def _save_missing_slcs(series, row, col):
         slc_str_list = [
             g.strftime(apertools.sario.DATE_FMT)
             for g in np.array(slc_date_list)[series]
@@ -289,7 +289,7 @@ def view_masks(
         callback = _print
     elif slclist_ignore_file:
         print("Saving to %s" % slclist_ignore_file)
-        callback = _save_missing_geos
+        callback = _save_missing_slcs
 
     apertools.plotting.view_stack(
         slc_masks,

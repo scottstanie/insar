@@ -47,8 +47,8 @@ except:
 
 @log_runtime
 def run_inversion(
-    unw_stack_file=constants.UNW_FILENAME,
-    input_dset=constants.STACK_FLAT_SHIFTED_DSET,
+    unw_stack_file=sario.UNW_FILENAME,
+    input_dset=sario.STACK_FLAT_SHIFTED_DSET,
     outfile=constants.DEFO_FILENAME,
     output_dset=constants.DEFO_NOISY_DSET,
     overwrite=False,

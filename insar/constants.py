@@ -14,13 +14,6 @@ COR_FILENAME = "cor_stack.h5"
 STACK_DSET = "stack"
 STACK_MEAN_DSET = "stack_mean"
 STACK_FLAT_DSET = "stack_flat"
-STACK_FLAT_SHIFTED_DSET = "stack_flat_shifted"
-
-# Mask file datasets
-SLC_MASK_DSET = "slc"
-SLC_MASK_SUM_DSET = "slc_sum"
-IGRAM_MASK_DSET = "igram"
-IGRAM_MASK_SUM_DSET = "igram_sum"
 
 # output file
 DEFO_FILENAME = "deformation.h5"
@@ -30,9 +23,6 @@ MODEL_DEFO_DSET = "defo_{model}"
 ATMO_DAY1_DSET = "atmo_day1"
 
 DEM_RSC_DSET = "dem_rsc"
-
-SLCLIST_DSET = "slc_dates"
-IFGLIST_DSET = "ifg_dates"
 
 REFERENCE_ATTR = "reference"
 REFERENCE_STATION_ATTR = "reference_station"

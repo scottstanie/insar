@@ -25,8 +25,8 @@ from .constants import (
     STACK_FLAT_SHIFTED_DSET,
     SLC_MASK_DSET,
     SLC_MASK_SUM_DSET,
-    IGRAM_MASK_DSET,
-    IGRAM_MASK_SUM_DSET,
+    IFG_MASK_DSET,
+    IFG_MASK_SUM_DSET,
     DEM_RSC_DSET,
 )
 
@@ -379,7 +379,7 @@ def compute_int_masks(
     dem_rsc=None,
     igram_ext=".unw",
     slc_date_list=None,
-    dset_name=IGRAM_MASK_DSET,
+    dset_name=IFG_MASK_DSET,
     overwrite=False,
     compute_from_slcs=True,  # TODO: combine these
     mask_dem=True,
@@ -391,11 +391,11 @@ def compute_int_masks(
     """
     if not sario.check_dset(mask_file, dset_name, overwrite):
         return
-    if not sario.check_dset(mask_file, IGRAM_MASK_SUM_DSET, overwrite):
+    if not sario.check_dset(mask_file, IFG_MASK_SUM_DSET, overwrite):
         return
 
-    int_date_list = sario.find_igrams(directory=igram_path, ext=igram_ext)
-    int_file_list = sario.find_igrams(directory=igram_path, ext=igram_ext, parse=False)
+    int_date_list = sario.find_ifgs(directory=igram_path, ext=igram_ext)
+    int_file_list = sario.find_ifgs(directory=igram_path, ext=igram_ext, parse=False)
 
     if slc_date_list is None:
         slc_date_list = sario.find_slcs(directory=slc_path)
@@ -424,7 +424,7 @@ def compute_int_masks(
                 # int_mask_dset[idx] = np.ma.make_mask(dem_mask, shrink=False)
 
         # Also create one image of the total masks
-        f[IGRAM_MASK_SUM_DSET] = np.sum(int_mask_dset, axis=0)
+        f[IFG_MASK_SUM_DSET] = np.sum(int_mask_dset, axis=0)
 
 
 def _find_file_shape(dem_rsc=None, file_list=None, row_looks=None, col_looks=None):
@@ -441,7 +441,7 @@ def _find_file_shape(dem_rsc=None, file_list=None, row_looks=None, col_looks=Non
         return (len(file_list), dem_rsc["file_length"], dem_rsc["width"])
 
 
-def _read_mask_by_idx(idx, fname="masks.h5", dset=IGRAM_MASK_DSET):
+def _read_mask_by_idx(idx, fname="masks.h5", dset=IFG_MASK_DSET):
     with h5py.File(fname, "r") as f:
         m = f[dset][idx, :, :]
     # if fname.endswith(".nc"):  #
