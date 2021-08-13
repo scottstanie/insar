@@ -58,6 +58,7 @@ def run_inversion(
     # constant_velocity=False,
     max_temporal_baseline=800,
     max_temporal_bandwidth=None,  # TODO
+    min_temporal_bandwidth=None,  # TODO
     outlier_sigma=0,  # TODO: outlier outlier_sigma. Use trodi
     alpha=0,
     # L1=False, # TODO
@@ -111,6 +112,7 @@ def run_inversion(
         slclist_ignore_file=slclist_ignore_file,
         max_temporal_baseline=max_temporal_baseline,
         max_bandwidth=max_temporal_bandwidth,
+        min_bandwidth=min_temporal_bandwidth,
     )
 
     with h5py.File(unw_stack_file) as hf:
