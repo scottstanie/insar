@@ -178,6 +178,9 @@ def run_inversion(
     sario.save_slclist_to_h5(
         out_file=outfile, slc_date_list=slclist, dset_name=output_dset
     )
+    sario.save_ifglist_to_h5(
+        out_file=outfile, ifg_date_list=ifglist[valid_ifg_idxs], dset_name=output_dset
+    )
     dem_rsc = sario.load_dem_from_h5(unw_stack_file)
     sario.save_dem_to_h5(outfile, dem_rsc)
     if save_as_netcdf:
