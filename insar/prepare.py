@@ -18,10 +18,9 @@ import apertools.gps
 from apertools.log import get_log, log_runtime
 import apertools.deramp as deramp
 
-from .constants import (
+from apertools.sario import (
     MASK_FILENAME,
     UNW_FILENAME,
-    # COR_FILENAME,
     STACK_FLAT_SHIFTED_DSET,
     SLC_MASK_DSET,
     SLC_MASK_SUM_DSET,

@@ -15,7 +15,8 @@ scott@lidar igrams]$ head slclist
 
 """
 from concurrent.futures import ProcessPoolExecutor, as_completed
-import hdf5plugin  # noqa
+import hdf5plugin  # noqa : for the possiblity of HDF5 blosc filter
+import itertools
 import h5py
 import xarray as xr
 import numpy as np
@@ -65,7 +66,6 @@ def run_inversion(
     # difference=False,
     slclist_ignore_file="slclist_ignore.txt",
     save_as_netcdf=True,
-    verbose=False,
 ):
     """Runs SBAS inversion on all unwrapped igrams
 
@@ -89,16 +89,12 @@ def run_inversion(
             Removes the .geo and and igrams with these date
         save_as_netcdf (bool): if true, also save the `outfile` as `outfile`.nc for
             easier manipulation with xarray
-        verbose (bool): print extra timing and debug info
 
     Returns:
         slclist (list[datetime]): dates of each SAR acquisition from find_geos
         phi_arr (ndarray): absolute phases of every pixel at each time
         deformation (ndarray): matrix of deformations at each pixel and time
     """
-    if verbose:
-        logger.setLevel(10)  # DEBUG
-
     # averaging or linear means output will is 3D array (not just map of velocities)
     # is_3d = not (stack_average or constant_velocity)
     # output_dset = "stack" if is_3d else "velos"
@@ -134,7 +130,9 @@ def run_inversion(
     # proc_func = proc_pixel_daily
     output_shape = (len(slclist), nrows, ncols)
 
-    paramfile = "{}_run_params".format(outfile).replace(".", "_") + ".yml"
+    paramfile = (
+        "{}_{}_run_params".format(outfile, output_dset).replace(".", "_") + ".yml"
+    )
     # Saves all desried run variables and objects into a yaml file
     _record_run_params(
         paramfile,
@@ -179,16 +177,20 @@ def run_inversion(
         out_file=outfile, slc_date_list=slclist, dset_name=output_dset
     )
     sario.save_ifglist_to_h5(
-        out_file=outfile, ifg_date_list=ifglist[valid_ifg_idxs], dset_name=output_dset
+        out_file=outfile, ifg_date_list=ifglist, dset_name=output_dset
     )
-    dem_rsc = sario.load_dem_from_h5(unw_stack_file)
-    sario.save_dem_to_h5(outfile, dem_rsc)
+    # sario.save_dem_to_h5(outfile, rsc_data) # saving the dem... not as useful as the lat/lon arr
+    with h5py.File(unw_stack_file) as hf:
+        lat_arr = hf["lat"][()]
+        lon_arr = hf["lon"][()]
+    sario.save_latlon_to_h5(
+        outfile, lat_arr=lat_arr, lon_arr=lon_arr, overwrite=overwrite
+    )
     if save_as_netcdf:
         from apertools import netcdf
 
         netcdf.hdf5_to_netcdf(
             outfile,
-            outname=constants.DEFO_FILENAME_NC,
             dset_name=output_dset,
             stack_dim="date",
             data_units="cm",
