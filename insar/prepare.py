@@ -77,7 +77,8 @@ def prepare_stacks(
 
 
 def create_dset(h5file, dset_name, shape, dtype, chunks=True, compress=True):
-    comp_dict = hdf5plugin.Blosc() if compress else dict()
+    # comp_dict = hdf5plugin.Blosc() if compress else dict()
+    comp_dict = dict(compression="gzip") if compress else dict()
     with h5py.File(h5file, "a") as f:
         f.create_dataset(
             dset_name, shape=shape, dtype=dtype, chunks=chunks, **comp_dict
@@ -447,6 +448,67 @@ def _read_mask_by_idx(idx, fname="masks.h5", dset=IFG_MASK_DSET):
     # return m[::-1, :]
     # else:
     return m
+
+
+def redo_deramp(
+    unw_stack_file,
+    ref_row,
+    ref_col,
+    deramp_order=2,
+    dset_name=STACK_FLAT_SHIFTED_DSET,
+    chunk_layers=None,
+    window=5,
+):
+    cur_layer = 0
+    win = window // 2
+
+    # TODO
+    # if ref_station is not None:
+    #     rsc_data = sario.load(os.path.join(igram_path, "dem.rsc"))
+    #     ref_row, ref_col = apertools.gps.station_rowcol(
+    #         station_name=ref_station,
+    #         rsc_data=rsc_data,
+    #     )
+    with h5py.File(unw_stack_file, "a") as hf:
+        dset = hf[dset_name]
+        total_layers, rows, cols = dset.shape
+        if not chunk_layers:
+            chunk_shape = hf[dset_name].chunks
+            chunk_layers, _, _ = chunk_shape
+        buf = np.zeros((chunk_layers, rows, cols), dtype=np.float32)
+
+        while cur_layer < total_layers:
+            if cur_layer + chunk_layers > total_layers:
+                cur_slice = np.s_[cur_layer:]
+            else:
+                cur_slice = np.s_[cur_layer : cur_layer + chunk_layers]
+            logger.info(f"Deramping {cur_slice}")
+            dset.read_direct(buf, cur_slice)
+            out = deramp.remove_ramp(buf)
+
+            # Now center it on the shift window
+            patch = out[
+                ref_row - win : ref_row + win + 1, ref_col - win : ref_col + win + 1
+            ]
+            if not np.all(np.isnan(patch)):
+                out -= np.nanmean(patch)
+            else:
+                # Do I actually just want to ignore this one and give 0s?
+                logger.debug(f"Patch is all nan for {ref_row},{ref_col}")
+                out -= np.nanmean(out)
+
+            logger.info(f"Writing {cur_slice} back to dataset")
+            dset.write_direct(out, dest_sel=cur_slice)
+
+            cur_layer += chunk_layers
+
+    # Now record attrs of the dataset
+    with h5py.File(unw_stack_file, "r+") as f:
+        f[dset_name].attrs["deramp_order"] = deramp_order
+        f[dset_name].attrs["reference"] = [ref_row, ref_col]
+        # TODO
+        # if ref_station is not None:
+            # f[STACK_FLAT_SHIFTED_DSET].attrs["reference_station"] = ref_station
 
 
 # TODO: for mask subsetting...
