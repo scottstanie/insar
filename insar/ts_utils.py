@@ -272,8 +272,7 @@ def ptp_by_date_pct(da, low=0.05, high=0.95):
     return high_q - low_q
 
 
-from numba import jit
-@jit 
+from itertools import chain, combinations
 def build_closure_matrix(ifg_date_list, closure_list=None):
     """Takes the list of igram dates and builds the SBAS A matrix
 
@@ -286,52 +285,98 @@ def build_closure_matrix(ifg_date_list, closure_list=None):
             Each row corresponds to an igram, each column to a SAR date
             value will be -1 on the early (reference) igrams, +1 on later (secondary)
     """
-    def _find_row(ifgarr, row):
-        try:
-            idx = np.where((ifgarr == row).all(-1))[0][0]
-            return idx
-        except IndexError:
-            return -1
-
-    from itertools import chain, combinations
 
     if closure_list is None:
         sar_date_list = list(sorted(set(chain.from_iterable(ifg_date_list))))
         closure_list = list(combinations(sar_date_list, 3))
+
+    ifg_to_idx = {ifg: idx for idx, ifg in enumerate(ifg_date_list)}
+
     # N = len(sar_date_list)
     M = len(ifg_date_list)  # Number of igrams, number of rows
     K = len(closure_list)
-    # C = np.zeros((K, M))
-    ifgarr = np.array(ifg_date_list)
+    row = np.zeros(M,)
     C_list = []
     for j in range(K):
         trip = closure_list[j]
-        ifg1 = np.array((trip[0], trip[1]))
-        ifg2 = np.array((trip[1], trip[2]))
-        ifg3 = np.array((trip[0], trip[2]))
-        # breakpoint()
+
+        ifg1 = (trip[0], trip[1])
+        ifg2 = (trip[1], trip[2])
+        ifg3 = (trip[0], trip[2])
         try:
-            idx1 = _find_row(ifgarr, ifg1)
-            idx2 = _find_row(ifgarr, ifg2)
-            idx3 = _find_row(ifgarr, ifg3)
-        except ValueError:
+            idx1 = ifg_to_idx[ifg1]
+            idx2 = ifg_to_idx[ifg2]
+            idx3 = ifg_to_idx[ifg3]
+        except KeyError:
             continue
-        row = np.zeros(M,)
+
+        row[:] = 0
         row[idx1] = 1
         row[idx2] = 1
         row[idx3] = -1
         C_list.append(row)
-        # C[j, idx1] = 1
-        # C[j, idx2] = 1
-        # C[j, idx3] = -1
-        # if j > 10:
-            # break
-    # return C
+
     return np.stack(C_list)
 
 
 @jit
 def get_design_matrix4triplet(date12_list):
+    """Generate the design matrix of ifgram triangle for unwrap error correction using phase closure
+    Parameters: date12_list : list of string in YYYYMMDD_YYYYMMDD format
+    Returns:    C : 2D np.array in size of (num_tri, num_ifgram) consisting 0, 1, -1
+                    for 3 SAR acquisition in t1, t2 and t3 in time order,
+                    ifg1 for (t1, t2) with 1
+                    ifg2 for (t1, t3) with -1
+                    ifg3 for (t2, t3) with 1
+    Examples:   obj = ifgramStack('./inputs/ifgramStack.h5')
+                date12_list = obj.get_date12_list(dropIfgram=True)
+                C = ifgramStack.get_design_matrix4triplet(date12_list)
+    """
+    # Date info
+    date12_list = list(date12_list)
+
+    # calculate triangle_idx
+    triangle_idx = []
+    for ifgram1 in date12_list:
+        # ifgram1 (date1, date2)
+        date1, date2 = ifgram1.split('_')
+
+        # ifgram2 candidates (date1, date3)
+        date3_list = []
+        for ifgram2 in date12_list:
+            if date1 == ifgram2.split('_')[0] and ifgram2 != ifgram1:
+                date3_list.append(ifgram2.split('_')[1])
+
+        # ifgram2/3
+        if len(date3_list) > 0:
+            for date3 in date3_list:
+                ifgram3 = '{}_{}'.format(date2, date3)
+                if ifgram3 in date12_list:
+                    ifgram1 = '{}_{}'.format(date1, date2)
+                    ifgram2 = '{}_{}'.format(date1, date3)
+                    ifgram3 = '{}_{}'.format(date2, date3)
+                    triangle_idx.append([date12_list.index(ifgram1),
+                                         date12_list.index(ifgram2),
+                                         date12_list.index(ifgram3)])
+
+    if len(triangle_idx) == 0:
+        print('\nWARNING: No triangles found from input date12_list:\n{}!\n'.format(date12_list))
+        return None
+
+    triangle_idx = np.array(triangle_idx, np.int16)
+    triangle_idx = np.unique(triangle_idx, axis=0)
+
+    # triangle_idx to C
+    num_triangle = triangle_idx.shape[0]
+    C = np.zeros((num_triangle, len(date12_list)), np.float32)
+    for i in range(num_triangle):
+        C[i, triangle_idx[i, 0]] = 1
+        C[i, triangle_idx[i, 1]] = -1
+        C[i, triangle_idx[i, 2]] = 1
+    return C
+
+
+def get_design_matrix4triplet(ifg_date_list):
     """Generate the design matrix of ifgram triangle for unwrap error correction using phase closure
     Parameters: date12_list : list of string in YYYYMMDD_YYYYMMDD format
     Returns:    C : 2D np.array in size of (num_tri, num_ifgram) consisting 0, 1, -1
