@@ -8,7 +8,12 @@ from datetime import datetime
 import os
 import itertools
 import h5py
-import hdf5plugin
+from tqdm import tqdm
+
+try:
+    import hdf5plugin  # noqa
+except ImportError:
+    print("Failed to load hdf5plugin: may not save/load using blosc")
 import numpy as np
 from scipy.ndimage.morphology import binary_opening
 import rasterio as rio
@@ -21,6 +26,9 @@ import apertools.deramp as deramp
 from apertools.sario import (
     MASK_FILENAME,
     UNW_FILENAME,
+    COR_FILENAME,
+    STACK_DSET,
+    STACK_MEAN_DSET,
     STACK_FLAT_SHIFTED_DSET,
     SLC_MASK_DSET,
     SLC_MASK_SUM_DSET,
@@ -37,16 +45,19 @@ def prepare_stacks(
     igram_path,
     ref_row=None,
     ref_col=None,
+    ref_lat=None,
+    ref_lon=None,
     ref_station=None,
     deramp_order=2,
     window=5,
+    search_term="*.unw",
+    cor_search_term="*.cc",
     overwrite=False,
+    attach_latlon=True,
 ):
-    # cc_stack_file = os.path.join(igram_path, COR_FILENAME)
-    # mask_stack_file = os.path.join(igram_path, MASK_FILENAME)
-    unw_stack_file = os.path.join(igram_path, UNW_FILENAME)
-
-    create_mask_stacks(igram_path, overwrite=overwrite)
+    mask_file = create_mask_stacks(
+        igram_path, overwrite=overwrite, attach_latlon=attach_latlon
+    )
 
     if ref_station is not None:
         rsc_data = sario.load(os.path.join(igram_path, "dem.rsc"))
@@ -54,19 +65,50 @@ def prepare_stacks(
             station_name=ref_station,
             rsc_data=rsc_data,
         )
+    elif ref_lat is not None and ref_lon is not None:
+        # TODO: getting this from radar coord?
+        import apertools.latlon
+
+        rsc_file = os.path.join(igram_path, "dem.rsc")
+        if os.path.exists(rsc_file):
+            rsc_data = sario.load(rsc_file)
+            filename = None
+        else:
+            filename = mask_file
+        ref_row, ref_col = apertools.latlon.latlon_to_rowcol(
+            rsc_data=rsc_data,
+            filename=filename,
+        )
+
     if ref_row is None or ref_col is None:
         # ref_row, ref_col, ref_station = find_reference_location(
         raise ValueError("Need ref_row, ref_col or ref_station")
 
+    # Now create the unwrapped ifg stack and the correlation stack
+    cor_stack_file = os.path.join(igram_path, COR_FILENAME)
+    create_cor_stack(
+        cor_stack_file=cor_stack_file,
+        dset_name=STACK_DSET,
+        directory=igram_path,
+        search_term=cor_search_term,
+        overwrite=overwrite,
+        attach_latlon=attach_latlon,
+    )
+
+    unw_stack_file = os.path.join(igram_path, UNW_FILENAME)
     deramp_and_shift_unws(
         ref_row,
         ref_col,
         unw_stack_file=unw_stack_file,
+        cor_stack_file=cor_stack_file,
         dset_name=STACK_FLAT_SHIFTED_DSET,
         directory=igram_path,
         deramp_order=deramp_order,
         window=window,
+        search_term=search_term,
+        cor_search_term=cor_search_term,
         overwrite=overwrite,
+        attach_latlon=attach_latlon,
     )
     # Now record attrs of the dataset
     with h5py.File(unw_stack_file, "r+") as f:
@@ -101,43 +143,47 @@ def deramp_and_shift_unws(
     mask_fname=MASK_FILENAME,
     dset_name=STACK_FLAT_SHIFTED_DSET,
     directory=".",
+    search_term="*.unw",
+    cor_search_term="*.cc",
     deramp_order=2,
     window=5,
     overwrite=False,
     stack_fname="stackavg.tif",
+    attach_latlon=True,
 ):
 
     if not sario.check_dset(unw_stack_file, dset_name, overwrite):
         return
     logger.info(f"Deramping with reference ({ref_row},{ref_col})")
     # First make the empty dataset and save aux info
-    in_ext = ".unw"
-    file_list = sario.find_files(directory=directory, search_term="*" + in_ext)
+    file_list = sario.find_ifgs(
+        directory=directory, search_term=search_term, parse=False
+    )
+    date_list = sario.find_ifgs(directory=directory, search_term=search_term)
     band = 2
 
     with rio.open(file_list[0]) as src:
         rows, cols = src.shape
-        # bshape = src.block_shapes[band-1]  # TODO: use?
         dtype = src.dtypes[band - 1]
 
     shape = (len(file_list), rows, cols)
     create_dset(unw_stack_file, dset_name, shape, dtype, chunks=True, compress=True)
 
-    # Save the extra files too
-    rsc_data = sario.load(os.path.join(directory, "dem.rsc"))
-    sario.save_dem_to_h5(
-        unw_stack_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
-    )
+    if attach_latlon:
+        # Save the extra files too
+        # TODO: best way to check for radar coords? wouldn't want any lat/lon...
+        rsc_data = sario.load(os.path.join(directory, "dem.rsc"))
+        sario.save_dem_to_h5(
+            unw_stack_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
+        )
+        sario.save_latlon_to_h5(unw_stack_file, rsc_data=rsc_data)
 
-    int_date_list = sario.save_ifglist_to_h5(
-        igram_path=directory,
-        out_file=unw_stack_file,
-        overwrite=overwrite,
-        igram_ext=".unw",
+    sario.save_ifglist_to_h5(
+        ifg_date_list=date_list, out_file=unw_stack_file, overwrite=overwrite
     )
 
     # Only keep the SAR dates which have an interferogram where we're looking
-    slc_date_list = list(sorted(set(itertools.chain.from_iterable(int_date_list))))
+    slc_date_list = list(sorted(set(itertools.chain.from_iterable(date_list))))
 
     _ = sario.save_slclist_to_h5(
         slc_date_list=slc_date_list,
@@ -157,7 +203,7 @@ def deramp_and_shift_unws(
     win = window // 2
     lastidx = 0
     cur_chunk_size = 0
-    for idx, in_fname in enumerate(file_list):
+    for idx, in_fname in enumerate(tqdm(file_list)):
         if idx % 100 == 0:
             logger.info(f"Processing {in_fname} -> {idx+1} out of {len(file_list)}")
 
@@ -223,6 +269,105 @@ def deramp_and_shift_unws(
         dtype=stackavg.dtype,
     ) as dst:
         dst.write(stackavg, 1)
+    # Finally, attach the latitude/longitude datasets
+    if attach_latlon:
+        sario.attach_latlon(unw_stack_file, dset_name, depth_dim="ifg_idx")
+
+
+@log_runtime
+def create_cor_stack(
+    cor_stack_file=COR_FILENAME,
+    dset_name=STACK_DSET,
+    directory=".",
+    search_term="*.cc",
+    overwrite=False,
+    attach_latlon=True,
+    float_cor=False,
+):
+
+    if not sario.check_dset(cor_stack_file, dset_name, overwrite):
+        return
+    # First make the empty dataset and save aux info
+    file_list = sario.find_ifgs(
+        directory=directory, search_term=search_term, parse=False
+    )
+    date_list = sario.find_ifgs(directory=directory, search_term=search_term)
+    logger.info(f"Creating {cor_stack_file} of {len(file_list)} correlation files")
+
+    band = 1 if float_cor else 2
+    with rio.open(file_list[0]) as src:
+        rows, cols = src.shape
+        # dtype = src.dtypes[band - 1]
+        dtype = np.float32
+
+    shape = (len(file_list), rows, cols)
+    create_dset(cor_stack_file, dset_name, shape, dtype, chunks=True, compress=True)
+
+    if attach_latlon:
+        # Save the extra files too
+        # TODO: best way to check for radar coords? wouldn't want any lat/lon...
+        rsc_data = sario.load(os.path.join(directory, "dem.rsc"))
+        sario.save_dem_to_h5(
+            cor_stack_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
+        )
+        sario.save_latlon_to_h5(cor_stack_file, rsc_data=rsc_data)
+
+    sario.save_ifglist_to_h5(
+        ifg_date_list=date_list, out_file=cor_stack_file, overwrite=overwrite
+    )
+
+    with h5py.File(cor_stack_file, "r+") as f:
+        chunk_shape = f[dset_name].chunks
+        chunk_depth, chunk_rows, chunk_cols = chunk_shape
+        # n = n or chunk_size[0]
+
+    # While we're iterating, save a stacked average
+    stack_sum = np.zeros((rows, cols), dtype="float32")
+    stack_counts = np.zeros((rows, cols), dtype="float32")
+
+    buf = np.empty((chunk_depth, rows, cols), dtype=dtype)
+    lastidx = 0
+    cur_chunk_size = 0
+    for idx, in_fname in enumerate(tqdm(file_list)):
+        if idx % 100 == 0:
+            logger.info(f"Processing {in_fname} -> {idx+1} out of {len(file_list)}")
+
+        if idx % chunk_depth == 0 and idx > 0:
+            logger.info(f"Writing {lastidx}:{lastidx+chunk_depth}")
+            assert cur_chunk_size <= chunk_depth
+            with h5py.File(cor_stack_file, "r+") as f:
+                f[dset_name][lastidx : lastidx + cur_chunk_size, :, :] = buf
+
+            lastidx = idx
+            cur_chunk_size = 0
+
+        # driver = "ROI_PAC" if in_fname.endswith(".cor") else None  # let gdal guess
+        # try
+        with rio.open(in_fname) as inf:
+            cor = inf.read(band)
+            # store this in the buffer until emptied
+            curidx = idx % chunk_depth
+            buf[curidx, :, :] = cor
+            cur_chunk_size += 1
+
+            mask = np.isnan(cor)
+            stack_sum[~mask] += cor[~mask]
+            stack_counts[~mask] += 1
+
+    if cur_chunk_size > 0:
+        # Write the final part of the buffer:
+        with h5py.File(cor_stack_file, "r+") as f:
+            f[dset_name][lastidx : lastidx + cur_chunk_size, :, :] = buf[
+                :cur_chunk_size
+            ]
+    # Also save the stack mean
+    with h5py.File(cor_stack_file, "r+") as f:
+        f[STACK_MEAN_DSET] = stack_sum / (stack_counts + 1e-6)
+
+    # Finally, attach the latitude/longitude datasets
+    if attach_latlon:
+        sario.attach_latlon(cor_stack_file, dset_name, depth_dim="ifg_idx")
+        sario.attach_latlon(cor_stack_file, STACK_MEAN_DSET, depth_dim=None)
 
 
 @log_runtime
@@ -232,6 +377,7 @@ def create_mask_stacks(
     slc_path=None,
     overwrite=False,
     compute_from_slcs=True,
+    attach_latlon=True,
 ):
     """Create mask stacks for areas in .geo and .int
 
@@ -295,7 +441,18 @@ def create_mask_stacks(
         overwrite=overwrite,
         compute_from_slcs=compute_from_slcs,
     )
-    # TODO: now add the correlation check
+    if attach_latlon:
+        # now attach the lat/lon grid
+        latlon_dsets = [
+            SLC_MASK_DSET,
+            SLC_MASK_SUM_DSET,
+            IFG_MASK_DSET,
+            IFG_MASK_SUM_DSET,
+        ]
+        depth_dims = ["slc_dates", None, "ifg_idx", None]
+        for name, dim in zip(latlon_dsets, depth_dims):
+            print(f"attaching {dim} in {name} to depth")
+            sario.attach_latlon(mask_file, name, depth_dim=dim)
     return mask_file
 
 
@@ -344,7 +501,7 @@ def save_slc_masks(
 
     with h5py.File(mask_file, "a") as f:
         dset = f[dset_name]
-        for idx, slc_fname in enumerate(slc_file_list):
+        for idx, slc_fname in enumerate(tqdm(slc_file_list)):
             # save as an individual file too
             mask_name = os.path.split(slc_fname)[1] + ".mask"
             if not os.path.exists(mask_name):
@@ -410,7 +567,8 @@ def compute_int_masks(
     with h5py.File(mask_file, "a") as f:
         slc_mask_stack = f[SLC_MASK_DSET]
         int_mask_dset = f[dset_name]
-        for idx, (early, late) in enumerate(int_date_list):
+        # TODO: read coherence, also form that one
+        for idx, (early, late) in enumerate(tqdm(int_date_list)):
             if compute_from_slcs:
                 early_idx = slc_date_list.index(early)
                 late_idx = slc_date_list.index(late)
@@ -508,7 +666,9 @@ def redo_deramp(
         f[dset_name].attrs["reference"] = [ref_row, ref_col]
         # TODO
         # if ref_station is not None:
-            # f[STACK_FLAT_SHIFTED_DSET].attrs["reference_station"] = ref_station
+        # f[STACK_FLAT_SHIFTED_DSET].attrs["reference_station"] = ref_station
+    if attach_latlon:
+        sario.attach_latlon(unw_stack_file, dset_name, depth_dim="ifg_idx")
 
 
 # TODO: for mask subsetting...
