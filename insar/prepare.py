@@ -204,11 +204,8 @@ def deramp_and_shift_unws(
     lastidx = 0
     cur_chunk_size = 0
     for idx, in_fname in enumerate(tqdm(file_list)):
-        if idx % 100 == 0:
-            logger.info(f"Processing {in_fname} -> {idx+1} out of {len(file_list)}")
-
         if idx % chunk_depth == 0 and idx > 0:
-            logger.info(f"Writing {lastidx}:{lastidx+chunk_depth}")
+            tqdm.write(f"Writing {lastidx}:{lastidx+chunk_depth}")
             assert cur_chunk_size <= chunk_depth
             with h5py.File(unw_stack_file, "r+") as f:
                 f[dset_name][lastidx : lastidx + cur_chunk_size, :, :] = buf
@@ -346,7 +343,7 @@ def create_cor_stack(
     cur_chunk_size = 0
     for idx, in_fname in enumerate(tqdm(file_list)):
         if idx % chunk_depth == 0 and idx > 0:
-            logger.info(f"Writing {lastidx}:{lastidx+chunk_depth}")
+            tqdm.write(f"Writing {lastidx}:{lastidx+chunk_depth}")
             assert cur_chunk_size <= chunk_depth
             with h5py.File(cor_stack_file, "r+") as f:
                 f[dset_name][lastidx : lastidx + cur_chunk_size, :, :] = buf
@@ -530,7 +527,7 @@ def save_slc_masks(
                     (row_looks - 1) :: row_looks, (col_looks - 1) :: col_looks
                 ]
                 # ipdb.set_trace()
-                logger.info(f"Saving {slc_fname} to stack")
+                tqdm.write(f"Saving {slc_fname} to stack")
                 cur_mask = _get_slc_mask(g_subsample)
                 sario.save(mask_name, cur_mask)
             else:
@@ -590,8 +587,8 @@ def compute_int_masks(
             elif mask_dem:
                 int_mask_dset[idx] = dem_mask
             else:
-                print("Not masking")
-                # int_mask_dset[idx] = np.ma.make_mask(dem_mask, shrink=False)
+                # print("Not masking")
+                int_mask_dset[idx] = np.ma.make_mask(dem_mask, shrink=False)
 
         # Also create one image of the total masks
         f[IFG_MASK_SUM_DSET] = np.sum(int_mask_dset, axis=0)
@@ -602,7 +599,7 @@ def _find_file_shape(dem_rsc=None, file_list=None, row_looks=None, col_looks=Non
         try:
             g = sario.load(file_list[0], looks=(row_looks, col_looks))
         except IndexError:
-            raise ValueError("No .geo files found ")
+            raise ValueError("No files found ")
         except TypeError:
             raise ValueError("Need file_list if no dem_rsc")
 
