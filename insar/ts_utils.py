@@ -1,5 +1,6 @@
 import numpy as np
 from matplotlib.dates import date2num
+from itertools import chain, combinations
 
 
 def build_A_matrix(sar_date_list, ifg_date_list):
@@ -272,7 +273,6 @@ def ptp_by_date_pct(da, low=0.05, high=0.95):
     return high_q - low_q
 
 
-from itertools import chain, combinations
 def build_closure_matrix(ifg_date_list, closure_list=None):
     """Takes the list of igram dates and builds the SBAS A matrix
 
@@ -295,7 +295,7 @@ def build_closure_matrix(ifg_date_list, closure_list=None):
     # N = len(sar_date_list)
     M = len(ifg_date_list)  # Number of igrams, number of rows
     K = len(closure_list)
-    row = np.zeros(M,)
+    row = np.zeros(M)
     C_list = []
     for j in range(K):
         trip = closure_list[j]
@@ -319,7 +319,6 @@ def build_closure_matrix(ifg_date_list, closure_list=None):
     return np.stack(C_list)
 
 
-@jit
 def get_design_matrix4triplet(date12_list):
     """Generate the design matrix of ifgram triangle for unwrap error correction using phase closure
     Parameters: date12_list : list of string in YYYYMMDD_YYYYMMDD format
@@ -339,84 +338,36 @@ def get_design_matrix4triplet(date12_list):
     triangle_idx = []
     for ifgram1 in date12_list:
         # ifgram1 (date1, date2)
-        date1, date2 = ifgram1.split('_')
+        date1, date2 = ifgram1.split("_")
 
         # ifgram2 candidates (date1, date3)
         date3_list = []
         for ifgram2 in date12_list:
-            if date1 == ifgram2.split('_')[0] and ifgram2 != ifgram1:
-                date3_list.append(ifgram2.split('_')[1])
+            if date1 == ifgram2.split("_")[0] and ifgram2 != ifgram1:
+                date3_list.append(ifgram2.split("_")[1])
 
         # ifgram2/3
         if len(date3_list) > 0:
             for date3 in date3_list:
-                ifgram3 = '{}_{}'.format(date2, date3)
+                ifgram3 = "{}_{}".format(date2, date3)
                 if ifgram3 in date12_list:
-                    ifgram1 = '{}_{}'.format(date1, date2)
-                    ifgram2 = '{}_{}'.format(date1, date3)
-                    ifgram3 = '{}_{}'.format(date2, date3)
-                    triangle_idx.append([date12_list.index(ifgram1),
-                                         date12_list.index(ifgram2),
-                                         date12_list.index(ifgram3)])
+                    ifgram1 = "{}_{}".format(date1, date2)
+                    ifgram2 = "{}_{}".format(date1, date3)
+                    ifgram3 = "{}_{}".format(date2, date3)
+                    triangle_idx.append(
+                        [
+                            date12_list.index(ifgram1),
+                            date12_list.index(ifgram2),
+                            date12_list.index(ifgram3),
+                        ]
+                    )
 
     if len(triangle_idx) == 0:
-        print('\nWARNING: No triangles found from input date12_list:\n{}!\n'.format(date12_list))
-        return None
-
-    triangle_idx = np.array(triangle_idx, np.int16)
-    triangle_idx = np.unique(triangle_idx, axis=0)
-
-    # triangle_idx to C
-    num_triangle = triangle_idx.shape[0]
-    C = np.zeros((num_triangle, len(date12_list)), np.float32)
-    for i in range(num_triangle):
-        C[i, triangle_idx[i, 0]] = 1
-        C[i, triangle_idx[i, 1]] = -1
-        C[i, triangle_idx[i, 2]] = 1
-    return C
-
-
-def get_design_matrix4triplet(ifg_date_list):
-    """Generate the design matrix of ifgram triangle for unwrap error correction using phase closure
-    Parameters: date12_list : list of string in YYYYMMDD_YYYYMMDD format
-    Returns:    C : 2D np.array in size of (num_tri, num_ifgram) consisting 0, 1, -1
-                    for 3 SAR acquisition in t1, t2 and t3 in time order,
-                    ifg1 for (t1, t2) with 1
-                    ifg2 for (t1, t3) with -1
-                    ifg3 for (t2, t3) with 1
-    Examples:   obj = ifgramStack('./inputs/ifgramStack.h5')
-                date12_list = obj.get_date12_list(dropIfgram=True)
-                C = ifgramStack.get_design_matrix4triplet(date12_list)
-    """
-    # Date info
-    date12_list = list(date12_list)
-
-    # calculate triangle_idx
-    triangle_idx = []
-    for ifgram1 in date12_list:
-        # ifgram1 (date1, date2)
-        date1, date2 = ifgram1.split('_')
-
-        # ifgram2 candidates (date1, date3)
-        date3_list = []
-        for ifgram2 in date12_list:
-            if date1 == ifgram2.split('_')[0] and ifgram2 != ifgram1:
-                date3_list.append(ifgram2.split('_')[1])
-
-        # ifgram2/3
-        if len(date3_list) > 0:
-            for date3 in date3_list:
-                ifgram3 = '{}_{}'.format(date2, date3)
-                if ifgram3 in date12_list:
-                    ifgram1 = '{}_{}'.format(date1, date2)
-                    ifgram2 = '{}_{}'.format(date1, date3)
-                    ifgram3 = '{}_{}'.format(date2, date3)
-                    triangle_idx.append([date12_list.index(ifgram1),
-                                         date12_list.index(ifgram2),
-                                         date12_list.index(ifgram3)])
-
-    if len(triangle_idx) == 0:
-        print('\nWARNING: No triangles found from input date12_list:\n{}!\n'.format(date12_list))
+        print(
+            "\nWARNING: No triangles found from input date12_list:\n{}!\n".format(
+                date12_list
+            )
+        )
         return None
 
     triangle_idx = np.array(triangle_idx, np.int16)
