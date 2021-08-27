@@ -80,10 +80,6 @@ def prepare_stacks(
             filename=filename,
         )
 
-    if ref_row is None or ref_col is None:
-        # ref_row, ref_col, ref_station = find_reference_location(
-        raise ValueError("Need ref_row, ref_col or ref_station")
-
     # Now create the unwrapped ifg stack and the correlation stack
     cor_stack_file = os.path.join(igram_path, COR_FILENAME)
     create_cor_stack(
@@ -94,6 +90,10 @@ def prepare_stacks(
         overwrite=overwrite,
         attach_latlon=attach_latlon,
     )
+
+    if ref_row is None or ref_col is None:
+        # ref_row, ref_col, ref_station = find_reference_location(
+        raise ValueError("Need ref_row, ref_col or ref_station")
 
     unw_stack_file = os.path.join(igram_path, UNW_FILENAME)
     deramp_and_shift_unws(
@@ -274,6 +274,23 @@ def deramp_and_shift_unws(
         sario.attach_latlon(unw_stack_file, dset_name, depth_dim="ifg_idx")
 
 
+def _get_load_func(in_fname, band=2):
+    try:
+        with rio.open(in_fname) as inf:
+            pass
+
+        def load_func(x):
+            with rio.open(in_fname) as inf:
+                return inf.read(band)
+
+    except rio.errors.RasterioIOError:
+
+        def load_func(x):
+            return sario.load(x)
+
+    return load_func
+
+
 @log_runtime
 def create_cor_stack(
     cor_stack_file=COR_FILENAME,
@@ -295,10 +312,9 @@ def create_cor_stack(
     logger.info(f"Creating {cor_stack_file} of {len(file_list)} correlation files")
 
     band = 1 if float_cor else 2
-    with rio.open(file_list[0]) as src:
-        rows, cols = src.shape
-        # dtype = src.dtypes[band - 1]
-        dtype = np.float32
+    load_func = _get_load_func(file_list[0], band=band)
+    rows, cols = load_func(file_list[0]).shape
+    dtype = np.float32
 
     shape = (len(file_list), rows, cols)
     create_dset(cor_stack_file, dset_name, shape, dtype, chunks=True, compress=True)
@@ -329,9 +345,6 @@ def create_cor_stack(
     lastidx = 0
     cur_chunk_size = 0
     for idx, in_fname in enumerate(tqdm(file_list)):
-        if idx % 100 == 0:
-            logger.info(f"Processing {in_fname} -> {idx+1} out of {len(file_list)}")
-
         if idx % chunk_depth == 0 and idx > 0:
             logger.info(f"Writing {lastidx}:{lastidx+chunk_depth}")
             assert cur_chunk_size <= chunk_depth
@@ -343,16 +356,17 @@ def create_cor_stack(
 
         # driver = "ROI_PAC" if in_fname.endswith(".cor") else None  # let gdal guess
         # try
-        with rio.open(in_fname) as inf:
-            cor = inf.read(band)
-            # store this in the buffer until emptied
-            curidx = idx % chunk_depth
-            buf[curidx, :, :] = cor
-            cur_chunk_size += 1
+        cor = load_func(in_fname)
+        # with rio.open(in_fname) as inf:
+        # cor = inf.read(band)
+        # store this in the buffer until emptied
+        curidx = idx % chunk_depth
+        buf[curidx, :, :] = cor
+        cur_chunk_size += 1
 
-            mask = np.isnan(cor)
-            stack_sum[~mask] += cor[~mask]
-            stack_counts[~mask] += 1
+        mask = np.isnan(cor)
+        stack_sum[~mask] += cor[~mask]
+        stack_counts[~mask] += 1
 
     if cur_chunk_size > 0:
         # Write the final part of the buffer:
@@ -451,7 +465,7 @@ def create_mask_stacks(
         ]
         depth_dims = ["slc_dates", None, "ifg_idx", None]
         for name, dim in zip(latlon_dsets, depth_dims):
-            print(f"attaching {dim} in {name} to depth")
+            logger.info(f"attaching {dim} in {name} to depth")
             sario.attach_latlon(mask_file, name, depth_dim=dim)
     return mask_file
 
@@ -522,8 +536,6 @@ def save_slc_masks(
             else:
                 cur_mask = sario.load(mask_name, rsc_file="dem.rsc")
             dset[idx] = cur_mask
-            if idx % 100 == 0:
-                print(f"Done with {idx} out of {len(slc_file_list)}")
 
         # Also add a composite mask depthwise
         f[SLC_MASK_SUM_DSET] = np.sum(dset, axis=0)
@@ -639,7 +651,7 @@ def redo_deramp(
         while cur_layer < total_layers:
             if cur_layer + chunk_layers > total_layers:
                 cur_slice = np.s_[cur_layer:]
-                dest_slice = np.s_[:total_layers - cur_layer]
+                dest_slice = np.s_[: total_layers - cur_layer]
 
             else:
                 cur_slice = np.s_[cur_layer : cur_layer + chunk_layers]
