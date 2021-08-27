@@ -616,8 +616,9 @@ def redo_deramp(
     dset_name=STACK_FLAT_SHIFTED_DSET,
     chunk_layers=None,
     window=5,
+    cur_layer=0,
 ):
-    cur_layer = 0
+    # cur_layer = 0
     win = window // 2
 
     # TODO
@@ -638,11 +639,15 @@ def redo_deramp(
         while cur_layer < total_layers:
             if cur_layer + chunk_layers > total_layers:
                 cur_slice = np.s_[cur_layer:]
+                dest_slice = np.s_[:total_layers - cur_layer]
+
             else:
                 cur_slice = np.s_[cur_layer : cur_layer + chunk_layers]
+                dest_slice = np.s_[:chunk_layers]
+
             logger.info(f"Deramping {cur_slice}")
-            dset.read_direct(buf, cur_slice)
-            out = deramp.remove_ramp(buf)
+            dset.read_direct(buf, cur_slice, dest_slice)
+            out = deramp.remove_ramp(buf[dest_slice])
 
             # Now center it on the shift window
             patch = out[
