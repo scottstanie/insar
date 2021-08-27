@@ -215,7 +215,8 @@ def deramp_and_shift_unws(
 
         driver = "ROI_PAC" if in_fname.endswith(".unw") else None  # let gdal guess
         with rio.open(in_fname, driver=driver) as inf:
-            mask = _read_mask_by_idx(idx, fname=mask_fname).astype(bool)
+            with h5py.File(mask_fname, "r") as f:
+                mask = f[IFG_MASK_DSET][idx, :, :].astype(bool)
             # amp = inf.read(1)
             phase = inf.read(2)
             deramped_phase = deramp.remove_ramp(
@@ -606,15 +607,6 @@ def _find_file_shape(dem_rsc=None, file_list=None, row_looks=None, col_looks=Non
         return (len(file_list), g.shape[0], g.shape[1])
     else:
         return (len(file_list), dem_rsc["file_length"], dem_rsc["width"])
-
-
-def _read_mask_by_idx(idx, fname="masks.h5", dset=IFG_MASK_DSET):
-    with h5py.File(fname, "r") as f:
-        m = f[dset][idx, :, :]
-    # if fname.endswith(".nc"):  #
-    # return m[::-1, :]
-    # else:
-    return m
 
 
 def redo_deramp(
