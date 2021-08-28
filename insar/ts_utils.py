@@ -290,19 +290,18 @@ def build_closure_matrix(ifg_date_list, closure_list=None):
         sar_date_list = list(sorted(set(chain.from_iterable(ifg_date_list))))
         closure_list = list(combinations(sar_date_list, 3))
 
+    # Create an inverse map from tuple(date1, date1) -> index in ifg list
     ifg_to_idx = {ifg: idx for idx, ifg in enumerate(ifg_date_list)}
 
     # N = len(sar_date_list)
     M = len(ifg_date_list)  # Number of igrams, number of rows
-    K = len(closure_list)
-    row = np.zeros(M)
+    # K = len(closure_list)
     C_list = []
-    for j in range(K):
-        trip = closure_list[j]
+    for triplet in closure_list:
 
-        ifg1 = (trip[0], trip[1])
-        ifg2 = (trip[1], trip[2])
-        ifg3 = (trip[0], trip[2])
+        ifg1 = (triplet[0], triplet[1])
+        ifg2 = (triplet[1], triplet[2])
+        ifg3 = (triplet[0], triplet[2])
         try:
             idx1 = ifg_to_idx[ifg1]
             idx2 = ifg_to_idx[ifg2]
@@ -310,13 +309,14 @@ def build_closure_matrix(ifg_date_list, closure_list=None):
         except KeyError:
             continue
 
-        row[:] = 0
+        # breakpoint()
+        row = np.zeros(M, dtype=np.int8)
         row[idx1] = 1
         row[idx2] = 1
         row[idx3] = -1
         C_list.append(row)
 
-    return np.stack(C_list)
+    return np.stack(C_list).astype(np.float32)
 
 
 def get_design_matrix4triplet(date12_list):
@@ -381,3 +381,44 @@ def get_design_matrix4triplet(date12_list):
         C[i, triangle_idx[i, 1]] = -1
         C[i, triangle_idx[i, 2]] = 1
     return C
+
+"""
+In [1]: from insar import ts_utils
+In [2]: ifglist = sario.load_ifglist_from_h5("asc-path-137/igrams/unw_stack.h5")
+In [3]: ifgnums = [tuple(row.astype(int)) for row in sario.load_ifglist_from_h5("asc-path-137/igrams/unw_stack.h5", parse=False)]
+
+In [4]: %time C2 = ts_utils.build_closure_matrix(ifgnums)
+CPU times: user 1.17 s, sys: 1.65 s, total: 2.82 s
+Wall time: 2.85 s
+
+
+In [6]: ifgstrs = [f"{d.strftime('%Y%m%d')}_{d2.strftime('%Y%m%d')}" for d, d2 in ifglist]
+In [7]: %time C1 = ts_utils.get_design_matrix4triplet(ifgstrs)
+CPU times: user 40.5 s, sys: 668 ms, total: 41.2 s
+Wall time: 41.3 s
+
+
+In [10]: np.allclose(C1, C2)
+Out[10]: True
+
+In [12]: ifgnums[:4]
+Out[12]: [(16466, 16514), (16466, 16526), (16466, 16586), (16466, 16598)]
+
+In [13]: ifgstrs[:4]
+Out[13]:
+['20150131_20150320',
+ '20150131_20150401',
+ '20150131_20150531',
+ '20150131_20150612']
+
+In [14]: from matplotlib.dates import num2date
+In [18]: num2date(ifgnums[:2])
+Out[18]:
+[[datetime.datetime(2015, 1, 31, 0, 0, tzinfo=datetime.timezone.utc),
+  datetime.datetime(2015, 3, 20, 0, 0, tzinfo=datetime.timezone.utc)],
+ [datetime.datetime(2015, 1, 31, 0, 0, tzinfo=datetime.timezone.utc),
+  datetime.datetime(2015, 4, 1, 0, 0, tzinfo=datetime.timezone.utc)]]
+
+In [19]: ifgstrs[:2]
+Out[19]: ['20150131_20150320', '20150131_20150401']
+"""
