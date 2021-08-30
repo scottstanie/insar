@@ -15,8 +15,8 @@ scott@lidar igrams]$ head slclist
 
 """
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import tqdm
 import hdf5plugin  # noqa : for the possiblity of HDF5 blosc filter
-import itertools
 import h5py
 import xarray as xr
 import numpy as np
@@ -57,9 +57,10 @@ def run_inversion(
     max_date=None,
     stack_average=False,
     # constant_velocity=False,
-    max_temporal_baseline=800,
+    max_temporal_baseline=None,
     max_temporal_bandwidth=None,  # TODO
     min_temporal_bandwidth=None,  # TODO
+    include_annual=False,
     outlier_sigma=0,  # TODO: outlier outlier_sigma. Use trodi
     alpha=0,
     # L1=False, # TODO
@@ -109,6 +110,7 @@ def run_inversion(
         max_temporal_baseline=max_temporal_baseline,
         max_bandwidth=max_temporal_bandwidth,
         min_bandwidth=min_temporal_bandwidth,
+        include_annual=include_annual,
     )
 
     with h5py.File(unw_stack_file) as hf:
