@@ -4,6 +4,7 @@ import os
 from glob import glob
 import argparse
 import subprocess
+from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # TODO: pass in the path: currently only runs on the current directory
@@ -89,8 +90,8 @@ def main():
             )
             for f in filenames
         ]
-        for idx, fut in enumerate(as_completed(futures)):
-            print("Done with", idx, "/", len(futures))
+        for idx, fut in enumerate(tqdm(as_completed(futures), start=1)):
+            tqdm.write("Done with {} / {}".format(idx, len(futures)))
 
 
 def _snaphu_cmd(intfile, width, corname, outname, conncomp_name, float_cor=False):
