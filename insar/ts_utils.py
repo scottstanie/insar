@@ -3,12 +3,12 @@ from matplotlib.dates import date2num
 from itertools import chain, combinations
 
 
-def build_A_matrix(sar_date_list, ifg_date_list):
+def build_A_matrix(sar_date_list, ifg_date_pairs):
     """Takes the list of igram dates and builds the SBAS A matrix
 
     Args:
         sar_date_list (list[date]): datetimes of the acquisitions
-        ifg_date_list (list[tuple(date, date)])
+        ifg_date_pairs (list[tuple(date, date)])
 
     Returns:
         np.array 2D: the incident-like matrix from the SBAS paper: A*phi = dphi
@@ -18,11 +18,11 @@ def build_A_matrix(sar_date_list, ifg_date_list):
     # We take the first .geo to be time 0, leave out of matrix
     # Match on date (not time) to find indices
     sar_date_list = sar_date_list[1:]
-    M = len(ifg_date_list)  # Number of igrams, number of rows
+    M = len(ifg_date_pairs)  # Number of igrams, number of rows
     N = len(sar_date_list)
     A = np.zeros((M, N))
     for j in range(M):
-        early_igram, late_igram = ifg_date_list[j]
+        early_igram, late_igram = ifg_date_pairs[j]
 
         try:
             idx_early = sar_date_list.index(early_igram)
@@ -36,12 +36,12 @@ def build_A_matrix(sar_date_list, ifg_date_list):
     return A
 
 
-def build_B_matrix(sar_dates, ifg_date_list, model=None):
+def build_B_matrix(sar_dates, ifg_date_pairs, model=None):
     """Takes the list of igram dates and builds the SBAS B (velocity coeff) matrix
 
     Args:
         sar_date_list (list[date]): dates of the SAR acquisitions
-        ifg_date_list (list[tuple(date, date)])
+        ifg_date_pairs (list[tuple(date, date)])
         model (str): If "linear", creates the M x 1 matrix for linear velo model
 
     Returns:
@@ -57,7 +57,7 @@ def build_B_matrix(sar_dates, ifg_date_list, model=None):
         pass
     timediffs = np.array([difference.days for difference in np.diff(sar_dates)])
 
-    A = build_A_matrix(sar_dates, ifg_date_list)
+    A = build_A_matrix(sar_dates, ifg_date_pairs)
     B = np.zeros_like(A)
 
     for j, row in enumerate(A):
@@ -273,152 +273,51 @@ def ptp_by_date_pct(da, low=0.05, high=0.95):
     return high_q - low_q
 
 
-def build_closure_matrix(ifg_date_list, closure_list=None):
+def build_closure_matrix(ifg_date_pairs):
     """Takes the list of igram dates and builds the SBAS A matrix
 
     Args:
-        sar_date_list (list[date]): datetimes of the acquisitions
-        ifg_date_list (list[tuple(date, date)])
+        ifg_date_pairs (list[tuple(date, date)])
 
     Returns:
-        np.array 2D: the incident-like matrix from the SBAS paper: A*phi = dphi
-            Each row corresponds to an igram, each column to a SAR date
-            value will be -1 on the early (reference) igrams, +1 on later (secondary)
-    """
+        C (2D ndarray): Size = (K, M), where M = len(ifg_date_pairs),
+            K = number of possible triplets from the ifgs.
+            Each row has two 1s, one -1, corresponding to indexes within
+            `ifg_date_pairs` so that `rows @ ifg_date_pairs` sums up the closure phase
 
-    if closure_list is None:
-        sar_date_list = list(sorted(set(chain.from_iterable(ifg_date_list))))
-        closure_list = list(combinations(sar_date_list, 3))
+    E.g. if `ifg_date_pairs` has [(0, 1), (0, 2),...,(1, 2),...], then
+    row 1 of `C` will be
+        [+1, -1, 0,...,0,+1,0,....]
+    Since ifg(0, 1) + ifg(1,2) - ifg(0, 2) = closure(0,1,2)
+
+
+    """
+    # Get the unique SAR dates present in the interferogram list
+    sar_date_list = sorted(set(chain.from_iterable(ifg_date_pairs)))
+    closure_list = combinations(sar_date_list, 3)
 
     # Create an inverse map from tuple(date1, date1) -> index in ifg list
-    ifg_to_idx = {ifg: idx for idx, ifg in enumerate(ifg_date_list)}
+    ifg_to_idx = {tuple(ifg): idx for idx, ifg in enumerate(ifg_date_pairs)}
 
-    # N = len(sar_date_list)
-    M = len(ifg_date_list)  # Number of igrams, number of rows
-    # K = len(closure_list)
+    M = len(ifg_date_pairs)  # Number of igrams, number of rows
     C_list = []
-    for triplet in closure_list:
+    for date1, date2, date3 in closure_list:
 
-        ifg1 = (triplet[0], triplet[1])
-        ifg2 = (triplet[1], triplet[2])
-        ifg3 = (triplet[0], triplet[2])
+        ifg12 = (date1, date2)
+        ifg23 = (date2, date3)
+        ifg13 = (date1, date3)
         try:
-            idx1 = ifg_to_idx[ifg1]
-            idx2 = ifg_to_idx[ifg2]
-            idx3 = ifg_to_idx[ifg3]
+            idx12 = ifg_to_idx[ifg12]
+            idx23 = ifg_to_idx[ifg23]
+            idx13 = ifg_to_idx[ifg13]
         except KeyError:
             continue
 
-        # breakpoint()
         row = np.zeros(M, dtype=np.int8)
-        row[idx1] = 1
-        row[idx2] = 1
-        row[idx3] = -1
+        row[idx12] = 1
+        row[idx23] = 1
+        row[idx13] = -1
         C_list.append(row)
 
     return np.stack(C_list).astype(np.float32)
-
-
-def get_design_matrix4triplet(date12_list):
-    """Generate the design matrix of ifgram triangle for unwrap error correction using phase closure
-    Parameters: date12_list : list of string in YYYYMMDD_YYYYMMDD format
-    Returns:    C : 2D np.array in size of (num_tri, num_ifgram) consisting 0, 1, -1
-                    for 3 SAR acquisition in t1, t2 and t3 in time order,
-                    ifg1 for (t1, t2) with 1
-                    ifg2 for (t1, t3) with -1
-                    ifg3 for (t2, t3) with 1
-    Examples:   obj = ifgramStack('./inputs/ifgramStack.h5')
-                date12_list = obj.get_date12_list(dropIfgram=True)
-                C = ifgramStack.get_design_matrix4triplet(date12_list)
-    """
-    # Date info
-    date12_list = list(date12_list)
-
-    # calculate triangle_idx
-    triangle_idx = []
-    for ifgram1 in date12_list:
-        # ifgram1 (date1, date2)
-        date1, date2 = ifgram1.split("_")
-
-        # ifgram2 candidates (date1, date3)
-        date3_list = []
-        for ifgram2 in date12_list:
-            if date1 == ifgram2.split("_")[0] and ifgram2 != ifgram1:
-                date3_list.append(ifgram2.split("_")[1])
-
-        # ifgram2/3
-        if len(date3_list) > 0:
-            for date3 in date3_list:
-                ifgram3 = "{}_{}".format(date2, date3)
-                if ifgram3 in date12_list:
-                    ifgram1 = "{}_{}".format(date1, date2)
-                    ifgram2 = "{}_{}".format(date1, date3)
-                    ifgram3 = "{}_{}".format(date2, date3)
-                    triangle_idx.append(
-                        [
-                            date12_list.index(ifgram1),
-                            date12_list.index(ifgram2),
-                            date12_list.index(ifgram3),
-                        ]
-                    )
-
-    if len(triangle_idx) == 0:
-        print(
-            "\nWARNING: No triangles found from input date12_list:\n{}!\n".format(
-                date12_list
-            )
-        )
-        return None
-
-    triangle_idx = np.array(triangle_idx, np.int16)
-    triangle_idx = np.unique(triangle_idx, axis=0)
-
-    # triangle_idx to C
-    num_triangle = triangle_idx.shape[0]
-    C = np.zeros((num_triangle, len(date12_list)), np.float32)
-    for i in range(num_triangle):
-        C[i, triangle_idx[i, 0]] = 1
-        C[i, triangle_idx[i, 1]] = -1
-        C[i, triangle_idx[i, 2]] = 1
-    return C
-
-"""
-In [1]: from insar import ts_utils
-In [2]: ifglist = sario.load_ifglist_from_h5("asc-path-137/igrams/unw_stack.h5")
-In [3]: ifgnums = [tuple(row.astype(int)) for row in sario.load_ifglist_from_h5("asc-path-137/igrams/unw_stack.h5", parse=False)]
-
-In [4]: %time C2 = ts_utils.build_closure_matrix(ifgnums)
-CPU times: user 1.17 s, sys: 1.65 s, total: 2.82 s
-Wall time: 2.85 s
-
-
-In [6]: ifgstrs = [f"{d.strftime('%Y%m%d')}_{d2.strftime('%Y%m%d')}" for d, d2 in ifglist]
-In [7]: %time C1 = ts_utils.get_design_matrix4triplet(ifgstrs)
-CPU times: user 40.5 s, sys: 668 ms, total: 41.2 s
-Wall time: 41.3 s
-
-
-In [10]: np.allclose(C1, C2)
-Out[10]: True
-
-In [12]: ifgnums[:4]
-Out[12]: [(16466, 16514), (16466, 16526), (16466, 16586), (16466, 16598)]
-
-In [13]: ifgstrs[:4]
-Out[13]:
-['20150131_20150320',
- '20150131_20150401',
- '20150131_20150531',
- '20150131_20150612']
-
-In [14]: from matplotlib.dates import num2date
-In [18]: num2date(ifgnums[:2])
-Out[18]:
-[[datetime.datetime(2015, 1, 31, 0, 0, tzinfo=datetime.timezone.utc),
-  datetime.datetime(2015, 3, 20, 0, 0, tzinfo=datetime.timezone.utc)],
- [datetime.datetime(2015, 1, 31, 0, 0, tzinfo=datetime.timezone.utc),
-  datetime.datetime(2015, 4, 1, 0, 0, tzinfo=datetime.timezone.utc)]]
-
-In [19]: ifgstrs[:2]
-Out[19]: ['20150131_20150320', '20150131_20150401']
-"""
+    
