@@ -188,6 +188,8 @@ def run_inversion(
     sario.save_latlon_to_h5(
         outfile, lat_arr=lat_arr, lon_arr=lon_arr, overwrite=overwrite
     )
+    sario.attach_latlon(unw_stack_file, output_dset, depth_dim="date")
+    # TODO: just use the h5?
     if save_as_netcdf:
         from apertools import netcdf
 

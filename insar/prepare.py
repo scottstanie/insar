@@ -52,11 +52,43 @@ def prepare_stacks(
     window=5,
     search_term="*.unw",
     cor_search_term="*.cc",
+    float_cor=False,
+    row_looks=None,
+    col_looks=None,
     overwrite=False,
     attach_latlon=True,
+    mask_from_slcs=True,
+    compute_water_mask=False,
+    mask_dem=True,
 ):
+    ifg_date_list = sario.find_ifgs(directory=igram_path, search_term=search_term)
+    ifg_file_list = sario.find_ifgs(
+        directory=igram_path, search_term=search_term, parse=False
+    )
+    slc_date_list = list(sorted(set(itertools.chain.from_iterable(ifg_date_list))))
+
     mask_file = create_mask_stacks(
-        igram_path, overwrite=overwrite, attach_latlon=attach_latlon
+        igram_path,
+        overwrite=overwrite,
+        attach_latlon=attach_latlon,
+        compute_water_mask=compute_water_mask,
+        compute_from_slcs=mask_from_slcs,
+        slc_date_list=slc_date_list,
+        ifg_date_list=ifg_date_list,
+        ifg_file_list=ifg_file_list,
+        row_looks=row_looks,
+        col_looks=col_looks,
+    )
+
+    cor_stack_file = os.path.join(igram_path, COR_FILENAME)
+    create_cor_stack(
+        cor_stack_file=cor_stack_file,
+        dset_name=STACK_DSET,
+        directory=igram_path,
+        search_term=cor_search_term,
+        overwrite=overwrite,
+        attach_latlon=attach_latlon,
+        float_cor=float_cor,
     )
 
     if ref_station is not None:
@@ -80,33 +112,21 @@ def prepare_stacks(
             filename=filename,
         )
 
-    # Now create the unwrapped ifg stack and the correlation stack
-    cor_stack_file = os.path.join(igram_path, COR_FILENAME)
-    create_cor_stack(
-        cor_stack_file=cor_stack_file,
-        dset_name=STACK_DSET,
-        directory=igram_path,
-        search_term=cor_search_term,
-        overwrite=overwrite,
-        attach_latlon=attach_latlon,
-    )
-
     if ref_row is None or ref_col is None:
         # ref_row, ref_col, ref_station = find_reference_location(
         raise ValueError("Need ref_row, ref_col or ref_station")
 
+    # Now create the unwrapped ifg stack
     unw_stack_file = os.path.join(igram_path, UNW_FILENAME)
     deramp_and_shift_unws(
         ref_row,
         ref_col,
         unw_stack_file=unw_stack_file,
-        cor_stack_file=cor_stack_file,
         dset_name=STACK_FLAT_SHIFTED_DSET,
         directory=igram_path,
         deramp_order=deramp_order,
         window=window,
         search_term=search_term,
-        cor_search_term=cor_search_term,
         overwrite=overwrite,
         attach_latlon=attach_latlon,
     )
@@ -116,6 +136,15 @@ def prepare_stacks(
         f[STACK_FLAT_SHIFTED_DSET].attrs["reference"] = [ref_row, ref_col]
         if ref_station is not None:
             f[STACK_FLAT_SHIFTED_DSET].attrs["reference_station"] = ref_station
+
+    for f in [mask_file, cor_stack_file, unw_stack_file]:
+        sario.save_ifglist_to_h5(
+            ifg_date_list=ifg_date_list, out_file=f, overwrite=overwrite
+        )
+
+        sario.save_slclist_to_h5(
+            slc_date_list=slc_date_list, out_file=f, overwrite=overwrite
+        )
 
 
 def create_dset(h5file, dset_name, shape, dtype, chunks=True, compress=True):
@@ -128,11 +157,8 @@ def create_dset(h5file, dset_name, shape, dtype, chunks=True, compress=True):
 
 
 def temporal_baseline(filename):
-    fmt = "%Y%m%d"
-    fname = os.path.split(filename)[1]
-    datestrs = os.path.splitext(fname)[0].split("_")
-    igram = [datetime.strptime(t, fmt) for t in datestrs]
-    return (igram[1] - igram[0]).days
+    ifg = sario.parse_ifglist_strings(filename)
+    return (ifg[1] - ifg[0]).days
 
 
 @log_runtime
@@ -144,7 +170,6 @@ def deramp_and_shift_unws(
     dset_name=STACK_FLAT_SHIFTED_DSET,
     directory=".",
     search_term="*.unw",
-    cor_search_term="*.cc",
     deramp_order=2,
     window=5,
     overwrite=False,
@@ -159,7 +184,6 @@ def deramp_and_shift_unws(
     file_list = sario.find_ifgs(
         directory=directory, search_term=search_term, parse=False
     )
-    date_list = sario.find_ifgs(directory=directory, search_term=search_term)
     band = 2
 
     with rio.open(file_list[0]) as src:
@@ -178,23 +202,18 @@ def deramp_and_shift_unws(
         )
         sario.save_latlon_to_h5(unw_stack_file, rsc_data=rsc_data)
 
-    sario.save_ifglist_to_h5(
-        ifg_date_list=date_list, out_file=unw_stack_file, overwrite=overwrite
-    )
-
-    # Only keep the SAR dates which have an interferogram where we're looking
-    slc_date_list = list(sorted(set(itertools.chain.from_iterable(date_list))))
-
-    _ = sario.save_slclist_to_h5(
-        slc_date_list=slc_date_list,
-        out_file=unw_stack_file,
-        overwrite=overwrite,
-    )
-
     with h5py.File(unw_stack_file, "r+") as f:
         chunk_shape = f[dset_name].chunks
         chunk_depth, chunk_rows, chunk_cols = chunk_shape
         # n = n or chunk_size[0]
+
+    # Get the projection information to use to write as gtiff
+    if os.path.exists(file_list[0] + ".rsc"):
+        driver = "ROI_PAC"
+    # elif os.path.exists(file_list[0] + ".xml") or os.path.exists(file_list[0] + ".vrt"):
+    # driver = "ISCE"
+    else:
+        driver = None
 
     # While we're iterating, save a stacked average
     stackavg = np.zeros((rows, cols), dtype="float32")
@@ -213,7 +232,6 @@ def deramp_and_shift_unws(
             lastidx = idx
             cur_chunk_size = 0
 
-        driver = "ROI_PAC" if in_fname.endswith(".unw") else None  # let gdal guess
         with rio.open(in_fname, driver=driver) as inf:
             with h5py.File(mask_fname, "r") as f:
                 mask = f[IFG_MASK_DSET][idx, :, :].astype(bool)
@@ -249,8 +267,7 @@ def deramp_and_shift_unws(
                 :cur_chunk_size
             ]
 
-    # Get the projection information to use to write as gtiff
-    with rio.open(file_list[0], driver="ROI_PAC") as ds:
+    with rio.open(file_list[0], driver=driver) as ds:
         transform = ds.transform
         crs = ds.crs
 
@@ -274,7 +291,7 @@ def deramp_and_shift_unws(
 
 def _get_load_func(in_fname, band=2):
     try:
-        with rio.open(in_fname) as inf:
+        with rio.open(in_fname):
             pass
 
         def load_func(x):
@@ -306,7 +323,6 @@ def create_cor_stack(
     file_list = sario.find_ifgs(
         directory=directory, search_term=search_term, parse=False
     )
-    date_list = sario.find_ifgs(directory=directory, search_term=search_term)
     logger.info(f"Creating {cor_stack_file} of {len(file_list)} correlation files")
 
     band = 1 if float_cor else 2
@@ -325,11 +341,6 @@ def create_cor_stack(
             cor_stack_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
         )
         sario.save_latlon_to_h5(cor_stack_file, rsc_data=rsc_data)
-
-    sario.save_ifglist_to_h5(
-        ifg_date_list=date_list, out_file=cor_stack_file, overwrite=overwrite
-    )
-
     with h5py.File(cor_stack_file, "r+") as f:
         chunk_shape = f[dset_name].chunks
         chunk_depth, chunk_rows, chunk_cols = chunk_shape
@@ -389,7 +400,14 @@ def create_mask_stacks(
     slc_path=None,
     overwrite=False,
     compute_from_slcs=True,
+    slc_date_list=None,
+    ifg_date_list=None,
+    ifg_file_list=None,
     attach_latlon=True,
+    compute_water_mask=False,
+    mask_dem=True,
+    row_looks=None,
+    col_looks=None,
 ):
     """Create mask stacks for areas in .geo and .int
 
@@ -398,42 +416,33 @@ def create_mask_stacks(
     if mask_filename is None:
         mask_file = os.path.join(igram_path, MASK_FILENAME)
 
-    if slc_path is None:
-        slc_path = utils.get_parent_dir(igram_path)
-
     # Used to shrink the .geo masks to save size as .int masks
-    row_looks, col_looks = apertools.sario.find_looks_taken(
-        igram_path, slc_path=slc_path
-    )
+    if row_looks is None or col_looks is None:
+        if slc_path is None:
+            slc_path = utils.get_parent_dir(igram_path)
 
-    rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
-    sario.save_dem_to_h5(
-        mask_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
-    )
+        row_looks, col_looks = apertools.sario.find_looks_taken(
+            igram_path, slc_path=slc_path
+        )
 
-    int_date_list = sario.save_ifglist_to_h5(
-        igram_path=igram_path,
-        out_file=mask_file,
-        overwrite=overwrite,
-        igram_ext=".unw",
-    )
+    if attach_latlon:
+        # Save the extra files too
+        rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
 
-    # Only keep the SAR dates which have an interferogram where we're looking
-    slc_date_list = list(sorted(set(itertools.chain.from_iterable(int_date_list))))
-
-    _ = sario.save_slclist_to_h5(
-        slc_date_list=slc_date_list,
-        out_file=mask_file,
-        overwrite=overwrite,
-    )
-
-    all_slc_files = sario.find_slcs(directory=slc_path, parse=False)
-    all_slc_dates = sario.find_slcs(directory=slc_path)
-    slc_file_list = [
-        gf for gf, gd in zip(all_slc_files, all_slc_dates) if gd in slc_date_list
-    ]
+        sario.save_dem_to_h5(
+            mask_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
+        )
+    else:
+        rsc_data = None
 
     if compute_from_slcs:
+        if slc_path is None:
+            slc_path = utils.get_parent_dir(igram_path)
+        all_slc_files = sario.find_slcs(directory=slc_path, parse=False)
+        all_slc_dates = sario.find_slcs(directory=slc_path)
+        slc_file_list = [
+            f for f, d in zip(all_slc_files, all_slc_dates) if d in slc_date_list
+        ]
         save_slc_masks(
             slc_path,
             mask_file,
@@ -443,6 +452,9 @@ def create_mask_stacks(
             col_looks=col_looks,
             overwrite=overwrite,
         )
+    if compute_water_mask:
+        # TODO
+        pass
 
     compute_int_masks(
         mask_file=mask_file,
@@ -450,8 +462,11 @@ def create_mask_stacks(
         slc_path=slc_path,
         dem_rsc=rsc_data,
         slc_date_list=slc_date_list,
+        ifg_date_list=ifg_date_list,
+        ifg_file_list=ifg_file_list,
         overwrite=overwrite,
         compute_from_slcs=compute_from_slcs,
+        mask_dem=mask_dem,
     )
     if attach_latlon:
         # now attach the lat/lon grid
@@ -546,6 +561,8 @@ def compute_int_masks(
     dem_rsc=None,
     igram_ext=".unw",
     slc_date_list=None,
+    ifg_date_list=None,
+    ifg_file_list=None,
     dset_name=IFG_MASK_DSET,
     overwrite=False,
     compute_from_slcs=True,  # TODO: combine these
@@ -561,14 +578,11 @@ def compute_int_masks(
     if not sario.check_dset(mask_file, IFG_MASK_SUM_DSET, overwrite):
         return
 
-    int_date_list = sario.find_ifgs(directory=igram_path, ext=igram_ext)
-    int_file_list = sario.find_ifgs(directory=igram_path, ext=igram_ext, parse=False)
-
-    if slc_date_list is None:
+    if slc_date_list is None and compute_from_slcs:
         slc_date_list = sario.find_slcs(directory=slc_path)
 
     # Make the empty stack, or delete if exists
-    shape = _find_file_shape(dem_rsc=dem_rsc, file_list=int_file_list)
+    shape = _find_file_shape(dem_rsc=dem_rsc, file_list=ifg_file_list)
     create_dset(mask_file, dset_name, shape=shape, dtype=bool)
 
     if mask_dem:
@@ -578,7 +592,7 @@ def compute_int_masks(
         slc_mask_stack = f[SLC_MASK_DSET]
         int_mask_dset = f[dset_name]
         # TODO: read coherence, also form that one
-        for idx, (early, late) in enumerate(tqdm(int_date_list)):
+        for idx, (early, late) in enumerate(tqdm(ifg_date_list)):
             if compute_from_slcs:
                 early_idx = slc_date_list.index(early)
                 late_idx = slc_date_list.index(late)
@@ -596,11 +610,15 @@ def compute_int_masks(
 
 
 def _find_file_shape(dem_rsc=None, file_list=None, row_looks=None, col_looks=None):
+    if len(file_list) == 0:
+        raise ValueError("No files found ")
     if not dem_rsc:
+        if not row_looks and not col_looks:
+            with rio.open(file_list[0]) as src:
+                return (len(file_list), *src.shape[-2:])
+
         try:
             g = sario.load(file_list[0], looks=(row_looks, col_looks))
-        except IndexError:
-            raise ValueError("No files found ")
         except TypeError:
             raise ValueError("Need file_list if no dem_rsc")
 
@@ -618,6 +636,7 @@ def redo_deramp(
     chunk_layers=None,
     window=5,
     cur_layer=0,
+    attach_latlon=True,
 ):
     # cur_layer = 0
     win = window // 2
@@ -677,13 +696,20 @@ def redo_deramp(
         sario.attach_latlon(unw_stack_file, dset_name, depth_dim="ifg_idx")
 
 
-# TODO: for mask subsetting...
-# sario.save("dem.rsc", latlon.from_grid(mds.lon.values, mds.lat.values, sparse=True))
-# time gdal_translate -of netCDF -co "FORMAT=NC4" -co "COMPRESS=DEFLATE" -co "ZLEVEL=4"
-# -projwin -103.85 31.6 -102.8 30.8 masks_igram4.nc masks_subset4.nc
-# sario.hdf5_to_netcdf("../igrams_looked_18/masks.h5", stack_dset_list=['igram', 'geo'],
-# stack_dim_list=['idx', 'date'], outname="masks_igram3.nc")
-# sario.save_slclist_to_h5(out_file="masks_subset4.nc",
-# slc_date_list=sario.load_slclist_from_h5("../igrams_looked_18/masks.h5"))
-# sario.save_ifglist_to_h5(out_file="masks_subset5.nc",
-# int_date_list=sario.load_ifglist_from_h5("../igrams_looked_18/masks.h5"))
+def prepare_isce():
+    search_term = "Igrams/**/filt*.unw"
+    cor_search_term = "Igrams/**/filt*.cor"
+    prepare_stacks(
+        ".",
+        ref_row=1000,
+        ref_col=440,
+        deramp_order=1,
+        search_term=search_term,
+        cor_search_term=cor_search_term,
+        row_looks=5,
+        col_looks=3,
+        attach_latlon=False,
+        mask_from_slcs=False,
+        mask_dem=False,
+        float_cor=True,
+    )
