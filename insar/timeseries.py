@@ -175,12 +175,8 @@ def run_inversion(
         # L1,
         outlier_sigma,
     )
-    sario.save_slclist_to_h5(
-        out_file=outfile, slc_date_list=slclist, dset_name=output_dset
-    )
-    sario.save_ifglist_to_h5(
-        out_file=outfile, ifg_date_list=ifglist, dset_name=output_dset
-    )
+    sario.save_slclist_to_h5(out_file=outfile, slc_date_list=slclist)
+    sario.save_ifglist_to_h5(out_file=outfile, ifg_date_list=ifglist)
     # sario.save_dem_to_h5(outfile, rsc_data) # saving the dem... not as useful as the lat/lon arr
     with h5py.File(unw_stack_file) as hf:
         lat_arr = hf["lat"][()]
@@ -188,7 +184,9 @@ def run_inversion(
     sario.save_latlon_to_h5(
         outfile, lat_arr=lat_arr, lon_arr=lon_arr, overwrite=overwrite
     )
-    sario.attach_latlon(unw_stack_file, output_dset, depth_dim="date")
+    with h5py.File(outfile, "a") as hf:
+        hf["date"] = hf["slc_dates"]
+    sario.attach_latlon(outfile, output_dset, depth_dim="date")
     # TODO: just use the h5?
     if save_as_netcdf:
         from apertools import netcdf

@@ -627,6 +627,7 @@ def _find_file_shape(dem_rsc=None, file_list=None, row_looks=None, col_looks=Non
         return (len(file_list), dem_rsc["file_length"], dem_rsc["width"])
 
 
+from helpers import elevation_vs_phase as evp
 def redo_deramp(
     unw_stack_file,
     ref_row,
@@ -640,6 +641,7 @@ def redo_deramp(
 ):
     # cur_layer = 0
     win = window // 2
+    dem = sario.load("elevation_looked.dem")
 
     # TODO
     # if ref_station is not None:
@@ -667,18 +669,19 @@ def redo_deramp(
 
             logger.info(f"Deramping {cur_slice}")
             dset.read_direct(buf, cur_slice, dest_slice)
-            out = deramp.remove_ramp(buf[dest_slice])
+            # out = deramp.remove_ramp(buf[dest_slice], deramp_order=deramp_order)
+            out = evp.remove_ramp(buf[dest_slice])
 
-            # Now center it on the shift window
-            patch = out[
-                ref_row - win : ref_row + win + 1, ref_col - win : ref_col + win + 1
-            ]
-            if not np.all(np.isnan(patch)):
-                out -= np.nanmean(patch)
-            else:
-                # Do I actually just want to ignore this one and give 0s?
-                logger.debug(f"Patch is all nan for {ref_row},{ref_col}")
-                out -= np.nanmean(out)
+            # # Now center it on the shift window
+            # patch = out[
+            #     ref_row - win : ref_row + win + 1, ref_col - win : ref_col + win + 1
+            # ]
+            # if not np.all(np.isnan(patch)):
+            #     out -= np.nanmean(patch)
+            # else:
+            #     # Do I actually just want to ignore this one and give 0s?
+            #     logger.debug(f"Patch is all nan for {ref_row},{ref_col}")
+            #     out -= np.nanmean(out)
 
             logger.info(f"Writing {cur_slice} back to dataset")
             dset.write_direct(out, dest_sel=cur_slice)
