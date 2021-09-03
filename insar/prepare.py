@@ -716,3 +716,65 @@ def prepare_isce():
         mask_dem=False,
         float_cor=True,
     )
+
+def remove_elevation(dem_da_sub, ifg_stack_sub, dem, ifg_stack, subfactor=5):
+    cols = dem_da_sub.shape[1]
+    col_slices = [slice(0, cols // 2), slice(cols // 2, None)]
+    col_slices = [slice(0, cols)]
+    polys = []
+    col_maxes = []
+    cur_col = 0
+    halves = []
+    # for col_slice in col_slices:
+    # col_slice = slice(cur_col, cur_col + cols // 2)
+    # print("Dem subset shape", dem_da_sub[:, col_slice].shape)
+    col_slice = slice(None)
+    dem_pixels = dem_da_sub[:, col_slice].stack(space=("lat", "lon"))
+    ifg_pixels = ifg_stack_sub[:, :, col_slice].stack(space=("lat", "lon"))
+    print("ifg pixels shape:", ifg_pixels.shape)
+
+    xx = dem_pixels.data
+    yy = ifg_pixels.data.T
+    # mask_na = np.logical_or(np.isnan(xx), np.isnan(yy))
+    # xx, yy = xx[~mask_na], yy[~mask_na]
+
+    pf = np.polyfit(xx, np.nan_to_num(yy), 1)
+    polys.append(pf)
+    # print(pf)
+    # return xr.DataArray(pf)
+    # Now get the full sized ifg and dem
+    # ifgs_corrected = []
+    # for idx, ifg in enumerate(ifg_stack):
+    # ifg_half = ifg[:, col_slice]
+    # ifgs_corrected.append(ifg_half - np.polyval(pf[:, idx], dem_half))
+    # halves.append(np.stack(ifgs_corrected))
+
+    # full_col_slice = slice(subfactor* cur_col, subfactor*(cur_col + cols // 2))
+    # dem_half = dem[:, full_col_slice]
+    dem_half = dem
+    # return pf
+    from numpy.polynomial.polynomial import polyval
+    corrections = polyval(dem.data, pf[::-1, :], tensor=True)
+    return ifg_stack - corrections
+
+    # corrections = corrected_pixels.reshape(ifg_stack[:, :, full_col_slice].shape)
+    # corrections = corrected_pixels.reshape(ifg_stack.shape)
+    # return corrections
+    # halves.append(corrections)
+
+    # cur_col += cols // 2
+    # col_maxes.append(cur_col)
+
+
+# return np.stack(halves)
+
+
+# poly_da = xr.DataArray(
+#     np.stack(polys),
+#     coords={
+#         "max_col": col_maxes,
+#         "poly_coeff": [1, 0],
+#         "ifg_idx": ifg_stack_sub.ifg_idx,
+#     },
+# )
+
