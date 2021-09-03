@@ -630,18 +630,20 @@ def _find_file_shape(dem_rsc=None, file_list=None, row_looks=None, col_looks=Non
 from helpers import elevation_vs_phase as evp
 def redo_deramp(
     unw_stack_file,
-    ref_row,
-    ref_col,
+    ref_row=None,
+    ref_col=None,
     deramp_order=2,
     dset_name=STACK_FLAT_SHIFTED_DSET,
     chunk_layers=None,
     window=5,
     cur_layer=0,
     attach_latlon=True,
+    subfactor=5,
 ):
     # cur_layer = 0
     win = window // 2
     dem = sario.load("elevation_looked.dem")
+    dem_sub = utils.take_looks(dem, subfactor, subfactor)
 
     # TODO
     # if ref_station is not None:
@@ -670,7 +672,7 @@ def redo_deramp(
             logger.info(f"Deramping {cur_slice}")
             dset.read_direct(buf, cur_slice, dest_slice)
             # out = deramp.remove_ramp(buf[dest_slice], deramp_order=deramp_order)
-            out = evp.remove_ramp(buf[dest_slice])
+            out = remove_elevation(buf[dest_slice], dem, dem_sub, subfactor)
 
             # # Now center it on the shift window
             # patch = out[
@@ -717,29 +719,33 @@ def prepare_isce():
         float_cor=True,
     )
 
-def remove_elevation(dem_da_sub, ifg_stack_sub, dem, ifg_stack, subfactor=5):
-    cols = dem_da_sub.shape[1]
-    col_slices = [slice(0, cols // 2), slice(cols // 2, None)]
-    col_slices = [slice(0, cols)]
-    polys = []
-    col_maxes = []
-    cur_col = 0
-    halves = []
-    # for col_slice in col_slices:
-    # col_slice = slice(cur_col, cur_col + cols // 2)
-    # print("Dem subset shape", dem_da_sub[:, col_slice].shape)
-    col_slice = slice(None)
-    dem_pixels = dem_da_sub[:, col_slice].stack(space=("lat", "lon"))
-    ifg_pixels = ifg_stack_sub[:, :, col_slice].stack(space=("lat", "lon"))
-    print("ifg pixels shape:", ifg_pixels.shape)
+# def remove_elevation(dem_da_sub, ifg_stack_sub, dem, ifg_stack, subfactor=5):
+def remove_elevation(ifg_stack, dem, dem_sub, subfactor=5):
+    ifg_stack_sub = np.stack([utils.take_looks(ifg, subfactor, subfactor) for ifg in ifg_stack])
+    # cols = dem_sub.shape[1]
+    # col_slices = [slice(0, cols // 2), slice(cols // 2, None)]
+    # col_slices = [slice(0, cols)]
+    # polys = []
+    # col_maxes = []
+    # cur_col = 0
+    # halves = []
+    # # for col_slice in col_slices:
+    # # col_slice = slice(cur_col, cur_col + cols // 2)
+    # # print("Dem subset shape", dem_da_sub[:, col_slice].shape)
+    # col_slice = slice(None)
+    # # dem_pixels = dem_da_sub[:, col_slice].stack(space=("lat", "lon"))
+    # # ifg_pixels = ifg_stack_sub[:, :, col_slice].stack(space=("lat", "lon"))
+    dem_pixels = dem_sub.reshape(-1)
+    ifg_pixels = ifg_stack_sub.reshape((len(ifg_stack), -1))
+    # print("ifg pixels shape:", ifg_pixels.shape)
 
-    xx = dem_pixels.data
-    yy = ifg_pixels.data.T
+    xx = dem_pixels.data  # (K, )
+    yy = ifg_pixels.T  # (K, M)
     # mask_na = np.logical_or(np.isnan(xx), np.isnan(yy))
     # xx, yy = xx[~mask_na], yy[~mask_na]
 
     pf = np.polyfit(xx, np.nan_to_num(yy), 1)
-    polys.append(pf)
+    # polys.append(pf)
     # print(pf)
     # return xr.DataArray(pf)
     # Now get the full sized ifg and dem
@@ -751,10 +757,11 @@ def remove_elevation(dem_da_sub, ifg_stack_sub, dem, ifg_stack, subfactor=5):
 
     # full_col_slice = slice(subfactor* cur_col, subfactor*(cur_col + cols // 2))
     # dem_half = dem[:, full_col_slice]
-    dem_half = dem
+    # dem_half = dem
     # return pf
     from numpy.polynomial.polynomial import polyval
-    corrections = polyval(dem.data, pf[::-1, :], tensor=True)
+    # the new Polynomial API does coeffs low to high (for old, first was x^1, then x^0)
+    corrections = polyval(dem, pf[::-1, :], tensor=True)
     return ifg_stack - corrections
 
     # corrections = corrected_pixels.reshape(ifg_stack[:, :, full_col_slice].shape)
