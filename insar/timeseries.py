@@ -15,7 +15,6 @@ scott@lidar igrams]$ head slclist
 
 """
 from concurrent.futures import ProcessPoolExecutor, as_completed
-import tqdm
 import hdf5plugin  # noqa : for the possiblity of HDF5 blosc filter
 import h5py
 import xarray as xr
@@ -394,20 +393,6 @@ def _get_block_shape(full_shape, chunk_size, block_size_max=10e6, nbytes=4):
     return cur_block_shape
 
 
-def _record_run_params(paramfile, **kwargs):
-    from ruamel.yaml import YAML
-
-    yaml = YAML()
-
-    with open(paramfile, "w") as f:
-        yaml.dump(kwargs, f)
-
-
-def _confirm_closed(fname):
-    """Weird hack to make sure file handles are closed
-    https://github.com/h5py/h5py/issues/1090#issuecomment-608485873"""
-    xr.open_dataset(fname).close()
-
 
 def calc_model_fit_deformation(
     defo_fname=constants.DEFO_FILENAME_NC,
@@ -603,3 +588,17 @@ def calc_model_fit_deformation(
         polyfit_lin.to_netcdf(defo_fname, group=group, mode="a")
 
     return model_defo
+
+def _record_run_params(paramfile, **kwargs):
+    from ruamel.yaml import YAML
+
+    yaml = YAML()
+
+    with open(paramfile, "w") as f:
+        yaml.dump(kwargs, f)
+
+
+def _confirm_closed(fname):
+    """Weird hack to make sure file handles are closed
+    https://github.com/h5py/h5py/issues/1090#issuecomment-608485873"""
+    xr.open_dataset(fname).close()
