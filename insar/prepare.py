@@ -66,7 +66,7 @@ def prepare_stacks(
     mask_dem=True,
 ):
     if coordinates is None:
-        coordinates = _detect_rdr_geo(igram_path)
+        coordinates = detect_rdr_coordinates(igram_path)
     if coordinates not in COORDINATES_CHOICES:
         raise ValueError("coordinates must be in {}".format(COORDINATES_CHOICES))
     if coordinates == "rdr":
@@ -746,7 +746,7 @@ def redo_deramp(
         sario.attach_latlon_2d(unw_stack_file, dset_name, depth_dim="ifg_idx")
 
 
-def _detect_rdr_geo(igram_path):
+def detect_rdr_coordinates(igram_path):
     if any(ISCE_GEOM_DIR in f for f in glob.glob(os.path.join(igram_path, "*"))):
         return "rdr"
     else:

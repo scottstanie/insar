@@ -14,8 +14,9 @@ scott@lidar igrams]$ head slclist
 20180420_20180502.int
 
 """
-from concurrent.futures import ProcessPoolExecutor, as_completed
-import apertools
+import os
+from concurrent.futures import ProcessPoolExecutor, as_completed, Future, Executor
+from threading import Lock
 import hdf5plugin  # noqa : for the possiblity of HDF5 blosc filter
 import h5py
 import xarray as xr
@@ -24,11 +25,13 @@ from matplotlib.dates import date2num
 
 from apertools import sario, utils
 from apertools.log import get_log, log_runtime
-from .prepare import create_dset
+from .prepare import create_dset, detect_rdr_coordinates
 from . import constants
 from apertools.constants import PHASE_TO_CM_MAP, WAVELENGTH_MAP
 from .ts_utils import ptp_by_date, ptp_by_date_pct
 
+PARALLEL = True  # With false, uses dummy Executor (for debugging)
+MAX_WORKERS = 6
 logger = get_log()
 
 # Import numba if available; otherwise, just use python-only version
@@ -62,13 +65,13 @@ def run_inversion(
     max_temporal_bandwidth=None,  # TODO
     min_temporal_bandwidth=None,  # TODO
     include_annual=False,
-    outlier_sigma=0,  # TODO: outlier outlier_sigma. Use trodi
+    # outlier_sigma=0,  # TODO: outlier outlier_sigma. Use trodi
     alpha=0,
     # L1=False, # TODO
     # difference=False,
     slclist_ignore_file="slclist_ignore.txt",
     save_as_netcdf=True,
-    attach_latlon=True,  # TODO: just make this auto if it's in radar...
+    coordinates=None,
     platform="s1",
 ):
     """Runs SBAS inversion on all unwrapped igrams
@@ -102,6 +105,8 @@ def run_inversion(
     # averaging or linear means output will is 3D array (not just map of velocities)
     # is_3d = not (stack_average or constant_velocity)
     # output_dset = "stack" if is_3d else "velos"
+    if coordinates is None:
+        coordinates = detect_rdr_coordinates(os.path.dirname(unw_stack_file))
 
     slclist, ifglist = sario.load_slclist_ifglist(h5file=unw_stack_file)
 
@@ -152,7 +157,7 @@ def run_inversion(
         max_date=max_date,
         max_temporal_baseline=max_temporal_baseline,
         max_bandwidth=max_temporal_bandwidth,
-        outlier_sigma=outlier_sigma,
+        # outlier_sigma=outlier_sigma,
         alpha=alpha,
         # L1=False,
         # difference=difference,
@@ -160,6 +165,7 @@ def run_inversion(
         block_shape=block_shape,
         platform=platform,
         wavelength=WAVELENGTH_MAP[platform],
+        coordinates=coordinates,
     )
 
     if sario.check_dset(outfile, output_dset, overwrite) is False:
@@ -182,7 +188,7 @@ def run_inversion(
         alpha,
         # L1,
         phase_to_cm,
-        outlier_sigma,
+        # outlier_sigma,
     )
     sario.save_slclist_to_h5(out_file=outfile, slc_date_list=slclist)
     with h5py.File(outfile, "a") as hf:
@@ -193,18 +199,25 @@ def run_inversion(
         with h5py.File(unw_stack_file) as hf:
             lat = hf["lat"][()]
             lon = hf["lon"][()]
-        sario.save_latlon_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
-        sario.attach_latlon(outfile, output_dset, depth_dim="date")
+        if coordinates == "geo":
+            sario.save_latlon_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
+            sario.attach_latlon(outfile, output_dset, depth_dim="date")
+        else:
+            sario.save_latlon_2d_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
+            sario.attach_latlon_2d(outfile, output_dset, depth_dim="date")
+
     # TODO: just use the h5?
     if save_as_netcdf:
-        from apertools import netcdf
-
-        netcdf.hdf5_to_netcdf(
-            outfile,
-            dset_name=output_dset,
-            stack_dim="date",
-            data_units="cm",
-        )
+        # TODO: any downside of the xr version instead of mine?
+        ds = xr.open_dataset(outfile)
+        ds.to_netcdf(outfile.replace(".h5", ".nc"), engine="h5netcdf")
+        # from apertools import netcdf
+        # netcdf.hdf5_to_netcdf(
+        #     outfile,
+        #     dset_name=output_dset,
+        #     stack_dim="date",
+        #     data_units="cm",
+        # )
 
 
 def run_sbas(
@@ -216,7 +229,7 @@ def run_sbas(
     block_shape,
     slclist,
     ifglist,
-    constant_velocity,
+    # constant_velocity,
     alpha,
     phase_to_cm,
     # L1,
@@ -251,7 +264,8 @@ def run_sbas(
     blk_slices = utils.block_iterator((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
     # blk_slices = list(blk_slices)[:6]  # Test small area
 
-    with ProcessPoolExecutor(max_workers=4) as executor:
+    ExecutorClass = ProcessPoolExecutor if PARALLEL else DummyExecutor
+    with ExecutorClass(max_workers=MAX_WORKERS) as executor:
         # for (rows, cols) in blk_slices:
         future_to_block = {
             executor.submit(
@@ -262,7 +276,7 @@ def run_sbas(
                 valid_ifg_idxs,
                 slclist,
                 ifglist,
-                constant_velocity,
+                # constant_velocity,
                 phase_to_cm,
             ): blk
             for blk in blk_slices
@@ -281,7 +295,7 @@ def _load_and_run(
     valid_ifg_idxs,
     slclist,
     ifglist,
-    constant_velocity,
+    # constant_velocity,
     phase_to_cm,
 ):
     rows, cols = blk
@@ -329,6 +343,7 @@ def calc_soln(
     nan_idxs = np.isnan(unw_cols)
     unw_cols_nonan = np.where(nan_idxs, 0, unw_cols).astype(dtype)
     # skip any all 0 blocks:
+    breakpoint()
     if unw_cols_nonan.sum() == 0:
         return np.zeros((len(slcs_clean), nrow, ncol), dtype=dtype)
 
@@ -623,3 +638,30 @@ def _confirm_closed(fname):
     """Weird hack to make sure file handles are closed
     https://github.com/h5py/h5py/issues/1090#issuecomment-608485873"""
     xr.open_dataset(fname).close()
+
+
+class DummyExecutor(Executor):
+    def __init__(self, *args, **kwargs):
+        self._shutdown = False
+        self._shutdownLock = Lock()
+
+    def submit(self, fn, *args, **kwargs):
+        with self._shutdownLock:
+            if self._shutdown:
+                raise RuntimeError("cannot schedule new futures after shutdown")
+
+            f = Future()
+            try:
+                result = fn(*args, **kwargs)
+            except KeyboardInterrupt:
+                raise
+            except BaseException as e:
+                f.set_exception(e)
+            else:
+                f.set_result(result)
+
+            return f
+
+    def shutdown(self, wait=True):
+        with self._shutdownLock:
+            self._shutdown = True
