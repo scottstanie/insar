@@ -85,6 +85,7 @@ def main(
     with h5py.File(outfile, "w") as f:
         f[dset] = stack
     sario.save_slclist_to_h5(out_file=outfile, slc_date_list=slclist, dset_name=dset)
+    # TODO: use lat/lon arrays, not DEM
     dem_rsc = sario.load_dem_from_h5(unw_file)
     sario.save_dem_to_h5(outfile, dem_rsc)
     netcdf.hdf5_to_netcdf(
@@ -242,6 +243,7 @@ def solve_stack_bandwidths(
             f["velos_b"] = velo_img_b
         sario.save_slclist_to_h5(out_file=cur_of, geo_date_list=slclist, dset_name=stack_dset)
         # sario.save_slclist_to_h5(out_file=cur_of, geo_date_list=slclist, dset_name="stack_B")
+        # TODO: attach_latlon, not save dem
         dem_rsc = sario.load_dem_from_h5("unw_stack.h5")
         sario.save_dem_to_h5(cur_of, dem_rsc)
         netcdf.hdf5_to_netcdf(

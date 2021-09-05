@@ -4,10 +4,11 @@ Preprocessing insar data for timeseries analysis
 
 Forms stacks as .h5 files for easy access to depth-wise slices
 """
-from datetime import datetime
 import os
+import glob
 import itertools
 import h5py
+from pygeos import coordinates
 from tqdm import tqdm
 
 try:
@@ -34,8 +35,10 @@ from apertools.sario import (
     SLC_MASK_SUM_DSET,
     IFG_MASK_DSET,
     IFG_MASK_SUM_DSET,
-    DEM_RSC_DSET,
+    ISCE_GEOM_DIR,
+    ISCE_SLC_DIR,
 )
+from apertools.constants import COORDINATES_CHOICES
 
 logger = get_log()
 
@@ -56,11 +59,19 @@ def prepare_stacks(
     row_looks=None,
     col_looks=None,
     overwrite=False,
-    attach_latlon=True,
+    coordinates="geo",
+    geom_dir=ISCE_GEOM_DIR,
     mask_from_slcs=True,
     compute_water_mask=False,
     mask_dem=True,
 ):
+    if coordinates is None:
+        coordinates = _detect_rdr_geo(igram_path)
+    if coordinates not in COORDINATES_CHOICES:
+        raise ValueError("coordinates must be in {}".format(COORDINATES_CHOICES))
+    if coordinates == "rdr":
+        lon, lat = sario.load_rdr_latlon(geom_dir=geom_dir)
+
     ifg_date_list = sario.find_ifgs(directory=igram_path, search_term=search_term)
     ifg_file_list = sario.find_ifgs(
         directory=igram_path, search_term=search_term, parse=False
@@ -70,7 +81,7 @@ def prepare_stacks(
     mask_file = create_mask_stacks(
         igram_path,
         overwrite=overwrite,
-        attach_latlon=attach_latlon,
+        coordinates=coordinates,
         compute_water_mask=compute_water_mask,
         compute_from_slcs=mask_from_slcs,
         slc_date_list=slc_date_list,
@@ -78,6 +89,7 @@ def prepare_stacks(
         ifg_file_list=ifg_file_list,
         row_looks=row_looks,
         col_looks=col_looks,
+        mask_dem=mask_dem,
     )
 
     cor_stack_file = os.path.join(igram_path, COR_FILENAME)
@@ -87,7 +99,6 @@ def prepare_stacks(
         directory=igram_path,
         search_term=cor_search_term,
         overwrite=overwrite,
-        attach_latlon=attach_latlon,
         float_cor=float_cor,
     )
 
@@ -128,7 +139,6 @@ def prepare_stacks(
         window=window,
         search_term=search_term,
         overwrite=overwrite,
-        attach_latlon=attach_latlon,
     )
     # Now record attrs of the dataset
     with h5py.File(unw_stack_file, "r+") as f:
@@ -174,7 +184,7 @@ def deramp_and_shift_unws(
     window=5,
     overwrite=False,
     stack_fname="stackavg.tif",
-    attach_latlon=True,
+    geom_dir=ISCE_GEOM_DIR,
 ):
 
     if not sario.check_dset(unw_stack_file, dset_name, overwrite):
@@ -192,15 +202,6 @@ def deramp_and_shift_unws(
 
     shape = (len(file_list), rows, cols)
     create_dset(unw_stack_file, dset_name, shape, dtype, chunks=True, compress=True)
-
-    if attach_latlon:
-        # Save the extra files too
-        # TODO: best way to check for radar coords? wouldn't want any lat/lon...
-        rsc_data = sario.load(os.path.join(directory, "dem.rsc"))
-        sario.save_dem_to_h5(
-            unw_stack_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
-        )
-        sario.save_latlon_to_h5(unw_stack_file, rsc_data=rsc_data)
 
     with h5py.File(unw_stack_file, "r+") as f:
         chunk_shape = f[dset_name].chunks
@@ -284,9 +285,19 @@ def deramp_and_shift_unws(
         dtype=stackavg.dtype,
     ) as dst:
         dst.write(stackavg, 1)
-    # Finally, attach the latitude/longitude datasets
-    if attach_latlon:
+
+    # Save the extra files too
+    if coordinates == "geo":
+        # TODO: best way to check for radar coords? wouldn't want any lat/lon...
+        rsc_data = sario.load(os.path.join(directory, "dem.rsc"))
+        sario.save_latlon_to_h5(unw_stack_file, rsc_data=rsc_data)
         sario.attach_latlon(unw_stack_file, dset_name, depth_dim="ifg_idx")
+    else:
+        lat, lon = sario.load_rdr_latlon(geom_dir=geom_dir)
+        sario.save_latlon_2d_to_h5(
+            unw_stack_file, lat=lat, lon=lon, overwrite=overwrite
+        )
+        sario.attach_latlon_2d(unw_stack_file, dset_name, depth_dim="ifg_idx")
 
 
 def _get_load_func(in_fname, band=2):
@@ -313,7 +324,7 @@ def create_cor_stack(
     directory=".",
     search_term="*.cc",
     overwrite=False,
-    attach_latlon=True,
+    geom_dir=ISCE_GEOM_DIR,
     float_cor=False,
 ):
 
@@ -333,14 +344,6 @@ def create_cor_stack(
     shape = (len(file_list), rows, cols)
     create_dset(cor_stack_file, dset_name, shape, dtype, chunks=True, compress=True)
 
-    if attach_latlon:
-        # Save the extra files too
-        # TODO: best way to check for radar coords? wouldn't want any lat/lon...
-        rsc_data = sario.load(os.path.join(directory, "dem.rsc"))
-        sario.save_dem_to_h5(
-            cor_stack_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
-        )
-        sario.save_latlon_to_h5(cor_stack_file, rsc_data=rsc_data)
     with h5py.File(cor_stack_file, "r+") as f:
         chunk_shape = f[dset_name].chunks
         chunk_depth, chunk_rows, chunk_cols = chunk_shape
@@ -387,10 +390,20 @@ def create_cor_stack(
     with h5py.File(cor_stack_file, "r+") as f:
         f[STACK_MEAN_DSET] = stack_sum / (stack_counts + 1e-6)
 
-    # Finally, attach the latitude/longitude datasets
-    if attach_latlon:
+    # Save the lat/lon datasets, attach to main data files
+    if coordinates == "geo":
+        # TODO: best way to check for radar coords? wouldn't want any lat/lon...
+        rsc_data = sario.load(os.path.join(directory, "dem.rsc"))
+        sario.save_latlon_to_h5(cor_stack_file, rsc_data=rsc_data)
         sario.attach_latlon(cor_stack_file, dset_name, depth_dim="ifg_idx")
         sario.attach_latlon(cor_stack_file, STACK_MEAN_DSET, depth_dim=None)
+    else:
+        lat, lon = sario.load_rdr_latlon(geom_dir=geom_dir)
+        sario.save_latlon_2d_to_h5(
+            cor_stack_file, lat=lat, lon=lon, overwrite=overwrite
+        )
+        sario.attach_latlon_2d(cor_stack_file, dset_name, depth_dim="ifg_idx")
+        sario.attach_latlon_2d(cor_stack_file, STACK_MEAN_DSET, depth_dim=None)
 
 
 @log_runtime
@@ -403,11 +416,12 @@ def create_mask_stacks(
     slc_date_list=None,
     ifg_date_list=None,
     ifg_file_list=None,
-    attach_latlon=True,
+    coordinates="geo",
     compute_water_mask=False,
     mask_dem=True,
     row_looks=None,
     col_looks=None,
+    geom_dir=ISCE_GEOM_DIR,
 ):
     """Create mask stacks for areas in .geo and .int
 
@@ -416,28 +430,28 @@ def create_mask_stacks(
     if mask_filename is None:
         mask_file = os.path.join(igram_path, MASK_FILENAME)
 
-    # Used to shrink the .geo masks to save size as .int masks
-    if row_looks is None or col_looks is None:
+    if coordinates == "geo":
+        # Save the extra files too
+        rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
+        # .save_dem_to_h5( mask_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
+        sario.save_latlon_to_h5(mask_file, rsc_data=rsc_data)
         if slc_path is None:
             slc_path = utils.get_parent_dir(igram_path)
+    else:
+        # TODO:
+        lat, lon = sario.load_rdr_latlon(geom_dir=geom_dir)
+        sario.save_latlon_2d_to_h5(mask_file, lat=lat, lon=lon, overwrite=overwrite)
+        rsc_data = None
+        if slc_path is None:
+            slc_path = os.path.join(igram_path, ISCE_SLC_DIR)
 
+    # Used to shrink the .geo masks to save size as .int masks
+    if row_looks is None or col_looks is None:
         row_looks, col_looks = apertools.sario.find_looks_taken(
             igram_path, slc_path=slc_path
         )
 
-    if attach_latlon:
-        # Save the extra files too
-        rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
-
-        sario.save_dem_to_h5(
-            mask_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
-        )
-    else:
-        rsc_data = None
-
     if compute_from_slcs:
-        if slc_path is None:
-            slc_path = utils.get_parent_dir(igram_path)
         all_slc_files = sario.find_slcs(directory=slc_path, parse=False)
         all_slc_dates = sario.find_slcs(directory=slc_path)
         slc_file_list = [
@@ -452,6 +466,14 @@ def create_mask_stacks(
             col_looks=col_looks,
             overwrite=overwrite,
         )
+    else:
+        # Save empty SLC datasets
+        fs = glob.glob(os.path.join(igram_path, ISCE_SLC_DIR, "**/*.slc"))
+        with rio.open(fs[0]) as src:
+            shape = (len(fs), *src.shape[-2:])
+        print(SLC_MASK_SUM_DSET, shape)
+        create_dset(mask_file, SLC_MASK_DSET, shape=shape, dtype=bool)
+        create_dset(mask_file, SLC_MASK_SUM_DSET, shape=shape[1:], dtype=bool)
     if compute_water_mask:
         # TODO
         pass
@@ -468,18 +490,28 @@ def create_mask_stacks(
         compute_from_slcs=compute_from_slcs,
         mask_dem=mask_dem,
     )
-    if attach_latlon:
-        # now attach the lat/lon grid
-        latlon_dsets = [
-            SLC_MASK_DSET,
-            SLC_MASK_SUM_DSET,
-            IFG_MASK_DSET,
-            IFG_MASK_SUM_DSET,
-        ]
-        depth_dims = ["slc_dates", None, "ifg_idx", None]
-        for name, dim in zip(latlon_dsets, depth_dims):
-            logger.info(f"attaching {dim} in {name} to depth")
-            sario.attach_latlon(mask_file, name, depth_dim=dim)
+
+    # Finally, attach the latitude/longitude datasets
+    if coordinates == "geo":
+        rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
+        sario.save_latlon_to_h5(mask_file, rsc_data=rsc_data)
+        attach_func = sario.attach_latlon
+    else:
+        lat, lon = sario.load_rdr_latlon(geom_dir=geom_dir)
+        sario.save_latlon_2d_to_h5(mask_file, lat=lat, lon=lon, overwrite=overwrite)
+        rsc_data = None
+        attach_func = sario.attach_latlon_2d
+
+    latlon_dsets = [
+        SLC_MASK_DSET,
+        SLC_MASK_SUM_DSET,
+        IFG_MASK_DSET,
+        IFG_MASK_SUM_DSET,
+    ]
+    depth_dims = ["slc_dates", None, "ifg_idx", None]
+    for name, dim in zip(latlon_dsets, depth_dims):
+        logger.info(f"attaching {dim} in {name} to depth")
+        attach_func(mask_file, name, depth_dim=dim)
     return mask_file
 
 
@@ -565,7 +597,7 @@ def compute_int_masks(
     ifg_file_list=None,
     dset_name=IFG_MASK_DSET,
     overwrite=False,
-    compute_from_slcs=True,  # TODO: combine these
+    compute_from_slcs=True,
     mask_dem=True,
     dem_filename="elevation_looked.dem",
 ):
@@ -587,23 +619,26 @@ def compute_int_masks(
 
     if mask_dem:
         dem_mask = sario.load(dem_filename) == 0
+    else:
+        dem_mask = np.zeros(shape[-2:], dtype=bool)
 
     with h5py.File(mask_file, "a") as f:
-        slc_mask_stack = f[SLC_MASK_DSET]
         int_mask_dset = f[dset_name]
         # TODO: read coherence, also form that one
         for idx, (early, late) in enumerate(tqdm(ifg_date_list)):
             if compute_from_slcs:
                 early_idx = slc_date_list.index(early)
                 late_idx = slc_date_list.index(late)
-                early_mask = slc_mask_stack[early_idx]
-                late_mask = slc_mask_stack[late_idx]
+                early_mask = f[SLC_MASK_DSET][early_idx]
+                late_mask = f[SLC_MASK_DSET][late_idx]
                 int_mask_dset[idx] = np.logical_or(early_mask, late_mask)
             elif mask_dem:
                 int_mask_dset[idx] = dem_mask
             else:
                 # print("Not masking")
-                int_mask_dset[idx] = np.ma.make_mask(dem_mask, shrink=False)
+                # int_mask_dset[idx] = np.ma.make_mask(dem_mask, shrink=False)
+                # Already zeros... skip
+                pass
 
         # Also create one image of the total masks
         f[IFG_MASK_SUM_DSET] = np.sum(int_mask_dset, axis=0)
@@ -628,6 +663,8 @@ def _find_file_shape(dem_rsc=None, file_list=None, row_looks=None, col_looks=Non
 
 
 from helpers import elevation_vs_phase as evp
+
+
 def redo_deramp(
     unw_stack_file,
     ref_row=None,
@@ -637,8 +674,8 @@ def redo_deramp(
     chunk_layers=None,
     window=5,
     cur_layer=0,
-    attach_latlon=True,
     subfactor=5,
+    coordinates="geo",
 ):
     # cur_layer = 0
     win = window // 2
@@ -697,31 +734,56 @@ def redo_deramp(
         # TODO
         # if ref_station is not None:
         # f[STACK_FLAT_SHIFTED_DSET].attrs["reference_station"] = ref_station
-    if attach_latlon:
+    dirname = os.path.dirname(unw_stack_file)
+    if coordinates == "geo":
+        # TODO: best way to check for radar coords? wouldn't want any lat/lon...
+        rsc_data = sario.load(os.path.join(dirname, "dem.rsc"))
+        sario.save_latlon_to_h5(unw_stack_file, rsc_data=rsc_data)
         sario.attach_latlon(unw_stack_file, dset_name, depth_dim="ifg_idx")
+    else:
+        lat, lon = sario.load_rdr_latlon(geom_dir=os.path.join(dirname, ISCE_GEOM_DIR))
+        sario.save_latlon_2d_to_h5(unw_stack_file, lat=lat, lon=lon)
+        sario.attach_latlon_2d(unw_stack_file, dset_name, depth_dim="ifg_idx")
 
 
-def prepare_isce():
+def _detect_rdr_geo(igram_path):
+    if any(ISCE_GEOM_DIR in f for f in glob.glob(os.path.join(igram_path, "*"))):
+        return "rdr"
+    else:
+        return "geo"
+
+
+def prepare_isce(
+    project_dir=".",
+    ref_row=None,
+    ref_col=None,
+    deramp_order=1,
+    row_looks=5,
+    col_looks=3,
+):
     search_term = "Igrams/**/filt*.unw"
     cor_search_term = "Igrams/**/filt*.cor"
     prepare_stacks(
-        ".",
-        ref_row=1000,
-        ref_col=440,
-        deramp_order=1,
+        project_dir,
+        ref_row=ref_row,
+        ref_col=ref_col,
+        deramp_order=deramp_order,
         search_term=search_term,
         cor_search_term=cor_search_term,
-        row_looks=5,
-        col_looks=3,
-        attach_latlon=False,
+        row_looks=row_looks,
+        col_looks=col_looks,
+        coordinates="rdr",
         mask_from_slcs=False,
         mask_dem=False,
         float_cor=True,
     )
 
+
 # def remove_elevation(dem_da_sub, ifg_stack_sub, dem, ifg_stack, subfactor=5):
 def remove_elevation(ifg_stack, dem, dem_sub, subfactor=5):
-    ifg_stack_sub = np.stack([utils.take_looks(ifg, subfactor, subfactor) for ifg in ifg_stack])
+    ifg_stack_sub = np.stack(
+        [utils.take_looks(ifg, subfactor, subfactor) for ifg in ifg_stack]
+    )
     # cols = dem_sub.shape[1]
     # col_slices = [slice(0, cols // 2), slice(cols // 2, None)]
     # col_slices = [slice(0, cols)]
@@ -760,6 +822,7 @@ def remove_elevation(ifg_stack, dem, dem_sub, subfactor=5):
     # dem_half = dem
     # return pf
     from numpy.polynomial.polynomial import polyval
+
     # the new Polynomial API does coeffs low to high (for old, first was x^1, then x^0)
     corrections = polyval(dem, pf[::-1, :], tensor=True)
     return ifg_stack - corrections
@@ -784,4 +847,3 @@ def remove_elevation(ifg_stack, dem, dem_sub, subfactor=5):
 #         "ifg_idx": ifg_stack_sub.ifg_idx,
 #     },
 # )
-

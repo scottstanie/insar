@@ -1,8 +1,3 @@
-from math import pi
-SENTINEL_WAVELENGTH = 5.5465763  # cm
-PHASE_TO_CM = SENTINEL_WAVELENGTH / (4 * pi)
-DATE_FMT = "%Y%m%d"
-
 # output file
 DEFO_FILENAME = "deformation.h5"
 DEFO_FILENAME_NC = "deformation.nc"

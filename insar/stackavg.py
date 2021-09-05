@@ -3,6 +3,8 @@ import rasterio as rio
 from rasterio.errors import RasterioIOError
 import h5py
 import apertools.sario as sario
+from apertools.sario import DATE_FMT
+from apertools.constants import P2MM_S1 as P2MM
 from apertools.deramp import remove_ramp
 from collections import namedtuple
 
@@ -15,12 +17,6 @@ from collections import namedtuple
 
 # TODO: figure out best place for this
 Igram = namedtuple("Igram", "early late")
-
-DATE_FMT = "%Y%m%d"
-
-SENTINEL_WAVELENGTH = 5.5465763  # cm
-PHASE_TO_CM = SENTINEL_WAVELENGTH / (4 * np.pi)
-P2MM = PHASE_TO_CM * 10 * 365  # (cm / day) -> (mm / yr)
 
 
 def _default_outfile(max_temporal_baseline, min_date, max_date):

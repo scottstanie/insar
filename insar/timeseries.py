@@ -15,6 +15,7 @@ scott@lidar igrams]$ head slclist
 
 """
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import apertools
 import hdf5plugin  # noqa : for the possiblity of HDF5 blosc filter
 import h5py
 import xarray as xr
@@ -25,6 +26,7 @@ from apertools import sario, utils
 from apertools.log import get_log, log_runtime
 from .prepare import create_dset
 from . import constants
+from apertools.constants import PHASE_TO_CM_MAP, WAVELENGTH_MAP
 from .ts_utils import ptp_by_date, ptp_by_date_pct
 
 logger = get_log()
@@ -66,6 +68,8 @@ def run_inversion(
     # difference=False,
     slclist_ignore_file="slclist_ignore.txt",
     save_as_netcdf=True,
+    attach_latlon=True,  # TODO: just make this auto if it's in radar...
+    platform="s1",
 ):
     """Runs SBAS inversion on all unwrapped igrams
 
@@ -124,6 +128,9 @@ def run_inversion(
         full_shape, chunk_size, block_size_max=100e6, nbytes=nbytes
     )
 
+    # TODO: platform = standardize(..)
+    phase_to_cm = PHASE_TO_CM_MAP[platform]
+
     # if constant_velocity:
     # proc_func = proc_pixel_linear
     # output_shape = (nrows, ncols)
@@ -151,6 +158,8 @@ def run_inversion(
         # difference=difference,
         slclist_ignore=open(slclist_ignore_file).read().splitlines(),
         block_shape=block_shape,
+        platform=platform,
+        wavelength=WAVELENGTH_MAP[platform],
     )
 
     if sario.check_dset(outfile, output_dset, overwrite) is False:
@@ -172,20 +181,20 @@ def run_inversion(
         # constant_velocity,
         alpha,
         # L1,
+        phase_to_cm,
         outlier_sigma,
     )
     sario.save_slclist_to_h5(out_file=outfile, slc_date_list=slclist)
-    sario.save_ifglist_to_h5(out_file=outfile, ifg_date_list=ifglist)
-    # sario.save_dem_to_h5(outfile, rsc_data) # saving the dem... not as useful as the lat/lon arr
-    with h5py.File(unw_stack_file) as hf:
-        lat_arr = hf["lat"][()]
-        lon_arr = hf["lon"][()]
-    sario.save_latlon_to_h5(
-        outfile, lat_arr=lat_arr, lon_arr=lon_arr, overwrite=overwrite
-    )
     with h5py.File(outfile, "a") as hf:
         hf["date"] = hf["slc_dates"]
-    sario.attach_latlon(outfile, output_dset, depth_dim="date")
+    sario.save_ifglist_to_h5(out_file=outfile, ifg_date_list=ifglist)
+    # sario.save_dem_to_h5(outfile, rsc_data) # saving the dem... not as useful as the lat/lon arr
+    if sario.attach_latlon:
+        with h5py.File(unw_stack_file) as hf:
+            lat = hf["lat"][()]
+            lon = hf["lon"][()]
+        sario.save_latlon_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
+        sario.attach_latlon(outfile, output_dset, depth_dim="date")
     # TODO: just use the h5?
     if save_as_netcdf:
         from apertools import netcdf
@@ -209,8 +218,9 @@ def run_sbas(
     ifglist,
     constant_velocity,
     alpha,
+    phase_to_cm,
     # L1,
-    outlier_sigma=0,
+    # outlier_sigma=0,
 ):
     """Performs and SBAS inversion on each pixel of unw_stack to find deformation
 
@@ -253,6 +263,7 @@ def run_sbas(
                 slclist,
                 ifglist,
                 constant_velocity,
+                phase_to_cm,
             ): blk
             for blk in blk_slices
         }
@@ -264,7 +275,14 @@ def run_sbas(
 
 
 def _load_and_run(
-    blk, unw_stack_file, input_dset, valid_ifg_idxs, slclist, ifglist, constant_velocity
+    blk,
+    unw_stack_file,
+    input_dset,
+    valid_ifg_idxs,
+    slclist,
+    ifglist,
+    constant_velocity,
+    phase_to_cm,
 ):
     rows, cols = blk
     with h5py.File(unw_stack_file) as hf:
@@ -278,6 +296,7 @@ def _load_and_run(
             ifglist,
             # alpha,
             # constant_velocity,
+            phase_to_cm,
         )
         return out_chunk
 
@@ -299,6 +318,7 @@ def calc_soln(
     # constant_velocity,
     # L1 = True,
     # outlier_sigma=4,
+    phase_to_cm,
 ):
     # TODO: this is where i'd get rid of specific dates/ifgs
     slcs_clean, ifglist_clean, unw_clean = slclist, ifglist, unw_chunk
@@ -335,7 +355,7 @@ def calc_soln(
 
     # Add a 0 image for the first date
     stack = np.concatenate((np.zeros((1, nrow, ncol), dtype=dtype), stack), axis=0)
-    stack *= constants.PHASE_TO_CM
+    stack *= phase_to_cm
     return stack
 
 
@@ -349,6 +369,7 @@ def calc_soln_pixelwise(
     # constant_velocity,
     # L1 = True,
     # outlier_sigma=4,
+    phase_to_cm,
 ):
     slcs_clean, ifglist_clean, unw_clean = slclist, ifglist, unw_chunk
 
@@ -367,7 +388,7 @@ def calc_soln_pixelwise(
             # first date is 0
             stack[1:, idx, jdx] = cur_soln
 
-    stack *= constants.PHASE_TO_CM
+    stack *= phase_to_cm
     return stack
 
 
@@ -391,7 +412,6 @@ def _get_block_shape(full_shape, chunk_size, block_size_max=10e6, nbytes=4):
             break
         chunks_per_block = block_size_max / (np.prod(cur_block_shape) * nbytes)
     return cur_block_shape
-
 
 
 def calc_model_fit_deformation(
@@ -588,6 +608,7 @@ def calc_model_fit_deformation(
         polyfit_lin.to_netcdf(defo_fname, group=group, mode="a")
 
     return model_defo
+
 
 def _record_run_params(paramfile, **kwargs):
     from ruamel.yaml import YAML
