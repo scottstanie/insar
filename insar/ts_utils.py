@@ -259,8 +259,9 @@ def _augment_zeros(B, delta_phis):
 def ptp_by_date(da):
     import xarray as xr
 
+    ydim, xdim = da.dims[-2:]
     return xr.apply_ufunc(
-        np.ptp, da, input_core_dims=[["lat", "lon"]], kwargs={"axis": (-2, -1)}
+        np.ptp, da, input_core_dims=[[ydim, xdim]], kwargs={"axis": (-2, -1)}
     )
 
 
@@ -268,8 +269,9 @@ def ptp_by_date_pct(da, low=0.05, high=0.95):
     """Find the peak-to-peak amplitude per image, based on the `high`/`low` percentiles"""
     import xarray as xr
 
-    high_q = da.quantile(high, dim=("lat", "lon"))
-    low_q = da.quantile(low, dim=("lat", "lon"))
+    ydim, xdim = da.dims[-2:]
+    high_q = da.quantile(high, dim=(ydim, xdim))
+    low_q = da.quantile(low, dim=(ydim, xdim))
     return high_q - low_q
 
 
@@ -320,4 +322,34 @@ def build_closure_matrix(ifg_date_pairs):
         C_list.append(row)
 
     return np.stack(C_list).astype(np.float32)
-    
+
+
+def get_cor_indexes(defo_fname="deformation.h5", cor_fname="cor_stack.h5"):
+    from apertools import sario
+
+    all_ifgs = [
+        tuple(pair) for pair in sario.load_ifglist_from_h5(cor_fname, parse=False)
+    ]
+    defo_ifgs = [
+        tuple(pair) for pair in sario.load_ifglist_from_h5(defo_fname, parse=False)
+    ]
+    return np.array([all_ifgs.index(ifg) for ifg in defo_ifgs])
+
+
+def get_cor_for_deformation(defo_fname="deformation.h5", cor_fname="cor_stack.h5"):
+    """Get the stack of correlation images for the ifg subset used to make `defo_fname`
+    as a DataArray
+    """
+    import xarray as xr
+
+    cor_idxs = get_cor_indexes(defo_fname=defo_fname, cor_fname=cor_fname)
+    ds_cor = xr.open_dataset(cor_fname)
+    return ds_cor["stack"].sel(ifg_idx=cor_idxs)
+
+
+def get_mean_cor(defo_fname="deformation.h5", cor_fname="cor_stack.h5"):
+    """Get the mean correlation images for the ifg subset used to make `defo_fname`
+    as a DataArray
+    """
+    da_cor = get_cor_for_deformation(defo_fname, cor_fname)
+    return da_cor.mean(axis=0)

@@ -343,7 +343,6 @@ def calc_soln(
     nan_idxs = np.isnan(unw_cols)
     unw_cols_nonan = np.where(nan_idxs, 0, unw_cols).astype(dtype)
     # skip any all 0 blocks:
-    breakpoint()
     if unw_cols_nonan.sum() == 0:
         return np.zeros((len(slcs_clean), nrow, ncol), dtype=dtype)
 
@@ -597,30 +596,30 @@ def calc_model_fit_deformation(
     model_ds = model_defo.to_dataset(name=outname)
 
     _confirm_closed(defo_fname)
-    model_ds.to_netcdf(defo_fname, mode="a")
+    model_ds.to_netcdf(defo_fname, mode="a", engine="h5netcdf")
 
     if remove_day1_atmo:
         out = constants.ATMO_DAY1_DSET
         logger.info("Saving day1 atmo estimation to %s", out)
         if sario.check_dset(defo_fname, out, overwrite):
-            avg_atmo.to_dataset(name=out).to_netcdf(defo_fname, mode="a")
+            avg_atmo.to_dataset(name=out).to_netcdf(defo_fname, mode="a", engine="h5netcdf")
 
     if save_linear_fit:
         # out = constants.ATMO_DAY1_DSET
         out = "linear_velocity"
         logger.info("Saving linear velocity fit to %s", out)
         if sario.check_dset(defo_fname, out, overwrite):
-            velocities.to_dataset(name=out).to_netcdf(defo_fname, mode="a")
+            velocities.to_dataset(name=out).to_netcdf(defo_fname, mode="a", engine="h5netcdf")
 
     group = "polyfit_results"
     logger.info("Saving polyfit results to %s:/%s", defo_fname, group)
     if sario.check_dset(defo_fname, group, overwrite):
-        polyfit_ds.to_netcdf(defo_fname, group=group, mode="a")
+        polyfit_ds.to_netcdf(defo_fname, group=group, mode="a", engine="h5netcdf")
 
     group = "polyfit_lin_results"
     logger.info("Saving polyfit results to %s:/%s", defo_fname, group)
     if sario.check_dset(defo_fname, group, overwrite):
-        polyfit_lin.to_netcdf(defo_fname, group=group, mode="a")
+        polyfit_lin.to_netcdf(defo_fname, group=group, mode="a", engine="h5netcdf")
 
     return model_defo
 

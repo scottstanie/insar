@@ -69,8 +69,6 @@ def prepare_stacks(
         coordinates = detect_rdr_coordinates(igram_path)
     if coordinates not in COORDINATES_CHOICES:
         raise ValueError("coordinates must be in {}".format(COORDINATES_CHOICES))
-    if coordinates == "rdr":
-        lon, lat = sario.load_rdr_latlon(geom_dir=geom_dir)
 
     ifg_date_list = sario.find_ifgs(directory=igram_path, search_term=search_term)
     ifg_file_list = sario.find_ifgs(
@@ -112,16 +110,22 @@ def prepare_stacks(
         # TODO: getting this from radar coord?
         import apertools.latlon
 
-        rsc_file = os.path.join(igram_path, "dem.rsc")
-        if os.path.exists(rsc_file):
-            rsc_data = sario.load(rsc_file)
-            filename = None
+        if coordinates == "geo":
+            rsc_file = os.path.join(igram_path, "dem.rsc")
+            if os.path.exists(rsc_file):
+                rsc_data = sario.load(rsc_file)
+                filename = None
+            else:
+                filename = mask_file
+            ref_row, ref_col = apertools.latlon.latlon_to_rowcol(
+                rsc_data=rsc_data,
+                filename=filename,
+            )
         else:
-            filename = mask_file
-        ref_row, ref_col = apertools.latlon.latlon_to_rowcol(
-            rsc_data=rsc_data,
-            filename=filename,
-        )
+            ref_row, ref_col = apertools.latlon.latlon_to_rowcol_rdr(
+                ref_lat, ref_lon, geom_dir=geom_dir
+            )
+            print(ref_row, ref_col)
 
     if ref_row is None or ref_col is None:
         # ref_row, ref_col, ref_station = find_reference_location(
@@ -141,9 +145,20 @@ def prepare_stacks(
         overwrite=overwrite,
     )
     # Now record attrs of the dataset
+    if ref_lat is None:
+        if coordinates == "geo":
+            ref_row, ref_col = apertools.latlon.latlon_to_rowcol(
+                filename=unw_stack_file
+            )
+        else:
+            ref_lat, ref_lon = apertools.latlon.rowcol_to_latlon_rdr(
+                ref_row, ref_col, geom_dir=geom_dir
+            )
+
     with h5py.File(unw_stack_file, "r+") as f:
         f[STACK_FLAT_SHIFTED_DSET].attrs["deramp_order"] = deramp_order
         f[STACK_FLAT_SHIFTED_DSET].attrs["reference"] = [ref_row, ref_col]
+        f[STACK_FLAT_SHIFTED_DSET].attrs["reference_latlon"] = [ref_lat, ref_lon]
         if ref_station is not None:
             f[STACK_FLAT_SHIFTED_DSET].attrs["reference_station"] = ref_station
 
@@ -451,7 +466,7 @@ def create_mask_stacks(
             igram_path, slc_path=slc_path
         )
 
-    if compute_from_slcs:
+    if compute_from_slcs :
         all_slc_files = sario.find_slcs(directory=slc_path, parse=False)
         all_slc_dates = sario.find_slcs(directory=slc_path)
         slc_file_list = [
@@ -466,7 +481,7 @@ def create_mask_stacks(
             col_looks=col_looks,
             overwrite=overwrite,
         )
-    else:
+    elif sario.check_dset(mask_file, SLC_MASK_DSET, overwrite):
         # Save empty SLC datasets
         fs = glob.glob(os.path.join(igram_path, ISCE_SLC_DIR, "**/*.slc"))
         with rio.open(fs[0]) as src:
@@ -757,6 +772,8 @@ def prepare_isce(
     project_dir=".",
     ref_row=None,
     ref_col=None,
+    ref_lat=None,
+    ref_lon=None,
     deramp_order=1,
     row_looks=5,
     col_looks=3,
@@ -767,6 +784,8 @@ def prepare_isce(
         project_dir,
         ref_row=ref_row,
         ref_col=ref_col,
+        ref_lat=ref_lat,
+        ref_lon=ref_lon,
         deramp_order=deramp_order,
         search_term=search_term,
         cor_search_term=cor_search_term,
@@ -774,6 +793,7 @@ def prepare_isce(
         col_looks=col_looks,
         coordinates="rdr",
         mask_from_slcs=False,
+        geom_dir=os.path.join(project_dir, ISCE_GEOM_DIR),
         mask_dem=False,
         float_cor=True,
     )
