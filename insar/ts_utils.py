@@ -1,6 +1,7 @@
 import numpy as np
 from matplotlib.dates import date2num
 from itertools import chain, combinations
+from apertools import sario
 
 
 def build_A_matrix(sar_date_list, ifg_date_pairs):
@@ -325,8 +326,6 @@ def build_closure_matrix(ifg_date_pairs):
 
 
 def get_cor_indexes(defo_fname="deformation.h5", cor_fname="cor_stack.h5"):
-    from apertools import sario
-
     all_ifgs = [
         tuple(pair) for pair in sario.load_ifglist_from_h5(cor_fname, parse=False)
     ]
@@ -336,20 +335,21 @@ def get_cor_indexes(defo_fname="deformation.h5", cor_fname="cor_stack.h5"):
     return np.array([all_ifgs.index(ifg) for ifg in defo_ifgs])
 
 
-def get_cor_for_deformation(defo_fname="deformation.h5", cor_fname="cor_stack.h5"):
+def get_cor_for_deformation(
+    defo_fname="deformation.h5", cor_fname="cor_stack.h5", cor_dset=sario.STACK_DSET
+):
     """Get the stack of correlation images for the ifg subset used to make `defo_fname`
     as a DataArray
     """
     import xarray as xr
 
     cor_idxs = get_cor_indexes(defo_fname=defo_fname, cor_fname=cor_fname)
-    ds_cor = xr.open_dataset(cor_fname)
-    return ds_cor["stack"].sel(ifg_idx=cor_idxs)
+    with xr.open_dataset(cor_fname) as ds_cor:
+        return ds_cor[cor_dset].sel(ifg_idx=cor_idxs)
 
 
 def get_mean_cor(defo_fname="deformation.h5", cor_fname="cor_stack.h5"):
     """Get the mean correlation images for the ifg subset used to make `defo_fname`
     as a DataArray
     """
-    da_cor = get_cor_for_deformation(defo_fname, cor_fname)
-    return da_cor.mean(axis=0)
+    return get_cor_for_deformation(defo_fname, cor_fname).mean(axis=0)

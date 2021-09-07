@@ -29,6 +29,7 @@ from .prepare import create_dset, detect_rdr_coordinates
 from . import constants
 from apertools.constants import PHASE_TO_CM_MAP, WAVELENGTH_MAP
 from .ts_utils import ptp_by_date, ptp_by_date_pct
+from insar import ts_utils
 
 PARALLEL = True  # With false, uses dummy Executor (for debugging)
 MAX_WORKERS = 6
@@ -56,6 +57,7 @@ def run_inversion(
     input_dset=sario.STACK_FLAT_SHIFTED_DSET,
     outfile=constants.DEFO_FILENAME,
     output_dset=constants.DEFO_NOISY_DSET,
+    cor_stack_file=sario.COR_FILENAME,
     overwrite=False,
     min_date=None,
     max_date=None,
@@ -109,6 +111,9 @@ def run_inversion(
         coordinates = detect_rdr_coordinates(os.path.dirname(unw_stack_file))
 
     slclist, ifglist = sario.load_slclist_ifglist(h5file=unw_stack_file)
+    if not os.path.exists(slclist_ignore_file):
+        logger.info("%s does not exist. Creating empty file", slclist_ignore_file)
+        open(slclist_ignore_file, "w").close()
 
     slclist, ifglist, valid_ifg_idxs = utils.filter_slclist_ifglist(
         ifg_date_list=ifglist,
@@ -194,7 +199,10 @@ def run_inversion(
     with h5py.File(outfile, "a") as hf:
         hf["date"] = hf["slc_dates"]
     sario.save_ifglist_to_h5(out_file=outfile, ifg_date_list=ifglist)
-    # sario.save_dem_to_h5(outfile, rsc_data) # saving the dem... not as useful as the lat/lon arr
+    mean_cor = ts_utils.get_mean_cor(defo_fname=outfile, cor_fname=cor_stack_file)
+    with h5py.File(outfile, "a") as hf:
+        hf[constants.COR_MEAN_DSET] = mean_cor
+
     if sario.attach_latlon:
         with h5py.File(unw_stack_file) as hf:
             lat = hf["lat"][()]
@@ -202,9 +210,11 @@ def run_inversion(
         if coordinates == "geo":
             sario.save_latlon_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
             sario.attach_latlon(outfile, output_dset, depth_dim="date")
+            sario.attach_latlon(outfile, constants.COR_MEAN_DSET)
         else:
             sario.save_latlon_2d_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
             sario.attach_latlon_2d(outfile, output_dset, depth_dim="date")
+            sario.attach_latlon_2d(outfile, constants.COR_MEAN_DSET)
 
     # TODO: just use the h5?
     if save_as_netcdf:
@@ -602,14 +612,18 @@ def calc_model_fit_deformation(
         out = constants.ATMO_DAY1_DSET
         logger.info("Saving day1 atmo estimation to %s", out)
         if sario.check_dset(defo_fname, out, overwrite):
-            avg_atmo.to_dataset(name=out).to_netcdf(defo_fname, mode="a", engine="h5netcdf")
+            avg_atmo.to_dataset(name=out).to_netcdf(
+                defo_fname, mode="a", engine="h5netcdf"
+            )
 
     if save_linear_fit:
         # out = constants.ATMO_DAY1_DSET
         out = "linear_velocity"
         logger.info("Saving linear velocity fit to %s", out)
         if sario.check_dset(defo_fname, out, overwrite):
-            velocities.to_dataset(name=out).to_netcdf(defo_fname, mode="a", engine="h5netcdf")
+            velocities.to_dataset(name=out).to_netcdf(
+                defo_fname, mode="a", engine="h5netcdf"
+            )
 
     group = "polyfit_results"
     logger.info("Saving polyfit results to %s:/%s", defo_fname, group)

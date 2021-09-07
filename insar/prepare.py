@@ -46,6 +46,9 @@ logger = get_log()
 @log_runtime
 def prepare_stacks(
     igram_path,
+    unw_filename=UNW_FILENAME,
+    cor_filename=COR_FILENAME,
+    mask_filename=MASK_FILENAME,
     ref_row=None,
     ref_col=None,
     ref_lat=None,
@@ -76,8 +79,10 @@ def prepare_stacks(
     )
     slc_date_list = list(sorted(set(itertools.chain.from_iterable(ifg_date_list))))
 
-    mask_file = create_mask_stacks(
+    mask_file = os.path.join(igram_path, mask_filename)
+    create_mask_stacks(
         igram_path,
+        mask_file=mask_file,
         overwrite=overwrite,
         coordinates=coordinates,
         compute_water_mask=compute_water_mask,
@@ -88,9 +93,10 @@ def prepare_stacks(
         row_looks=row_looks,
         col_looks=col_looks,
         mask_dem=mask_dem,
+        geom_dir=geom_dir,
     )
 
-    cor_stack_file = os.path.join(igram_path, COR_FILENAME)
+    cor_stack_file = os.path.join(igram_path, cor_filename)
     create_cor_stack(
         cor_stack_file=cor_stack_file,
         dset_name=STACK_DSET,
@@ -132,12 +138,13 @@ def prepare_stacks(
         raise ValueError("Need ref_row, ref_col or ref_station")
 
     # Now create the unwrapped ifg stack
-    unw_stack_file = os.path.join(igram_path, UNW_FILENAME)
+    unw_stack_file = os.path.join(igram_path, unw_filename)
     deramp_and_shift_unws(
         ref_row,
         ref_col,
         unw_stack_file=unw_stack_file,
         dset_name=STACK_FLAT_SHIFTED_DSET,
+        mask_file=mask_filename,
         directory=igram_path,
         deramp_order=deramp_order,
         window=window,
@@ -191,7 +198,7 @@ def deramp_and_shift_unws(
     ref_row,
     ref_col,
     unw_stack_file=UNW_FILENAME,
-    mask_fname=MASK_FILENAME,
+    mask_file=MASK_FILENAME,
     dset_name=STACK_FLAT_SHIFTED_DSET,
     directory=".",
     search_term="*.unw",
@@ -249,7 +256,7 @@ def deramp_and_shift_unws(
             cur_chunk_size = 0
 
         with rio.open(in_fname, driver=driver) as inf:
-            with h5py.File(mask_fname, "r") as f:
+            with h5py.File(mask_file, "r") as f:
                 mask = f[IFG_MASK_DSET][idx, :, :].astype(bool)
             # amp = inf.read(1)
             phase = inf.read(2)
@@ -265,7 +272,7 @@ def deramp_and_shift_unws(
                 deramped_phase -= np.nanmean(patch)
             else:
                 # Do I actually just want to ignore this one and give 0s?
-                logger.debug(f"Patch is all nan for {ref_row},{ref_col}")
+                logger.info(f"Patch is all nan for {ref_row},{ref_col}")
                 deramped_phase -= np.nanmean(deramped_phase)
 
             # now store this in the buffer until emptied
@@ -274,6 +281,7 @@ def deramp_and_shift_unws(
             cur_chunk_size += 1
 
             # sum for the stack, only use non-masked data
+            # TODO: this is NOT how you do this... ugh
             stackavg[~mask] += deramped_phase[~mask] / temporal_baseline(in_fname)
 
     if cur_chunk_size > 0:
@@ -321,7 +329,7 @@ def _get_load_func(in_fname, band=2):
             pass
 
         def load_func(x):
-            with rio.open(in_fname) as inf:
+            with rio.open(x) as inf:
                 return inf.read(band)
 
     except rio.errors.RasterioIOError:
@@ -424,7 +432,7 @@ def create_cor_stack(
 @log_runtime
 def create_mask_stacks(
     igram_path,
-    mask_filename=None,
+    mask_file=MASK_FILENAME,
     slc_path=None,
     overwrite=False,
     compute_from_slcs=True,
@@ -442,20 +450,14 @@ def create_mask_stacks(
 
     Uses .geo dead areas as well as correlation
     """
-    if mask_filename is None:
-        mask_file = os.path.join(igram_path, MASK_FILENAME)
-
     if coordinates == "geo":
         # Save the extra files too
         rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
         # .save_dem_to_h5( mask_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
-        sario.save_latlon_to_h5(mask_file, rsc_data=rsc_data)
         if slc_path is None:
             slc_path = utils.get_parent_dir(igram_path)
     else:
         # TODO:
-        lat, lon = sario.load_rdr_latlon(geom_dir=geom_dir)
-        sario.save_latlon_2d_to_h5(mask_file, lat=lat, lon=lon, overwrite=overwrite)
         rsc_data = None
         if slc_path is None:
             slc_path = os.path.join(igram_path, ISCE_SLC_DIR)
@@ -466,7 +468,7 @@ def create_mask_stacks(
             igram_path, slc_path=slc_path
         )
 
-    if compute_from_slcs :
+    if compute_from_slcs:
         all_slc_files = sario.find_slcs(directory=slc_path, parse=False)
         all_slc_dates = sario.find_slcs(directory=slc_path)
         slc_file_list = [
@@ -495,7 +497,6 @@ def create_mask_stacks(
 
     compute_int_masks(
         mask_file=mask_file,
-        igram_path=igram_path,
         slc_path=slc_path,
         dem_rsc=rsc_data,
         slc_date_list=slc_date_list,
@@ -527,7 +528,6 @@ def create_mask_stacks(
     for name, dim in zip(latlon_dsets, depth_dims):
         logger.info(f"attaching {dim} in {name} to depth")
         attach_func(mask_file, name, depth_dim=dim)
-    return mask_file
 
 
 def save_slc_masks(
@@ -603,10 +603,8 @@ def save_slc_masks(
 
 def compute_int_masks(
     mask_file=None,
-    igram_path=None,
     slc_path=None,
     dem_rsc=None,
-    igram_ext=".unw",
     slc_date_list=None,
     ifg_date_list=None,
     ifg_file_list=None,
@@ -734,7 +732,7 @@ def redo_deramp(
             #     out -= np.nanmean(patch)
             # else:
             #     # Do I actually just want to ignore this one and give 0s?
-            #     logger.debug(f"Patch is all nan for {ref_row},{ref_col}")
+            #     logger.info(f"Patch is all nan for {ref_row},{ref_col}")
             #     out -= np.nanmean(out)
 
             logger.info(f"Writing {cur_slice} back to dataset")
@@ -770,6 +768,7 @@ def detect_rdr_coordinates(igram_path):
 
 def prepare_isce(
     project_dir=".",
+    geom_dir=ISCE_GEOM_DIR,
     ref_row=None,
     ref_col=None,
     ref_lat=None,
@@ -777,15 +776,21 @@ def prepare_isce(
     deramp_order=1,
     row_looks=5,
     col_looks=3,
+    unw_filename=UNW_FILENAME,
+    cor_filename=COR_FILENAME,
+    mask_filename=MASK_FILENAME,
+    search_term="Igrams/**/filt*.unw",
+    cor_search_term="Igrams/**/filt*.cor",
 ):
-    search_term = "Igrams/**/filt*.unw"
-    cor_search_term = "Igrams/**/filt*.cor"
     prepare_stacks(
         project_dir,
         ref_row=ref_row,
         ref_col=ref_col,
         ref_lat=ref_lat,
         ref_lon=ref_lon,
+        unw_filename=unw_filename,
+        cor_filename=cor_filename,
+        mask_filename=mask_filename,
         deramp_order=deramp_order,
         search_term=search_term,
         cor_search_term=cor_search_term,
@@ -793,7 +798,7 @@ def prepare_isce(
         col_looks=col_looks,
         coordinates="rdr",
         mask_from_slcs=False,
-        geom_dir=os.path.join(project_dir, ISCE_GEOM_DIR),
+        geom_dir=os.path.join(project_dir, geom_dir),
         mask_dem=False,
         float_cor=True,
     )
@@ -856,14 +861,25 @@ def remove_elevation(ifg_stack, dem, dem_sub, subfactor=5):
     # col_maxes.append(cur_col)
 
 
-# return np.stack(halves)
+def apply_phasemask(unw_low, intf_high):
+    """Apply the integer phase ambiguity in the unwrapped phase file unw_low to the
+    phase in complex file intf_high, writing the result to outfile.  You should use this
+    routine to apply an unwrapping solution obtained on low resolution data
+    back to a higher resolution version of the same data.
 
+    """
+    from skimage.transform import resize
 
-# poly_da = xr.DataArray(
-#     np.stack(polys),
-#     coords={
-#         "max_col": col_maxes,
-#         "poly_coeff": [1, 0],
-#         "ifg_idx": ifg_stack_sub.ifg_idx,
-#     },
-# )
+    logger.info("Applying phase from %s to %s.", unw_low, intf_high)
+    unw_high = resize(unw_low, intf_high.shape, mode="constant", anti_aliasing=False)
+
+    twopi = 2 * np.pi
+    # highres = sario.load(intf_high)
+    highres = np.angle(intf_high) if np.iscomplexobj(intf_high) else intf_high
+
+    # Do some fancy modular arithmetic to apply the phase ambiguity.
+    dx = highres - unw_high
+    ambig = twopi * np.around(dx / twopi)
+    highres = highres - ambig
+    # return np.stack((np.abs(intf_high), highres), axis=0)
+    return highres

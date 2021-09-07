@@ -276,3 +276,22 @@ def plot_bw(sar_date_list, phi_list, bandwidths):
 
     # if __name__ == "__main__":
     # main(unw_stack)
+
+
+# def plot():
+#      with xr.open_dataset('../snjoaq_14511_129A/deformation_maxbw4.nc') as ds: defo129 = ds['defo_noisy'][-1]
+#      fig, axes = plt.subplots(1, 3); ts.plot(ax=axes[0]); ts129.plot(ax=axes[1]); (ts - ts129).plot(ax=axes[2])
+#       axes[0].set_title("40 Mhz"); axes[1].set_title("20 MHz"); axes[2].set_title("(40 - 20)")
+
+
+
+# from skimage.transform import resize
+
+# In [43]: defo129_big = resize(defo129, defo.shape, mode="constant", anti_aliasing=False)
+
+#  with xr.open_dataset('deformation_maxbw4.nc') as ds: defo= ds['defo_noisy'][-1]
+#  with xr.open_dataset('../snjoaq_14511_129A/deformation_maxbw4.nc') as ds: defo129 = ds['defo_noisy'][-1]
+# In [46]: plotting.plot_img_diff(arrays=(defo, defo129_big), vm=50, cmap='RdBu_r')
+# Out[46]:
+# (<Figure size 350x2
+      
