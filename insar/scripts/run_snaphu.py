@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-from concurrent.futures.thread import ThreadPoolExecutor
 import os
 from glob import glob
 import argparse
@@ -90,7 +89,7 @@ def main():
             )
             for f in filenames
         ]
-        for idx, fut in enumerate(tqdm(as_completed(futures), start=1)):
+        for idx, fut in enumerate(tqdm(as_completed(futures)), start=1):
             tqdm.write("Done with {} / {}".format(idx, len(futures)))
 
 
