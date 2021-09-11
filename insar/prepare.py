@@ -8,7 +8,6 @@ import os
 import glob
 import itertools
 import h5py
-from pygeos import coordinates
 from tqdm import tqdm
 
 try:
@@ -28,6 +27,7 @@ from apertools.sario import (
     MASK_FILENAME,
     UNW_FILENAME,
     COR_FILENAME,
+    IFG_FILENAME,
     STACK_DSET,
     STACK_MEAN_DSET,
     STACK_FLAT_SHIFTED_DSET,
@@ -103,6 +103,7 @@ def prepare_stacks(
         directory=igram_path,
         search_term=cor_search_term,
         overwrite=overwrite,
+        coordinates=coordinates,
         float_cor=float_cor,
     )
 
@@ -149,6 +150,7 @@ def prepare_stacks(
         deramp_order=deramp_order,
         window=window,
         search_term=search_term,
+        coordinates=coordinates,
         overwrite=overwrite,
     )
     # Now record attrs of the dataset
@@ -206,6 +208,7 @@ def deramp_and_shift_unws(
     window=5,
     overwrite=False,
     stack_fname="stackavg.tif",
+    coordinates="geo",
     geom_dir=ISCE_GEOM_DIR,
 ):
 
@@ -239,7 +242,8 @@ def deramp_and_shift_unws(
         driver = None
 
     # While we're iterating, save a stacked average
-    stackavg = np.zeros((rows, cols), dtype="float32")
+    stack_sum = np.zeros((rows, cols), dtype="float32")
+    stack_counts = np.zeros((rows, cols), dtype="float32")
 
     buf = np.empty((chunk_depth, rows, cols), dtype=dtype)
     win = window // 2
@@ -265,24 +269,16 @@ def deramp_and_shift_unws(
             )
 
             # Now center it on the shift window
-            patch = deramped_phase[
-                ref_row - win : ref_row + win + 1, ref_col - win : ref_col + win + 1
-            ]
-            if not np.all(np.isnan(patch)):
-                deramped_phase -= np.nanmean(patch)
-            else:
-                # Do I actually just want to ignore this one and give 0s?
-                logger.info(f"Patch is all nan for {ref_row},{ref_col}")
-                deramped_phase -= np.nanmean(deramped_phase)
-
+            deramped_phase = _shift(deramped_phase, ref_row, ref_col, win)
             # now store this in the buffer until emptied
             curidx = idx % chunk_depth
             buf[curidx, :, :] = deramped_phase
             cur_chunk_size += 1
 
             # sum for the stack, only use non-masked data
-            # TODO: this is NOT how you do this... ugh
-            stackavg[~mask] += deramped_phase[~mask] / temporal_baseline(in_fname)
+            mask = np.isnan(deramped_phase)
+            stack_sum[~mask] += deramped_phase[~mask]
+            stack_counts[~mask] += 1
 
     if cur_chunk_size > 0:
         # Write the final part of the buffer:
@@ -291,6 +287,8 @@ def deramp_and_shift_unws(
                 :cur_chunk_size
             ]
 
+    # Save the stack average
+    stackavg = stack_sum / (stack_counts + 1e-6)
     with rio.open(file_list[0], driver=driver) as ds:
         transform = ds.transform
         crs = ds.crs
@@ -323,6 +321,14 @@ def deramp_and_shift_unws(
         sario.attach_latlon_2d(unw_stack_file, dset_name, depth_dim="ifg_idx")
 
 
+def _shift(deramped_phase, ref_row, ref_col, win):
+    """Shift with 2d or 3d array to be zero in `win` around (ref_row, ref_col)"""
+    patch = deramped_phase[
+        ..., ref_row - win : ref_row + win + 1, ref_col - win : ref_col + win + 1
+    ]
+    return deramped_phase - np.nanmean(patch, axis=(-2, -1), keepdims=True)
+
+
 def _get_load_func(in_fname, band=2):
     try:
         with rio.open(in_fname):
@@ -348,6 +354,7 @@ def create_cor_stack(
     search_term="*.cc",
     overwrite=False,
     geom_dir=ISCE_GEOM_DIR,
+    coordinates="geo",
     float_cor=False,
 ):
 
@@ -712,31 +719,26 @@ def redo_deramp(
 
         while cur_layer < total_layers:
             if cur_layer + chunk_layers > total_layers:
+                # over the edge for the final part
                 cur_slice = np.s_[cur_layer:]
                 dest_slice = np.s_[: total_layers - cur_layer]
 
             else:
+                # normal operation
                 cur_slice = np.s_[cur_layer : cur_layer + chunk_layers]
                 dest_slice = np.s_[:chunk_layers]
 
             logger.info(f"Deramping {cur_slice}")
+            buf *= 0
             dset.read_direct(buf, cur_slice, dest_slice)
             # out = deramp.remove_ramp(buf[dest_slice], deramp_order=deramp_order)
             out = remove_elevation(buf[dest_slice], dem, dem_sub, subfactor)
 
             # # Now center it on the shift window
-            # patch = out[
-            #     ref_row - win : ref_row + win + 1, ref_col - win : ref_col + win + 1
-            # ]
-            # if not np.all(np.isnan(patch)):
-            #     out -= np.nanmean(patch)
-            # else:
-            #     # Do I actually just want to ignore this one and give 0s?
-            #     logger.info(f"Patch is all nan for {ref_row},{ref_col}")
-            #     out -= np.nanmean(out)
+            # phase = _shift(phase, ref_row, ref_col, win)
 
             logger.info(f"Writing {cur_slice} back to dataset")
-            dset.write_direct(out, dest_sel=cur_slice)
+            dset.write_direct(out[dest_slice], dest_sel=cur_slice)
 
             cur_layer += chunk_layers
 
@@ -759,11 +761,107 @@ def redo_deramp(
         sario.attach_latlon_2d(unw_stack_file, dset_name, depth_dim="ifg_idx")
 
 
+def redo_reference(
+    unw_stack_file,
+    ref_lat=None,
+    ref_lon=None,
+    ref_row=None,
+    ref_col=None,
+    dset_name=STACK_FLAT_SHIFTED_DSET,
+    geom_dir=ISCE_GEOM_DIR,
+    coordinates="geo",
+    start_layer=0,
+    window=5,
+):
+
+    win = window // 2
+
+    with h5py.File(unw_stack_file, "r+") as f:
+
+        nimages, rows, cols = f[dset_name].shape
+        chunk_shape = f[dset_name].chunks
+        # chunk_layers, chunk_rows, chunk_cols = chunk_shape
+        chunk_layers = chunk_shape[0]
+
+    buf = np.zeros((chunk_layers, rows, cols), dtype=np.float32)
+    ref_row, ref_col, ref_lat, ref_lon = get_reference(
+        ref_row, ref_col, ref_lat, ref_lon, coordinates, unw_stack_file, geom_dir
+    )
+
+    cur_layer = start_layer
+    with h5py.File(unw_stack_file, "a") as hf:
+        dset = hf[dset_name]
+        total_layers, rows, cols = dset.shape
+
+        while cur_layer < total_layers:
+            if cur_layer + chunk_layers > total_layers:
+                cur_slice = np.s_[cur_layer:]
+                dest_slice = np.s_[: total_layers - cur_layer]
+
+            else:
+                cur_slice = np.s_[cur_layer : cur_layer + chunk_layers]
+                dest_slice = np.s_[:chunk_layers]
+
+            logger.info(f"Recentering {cur_slice}")
+            buf *= 0
+            dset.read_direct(buf, cur_slice, dest_slice)
+            # Now center it on the shift window
+            buf = _shift(buf, ref_row, ref_col, win)
+
+            logger.info(f"Writing {cur_slice} back to dataset")
+            dset.write_direct(buf[dest_slice], dest_sel=cur_slice)
+
+            cur_layer += chunk_layers
+
+    with h5py.File(unw_stack_file, "r+") as f:
+        f[dset_name].attrs["reference"] = [ref_row, ref_col]
+        f[dset_name].attrs["reference_latlon"] = [ref_lat, ref_lon]
+
+
 def detect_rdr_coordinates(igram_path):
     if any(ISCE_GEOM_DIR in f for f in glob.glob(os.path.join(igram_path, "*"))):
         return "rdr"
     else:
         return "geo"
+
+
+def get_reference(
+    ref_row, ref_col, ref_lat, ref_lon, coordinates, unw_stack_file, geom_dir
+):
+    import apertools.latlon
+
+    if coordinates == "geo":
+        if ref_lat is not None and ref_lon is not None:
+            ref_row, ref_col = apertools.latlon.latlon_to_rowcol(
+                ref_lat,
+                ref_lon,
+                filename=unw_stack_file,
+            )
+        elif ref_row is not None and ref_col is not None:
+            ref_lat, ref_lon = apertools.latlon.rowcol_to_latlon(
+                ref_row,
+                ref_col,
+                filename=unw_stack_file,
+            )
+    else:
+        if ref_lat is not None and ref_lon is not None:
+            ref_row, ref_col = apertools.latlon.latlon_to_rowcol_rdr(
+                ref_lat, ref_lon, geom_dir=geom_dir
+            )
+        elif ref_row is not None and ref_col is not None:
+            ref_lat, ref_lon = apertools.latlon.rowcol_to_latlon_rdr(
+                ref_row, ref_col, geom_dir=geom_dir
+            )
+    if any((r is None for r in [ref_row, ref_col, ref_lat, ref_lon])):
+        raise ValueError("need either ref_row/ref_col or ref_lat/ref_lon")
+    # Now record attrs of the dataset
+    # if ref_station is not None:
+    #     rsc_data = sario.load(os.path.join(igram_path, "dem.rsc"))
+    #     ref_row, ref_col = apertools.gps.station_rowcol(
+    #         station_name=ref_station,
+    #         rsc_data=rsc_data,
+    #     )
+    return ref_row, ref_col, ref_lat, ref_lon
 
 
 def prepare_isce(
@@ -883,3 +981,79 @@ def apply_phasemask(unw_low, intf_high):
     highres = highres - ambig
     # return np.stack((np.abs(intf_high), highres), axis=0)
     return highres
+
+
+@log_runtime
+def create_ifg_stack(
+    ifg_stack_file=IFG_FILENAME,
+    dset_name=STACK_DSET,
+    directory=".",
+    search_term="*.int",
+    overwrite=False,
+    geom_dir=ISCE_GEOM_DIR,
+    coordinates="geo",
+    max_temp=10000,
+):
+
+    if not sario.check_dset(ifg_stack_file, dset_name, overwrite):
+        return
+    # First make the empty dataset and save aux info
+    file_list = sario.find_ifgs(
+        directory=directory, search_term=search_term, parse=False
+    )
+
+    band = 1
+    load_func = _get_load_func(file_list[0], band=band)
+    rows, cols = load_func(file_list[0]).shape
+    logger.info(f"Found {len(file_list)} total files")
+    file_list = [f for f in file_list if temporal_baseline(f) < max_temp]
+    logger.info(f"Creating {ifg_stack_file} of {len(file_list)} files")
+    dtype = np.complex64
+
+    shape = (len(file_list), rows, cols)
+    create_dset(ifg_stack_file, dset_name, shape, dtype, chunks=True, compress=True)
+
+    with h5py.File(ifg_stack_file, "r+") as f:
+        chunk_shape = f[dset_name].chunks
+        chunk_depth, chunk_rows, chunk_cols = chunk_shape
+        # n = n or chunk_size[0]
+
+    buf = np.empty((chunk_depth, rows, cols), dtype=dtype)
+    lastidx = 0
+    cur_chunk_size = 0
+    for idx, in_fname in enumerate(tqdm(file_list)):
+        if idx % chunk_depth == 0 and idx > 0:
+            tqdm.write(f"Writing {lastidx}:{lastidx+chunk_depth}")
+            assert cur_chunk_size <= chunk_depth
+            with h5py.File(ifg_stack_file, "r+") as f:
+                f[dset_name][lastidx : lastidx + cur_chunk_size, :, :] = buf
+
+            lastidx = idx
+            cur_chunk_size = 0
+
+        # driver = "ROI_PAC" if in_fname.endswith(".int") else None  # let gdal guess
+        ifg = load_func(in_fname)
+        # store this in the buffer until emptied
+        curidx = idx % chunk_depth
+        buf[curidx, :, :] = ifg
+        cur_chunk_size += 1
+
+    if cur_chunk_size > 0:
+        # Write the final part of the buffer:
+        with h5py.File(ifg_stack_file, "r+") as f:
+            f[dset_name][lastidx : lastidx + cur_chunk_size, :, :] = buf[
+                :cur_chunk_size
+            ]
+
+    # Save the lat/lon datasets, attach to main data files
+    if coordinates == "geo":
+        # TODO: best way to check for radar coords? wouldn't want any lat/lon...
+        rsc_data = sario.load(os.path.join(directory, "dem.rsc"))
+        sario.save_latlon_to_h5(ifg_stack_file, rsc_data=rsc_data)
+        sario.attach_latlon(ifg_stack_file, dset_name, depth_dim="ifg_idx")
+    else:
+        lat, lon = sario.load_rdr_latlon(geom_dir=geom_dir)
+        sario.save_latlon_2d_to_h5(
+            ifg_stack_file, lat=lat, lon=lon, overwrite=overwrite
+        )
+        sario.attach_latlon_2d(ifg_stack_file, dset_name, depth_dim="ifg_idx")

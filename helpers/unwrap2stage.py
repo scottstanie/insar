@@ -1,23 +1,12 @@
 #!/usr/bin/env python
 import argparse
 from glob import glob
-import sys
 import os
 import subprocess
-from apertools import isce_helpers
-
-# import datetime
 import h5py
 import numpy as np
 
-# import matplotlib.pyplot as plt
-# import rasterio as rio
-# import rioxarray
-# import xarray as xr
 from tqdm import trange, tqdm
-
-# from apertools import sario, plotting
-# from apertools import latlon, gps, los, utils
 
 looks = (15, 9)
 row_looks, col_looks = looks
@@ -57,12 +46,15 @@ def main():
         "--max-temporal", default=1000, type=int, help="max temporal baseline to create"
     )
     parser.add_argument("--ref-lat", help="InSAR stable reference latitude", type=float)
-    parser.add_argument("--ref-lon", help="InSAR stable reference longitude", type=float)
+    parser.add_argument(
+        "--ref-lon", help="InSAR stable reference longitude", type=float
+    )
     args = parser.parse_args()
 
     os.chdir(args.project_dir)
     create_multilooked(args.looks, args.max_temporal)
     make_stacks(args.ref_lat, args.ref_lon, looks)
+    transfer_phasemask(looks)
 
 
 def create_multilooked(looks, max_temp=None):
@@ -80,7 +72,7 @@ def create_multilooked(looks, max_temp=None):
     #     max_temp=max_temp,
     # )
     # subprocess.run(f"bash {run_file}", shell=True)
-    isce_helpers.multilook_geom(looks=looks)
+    isce_helpers.multilook_geom(looks=looks, overwrite=False)
     ifg_file_list = create_ifg_cor(config_dir, looks)
     unwrap_file = "ifgs_to_unwrap.txt"
     with open(unwrap_file, "w") as f:
@@ -139,16 +131,26 @@ def make_stacks(ref_lat, ref_lon, looks):
     )
 
 
-def transfer_phasemask(looks):
-    from apertools import sario, deramp
+def transfer_phasemask(
+    looks,
+    src_stack="unw_stack.h5",
+    dst_stack="unw_stack_2stage.h5",
+    ref_lat=None,
+    ref_lon=None,
+):
+    from apertools import sario, deramp, latlon
     from insar import prepare
     import shutil
 
     row_looks, col_looks = looks
-    shutil.copy("unw_stack.h5", "unw_stack_2stage.h5")
+    print(f"Copying {src_stack} to {dst_stack}")
+    if os.path.exists(dst_stack):
+        print(f"{dst_stack} exists, exiting.")
+        return
+    shutil.copy(src_stack, dst_stack)
 
-    unw_stack_looked = (f"unw_stack_{row_looks}_{col_looks}.h5",)
-    ifglist = sario.load_ifglist_from_h5("unw_stack_2stage.h5")
+    unw_stack_looked = f"unw_stack_{row_looks}_{col_looks}.h5"
+    ifglist = sario.load_ifglist_from_h5(dst_stack)
     ifglist_low = sario.load_ifglist_from_h5(unw_stack_looked)
     ifg_full_idxs = [ifglist.index(ii) for ii in ifglist_low]
     ifg_files = sario.ifglist_to_filenames(ifglist)
@@ -165,12 +167,24 @@ def transfer_phasemask(looks):
         f_int = os.path.join(f"Igrams_{row_looks}_{col_looks}/", datestr, ifg)
         unw_files_low.append(f_int.replace(".int", ".unw"))
 
-    with h5py.File("unw_stack.h5") as hf:
-        ref_row, ref_col = hf["stack_flat_shifted"].attrs["reference"][()]
+    if ref_lat is None or ref_lon is None:
+        with h5py.File(src_stack) as hf:
+            ref_row, ref_col = hf["stack_flat_shifted"].attrs["reference"][()]
+        ref_lat, ref_lon = latlon.rowcol_to_latlon_rdr(
+            ref_row, ref_col, geom_dir="geom_reference"
+        )
 
-    with h5py.File("unw_stack_2stage.h5", "a") as hf_out:
+    else:
+        ref_row, ref_col = latlon.latlon_to_rowcol_rdr(
+            lat=ref_lat, lon=ref_lon, geom_dir="geom_reference"
+        )
+
+    with h5py.File(dst_stack, "a") as hf_out:
         # dset_low = hf_low['stack_flat_shifted']
         dset_out = hf_out["stack_flat_shifted"]
+        dset_out.attrs["reference"] = [ref_row, ref_col]
+        dset_out.attrs["reference_latlon"] = [ref_lat, ref_lon]
+
         win = 5
         for idx in trange(len(unw_files_low)):
             idx_full = ifg_full_idxs[idx]
