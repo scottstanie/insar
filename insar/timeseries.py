@@ -73,7 +73,7 @@ def run_inversion(
     # difference=False,
     slclist_ignore_file="slclist_ignore.txt",
     save_as_netcdf=True,
-    coordinates=None,
+    coordinates=None, # geo, rdr
     platform="s1",
 ):
     """Runs SBAS inversion on all unwrapped igrams

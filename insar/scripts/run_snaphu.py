@@ -13,20 +13,15 @@ PHASE_UNWRAP_DIR = os.path.expanduser("~/phase_unwrap/bin")
 
 def unwrap(
     intfile,
+    outfile,
     width,
     ext_int=".int",
     ext_cor=".cor",
-    ext_unw=".unw",
     float_cor=False,
-    overwrite=False,
 ):
-    outname = intfile.replace(ext_int, ext_unw)
-    if os.path.exists(outname) and not overwrite:
-        print(outname, "exists, skipping.")
-
     corname = intfile.replace(ext_int, ext_cor)
     conncomp_name = intfile.replace(ext_int, ".conncomp")
-    cmd = _snaphu_cmd(intfile, width, corname, outname, conncomp_name, float_cor=float_cor)
+    cmd = _snaphu_cmd(intfile, width, corname, outfile, conncomp_name, float_cor=float_cor)
     print(cmd)
     subprocess.check_call(cmd, shell=True)
 
@@ -53,6 +48,7 @@ def main():
     parser.add_argument("--ext-cor", default=".cor")
     parser.add_argument("--ext-unw", default=".unw")
     parser.add_argument("--float-cor", action="store_true")
+    parser.add_argument("--create-isce-headers", action="store_true")
     parser.add_argument(
         "--overwrite", help="Overwrite existing unwrapped file", action="store_true"
     )
@@ -75,22 +71,43 @@ def main():
     else:
         ext = args.ext
 
+    all_out_files = [inf.replace(ext, args.ext_unw) for inf in filenames]
+    in_files, out_files = [], []
+    for inf, outf in zip(filenames, all_out_files):
+        if os.path.exists(outf) and not args.overwrite:
+            # print(outf, "exists, skipping.")
+            continue
+        in_files.append(inf)
+        out_files.append(outf)
+    print(f"{len(out_files)} left to unwrap")
+
     with ThreadPoolExecutor(max_workers=args.max_procs) as exc:
         futures = [
             exc.submit(
                 unwrap,
-                f,
+                inf,
+                outf,
                 width,
                 ext,
                 args.ext_cor,
-                args.ext_unw,
                 args.float_cor,
-                args.overwrite,
             )
-            for f in filenames
+            for inf, outf in zip(in_files, out_files)
         ]
         for idx, fut in enumerate(tqdm(as_completed(futures)), start=1):
             tqdm.write("Done with {} / {}".format(idx, len(futures)))
+
+    if not args.create_isce_headers:
+        return
+
+    from apertools import isce_helpers, utils
+    for f in tqdm(filenames):
+        f = f.replace(args.ext, args.ext_unw)
+
+        dirname, fname = os.path.split(f)
+        with utils.chdir_then_revert(dirname):
+            isce_helpers.create_unw_image(fname)
+            # isce_helpers.create_int_image(fname)
 
 
 def _snaphu_cmd(intfile, width, corname, outname, conncomp_name, float_cor=False):
