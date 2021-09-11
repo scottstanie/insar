@@ -73,7 +73,7 @@ def run_inversion(
     # difference=False,
     slclist_ignore_file="slclist_ignore.txt",
     save_as_netcdf=True,
-    coordinates=None, # geo, rdr
+    coordinates=None,  # geo, rdr
     platform="s1",
 ):
     """Runs SBAS inversion on all unwrapped igrams
@@ -126,12 +126,20 @@ def run_inversion(
         include_annual=include_annual,
     )
 
+    # Gather all unw stack metadata for processing, and for copying over (reference,...)
     with h5py.File(unw_stack_file) as hf:
         full_shape = hf[input_dset].shape
         nstack, nrows, ncols = full_shape
         nbytes = hf[input_dset].dtype.itemsize
         chunk_size = list(hf[input_dset].chunks) or [nstack, 10, 10]
         chunk_size[0] = nstack  # always load a full depth slice at once
+        # The attrs set by HDF5/xarray have keys that are capitalized. skip those
+        # Note: .tolist() needed to convert numpy objects into lists/ints
+        attrs_to_copy = { k: v.tolist() for k, v in hf[input_dset].attrs.items() if k != k.upper() }
+    
+    for k, v in attrs_to_copy.items():
+        if isinstance(v, np.ndarray):
+            attrs_to_copy[k] = v.tolist()
 
     # Figure out how much to load at 1 time, staying at ~`block_size_max` bytes of RAM
     block_shape = _get_block_shape(
@@ -162,15 +170,13 @@ def run_inversion(
         max_date=max_date,
         max_temporal_baseline=max_temporal_baseline,
         max_bandwidth=max_temporal_bandwidth,
-        # outlier_sigma=outlier_sigma,
         alpha=alpha,
-        # L1=False,
-        # difference=difference,
         slclist_ignore=open(slclist_ignore_file).read().splitlines(),
         block_shape=block_shape,
         platform=platform,
         wavelength=WAVELENGTH_MAP[platform],
         coordinates=coordinates,
+        **attrs_to_copy,
     )
 
     if sario.check_dset(outfile, output_dset, overwrite) is False:
@@ -195,13 +201,19 @@ def run_inversion(
         phase_to_cm,
         # outlier_sigma,
     )
+
+    # Now save the ifg/slc information
     sario.save_slclist_to_h5(out_file=outfile, slc_date_list=slclist)
     with h5py.File(outfile, "a") as hf:
         hf["date"] = hf["slc_dates"]
     sario.save_ifglist_to_h5(out_file=outfile, ifg_date_list=ifglist)
+    # Add the mean correlation of interferograms used in this network
+    # Also copy over the metadata from the unw stack
     mean_cor = ts_utils.get_mean_cor(defo_fname=outfile, cor_fname=cor_stack_file)
     with h5py.File(outfile, "a") as hf:
         hf[constants.COR_MEAN_DSET] = mean_cor
+        for k, v in attrs_to_copy.items():
+            hf[output_dset].attrs[k] = v
 
     if sario.attach_latlon:
         with h5py.File(unw_stack_file) as hf:
@@ -219,8 +231,8 @@ def run_inversion(
     # TODO: just use the h5?
     if save_as_netcdf:
         # TODO: any downside of the xr version instead of mine?
-        ds = xr.open_dataset(outfile)
-        ds.to_netcdf(outfile.replace(".h5", ".nc"), engine="h5netcdf")
+        with xr.open_dataset(outfile) as ds:
+            ds.to_netcdf(outfile.replace(".h5", ".nc"), engine="h5netcdf")
         # from apertools import netcdf
         # netcdf.hdf5_to_netcdf(
         #     outfile,
@@ -640,6 +652,7 @@ def calc_model_fit_deformation(
 
 def _record_run_params(paramfile, **kwargs):
     from ruamel.yaml import YAML
+    print(kwargs)
 
     yaml = YAML()
 
