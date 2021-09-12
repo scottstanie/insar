@@ -80,6 +80,16 @@ def prepare_stacks(
     slc_date_list = list(sorted(set(itertools.chain.from_iterable(ifg_date_list))))
 
     mask_file = os.path.join(igram_path, mask_filename)
+    cor_stack_file = os.path.join(igram_path, cor_filename)
+    unw_stack_file = os.path.join(igram_path, unw_filename)
+    for f in [mask_file, cor_stack_file, unw_stack_file]:
+        sario.save_ifglist_to_h5(
+            ifg_date_list=ifg_date_list, out_file=f, overwrite=overwrite
+        )
+        sario.save_slclist_to_h5(
+            slc_date_list=slc_date_list, out_file=f, overwrite=overwrite
+        )
+
     create_mask_stacks(
         igram_path,
         mask_file=mask_file,
@@ -96,7 +106,6 @@ def prepare_stacks(
         geom_dir=geom_dir,
     )
 
-    cor_stack_file = os.path.join(igram_path, cor_filename)
     create_cor_stack(
         cor_stack_file=cor_stack_file,
         dset_name=STACK_DSET,
@@ -139,7 +148,6 @@ def prepare_stacks(
         raise ValueError("Need ref_row, ref_col or ref_station")
 
     # Now create the unwrapped ifg stack
-    unw_stack_file = os.path.join(igram_path, unw_filename)
     deramp_and_shift_unws(
         ref_row,
         ref_col,
@@ -168,17 +176,9 @@ def prepare_stacks(
         f[STACK_FLAT_SHIFTED_DSET].attrs["deramp_order"] = deramp_order
         f[STACK_FLAT_SHIFTED_DSET].attrs["reference"] = [ref_row, ref_col]
         f[STACK_FLAT_SHIFTED_DSET].attrs["reference_latlon"] = [ref_lat, ref_lon]
+        f[STACK_FLAT_SHIFTED_DSET].attrs["reference_window"] = window
         if ref_station is not None:
             f[STACK_FLAT_SHIFTED_DSET].attrs["reference_station"] = ref_station
-
-    for f in [mask_file, cor_stack_file, unw_stack_file]:
-        sario.save_ifglist_to_h5(
-            ifg_date_list=ifg_date_list, out_file=f, overwrite=overwrite
-        )
-
-        sario.save_slclist_to_h5(
-            slc_date_list=slc_date_list, out_file=f, overwrite=overwrite
-        )
 
 
 def create_dset(h5file, dset_name, shape, dtype, chunks=True, compress=True):
@@ -682,7 +682,45 @@ def _find_file_shape(dem_rsc=None, file_list=None, row_looks=None, col_looks=Non
         return (len(file_list), dem_rsc["file_length"], dem_rsc["width"])
 
 
-from helpers import elevation_vs_phase as evp
+def prepare_isce(
+    project_dir=".",
+    geom_dir=ISCE_GEOM_DIR,
+    ref_row=None,
+    ref_col=None,
+    ref_lat=None,
+    ref_lon=None,
+    deramp_order=1,
+    row_looks=5,
+    col_looks=3,
+    unw_filename=UNW_FILENAME,
+    cor_filename=COR_FILENAME,
+    mask_filename=MASK_FILENAME,
+    search_term="Igrams/**/2*.unw",
+    cor_search_term="Igrams/**/2*.cor",
+    # For filtered version:
+    # search_term="Igrams/**/filt*.unw",
+    # cor_search_term="Igrams/**/filt*.cor",
+):
+    prepare_stacks(
+        project_dir,
+        ref_row=ref_row,
+        ref_col=ref_col,
+        ref_lat=ref_lat,
+        ref_lon=ref_lon,
+        unw_filename=unw_filename,
+        cor_filename=cor_filename,
+        mask_filename=mask_filename,
+        deramp_order=deramp_order,
+        search_term=search_term,
+        cor_search_term=cor_search_term,
+        row_looks=row_looks,
+        col_looks=col_looks,
+        coordinates="rdr",
+        mask_from_slcs=False,
+        geom_dir=os.path.join(project_dir, geom_dir),
+        mask_dem=False,
+        float_cor=True,
+    )
 
 
 def redo_deramp(
@@ -691,15 +729,21 @@ def redo_deramp(
     ref_col=None,
     deramp_order=2,
     dset_name=STACK_FLAT_SHIFTED_DSET,
+    # cor_filename=COR_FILENAME,
+    cor_filename="cor_stack_filt.h5",  # TODO: change
     chunk_layers=None,
+    dem_file="elevation_looked.dem",
     window=5,
     cur_layer=0,
     subfactor=5,
+    cor_thresh=0.4,
     coordinates="geo",
 ):
     # cur_layer = 0
-    win = window // 2
-    dem = sario.load("elevation_looked.dem")
+    if coordinates == "geo":
+        dem = sario.load(dem_file)
+    else:
+        dem = sario.load(dem_file, use_gdal=True, band=1)
     dem_sub = utils.take_looks(dem, subfactor, subfactor)
 
     # TODO
@@ -709,6 +753,20 @@ def redo_deramp(
     #         station_name=ref_station,
     #         rsc_data=rsc_data,
     #     )
+    with h5py.File(cor_filename) as hf:
+        cor_mean = hf[STACK_MEAN_DSET][()]
+
+    # TODO: hardcode bad
+    shadow = sario.load("geom_reference/shadowMask.rdr", use_gdal=True, band=1).astype(
+        bool
+    )
+    water = ~sario.load("geom_reference/waterMask.rdr", use_gdal=True, band=1).astype(
+        bool
+    )
+    cor = cor_mean < cor_thresh
+    mask = np.any(np.stack((shadow, water, cor)), axis=0)
+    mask_sub = utils.take_looks(mask, subfactor, subfactor).astype(bool)
+
     with h5py.File(unw_stack_file, "a") as hf:
         dset = hf[dset_name]
         total_layers, rows, cols = dset.shape
@@ -732,9 +790,10 @@ def redo_deramp(
             buf *= 0
             dset.read_direct(buf, cur_slice, dest_slice)
             # out = deramp.remove_ramp(buf[dest_slice], deramp_order=deramp_order)
-            out = remove_elevation(buf[dest_slice], dem, dem_sub, subfactor)
+            out = remove_elevation(buf[dest_slice], dem, dem_sub, mask_sub, subfactor)
 
             # # Now center it on the shift window
+            # win = window // 2
             # phase = _shift(phase, ref_row, ref_col, win)
 
             logger.info(f"Writing {cur_slice} back to dataset")
@@ -742,23 +801,23 @@ def redo_deramp(
 
             cur_layer += chunk_layers
 
-    # Now record attrs of the dataset
-    with h5py.File(unw_stack_file, "r+") as f:
-        f[dset_name].attrs["deramp_order"] = deramp_order
-        f[dset_name].attrs["reference"] = [ref_row, ref_col]
-        # TODO
-        # if ref_station is not None:
-        # f[STACK_FLAT_SHIFTED_DSET].attrs["reference_station"] = ref_station
-    dirname = os.path.dirname(unw_stack_file)
-    if coordinates == "geo":
-        # TODO: best way to check for radar coords? wouldn't want any lat/lon...
-        rsc_data = sario.load(os.path.join(dirname, "dem.rsc"))
-        sario.save_latlon_to_h5(unw_stack_file, rsc_data=rsc_data)
-        sario.attach_latlon(unw_stack_file, dset_name, depth_dim="ifg_idx")
-    else:
-        lat, lon = sario.load_rdr_latlon(geom_dir=os.path.join(dirname, ISCE_GEOM_DIR))
-        sario.save_latlon_2d_to_h5(unw_stack_file, lat=lat, lon=lon)
-        sario.attach_latlon_2d(unw_stack_file, dset_name, depth_dim="ifg_idx")
+    # TODO: what do i want to record here...
+    # # Now record attrs of the dataset
+    # with h5py.File(unw_stack_file, "r+") as f:
+    #     f[dset_name].attrs["deramp_order"] = deramp_order
+    #     f[dset_name].attrs["reference"] = [ref_row, ref_col]
+    #     # if ref_station is not None:
+    #     # f[STACK_FLAT_SHIFTED_DSET].attrs["reference_station"] = ref_station
+
+    # dirname = os.path.dirname(unw_stack_file)
+    # if coordinates == "geo":
+    #     rsc_data = sario.load(os.path.join(dirname, "dem.rsc"))
+    #     sario.save_latlon_to_h5(unw_stack_file, rsc_data=rsc_data)
+    #     sario.attach_latlon(unw_stack_file, dset_name, depth_dim="ifg_idx")
+    # else:
+    #     lat, lon = sario.load_rdr_latlon(geom_dir=os.path.join(dirname, ISCE_GEOM_DIR))
+    #     sario.save_latlon_2d_to_h5(unw_stack_file, lat=lat, lon=lon)
+    #     sario.attach_latlon_2d(unw_stack_file, dset_name, depth_dim="ifg_idx")
 
 
 def redo_reference(
@@ -816,6 +875,7 @@ def redo_reference(
     with h5py.File(unw_stack_file, "r+") as f:
         f[dset_name].attrs["reference"] = [ref_row, ref_col]
         f[dset_name].attrs["reference_latlon"] = [ref_lat, ref_lon]
+        f[dset_name].attrs["reference_window"] = window
 
 
 def detect_rdr_coordinates(igram_path):
@@ -864,46 +924,11 @@ def get_reference(
     return ref_row, ref_col, ref_lat, ref_lon
 
 
-def prepare_isce(
-    project_dir=".",
-    geom_dir=ISCE_GEOM_DIR,
-    ref_row=None,
-    ref_col=None,
-    ref_lat=None,
-    ref_lon=None,
-    deramp_order=1,
-    row_looks=5,
-    col_looks=3,
-    unw_filename=UNW_FILENAME,
-    cor_filename=COR_FILENAME,
-    mask_filename=MASK_FILENAME,
-    search_term="Igrams/**/filt*.unw",
-    cor_search_term="Igrams/**/filt*.cor",
-):
-    prepare_stacks(
-        project_dir,
-        ref_row=ref_row,
-        ref_col=ref_col,
-        ref_lat=ref_lat,
-        ref_lon=ref_lon,
-        unw_filename=unw_filename,
-        cor_filename=cor_filename,
-        mask_filename=mask_filename,
-        deramp_order=deramp_order,
-        search_term=search_term,
-        cor_search_term=cor_search_term,
-        row_looks=row_looks,
-        col_looks=col_looks,
-        coordinates="rdr",
-        mask_from_slcs=False,
-        geom_dir=os.path.join(project_dir, geom_dir),
-        mask_dem=False,
-        float_cor=True,
-    )
-
-
 # def remove_elevation(dem_da_sub, ifg_stack_sub, dem, ifg_stack, subfactor=5):
-def remove_elevation(ifg_stack, dem, dem_sub, subfactor=5):
+def remove_elevation(ifg_stack, dem, dem_sub, mask=None, subfactor=5):
+    if mask is None:
+        mask = np.zeros(dem.shape, dtype=bool)
+
     ifg_stack_sub = np.stack(
         [utils.take_looks(ifg, subfactor, subfactor) for ifg in ifg_stack]
     )
@@ -920,8 +945,14 @@ def remove_elevation(ifg_stack, dem, dem_sub, subfactor=5):
     # col_slice = slice(None)
     # # dem_pixels = dem_da_sub[:, col_slice].stack(space=("lat", "lon"))
     # # ifg_pixels = ifg_stack_sub[:, :, col_slice].stack(space=("lat", "lon"))
-    dem_pixels = dem_sub.reshape(-1)
-    ifg_pixels = ifg_stack_sub.reshape((len(ifg_stack), -1))
+
+    # dem_pixels = dem_sub.reshape(-1)
+    # mask_pixels = cor_mask.reshape(-1)
+    # ifg_pixels = ifg_stack_sub.reshape((len(ifg_stack), -1))
+
+    dem_pixels = dem_sub[mask]
+    # mask_pixels = cor_mask.reshape(-1)
+    ifg_pixels = ifg_stack_sub[:, mask]
     # print("ifg pixels shape:", ifg_pixels.shape)
 
     xx = dem_pixels.data  # (K, )

@@ -325,14 +325,11 @@ def build_closure_matrix(ifg_date_pairs):
     return np.stack(C_list).astype(np.float32)
 
 
-def get_cor_indexes(defo_fname="deformation.h5", cor_fname="cor_stack.h5"):
-    all_ifgs = [
-        tuple(pair) for pair in sario.load_ifglist_from_h5(cor_fname, parse=False)
-    ]
-    defo_ifgs = [
-        tuple(pair) for pair in sario.load_ifglist_from_h5(defo_fname, parse=False)
-    ]
-    return np.array([all_ifgs.index(ifg) for ifg in defo_ifgs])
+def get_mean_cor(defo_fname="deformation.h5", cor_fname="cor_stack.h5"):
+    """Get the mean correlation images for the ifg subset used to make `defo_fname`
+    as a DataArray
+    """
+    return get_cor_for_deformation(defo_fname, cor_fname).mean(axis=0)
 
 
 def get_cor_for_deformation(
@@ -348,8 +345,11 @@ def get_cor_for_deformation(
         return ds_cor[cor_dset].sel(ifg_idx=cor_idxs)
 
 
-def get_mean_cor(defo_fname="deformation.h5", cor_fname="cor_stack.h5"):
-    """Get the mean correlation images for the ifg subset used to make `defo_fname`
-    as a DataArray
-    """
-    return get_cor_for_deformation(defo_fname, cor_fname).mean(axis=0)
+def get_cor_indexes(defo_fname="deformation.h5", cor_fname="cor_stack.h5"):
+    all_ifgs = [
+        tuple(pair) for pair in sario.load_ifglist_from_h5(cor_fname, parse=False)
+    ]
+    defo_ifgs = [
+        tuple(pair) for pair in sario.load_ifglist_from_h5(defo_fname, parse=False)
+    ]
+    return np.array([all_ifgs.index(ifg) for ifg in defo_ifgs])

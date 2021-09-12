@@ -135,8 +135,10 @@ def run_inversion(
         chunk_size[0] = nstack  # always load a full depth slice at once
         # The attrs set by HDF5/xarray have keys that are capitalized. skip those
         # Note: .tolist() needed to convert numpy objects into lists/ints
-        attrs_to_copy = { k: v.tolist() for k, v in hf[input_dset].attrs.items() if k != k.upper() }
-    
+        attrs_to_copy = {
+            k: v.tolist() for k, v in hf[input_dset].attrs.items() if k != k.upper()
+        }
+
     for k, v in attrs_to_copy.items():
         if isinstance(v, np.ndarray):
             attrs_to_copy[k] = v.tolist()
@@ -203,15 +205,15 @@ def run_inversion(
     )
 
     # Now save the ifg/slc information
-    sario.save_slclist_to_h5(out_file=outfile, slc_date_list=slclist)
-    with h5py.File(outfile, "a") as hf:
-        hf["date"] = hf["slc_dates"]
+    sario.save_slclist_to_h5(out_file=outfile, slc_date_list=slclist, alt_name="date")
     sario.save_ifglist_to_h5(out_file=outfile, ifg_date_list=ifglist)
     # Add the mean correlation of interferograms used in this network
     # Also copy over the metadata from the unw stack
+    cor_ds = constants.COR_MEAN_DSET
+    logger.info("Saving correlation from %s to %s/%s", cor_stack_file, outfile, cor_ds)
     mean_cor = ts_utils.get_mean_cor(defo_fname=outfile, cor_fname=cor_stack_file)
     with h5py.File(outfile, "a") as hf:
-        hf[constants.COR_MEAN_DSET] = mean_cor
+        hf[cor_ds] = mean_cor
         for k, v in attrs_to_copy.items():
             hf[output_dset].attrs[k] = v
 
@@ -222,7 +224,7 @@ def run_inversion(
         if coordinates == "geo":
             sario.save_latlon_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
             sario.attach_latlon(outfile, output_dset, depth_dim="date")
-            sario.attach_latlon(outfile, constants.COR_MEAN_DSET)
+            sario.attach_latlon(outfile, cor_ds)
         else:
             sario.save_latlon_2d_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
             sario.attach_latlon_2d(outfile, output_dset, depth_dim="date")
@@ -231,8 +233,10 @@ def run_inversion(
     # TODO: just use the h5?
     if save_as_netcdf:
         # TODO: any downside of the xr version instead of mine?
+        outfile_nc = outfile.replace(".h5", ".nc")
+        logger.info("Rewriting output to %s", outfile_nc)
         with xr.open_dataset(outfile) as ds:
-            ds.to_netcdf(outfile.replace(".h5", ".nc"), engine="h5netcdf")
+            ds.to_netcdf(outfile_nc, engine="h5netcdf")
         # from apertools import netcdf
         # netcdf.hdf5_to_netcdf(
         #     outfile,
@@ -625,7 +629,9 @@ def calc_model_fit_deformation(
         logger.info("Saving day1 atmo estimation to %s", out)
         if sario.check_dset(defo_fname, out, overwrite):
             avg_atmo.to_dataset(name=out).to_netcdf(
-                defo_fname, mode="a", engine="h5netcdf"
+                defo_fname,
+                mode="a",
+                engine="h5netcdf",
             )
 
     if save_linear_fit:
@@ -634,7 +640,9 @@ def calc_model_fit_deformation(
         logger.info("Saving linear velocity fit to %s", out)
         if sario.check_dset(defo_fname, out, overwrite):
             velocities.to_dataset(name=out).to_netcdf(
-                defo_fname, mode="a", engine="h5netcdf"
+                defo_fname,
+                mode="a",
+                engine="h5netcdf",
             )
 
     group = "polyfit_results"
@@ -652,6 +660,7 @@ def calc_model_fit_deformation(
 
 def _record_run_params(paramfile, **kwargs):
     from ruamel.yaml import YAML
+
     print(kwargs)
 
     yaml = YAML()
