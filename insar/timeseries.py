@@ -209,13 +209,16 @@ def run_inversion(
     sario.save_ifglist_to_h5(out_file=outfile, ifg_date_list=ifglist)
     # Add the mean correlation of interferograms used in this network
     # Also copy over the metadata from the unw stack
-    cor_ds = constants.COR_MEAN_DSET
-    logger.info("Saving correlation from %s to %s/%s", cor_stack_file, outfile, cor_ds)
-    mean_cor = ts_utils.get_mean_cor(defo_fname=outfile, cor_fname=cor_stack_file)
-    with h5py.File(outfile, "a") as hf:
-        hf[cor_ds] = mean_cor
-        for k, v in attrs_to_copy.items():
-            hf[output_dset].attrs[k] = v
+    if cor_stack_file:
+        cor_ds = constants.COR_MEAN_DSET
+        logger.info("Saving correlation from %s to %s/%s", cor_stack_file, outfile, cor_ds)
+        mean_cor = ts_utils.get_mean_cor(defo_fname=outfile, cor_fname=cor_stack_file)
+        with h5py.File(outfile, "a") as hf:
+            hf[cor_ds] = mean_cor
+            for k, v in attrs_to_copy.items():
+                hf[output_dset].attrs[k] = v
+    else:
+        mean_cor = None
 
     if sario.attach_latlon:
         with h5py.File(unw_stack_file) as hf:
@@ -224,11 +227,13 @@ def run_inversion(
         if coordinates == "geo":
             sario.save_latlon_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
             sario.attach_latlon(outfile, output_dset, depth_dim="date")
-            sario.attach_latlon(outfile, cor_ds)
+            if mean_cor is not None:
+                sario.attach_latlon(outfile, cor_ds)
         else:
             sario.save_latlon_2d_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
             sario.attach_latlon_2d(outfile, output_dset, depth_dim="date")
-            sario.attach_latlon_2d(outfile, constants.COR_MEAN_DSET)
+            if mean_cor is not None:
+                sario.attach_latlon_2d(outfile, cor_ds)
 
     # TODO: just use the h5?
     if save_as_netcdf:

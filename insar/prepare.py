@@ -147,6 +147,14 @@ def prepare_stacks(
         # ref_row, ref_col, ref_station = find_reference_location(
         raise ValueError("Need ref_row, ref_col or ref_station")
 
+    try:
+        water_mask = sario.load(
+            os.path.join(geom_dir, "waterMask.rdr"), use_gdal=True, band=1
+        )
+        water_mask = ~(water_mask.astype(bool))
+    except:
+        water_mask = None
+
     # Now create the unwrapped ifg stack
     deramp_and_shift_unws(
         ref_row,
@@ -159,6 +167,7 @@ def prepare_stacks(
         window=window,
         search_term=search_term,
         coordinates=coordinates,
+        water_mask=water_mask,
         overwrite=overwrite,
     )
     # Now record attrs of the dataset
@@ -183,7 +192,10 @@ def prepare_stacks(
 
 def create_dset(h5file, dset_name, shape, dtype, chunks=True, compress=True):
     # comp_dict = hdf5plugin.Blosc() if compress else dict()
-    comp_dict = dict(compression="gzip") if compress else dict()
+    # comp_dict = dict(compression="gzip") if compress else dict()
+    # TODO: gzip is super slow, but lfz and blosc can't be read by other stuff...
+    # what to do
+    comp_dict = dict()
     with h5py.File(h5file, "a") as f:
         f.create_dataset(
             dset_name, shape=shape, dtype=dtype, chunks=chunks, **comp_dict
@@ -209,6 +221,7 @@ def deramp_and_shift_unws(
     overwrite=False,
     stack_fname="stackavg.tif",
     coordinates="geo",
+    water_mask=None,
     geom_dir=ISCE_GEOM_DIR,
 ):
 
@@ -245,6 +258,7 @@ def deramp_and_shift_unws(
     stack_sum = np.zeros((rows, cols), dtype="float32")
     stack_counts = np.zeros((rows, cols), dtype="float32")
 
+    mask = np.zeros((rows, cols), dtype=bool)
     buf = np.empty((chunk_depth, rows, cols), dtype=dtype)
     win = window // 2
     lastidx = 0
@@ -260,10 +274,18 @@ def deramp_and_shift_unws(
             cur_chunk_size = 0
 
         with rio.open(in_fname, driver=driver) as inf:
-            with h5py.File(mask_file, "r") as f:
-                mask = f[IFG_MASK_DSET][idx, :, :].astype(bool)
             # amp = inf.read(1)
             phase = inf.read(2)
+
+            # TODO: this isn't well resolved for ISCE stuff
+            if water_mask is not None:
+                mask = water_mask
+            elif mask_file:
+                with h5py.File(mask_file, "r") as f:
+                    mask = f[IFG_MASK_DSET][idx, :, :].astype(bool)
+            else:
+                mask = (mask * 0).astype(bool)
+
             deramped_phase = deramp.remove_ramp(
                 phase, deramp_order=deramp_order, mask=mask
             )
@@ -276,9 +298,9 @@ def deramp_and_shift_unws(
             cur_chunk_size += 1
 
             # sum for the stack, only use non-masked data
-            mask = np.isnan(deramped_phase)
-            stack_sum[~mask] += deramped_phase[~mask]
-            stack_counts[~mask] += 1
+            nan_mask = np.isnan(deramped_phase)
+            stack_sum[~nan_mask] += deramped_phase[~nan_mask]
+            stack_counts[~nan_mask] += 1
 
     if cur_chunk_size > 0:
         # Write the final part of the buffer:
@@ -309,8 +331,8 @@ def deramp_and_shift_unws(
 
     # Save the extra files too
     if coordinates == "geo":
-        # TODO: best way to check for radar coords? wouldn't want any lat/lon...
-        rsc_data = sario.load(os.path.join(directory, "dem.rsc"))
+        # TODO: how to not make it tied to ROI_PAC
+        rsc_data = sario.load(file_list[0] + ".rsc")
         sario.save_latlon_to_h5(unw_stack_file, rsc_data=rsc_data)
         sario.attach_latlon(unw_stack_file, dset_name, depth_dim="ifg_idx")
     else:
@@ -826,6 +848,7 @@ def redo_reference(
     ref_lon=None,
     ref_row=None,
     ref_col=None,
+    ref_station=None,
     dset_name=STACK_FLAT_SHIFTED_DSET,
     geom_dir=ISCE_GEOM_DIR,
     coordinates="geo",
@@ -843,8 +866,15 @@ def redo_reference(
         chunk_layers = chunk_shape[0]
 
     buf = np.zeros((chunk_layers, rows, cols), dtype=np.float32)
-    ref_row, ref_col, ref_lat, ref_lon = get_reference(
-        ref_row, ref_col, ref_lat, ref_lon, coordinates, unw_stack_file, geom_dir
+    ref_row, ref_col, ref_lat, ref_lon, ref_station = get_reference(
+        ref_row,
+        ref_col,
+        ref_lat,
+        ref_lon,
+        ref_station,
+        coordinates,
+        unw_stack_file,
+        geom_dir,
     )
 
     cur_layer = start_layer
@@ -876,6 +906,7 @@ def redo_reference(
         f[dset_name].attrs["reference"] = [ref_row, ref_col]
         f[dset_name].attrs["reference_latlon"] = [ref_lat, ref_lon]
         f[dset_name].attrs["reference_window"] = window
+        f[dset_name].attrs["reference_station"] = ref_station or ""
 
 
 def detect_rdr_coordinates(igram_path):
@@ -886,12 +917,29 @@ def detect_rdr_coordinates(igram_path):
 
 
 def get_reference(
-    ref_row, ref_col, ref_lat, ref_lon, coordinates, unw_stack_file, geom_dir
+    ref_row,
+    ref_col,
+    ref_lat,
+    ref_lon,
+    ref_station,
+    coordinates,
+    unw_stack_file,
+    geom_dir,
 ):
     import apertools.latlon
+    import apertools.gps
 
     if coordinates == "geo":
-        if ref_lat is not None and ref_lon is not None:
+        if ref_station is not None:
+            ref_lon, ref_lat = apertools.gps.station_lonlat(
+                station_name=ref_station,
+            )
+            ref_row, ref_col = apertools.latlon.latlon_to_rowcol(
+                ref_lat,
+                ref_lon,
+                filename=unw_stack_file,
+            )
+        elif ref_lat is not None and ref_lon is not None:
             ref_row, ref_col = apertools.latlon.latlon_to_rowcol(
                 ref_lat,
                 ref_lon,
@@ -904,7 +952,14 @@ def get_reference(
                 filename=unw_stack_file,
             )
     else:
-        if ref_lat is not None and ref_lon is not None:
+        if ref_station is not None:
+            ref_lon, ref_lat = apertools.gps.station_lonlat(
+                station_name=ref_station,
+            )
+            ref_row, ref_col = apertools.latlon.latlon_to_rowcol_rdr(
+                ref_lat, ref_lon, geom_dir=geom_dir
+            )
+        elif ref_lat is not None and ref_lon is not None:
             ref_row, ref_col = apertools.latlon.latlon_to_rowcol_rdr(
                 ref_lat, ref_lon, geom_dir=geom_dir
             )
@@ -914,14 +969,7 @@ def get_reference(
             )
     if any((r is None for r in [ref_row, ref_col, ref_lat, ref_lon])):
         raise ValueError("need either ref_row/ref_col or ref_lat/ref_lon")
-    # Now record attrs of the dataset
-    # if ref_station is not None:
-    #     rsc_data = sario.load(os.path.join(igram_path, "dem.rsc"))
-    #     ref_row, ref_col = apertools.gps.station_rowcol(
-    #         station_name=ref_station,
-    #         rsc_data=rsc_data,
-    #     )
-    return ref_row, ref_col, ref_lat, ref_lon
+    return ref_row, ref_col, ref_lat, ref_lon, ref_station
 
 
 # def remove_elevation(dem_da_sub, ifg_stack_sub, dem, ifg_stack, subfactor=5):
@@ -999,7 +1047,7 @@ def apply_phasemask(unw_low, intf_high):
     """
     from skimage.transform import resize
 
-    logger.info("Applying phase from %s to %s.", unw_low, intf_high)
+    # logger.info("Applying phase from %s to %s.", unw_low, intf_high)
     unw_high = resize(unw_low, intf_high.shape, mode="constant", anti_aliasing=False)
 
     twopi = 2 * np.pi
@@ -1032,13 +1080,30 @@ def create_ifg_stack(
     file_list = sario.find_ifgs(
         directory=directory, search_term=search_term, parse=False
     )
+    ifg_date_list = sario.find_ifgs(directory=directory, search_term=search_term)
+
+    logger.info(f"Found {len(file_list)} total files")
+    tuple_list = [
+        (f, d)
+        for (f, d) in zip(file_list, ifg_date_list)
+        if temporal_baseline(f) < max_temp
+    ]
+    file_list, ifg_date_list = zip(*tuple_list)
+    logger.info(f"Creating {ifg_stack_file} of {len(file_list)} files")
+
+    slc_date_list = list(sorted(set(itertools.chain.from_iterable(ifg_date_list))))
+    sario.save_ifglist_to_h5(
+        ifg_date_list=ifg_date_list, out_file=ifg_stack_file, overwrite=overwrite
+    )
+    sario.save_slclist_to_h5(
+        slc_date_list=slc_date_list, out_file=ifg_stack_file, overwrite=overwrite
+    )
+    # return
 
     band = 1
     load_func = _get_load_func(file_list[0], band=band)
     rows, cols = load_func(file_list[0]).shape
-    logger.info(f"Found {len(file_list)} total files")
-    file_list = [f for f in file_list if temporal_baseline(f) < max_temp]
-    logger.info(f"Creating {ifg_stack_file} of {len(file_list)} files")
+
     dtype = np.complex64
 
     shape = (len(file_list), rows, cols)
