@@ -280,11 +280,13 @@ def deramp_and_shift_unws(
             # TODO: this isn't well resolved for ISCE stuff
             if water_mask is not None:
                 mask = water_mask
-            elif mask_file:
-                with h5py.File(mask_file, "r") as f:
-                    mask = f[IFG_MASK_DSET][idx, :, :].astype(bool)
             else:
                 mask = (mask * 0).astype(bool)
+
+            if mask_file:
+                with h5py.File(mask_file, "r") as f:
+                    mask2 = f[IFG_MASK_DSET][idx, :, :].astype(bool)
+                mask = np.logical_or(mask2, mask)
 
             deramped_phase = deramp.remove_ramp(
                 phase, deramp_order=deramp_order, mask=mask
