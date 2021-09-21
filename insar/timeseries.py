@@ -136,12 +136,18 @@ def run_inversion(
         # The attrs set by HDF5/xarray have keys that are capitalized. skip those
         # Note: .tolist() needed to convert numpy objects into lists/ints
         attrs_to_copy = {
-            k: v.tolist() for k, v in hf[input_dset].attrs.items() if k != k.upper()
+            k: v for k, v in hf[input_dset].attrs.items() if k != k.upper()
         }
 
+    keys_to_remove = []
     for k, v in attrs_to_copy.items():
-        if isinstance(v, np.ndarray):
+        if k == "coordinates":
+            keys_to_remove.append(k)
+        elif hasattr(v, "__array_interface__"):
+            # elif isinstance(v, np.ndarray):
             attrs_to_copy[k] = v.tolist()
+    for k in keys_to_remove:
+        attrs_to_copy.pop(k)
 
     # Figure out how much to load at 1 time, staying at ~`block_size_max` bytes of RAM
     block_shape = _get_block_shape(
@@ -211,7 +217,9 @@ def run_inversion(
     # Also copy over the metadata from the unw stack
     if cor_stack_file:
         cor_ds = constants.COR_MEAN_DSET
-        logger.info("Saving correlation from %s to %s/%s", cor_stack_file, outfile, cor_ds)
+        logger.info(
+            "Saving correlation from %s to %s/%s", cor_stack_file, outfile, cor_ds
+        )
         mean_cor = ts_utils.get_mean_cor(defo_fname=outfile, cor_fname=cor_stack_file)
         with h5py.File(outfile, "a") as hf:
             hf[cor_ds] = mean_cor
