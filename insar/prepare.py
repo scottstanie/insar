@@ -68,6 +68,7 @@ def prepare_stacks(
     compute_water_mask=False,
     mask_dem=True,
 ):
+    import apertools.latlon
     if coordinates is None:
         coordinates = detect_rdr_coordinates(igram_path)
     if coordinates not in COORDINATES_CHOICES:
@@ -124,7 +125,6 @@ def prepare_stacks(
         )
     elif ref_lat is not None and ref_lon is not None:
         # TODO: getting this from radar coord?
-        import apertools.latlon
 
         if coordinates == "geo":
             rsc_file = os.path.join(igram_path, "dem.rsc")
@@ -170,17 +170,8 @@ def prepare_stacks(
         water_mask=water_mask,
         overwrite=overwrite,
     )
-    # Now record attrs of the dataset
-    if ref_lat is None:
-        if coordinates == "geo":
-            ref_row, ref_col = apertools.latlon.latlon_to_rowcol(
-                filename=unw_stack_file
-            )
-        else:
-            ref_lat, ref_lon = apertools.latlon.rowcol_to_latlon_rdr(
-                ref_row, ref_col, geom_dir=geom_dir
-            )
 
+    # Now record attrs of the dataset
     with h5py.File(unw_stack_file, "r+") as f:
         f[STACK_FLAT_SHIFTED_DSET].attrs["deramp_order"] = deramp_order
         f[STACK_FLAT_SHIFTED_DSET].attrs["reference"] = [ref_row, ref_col]
