@@ -69,6 +69,7 @@ def prepare_stacks(
     mask_dem=True,
 ):
     import apertools.latlon
+
     if coordinates is None:
         coordinates = detect_rdr_coordinates(igram_path)
     if coordinates not in COORDINATES_CHOICES:
@@ -170,7 +171,15 @@ def prepare_stacks(
         water_mask=water_mask,
         overwrite=overwrite,
     )
-
+    if ref_lat is None:
+        if coordinates == "geo":
+            ref_lat, ref_lon = apertools.latlon.rowcol_to_latlon(
+                ref_row, ref_col, filename=unw_stack_file
+            )
+        else:
+            ref_lat, ref_lon = apertools.latlon.rowcol_to_latlon_rdr(
+                ref_row, ref_col, geom_dir=geom_dir
+            )
     # Now record attrs of the dataset
     with h5py.File(unw_stack_file, "r+") as f:
         f[STACK_FLAT_SHIFTED_DSET].attrs["deramp_order"] = deramp_order
@@ -470,6 +479,10 @@ def create_mask_stacks(
 
     Uses .geo dead areas as well as correlation
     """
+    # Do a check on the final one created:
+    if not sario.check_dset(mask_file, IFG_MASK_DSET, overwrite):
+        return
+
     if coordinates == "geo":
         # Save the extra files too
         rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
