@@ -68,6 +68,8 @@ def prepare_stacks(
     compute_water_mask=False,
     mask_dem=True,
 ):
+    import apertools.latlon
+
     if coordinates is None:
         coordinates = detect_rdr_coordinates(igram_path)
     if coordinates not in COORDINATES_CHOICES:
@@ -124,7 +126,6 @@ def prepare_stacks(
         )
     elif ref_lat is not None and ref_lon is not None:
         # TODO: getting this from radar coord?
-        import apertools.latlon
 
         if coordinates == "geo":
             rsc_file = os.path.join(igram_path, "dem.rsc")
@@ -170,17 +171,16 @@ def prepare_stacks(
         water_mask=water_mask,
         overwrite=overwrite,
     )
-    # Now record attrs of the dataset
     if ref_lat is None:
         if coordinates == "geo":
-            ref_row, ref_col = apertools.latlon.latlon_to_rowcol(
-                filename=unw_stack_file
+            ref_lat, ref_lon = apertools.latlon.rowcol_to_latlon(
+                ref_row, ref_col, filename=unw_stack_file
             )
         else:
             ref_lat, ref_lon = apertools.latlon.rowcol_to_latlon_rdr(
                 ref_row, ref_col, geom_dir=geom_dir
             )
-
+    # Now record attrs of the dataset
     with h5py.File(unw_stack_file, "r+") as f:
         f[STACK_FLAT_SHIFTED_DSET].attrs["deramp_order"] = deramp_order
         f[STACK_FLAT_SHIFTED_DSET].attrs["reference"] = [ref_row, ref_col]
@@ -280,11 +280,13 @@ def deramp_and_shift_unws(
             # TODO: this isn't well resolved for ISCE stuff
             if water_mask is not None:
                 mask = water_mask
-            elif mask_file:
-                with h5py.File(mask_file, "r") as f:
-                    mask = f[IFG_MASK_DSET][idx, :, :].astype(bool)
             else:
                 mask = (mask * 0).astype(bool)
+
+            if mask_file:
+                with h5py.File(mask_file, "r") as f:
+                    mask2 = f[IFG_MASK_DSET][idx, :, :].astype(bool)
+                mask = np.logical_or(mask2, mask)
 
             deramped_phase = deramp.remove_ramp(
                 phase, deramp_order=deramp_order, mask=mask
@@ -479,6 +481,10 @@ def create_mask_stacks(
 
     Uses .geo dead areas as well as correlation
     """
+    # Do a check on the final one created:
+    if not sario.check_dset(mask_file, IFG_MASK_DSET, overwrite):
+        return
+
     if coordinates == "geo":
         # Save the extra files too
         rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
