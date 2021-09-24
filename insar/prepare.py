@@ -193,7 +193,8 @@ def prepare_stacks(
 def create_dset(h5file, dset_name, shape, dtype, chunks=True, compress=True):
     # comp_dict = hdf5plugin.Blosc() if compress else dict()
     # comp_dict = dict(compression="gzip") if compress else dict()
-    # TODO: gzip is super slow, but lfz and blosc can't be read by other stuff...
+    comp_dict = dict(compression="lzf") if compress else dict()
+    # TODO: gzip is super slow, but lzf and blosc can't be read by other stuff...
     # what to do
     comp_dict = dict()
     with h5py.File(h5file, "a") as f:
