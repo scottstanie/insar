@@ -258,11 +258,17 @@ def deramp_and_shift_unws(
     stack_sum = np.zeros((rows, cols), dtype="float32")
     stack_counts = np.zeros((rows, cols), dtype="float32")
 
-    mask = np.zeros((rows, cols), dtype=bool)
     buf = np.empty((chunk_depth, rows, cols), dtype=dtype)
     win = window // 2
     lastidx = 0
     cur_chunk_size = 0
+
+    # TODO: this isn't well resolved for ISCE stuff
+    if water_mask is not None:
+        mask0 = water_mask
+    else:
+        mask0 = np.zeros((rows, cols), dtype=bool)
+
     for idx, in_fname in enumerate(tqdm(file_list)):
         if idx % chunk_depth == 0 and idx > 0:
             tqdm.write(f"Writing {lastidx}:{lastidx+chunk_depth}")
@@ -277,19 +283,15 @@ def deramp_and_shift_unws(
             # amp = inf.read(1)
             phase = inf.read(2)
 
-            # TODO: this isn't well resolved for ISCE stuff
-            if water_mask is not None:
-                mask = water_mask
-            else:
-                mask = (mask * 0).astype(bool)
-
             if mask_file:
                 with h5py.File(mask_file, "r") as f:
-                    mask2 = f[IFG_MASK_DSET][idx, :, :].astype(bool)
-                mask = np.logical_or(mask2, mask)
+                    mask1 = f[IFG_MASK_DSET][idx, :, :].astype(bool)
+                mask = np.logical_or(mask0, mask1)
+            else:
+                mask = mask0
 
             deramped_phase = deramp.remove_ramp(
-                phase, deramp_order=deramp_order, mask=mask
+                phase, deramp_order=deramp_order, mask=mask, copy=False
             )
 
             # Now center it on the shift window
@@ -751,17 +753,14 @@ def prepare_isce(
     )
 
 
-def redo_deramp(
+def reference_by_elevation(
     unw_stack_file,
-    ref_row=None,
-    ref_col=None,
     deramp_order=2,
     dset_name=STACK_FLAT_SHIFTED_DSET,
-    # cor_filename=COR_FILENAME,
-    cor_filename="cor_stack_filt.h5",  # TODO: change
+    cor_filename=COR_FILENAME,
+    # cor_filename="cor_stack_filt.h5",  # TODO: change
     chunk_layers=None,
     dem_file="elevation_looked.dem",
-    window=5,
     cur_layer=0,
     subfactor=5,
     cor_thresh=0.4,
@@ -774,25 +773,21 @@ def redo_deramp(
         dem = sario.load(dem_file, use_gdal=True, band=1)
     dem_sub = utils.take_looks(dem, subfactor, subfactor)
 
-    # TODO
-    # if ref_station is not None:
-    #     rsc_data = sario.load(os.path.join(igram_path, "dem.rsc"))
-    #     ref_row, ref_col = apertools.gps.station_rowcol(
-    #         station_name=ref_station,
-    #         rsc_data=rsc_data,
-    #     )
     with h5py.File(cor_filename) as hf:
         cor_mean = hf[STACK_MEAN_DSET][()]
 
     # TODO: hardcode bad
-    shadow = sario.load("geom_reference/shadowMask.rdr", use_gdal=True, band=1).astype(
-        bool
-    )
-    water = ~sario.load("geom_reference/waterMask.rdr", use_gdal=True, band=1).astype(
-        bool
-    )
-    cor = cor_mean < cor_thresh
-    mask = np.any(np.stack((shadow, water, cor)), axis=0)
+    if coordinates == "rdr":
+        shadow = sario.load(
+            "geom_reference/shadowMask.rdr", use_gdal=True, band=1
+        ).astype(bool)
+        water = ~sario.load(
+            "geom_reference/waterMask.rdr", use_gdal=True, band=1
+        ).astype(bool)
+        cor = cor_mean < cor_thresh
+        mask = np.any(np.stack((shadow, water, cor)), axis=0)
+    else:
+        mask = cor_mean < cor_thresh
     mask_sub = utils.take_looks(mask, subfactor, subfactor).astype(bool)
 
     with h5py.File(unw_stack_file, "a") as hf:
@@ -803,6 +798,7 @@ def redo_deramp(
             chunk_layers, _, _ = chunk_shape
         buf = np.zeros((chunk_layers, rows, cols), dtype=np.float32)
 
+        pbar = tqdm(total=total_layers)
         while cur_layer < total_layers:
             if cur_layer + chunk_layers > total_layers:
                 # over the edge for the final part
@@ -814,7 +810,7 @@ def redo_deramp(
                 cur_slice = np.s_[cur_layer : cur_layer + chunk_layers]
                 dest_slice = np.s_[:chunk_layers]
 
-            logger.info(f"Deramping {cur_slice}")
+            # logger.info(f" {cur_slice}")
             buf *= 0
             dset.read_direct(buf, cur_slice, dest_slice)
             # out = deramp.remove_ramp(buf[dest_slice], deramp_order=deramp_order)
@@ -828,24 +824,26 @@ def redo_deramp(
             dset.write_direct(out[dest_slice], dest_sel=cur_slice)
 
             cur_layer += chunk_layers
+            pbar.update(chunk_layers)
+
+        pbar.close()
+    # if cur_chunk_size > 0:
+    #     # Write the final part of the buffer:
+    #     with h5py.File(unw_stack_file, "r+") as f:
+    #         f[dset_name][lastidx : lastidx + cur_chunk_size, :, :] = buf[
+    #             :cur_chunk_size
+    #         ]
+
 
     # TODO: what do i want to record here...
-    # # Now record attrs of the dataset
-    # with h5py.File(unw_stack_file, "r+") as f:
-    #     f[dset_name].attrs["deramp_order"] = deramp_order
-    #     f[dset_name].attrs["reference"] = [ref_row, ref_col]
-    #     # if ref_station is not None:
-    #     # f[STACK_FLAT_SHIFTED_DSET].attrs["reference_station"] = ref_station
-
-    # dirname = os.path.dirname(unw_stack_file)
-    # if coordinates == "geo":
-    #     rsc_data = sario.load(os.path.join(dirname, "dem.rsc"))
-    #     sario.save_latlon_to_h5(unw_stack_file, rsc_data=rsc_data)
-    #     sario.attach_latlon(unw_stack_file, dset_name, depth_dim="ifg_idx")
-    # else:
-    #     lat, lon = sario.load_rdr_latlon(geom_dir=os.path.join(dirname, ISCE_GEOM_DIR))
-    #     sario.save_latlon_2d_to_h5(unw_stack_file, lat=lat, lon=lon)
-    #     sario.attach_latlon_2d(unw_stack_file, dset_name, depth_dim="ifg_idx")
+    # Now record attrs of the dataset
+    with h5py.File(unw_stack_file, "r+") as f:
+        dset = f[STACK_FLAT_SHIFTED_DSET]
+        dset.attrs["reference_method"] = "elevation"
+        dset.attrs["deramp_order"] = -1
+        dset.attrs["reference"] = [-1, -1]
+        dset.attrs["reference_latlon"] = [-1, -1]
+        dset.attrs["reference_window"] = 0
 
 
 def redo_reference(
