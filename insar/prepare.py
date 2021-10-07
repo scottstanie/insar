@@ -835,7 +835,6 @@ def reference_by_elevation(
     #             :cur_chunk_size
     #         ]
 
-
     # TODO: what do i want to record here...
     # Now record attrs of the dataset
     with h5py.File(unw_stack_file, "r+") as f:
@@ -1044,27 +1043,37 @@ def remove_elevation(ifg_stack, dem, dem_sub, mask=None, subfactor=5):
 
 
 def apply_phasemask(unw_low, intf_high):
-    """Apply the integer phase ambiguity in the unwrapped phase file unw_low to the
-    phase in complex file intf_high, writing the result to outfile.  You should use this
-    routine to apply an unwrapping solution obtained on low resolution data
-    back to a higher resolution version of the same data.
+    """Apply the integer phase ambiguity in the unwrapped phase array `unw_low`
+    to the phase in the wrapped, complex array `intf_high`.
 
+    You should use this routine to apply an unwrapping solution obtained on
+    low resolution data back to a higher resolution version of the same data.
+
+    If the `unw_low` has been multilooked 3x3 extra times beyond `intf_high`, then
+    each pixel in `unw_low` will be used for a 3x3 square of high-res data.
+
+    Returns:
+        ndarray, size = `intf_high.shape`. Unwrapped version of the high resolution data.
     """
     from skimage.transform import resize
 
-    # logger.info("Applying phase from %s to %s.", unw_low, intf_high)
+    # Resize the low res data to the same size as high-res.
+    # mode="constant" uses nearest-neighbor interpolation
     unw_high = resize(unw_low, intf_high.shape, mode="constant", anti_aliasing=False)
 
-    twopi = 2 * np.pi
-    # highres = sario.load(intf_high)
+    # Make sure we're working with phase, not complex numbers
     highres = np.angle(intf_high) if np.iscomplexobj(intf_high) else intf_high
 
-    # Do some fancy modular arithmetic to apply the phase ambiguity.
+    # Find the total radians between the wrapped an unwrapped
     dx = highres - unw_high
-    ambig = twopi * np.around(dx / twopi)
-    highres = highres - ambig
+    # convert the to nearest number of whol cycles, then back to ambiguity in radians
+    whole_cycles = np.around(dx / (2 * np.pi))
+    ambig = (2 * np.pi) * whole_cycles
+    highres_unw = highres - ambig
+
+    return highres_unw
+    # To return the unwrapped with both amplitude an phase (to save as a band-interleaved file)
     # return np.stack((np.abs(intf_high), highres), axis=0)
-    return highres
 
 
 @log_runtime
