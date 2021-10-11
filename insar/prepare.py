@@ -194,13 +194,23 @@ def create_dset(h5file, dset_name, shape, dtype, chunks=True, compress=True):
     # comp_dict = hdf5plugin.Blosc() if compress else dict()
     # comp_dict = dict(compression="gzip") if compress else dict()
     comp_dict = dict(compression="lzf") if compress else dict()
-    # TODO: gzip is super slow, but lzf and blosc can't be read by other stuff...
+    # TODO: gzip is super slow, but lzf and blosc sometimes can't be read by other stuff...
     # what to do
     comp_dict = dict()
     with h5py.File(h5file, "a") as f:
         f.create_dataset(
             dset_name, shape=shape, dtype=dtype, chunks=chunks, **comp_dict
         )
+
+
+def create_dset_zarr(zarr_file, dset_name, *args, **kwargs):
+    import zarr
+    from numcodecs import Blosc
+
+    compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
+    return zarr.open(
+        zarr_file, mode="a", encoding={dset_name: {"compressor": compressor}}
+    )
 
 
 def temporal_baseline(filename):
