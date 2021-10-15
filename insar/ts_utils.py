@@ -371,22 +371,47 @@ def rewrap_to_2pi(phase):
     return np.mod(phase + np.pi, 2 * np.pi) - np.pi
 
 
-def calculate_closure_phase(ifg_stack, ifg_date_pairs):
+def closure_phase(ifg_stack, ifg_date_pairs, rewrap=True):
     """Compute a stack of closure phase values for a stack of interferograms
 
     Args:
         ifg_stack (3D ndarray): stack of interferogram images
             Can be either complex, or the phase floats. Size = (m, r, c)
         ifg_date_pairs (list[tuple]): pairs of (reference, secondary) dates
-
+        rewrap (bool): force the values to be within (-pi, pi)
 
     Returns:
         ndarray: stack of closure phase images, sized (nc, r, c)
-        where nc is the number of rows produced by `build_closure_matrix`
+            where nc is the number of rows produced by `build_closure_matrix`
     """
     C = build_closure_matrix(ifg_date_pairs)
     ifg_phase = np.angle(ifg_stack) if np.iscomplexobj(ifg_stack) else ifg_stack
 
     num_imgs, rows, cols = ifg_stack.shape
     closures = C @ ifg_phase.reshape((num_imgs, -1))
-    return rewrap_to_2pi(closures.reshape((-1, (rows, cols))))
+    closures = closures.reshape = (-1, rows, cols)
+    if rewrap:
+        return rewrap_to_2pi(closures)
+    else:
+        return closures
+
+
+def closure_integer_ambiguity(unw_stack, ifg_date_pairs):
+    """Compute the integer ambiguity from the closure phase of unwrapped ifgs
+
+    Can be used to detect unwrapping errors, as a 2pi jump in one interferogram
+    will lead to a non-zero integer closure phase
+
+    Args:
+        ifg_stack (3D ndarray): stack of interferogram images
+            Can be either complex, or the phase floats. Size = (m, r, c)
+        ifg_date_pairs (list[tuple]): pairs of (reference, secondary) dates
+        rewrap (bool): force the values to be within (-pi, pi)
+
+    Returns:
+        ndarray: stack of closure phase images, sized (nc, r, c)
+            where nc is the number of rows produced by `build_closure_matrix`
+    """
+    closures = closure_phase(unw_stack, ifg_date_pairs, rewrap=False)
+    # Eq 9, Yunjun 2019
+    return (closures - rewrap_to_2pi(closures)) / (2 * np.pi)

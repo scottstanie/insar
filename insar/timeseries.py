@@ -346,8 +346,8 @@ def _load_and_run(
         logger.info(f"Loading chunk {rows}, {cols}")
         unw_chunk = hf[input_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
         # TODO: get rid of nan pixels at edge! dont let it ruin the whole chunk
-        out_chunk = calc_soln(
-            # out_chunk = calc_soln_pixelwise(
+        out_chunk = _calc_soln(
+            # out_chunk = _calc_soln_pixelwise(
             unw_chunk,
             slclist,
             ifglist,
@@ -367,7 +367,7 @@ def write_out_chunk(chunk, outfile, output_dset, rows=None, cols=None):
 
 
 @jit_decorator
-def calc_soln(
+def _calc_soln(
     unw_chunk,
     slclist,
     ifglist,
@@ -418,7 +418,7 @@ def calc_soln(
 
 # @jit_decorator
 @numba.njit(fastmath=True, parallel=True, cache=True, nogil=True)
-def calc_soln_pixelwise(
+def _calc_soln_pixelwise(
     unw_chunk,
     slclist,
     ifglist,
