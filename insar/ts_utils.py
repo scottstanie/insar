@@ -353,3 +353,40 @@ def get_cor_indexes(defo_fname="deformation.h5", cor_fname="cor_stack.h5"):
         tuple(pair) for pair in sario.load_ifglist_from_h5(defo_fname, parse=False)
     ]
     return np.array([all_ifgs.index(ifg) for ifg in defo_ifgs])
+
+
+def rewrap_to_2pi(phase):
+    """Converts phase results to be centered from -pi to pi
+
+    The result from multiplying by calculating, e.g., closure phase,
+    will usually have many values centered around -2pi, 0, and 2pi.
+    This function puts them all centered around 0.
+
+    Args:
+        phase (ndarray): array (or scalar) of phase values
+
+    Returns:
+        re-wrapped values within the interval -pi to pi
+    """
+    return np.mod(phase + np.pi, 2 * np.pi) - np.pi
+
+
+def calculate_closure_phase(ifg_stack, ifg_date_pairs):
+    """Compute a stack of closure phase values for a stack of interferograms
+
+    Args:
+        ifg_stack (3D ndarray): stack of interferogram images
+            Can be either complex, or the phase floats. Size = (m, r, c)
+        ifg_date_pairs (list[tuple]): pairs of (reference, secondary) dates
+
+
+    Returns:
+        ndarray: stack of closure phase images, sized (nc, r, c)
+        where nc is the number of rows produced by `build_closure_matrix`
+    """
+    C = build_closure_matrix(ifg_date_pairs)
+    ifg_phase = np.angle(ifg_stack) if np.iscomplexobj(ifg_stack) else ifg_stack
+
+    num_imgs, rows, cols = ifg_stack.shape
+    closures = C @ ifg_phase.reshape((num_imgs, -1))
+    return rewrap_to_2pi(closures.reshape((-1, (rows, cols))))
