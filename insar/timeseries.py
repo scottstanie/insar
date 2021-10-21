@@ -17,11 +17,12 @@ scott@lidar igrams]$ head slclist
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed, Future, Executor
 from threading import Lock
-try:
-    import hdf5plugin  # noqa : for the possiblity of HDF5 blosc filter
-except ImportError:
-    print("Cant import hdf5plugin. wont read Blosc compressed files")
-    
+
+# try:
+#     import hdf5plugin  # noqa : for the possiblity of HDF5 blosc filter
+# except ImportError:
+#     print("Cant import hdf5plugin. wont read Blosc compressed files")
+
 import h5py
 import xarray as xr
 import numpy as np

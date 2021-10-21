@@ -10,10 +10,10 @@ import itertools
 import h5py
 from tqdm import tqdm
 
-try:
-    import hdf5plugin  # noqa
-except ImportError:
-    print("Failed to load hdf5plugin: may not save/load using blosc")
+# try:
+#     import hdf5plugin  # noqa
+# except ImportError:
+#     print("Failed to load hdf5plugin: may not save/load using blosc")
 import numpy as np
 from scipy.ndimage.morphology import binary_opening
 import rasterio as rio
