@@ -276,19 +276,18 @@ def record_los_vectors(path=".", **kwargs):
     # np.save("los_enu_midpoint_vector.npy", enu_coeffs)
 
 
-def run_snaphu(lowpass=None, max_jobs=None, **kwargs):
+def run_snaphu(max_jobs=None, **kwargs):
     """8. run snaphu to unwrap all .int files
 
     Assumes we are in the directory with all .unw files
     """
-    # TODO: probably shouldn't call these like this? idk alternative right now
     igram_rsc = apertools.sario.load("dem.rsc")
-    snaphu_script = os.path.join(SCRIPTS_DIR, "run_snaphu.sh")
-    snaphu_cmd = "{filepath} {width} {lowpass}".format(
-        filepath=snaphu_script, width=igram_rsc["width"], lowpass=lowpass
-    )
+    width = igram_rsc["width"]
+
+    snaphu_script = os.path.join(SCRIPTS_DIR, "run_snaphu.py")
+    snaphu_cmd = f"{snaphu_script} --path . --ext-cor '.cc' --cols {width} "
     if max_jobs is not None:
-        snaphu_cmd += " {}".format(max_jobs)
+        snaphu_cmd += f" --max-jobs {max_jobs}"
     _log_and_run(snaphu_cmd)
 
 
@@ -298,6 +297,8 @@ def convert_to_tif(max_height=None, max_jobs=None, **kwargs):
     Assumes we are in the directory with all .int and .unw files
     Also adds .rsc files for all .int and .unw
     """
+    print("SKIPPING CONVERT TO TIF")
+    return
     if max_jobs is None:
         # TODO:to i really care about this
         max_jobs = cpu_count()

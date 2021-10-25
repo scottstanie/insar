@@ -62,9 +62,6 @@ def _snaphu_cmd(intfile, width, corname, outname, conncomp_name, float_cor=False
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--output", "-o", default="filename.out", help="Output filename"
-    )
-    parser.add_argument(
         "--path", "-p", default=".", help="Path to directory of .unw files"
     )
     parser.add_argument(
@@ -73,7 +70,9 @@ def main():
         default=".int",
     )
     parser.add_argument(
-        "--file-list", "-f", help="Path to a file containing names of files to unwrap"
+        "--file-list",
+        "-f",
+        help="Alternative to --path/--ext. Give filename containing names of files to unwrap",
     )
     parser.add_argument(
         "--cols", "-c", type=int, help="Optional: Specify number of cols in the file"
@@ -92,7 +91,7 @@ def main():
     parser.add_argument(
         "--overwrite", help="Overwrite existing unwrapped file", action="store_true"
     )
-    parser.add_argument("--max-procs", type=int, default=10)
+    parser.add_argument("--max-jobs", type=int, default=20)
 
     args = parser.parse_args()
     if args.file_list:
@@ -129,7 +128,7 @@ def main():
         out_files.append(outf)
     print(f"{len(out_files)} left to unwrap")
 
-    with ThreadPoolExecutor(max_workers=args.max_procs) as exc:
+    with ThreadPoolExecutor(max_workers=args.max_jobs) as exc:
         futures = [
             exc.submit(
                 unwrap,
