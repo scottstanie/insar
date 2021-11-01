@@ -12,6 +12,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 PHASE_UNWRAP_DIR = os.path.expanduser("~/phase_unwrap/bin")
 
 
+from apertools.log import get_log, log_runtime
+logger = get_log()
+
 def unwrap(
     intfile,
     outfile,
@@ -32,33 +35,57 @@ def unwrap(
     subprocess.check_call(cmd, shell=True)
     if os.path.exists(intfile + ".rsc"):
         shutil.copy(intfile + ".rsc", outfile + ".rsc")
+    set_unw_zeros(outfile, intfile)
 
 
 def _snaphu_cmd(intfile, width, corname, outname, conncomp_name, float_cor=False):
-    cmd = f"{PHASE_UNWRAP_DIR}/snaphu -s "
+    conf_name = outname + ".snaphu_conf"
     # Need to specify the conncomp file format in a config file
-    dummy_conf = f"CONNCOMPFILE    {conncomp_name}\n"
+    conf_string = f"""STATCOSTMODE SMOOTH
+INFILE {intfile}
+LINELENGTH {width}
+OUTFILE {outname}
+# CONNCOMPFILE {conncomp_name} # TODO: snaphu has a bug for tiling conncomps
+"""
     if float_cor:
         # Need to specify the input file format in a config file
         # the rest of the options are overwritten by command line options
-        # dummy_conf += "INFILEFORMAT     COMPLEX_DATA\n"
-        # dummy_conf += "CORRFILEFORMAT   ALT_LINE_DATA"
-        dummy_conf += "CORRFILEFORMAT   FLOAT_DATA\n"
-    conf_name = os.path.join(os.path.split(intfile)[0], "snaphu_tmp.conf")
-    with open(conf_name, "w") as f:
-        f.write(dummy_conf)
-    cmd += f" -f {conf_name}"
-    cmd += f" {intfile} {width} -o {outname}"
+        # conf_string += "INFILEFORMAT     COMPLEX_DATA\n"
+        # conf_string += "CORRFILEFORMAT   ALT_LINE_DATA"
+        conf_string += "CORRFILEFORMAT   FLOAT_DATA\n"
     if corname:
-        cmd += f" -c {corname}"
+        # cmd += f" -c {corname}"
+        conf_string += f"CORRFILE	{corname}\n"
     if width > 1000:
-        cmd += " -S --tile 3 3 400 400 --nproc 9"
+        conf_string += "NTILEROW 3\nNTILECOL 3\nROWOVRLP 400\nCOLOVRLP 400\n"
+        conf_string += "NPROC 9\n"
+        # cmd += " -S --tile 3 3 400 400 --nproc 9"
     elif width > 500:
-        cmd += " -S --tile 2 2 400 400 --nproc 4"
+        conf_string += "NTILEROW 2\nNTILECOL 2\nROWOVRLP 400\nCOLOVRLP 400\n"
+        conf_string += "NPROC 4\n"
+        # cmd += " -S --tile 2 2 400 400 --nproc 4"
+    with open(conf_name, "w") as f:
+        f.write(conf_string)
 
+    cmd = f"{PHASE_UNWRAP_DIR}/snaphu -f {conf_name} "
     return cmd
 
 
+def set_unw_zeros(unw_filename, ifg_filename):
+    """Set areas that are 0 in the ifg to be 0 in the unw"""
+    tmp_file = unw_filename.replace(".unw", "_tmp.unw")
+    cmd = (
+        f"gdal_calc.py --quiet --outfile={tmp_file} --type=Float32 --format=ROI_PAC "
+        f'--allBands=A -A {unw_filename} -B {ifg_filename} --calc "A * (B!=0)"'
+    )
+    print(f"Setting zeros for {unw_filename}")
+    print(cmd)
+    subprocess.check_call(cmd, shell=True)
+    subprocess.check_call(f"mv {tmp_file} {unw_filename}", shell=True)
+    subprocess.check_call(f"rm -f {tmp_file}.rsc", shell=True)
+
+
+@log_runtime
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -143,6 +170,7 @@ def main():
             for inf, outf in zip(in_files, out_files)
         ]
         for idx, fut in enumerate(tqdm(as_completed(futures)), start=1):
+            fut.result()
             tqdm.write("Done with {} / {}".format(idx, len(futures)))
 
     if not args.create_isce_headers:
