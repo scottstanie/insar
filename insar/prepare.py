@@ -40,6 +40,9 @@ from apertools.sario import (
 )
 from apertools.constants import COORDINATES_CHOICES
 
+COMPRESS_TYPE = "blosc"
+# COMPRESS_TYPE = "lzf"
+
 logger = get_log()
 
 
@@ -55,6 +58,7 @@ def prepare_stacks(
     ref_lon=None,
     ref_station=None,
     deramp_order=2,
+    remove_elevation=False,
     window=5,
     search_term="*.unw",
     cor_search_term="*.cc",
@@ -165,6 +169,7 @@ def prepare_stacks(
         mask_file=mask_filename,
         directory=igram_path,
         deramp_order=deramp_order,
+        remove_elevation=remove_elevation,
         window=window,
         search_term=search_term,
         coordinates=coordinates,
@@ -190,13 +195,18 @@ def prepare_stacks(
             f[STACK_FLAT_SHIFTED_DSET].attrs["reference_station"] = ref_station
 
 
-def create_dset(h5file, dset_name, shape, dtype, chunks=True, compress=True):
-    # comp_dict = hdf5plugin.Blosc() if compress else dict()
-    # comp_dict = dict(compression="gzip") if compress else dict()
-    comp_dict = dict(compression="lzf") if compress else dict()
-    # TODO: gzip is super slow, but lzf and blosc sometimes can't be read by other stuff...
-    # what to do
-    comp_dict = dict()
+def create_dset(
+    h5file, dset_name, shape, dtype, chunks=True, compression=COMPRESS_TYPE
+):
+    # TODO: gzip/"deflate" is super slow, but lzf and blosc sometimes can't be read by other stuff...
+    if not compression:
+        comp_dict = dict()
+    elif compression.lower() == "blosc":
+        # comp_dict = hdf5plugin.Blosc()
+        comp_dict = {"compression": 32001, "compression_opts": (0, 0, 0, 0, 5, 1, 1)}
+    else:
+        # gzip, lzf
+        comp_dict = dict(compression=compression)
     with h5py.File(h5file, "a") as f:
         f.create_dataset(
             dset_name, shape=shape, dtype=dtype, chunks=chunks, **comp_dict
@@ -234,6 +244,10 @@ def deramp_and_shift_unws(
     coordinates="geo",
     water_mask=None,
     geom_dir=ISCE_GEOM_DIR,
+    cor_thresh="auto",
+    cor_filename=COR_FILENAME,
+    dem_filename="elevation_looked.dem",
+    remove_elevation=False,
 ):
 
     if not sario.check_dset(unw_stack_file, dset_name, overwrite):
@@ -250,7 +264,8 @@ def deramp_and_shift_unws(
         dtype = src.dtypes[band - 1]
 
     shape = (len(file_list), rows, cols)
-    create_dset(unw_stack_file, dset_name, shape, dtype, chunks=True, compress=True)
+    create_dset(unw_stack_file, dset_name, shape, dtype, chunks=True)
+    # create_dset(unw_stack_file, STACK_DSET, shape, dtype, chunks=True)
 
     with h5py.File(unw_stack_file, "r+") as f:
         chunk_shape = f[dset_name].chunks
@@ -269,23 +284,46 @@ def deramp_and_shift_unws(
     stack_sum = np.zeros((rows, cols), dtype="float32")
     stack_counts = np.zeros((rows, cols), dtype="float32")
 
-    buf = np.empty((chunk_depth, rows, cols), dtype=dtype)
-    win = window // 2
-    lastidx = 0
-    cur_chunk_size = 0
-
     # TODO: this isn't well resolved for ISCE stuff
     if water_mask is not None:
         mask0 = water_mask
     else:
         mask0 = np.zeros((rows, cols), dtype=bool)
 
+    # Get the DEM and correlation files for mask setup
+    if coordinates == "geo":
+        dem = sario.load(dem_filename)
+    else:
+        dem = sario.load(dem_filename, use_gdal=True, band=1)
+    dem_mask = dem == 0
+    mask0 = np.logical_or(mask0, dem_mask)
+
+    with h5py.File(cor_filename) as hf:
+        cor_mean = hf[STACK_MEAN_DSET][()]
+
+    if cor_thresh == "auto":
+        cor_thresh = np.nanpercentile(cor_mean.flatten(), 60)
+    # Mask low-coherence pixels, and combine with water mask
+    cor_mask = cor_mean < cor_thresh
+    # mask0 = np.logical_or(mask0, cor_mask)
+    # TODO: is it worth it to do the moving-average subtraction?
+
+    # If we don't want to remove a linear elevation trend, don't pass dem to `deramp`
+    if not remove_elevation:
+        dem = None
+
+    # Set up buffer to only write once per chunk
+    buf = np.empty((chunk_depth, rows, cols), dtype=dtype)
+    win = window // 2
+    lastidx = 0
+    cur_chunk_size = 0
     for idx, in_fname in enumerate(tqdm(file_list)):
         if idx % chunk_depth == 0 and idx > 0:
             tqdm.write(f"Writing {lastidx}:{lastidx+chunk_depth}")
             assert cur_chunk_size <= chunk_depth
             with h5py.File(unw_stack_file, "r+") as f:
                 f[dset_name][lastidx : lastidx + cur_chunk_size, :, :] = buf
+                # f[STACK_DSET][lastidx : lastidx + cur_chunk_size, :, :] = buf_raw
 
             lastidx = idx
             cur_chunk_size = 0
@@ -301,19 +339,25 @@ def deramp_and_shift_unws(
             else:
                 mask = mask0
 
+            # Separate mask using the (high) correlation threshold for the fitting
+            # We dont want to permanentaly set to nan, since it's so high a threshold
+            mask_with_cor = np.logical_or(mask, cor_mask)
             deramped_phase = deramp.remove_ramp(
-                phase, deramp_order=deramp_order, mask=mask, copy=False
+                phase, deramp_order=deramp_order, mask=mask_with_cor, copy=True, dem=dem
             )
+            deramped_phase[mask] = np.nan
+            # In case other pixels were already nans
+            nan_mask = np.isnan(deramped_phase)
 
             # Now center it on the shift window
             deramped_phase = _shift(deramped_phase, ref_row, ref_col, win)
+
             # now store this in the buffer until emptied
             curidx = idx % chunk_depth
             buf[curidx, :, :] = deramped_phase
             cur_chunk_size += 1
 
             # sum for the stack, only use non-masked data
-            nan_mask = np.isnan(deramped_phase)
             stack_sum[~nan_mask] += deramped_phase[~nan_mask]
             stack_counts[~nan_mask] += 1
 
@@ -409,7 +453,7 @@ def create_cor_stack(
     dtype = np.float32
 
     shape = (len(file_list), rows, cols)
-    create_dset(cor_stack_file, dset_name, shape, dtype, chunks=True, compress=True)
+    create_dset(cor_stack_file, dset_name, shape, dtype, chunks=True)
 
     with h5py.File(cor_stack_file, "r+") as f:
         chunk_shape = f[dset_name].chunks
@@ -766,12 +810,12 @@ def prepare_isce(
 
 def reference_by_elevation(
     unw_stack_file,
-    deramp_order=2,
+    deramp_order=1,
     dset_name=STACK_FLAT_SHIFTED_DSET,
     cor_filename=COR_FILENAME,
     # cor_filename="cor_stack_filt.h5",  # TODO: change
     chunk_layers=None,
-    dem_file="elevation_looked.dem",
+    dem_filename="elevation_looked.dem",
     cur_layer=0,
     subfactor=5,
     cor_thresh=0.4,
@@ -779,9 +823,9 @@ def reference_by_elevation(
 ):
     # cur_layer = 0
     if coordinates == "geo":
-        dem = sario.load(dem_file)
+        dem = sario.load(dem_filename)
     else:
-        dem = sario.load(dem_file, use_gdal=True, band=1)
+        dem = sario.load(dem_filename, use_gdal=True, band=1)
     dem_sub = utils.take_looks(dem, subfactor, subfactor)
 
     with h5py.File(cor_filename) as hf:
@@ -987,7 +1031,7 @@ def get_reference(
 
 
 # def remove_elevation(dem_da_sub, ifg_stack_sub, dem, ifg_stack, subfactor=5):
-def remove_elevation(ifg_stack, dem, dem_sub, mask=None, subfactor=5):
+def remove_elevation(ifg_stack, dem, dem_sub, mask=None, subfactor=5, deramp_order=0):
     if mask is None:
         mask = np.zeros(dem.shape, dtype=bool)
 
@@ -1131,7 +1175,7 @@ def create_ifg_stack(
     dtype = np.complex64
 
     shape = (len(file_list), rows, cols)
-    create_dset(ifg_stack_file, dset_name, shape, dtype, chunks=True, compress=True)
+    create_dset(ifg_stack_file, dset_name, shape, dtype, chunks=True)
 
     with h5py.File(ifg_stack_file, "r+") as f:
         chunk_shape = f[dset_name].chunks

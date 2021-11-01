@@ -196,7 +196,7 @@ def run_inversion(
         raise ValueError(f"{outfile}:/{output_dset} exists, {overwrite = }")
 
     create_dset(
-        outfile, output_dset, output_shape, np.float32, chunks=True, compress=True
+        outfile, output_dset, output_shape, np.float32, chunks=True
     )
 
     run_sbas(
@@ -220,6 +220,7 @@ def run_inversion(
     sario.save_ifglist_to_h5(out_file=outfile, ifg_date_list=ifglist)
     # Add the mean correlation of interferograms used in this network
     # Also copy over the metadata from the unw stack
+    
     if cor_stack_file:
         cor_ds = constants.COR_MEAN_DSET
         logger.info(
@@ -479,6 +480,7 @@ def calc_model_fit_deformation(
     remove_day1_atmo=True,
     reweight_by_atmo_var=True,
     save_linear_fit=True,
+    linear_velo_dset=constants.LINEAR_VELO_DSET,
     outname=None,
     overwrite=False,
 ):
@@ -654,10 +656,9 @@ def calc_model_fit_deformation(
 
     if save_linear_fit:
         # out = constants.ATMO_DAY1_DSET
-        out = "linear_velocity"
-        logger.info("Saving linear velocity fit to %s", out)
-        if sario.check_dset(defo_fname, out, overwrite):
-            velocities.to_dataset(name=out).to_netcdf(
+        logger.info("Saving linear velocity fit to %s", linear_velo_dset)
+        if sario.check_dset(defo_fname, linear_velo_dset, overwrite):
+            velocities.to_dataset(name=linear_velo_dset).to_netcdf(
                 defo_fname,
                 mode="a",
                 engine="h5netcdf",
