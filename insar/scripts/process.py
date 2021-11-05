@@ -118,6 +118,7 @@ def run_sentinel_stack(unzip=True, product_type="", gpu=False, **kwargs):
     _log_and_run(cmd)
     for f in glob.glob("S*.geo"):
         # make symlinks of rsc file for loading
+        
         force_symlink("elevation.dem.rsc", f + ".rsc")
 
 
@@ -166,13 +167,15 @@ def prep_igrams_dir(cleanup=False, **kwargs):
     for fname in ("params", "elevation.dem", "elevation.dem.rsc"):
         try:
             src, dest = os.path.join(new_dir, fname), os.path.join(".", fname)
-            force_symlink(src, dest)
+            # force_symlink(src, dest)
+            subprocess.run(f"cp {src} {desc}", shell=True)
         except ValueError as e:
             logger.info(f"{dest} already exists: skipping ({e})")
 
     for geofile in geofiles:
         try:
-            force_symlink("elevation.dem.rsc", geofile + ".rsc")
+            # force_symlink("elevation.dem.rsc", geofile + ".rsc")
+            subprocess.run(f"cp elevation.dem.rsc {geofile}.rsc", shell=True)
         except ValueError as e:
             logger.info(f"{geofile + '.rsc'} already exists: skipping ({e})")
 
@@ -310,7 +313,7 @@ xargs -0 -n1 -I{} --max-procs=50 cp dem.rsc {}.rsc """
     add_unw_rsc = add_int_rsc.replace(".int", ".unw")
     _log_and_run(add_unw_rsc, check=False)
 
-    print("SKIPPING CONVERT TO TIF")
+    logger.info("SKIPPING CONVERT TO TIF")
     return
     # Default name by ps_sbas_igrams
     igram_rsc = apertools.sario.load("dem.rsc")
