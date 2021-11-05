@@ -296,22 +296,22 @@ def convert_to_tif(max_height=None, max_jobs=None, **kwargs):
     Assumes we are in the directory with all .int and .unw files
     Also adds .rsc files for all .int and .unw
     """
-    print("SKIPPING CONVERT TO TIF")
-    return
     if max_jobs is None:
         # TODO:to i really care about this
         max_jobs = cpu_count()
 
     add_int_rsc = """find . -name "*.int" -print0 | \
-xargs -0 -n1 -I{} --max-procs=50 ln -s dem.rsc {}.rsc """
+xargs -0 -n1 -I{} --max-procs=50 cp dem.rsc {}.rsc """
     _log_and_run(add_int_rsc, check=False)
-
-    add_unw_rsc = add_int_rsc.replace(".int", ".unw")
-    _log_and_run(add_unw_rsc, check=False)
 
     add_cc_rsc = add_int_rsc.replace(".int", ".cc")
     _log_and_run(add_cc_rsc, check=False)
 
+    add_unw_rsc = add_int_rsc.replace(".int", ".unw")
+    _log_and_run(add_unw_rsc, check=False)
+
+    print("SKIPPING CONVERT TO TIF")
+    return
     # Default name by ps_sbas_igrams
     igram_rsc = apertools.sario.load("dem.rsc")
     # "shopt -s nullglob" skips the for-loop when nothing matches
