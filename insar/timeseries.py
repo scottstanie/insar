@@ -33,7 +33,9 @@ from apertools.log import get_log, log_runtime
 from .prepare import create_dset, detect_rdr_coordinates
 from . import constants
 from apertools.constants import PHASE_TO_CM_MAP, WAVELENGTH_MAP
-from .ts_utils import ptp_by_date, ptp_by_date_pct
+
+# from .ts_utils import get_cor_mean, ptp_by_date, ptp_by_date_pct
+from .ts_utils import ptp_by_date_pct
 from insar import ts_utils
 
 PARALLEL = True  # With false, uses dummy Executor (for debugging)
@@ -109,6 +111,7 @@ def run_inversion(
         phi_arr (ndarray): absolute phases of every pixel at each time
         deformation (ndarray): matrix of deformations at each pixel and time
     """
+
     # averaging or linear means output will is 3D array (not just map of velocities)
     # is_3d = not (stack_average or constant_velocity)
     # output_dset = "stack" if is_3d else "velos"
@@ -195,9 +198,7 @@ def run_inversion(
     if sario.check_dset(outfile, output_dset, overwrite) is False:
         raise ValueError(f"{outfile}:/{output_dset} exists, {overwrite = }")
 
-    create_dset(
-        outfile, output_dset, output_shape, np.float32, chunks=True
-    )
+    create_dset(outfile, output_dset, output_shape, np.float32, chunks=True)
 
     run_sbas(
         unw_stack_file,
@@ -220,15 +221,20 @@ def run_inversion(
     sario.save_ifglist_to_h5(out_file=outfile, ifg_date_list=ifglist)
     # Add the mean correlation of interferograms used in this network
     # Also copy over the metadata from the unw stack
-    
+
     if cor_stack_file:
-        cor_ds = constants.COR_MEAN_DSET
+        cor_dset = constants.COR_MEAN_DSET
         logger.info(
-            "Saving correlation from %s to %s/%s", cor_stack_file, outfile, cor_ds
+            "Saving correlation from %s to %s/%s",
+            cor_stack_file,
+            outfile,
         )
-        mean_cor = ts_utils.get_mean_cor(defo_fname=outfile, cor_fname=cor_stack_file)
+        # mean_cor = ts_utils.get_cor_mean(defo_fname=outfile, cor_fname=cor_stack_file)
+        cor_mean = get_cor_mean(
+            valid_ifg_idxs, cor_fname=cor_stack_file, cor_dset=cor_dset
+        )
         with h5py.File(outfile, "a") as hf:
-            hf[cor_ds] = mean_cor
+            hf[cor_dset] = cor_mean
             for k, v in attrs_to_copy.items():
                 hf[output_dset].attrs[k] = v
     else:
@@ -471,6 +477,13 @@ def _get_block_shape(full_shape, chunk_size, block_size_max=10e6, nbytes=4):
             break
         chunks_per_block = block_size_max / (np.prod(cur_block_shape) * nbytes)
     return cur_block_shape
+
+
+def get_cor_mean(idxs, cor_fname=sario.COR_FILENAME, cor_dset=sario.STACK_DSET):
+    """Get the mean correlation from a subset of images specified by `idxs`"""
+    with h5py.File(cor_fname, "r") as hf:
+        logger.info(f"Getting mean correlation from {len(idxs)} images")
+        return np.mean(hf[cor_dset][idxs], axis=0)
 
 
 def calc_model_fit_deformation(
