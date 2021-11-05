@@ -168,7 +168,7 @@ def prep_igrams_dir(cleanup=False, **kwargs):
         try:
             src, dest = os.path.join(new_dir, fname), os.path.join(".", fname)
             # force_symlink(src, dest)
-            subprocess.run(f"cp {src} {desc}", shell=True)
+            subprocess.run(f"cp {src} {dest}", shell=True)
         except ValueError as e:
             logger.info(f"{dest} already exists: skipping ({e})")
 
