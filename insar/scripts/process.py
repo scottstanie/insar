@@ -24,14 +24,10 @@ from multiprocessing import cpu_count
 # from click import BadOptionUsage
 
 # import apertools.los
-import apertools.utils
-import apertools.sario
-import apertools.stitching
+
 from apertools.log import get_log, log_runtime
 from apertools.utils import mkdir_p, force_symlink
 from apertools.parsers import Sentinel
-import insar.prepare
-import insar.stackavg
 
 logger = get_log()
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -149,6 +145,7 @@ def _reorganize_files(new_dir="extra_files"):
 
 def prep_igrams_dir(cleanup=False, **kwargs):
     """4. Reorganize and rename .geo files, stitches .geos, prepare for igrams"""
+    import apertools.stitching
     new_dir = "extra_files"
     if cleanup:
         logger.info("Renaming .geo files, creating symlinks")
@@ -214,6 +211,7 @@ def create_sbas_list(max_temporal=500, max_spatial=500, **kwargs):
 
 def run_ps_sbas_igrams(xrate=1, yrate=1, xlooks=None, ylooks=None, **kwargs):
     """6. run the ps_sbas_igrams script"""
+    import apertools.sario
 
     def calc_sizes(xrate, yrate, width, length):
         xsize = int(math.floor(width / xrate) * xrate)
@@ -281,6 +279,7 @@ def run_snaphu(max_jobs=None, **kwargs):
 
     Assumes we are in the directory with all .unw files
     """
+    import apertools.sario
     igram_rsc = apertools.sario.load("dem.rsc")
     width = igram_rsc["width"]
 
@@ -297,22 +296,22 @@ def convert_to_tif(max_height=None, max_jobs=None, **kwargs):
     Assumes we are in the directory with all .int and .unw files
     Also adds .rsc files for all .int and .unw
     """
-    print("SKIPPING CONVERT TO TIF")
-    return
     if max_jobs is None:
         # TODO:to i really care about this
         max_jobs = cpu_count()
 
     add_int_rsc = """find . -name "*.int" -print0 | \
-xargs -0 -n1 -I{} --max-procs=50 ln -s dem.rsc {}.rsc """
+xargs -0 -n1 -I{} --max-procs=50 cp dem.rsc {}.rsc """
     _log_and_run(add_int_rsc, check=False)
-
-    add_unw_rsc = add_int_rsc.replace(".int", ".unw")
-    _log_and_run(add_unw_rsc, check=False)
 
     add_cc_rsc = add_int_rsc.replace(".int", ".cc")
     _log_and_run(add_cc_rsc, check=False)
 
+    add_unw_rsc = add_int_rsc.replace(".int", ".unw")
+    _log_and_run(add_unw_rsc, check=False)
+
+    print("SKIPPING CONVERT TO TIF")
+    return
     # Default name by ps_sbas_igrams
     igram_rsc = apertools.sario.load("dem.rsc")
     # "shopt -s nullglob" skips the for-loop when nothing matches
@@ -366,6 +365,7 @@ def run_sbas_inversion(
     """10. Perofrm SBAS inversion, save the deformation as .npy
 
     Assumes we are in the directory with all .unw files"""
+    import insar.prepare
     igram_path = os.path.realpath(os.getcwd())
 
     # Note: with overwrite=False, this will only take a long time once
@@ -422,8 +422,7 @@ STEPS = [
     run_sentinel_stack,
     prep_igrams_dir,
     create_sbas_list,
-    # run_ps_sbas_igrams,
-    run_form_igrams,
+    run_form_igrams,  # run_ps_sbas_igrams,
     record_los_vectors,
     run_snaphu,
     convert_to_tif,

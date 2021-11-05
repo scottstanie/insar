@@ -415,3 +415,46 @@ def closure_integer_ambiguity(unw_stack, ifg_date_pairs):
     closures = closure_phase(unw_stack, ifg_date_pairs, rewrap=False)
     # Eq 9, Yunjun 2019
     return (closures - rewrap_to_2pi(closures)) / (2 * np.pi)
+
+
+# TODO
+def _run_lowess(ts, xs, frac, it):
+    import statsmodels.api as sm
+    lowess = sm.nonparametric.lowess
+    return lowess(ts, xs, frac=frac, it=it)[:, 1]
+
+
+def lowess_stack(stack, xs, frac=0.5, it=1, workers=None):
+    from concurrent.futures import ProcessPoolExecutor
+    from itertools import repeat
+
+    timeseries = stack.reshape(stack.shape[0], -1).T
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        outputs = executor.map(
+            _run_lowess, timeseries, repeat(xs), repeat(frac), repeat(it)
+        )
+    return np.array(outputs).reshape(stack.shape)
+
+# def plot_bootstrap(x, y, frac=.4, K=100, pct_bootstrap=0.75):
+#     # from scipy import stats
+#     bootstraps = smooth(x, y, K=K, pct_bootstrap=pct_bootstrap, frac=frac)
+#     mean = np.nanmean(bootstraps, axis=1)
+#     # stderr = stats.sem(bootstraps, axis=1, nan_policy='omit')
+#     stderr = np.nanstd(bootstraps, axis=1, ddof=0) / np.sqrt(bootstraps.shape[1])
+
+#     fig, ax = plt.subplots()
+#     ax.fill_between(ts.date, mean-1.96*stderr, mean+1.96*stderr,alpha=0.95)
+#     #ax.plot(ts.date, bootstraps,  color='tomato', alpha=0.25)
+#     ax.plot(ts.date, mean, color='red')
+#     ax.plot(ts.date, ts, '.-')
+#     ax.set_title(f"{frac = :.2f}, {K = }, {pct_bootstrap = :.2f}")
+#     return bootstraps, ax
+
+# def smooth(x, y, frac=.3, K=1, pct_bootstrap=0.75):
+#     if K > 1:
+#         return np.stack([smooth(x, y, K=1, frac=frac, pct_bootstrap=pct_bootstrap) for k in range(K)]).T
+#     nboot = int(pct_bootstrap * len(x))
+#     sample_idxs = np.random.choice(len(x), nboot, replace=True)
+#     y_s = y[sample_idxs]
+#     x_s = x[sample_idxs]
+#     return sm_lowess(y_s, x_s, frac=frac, it=1, xvals=x)

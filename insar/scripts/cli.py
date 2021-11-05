@@ -5,7 +5,7 @@ from os.path import abspath, join, split
 import glob
 import json
 import click
-import insar
+import insar.scripts.process
 
 
 # Main entry point:
@@ -30,6 +30,7 @@ def cli(ctx, verbose, path):
 
 # COMMAND: PROCESS
 def parse_steps(ctx, param, value):
+    import insar.scripts.process
     """Allows ranges of steps, from https://stackoverflow.com/a/4726287"""
     if value is None:
         return []
@@ -216,6 +217,7 @@ def process(context, **kwargs):
     They may be ignored if not running step 2, and are an alternative to
     using --geojson
     """
+    import insar.scripts.process
     kwargs["verbose"] = context["verbose"]
     if kwargs["left_lon"] and kwargs["geojson"]:
         raise click.BadOptionUsage(
@@ -544,6 +546,7 @@ def prepare_stacks(context, overwrite):
 )
 @click.pass_obj
 def unzip(context, delete_zips):
+    import insar.scripts.preproc
     insar.scripts.preproc.unzip_sentinel_files(context["path"], delete_zips=delete_zips)
 
 
