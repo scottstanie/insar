@@ -118,7 +118,7 @@ def run_sentinel_stack(unzip=True, product_type="", gpu=False, **kwargs):
     _log_and_run(cmd)
     for f in glob.glob("S*.geo"):
         # make symlinks of rsc file for loading
-        
+
         force_symlink("elevation.dem.rsc", f + ".rsc")
 
 
@@ -144,9 +144,24 @@ def _reorganize_files(new_dir="extra_files"):
     """Records current file names for Sentinel dir, renames to short names"""
 
 
+def _cleanup_bad_dates(new_dir="extra_files", bad_dir_name="bad_files"):
+    """Moves dates with missing data to separate folder"""
+    from apertools import stitching, utils
+
+    mkdir_p(bad_dir_name)
+    with utils.chdir_then_revert(new_dir):
+        bad_dates = stitching.find_safes_with_missing_data(".", "elevation.dem")
+        for d in bad_dates:
+            dstr = d.strftime("%Y%m%d")
+            for f in glob.glob(f"*{dstr}*"):
+                logger.info("Bad date: Moving {} to {}".format(f, bad_dir_name))
+                os.rename(f, os.path.join(bad_dir_name, dstr))
+
+
 def prep_igrams_dir(cleanup=False, **kwargs):
     """4. Reorganize and rename .geo files, stitches .geos, prepare for igrams"""
-    import apertools.stitching
+    from apertools import stitching
+
     new_dir = "extra_files"
     if cleanup:
         logger.info("Renaming .geo files, creating symlinks")
@@ -155,9 +170,8 @@ def prep_igrams_dir(cleanup=False, **kwargs):
         else:
             # Save all sentinel_stack output to new_dir
             mkdir_p(new_dir)
+            _cleanup_bad_dates(new_dir)
             subprocess.call("mv ./* {}/".format(new_dir), shell=True)
-        # For now, leave out the "bad_geo" making
-        # apertools.utils.clean_files(".geo", path=".", zero_threshold=0.50, test=False)
 
     # Then bring back the useful ones to the cur dir as symlinks renamed
     geofiles = glob.glob(os.path.join(new_dir, "*.geo"))
@@ -180,7 +194,7 @@ def prep_igrams_dir(cleanup=False, **kwargs):
             logger.info(f"{geofile + '.rsc'} already exists: skipping ({e})")
 
     # Now stitch together duplicate dates of .geos
-    apertools.stitching.stitch_same_dates(
+    stitching.stitch_same_dates(
         geo_path="extra_files/", output_path=".", overwrite=False
     )
 
@@ -283,6 +297,7 @@ def run_snaphu(max_jobs=None, **kwargs):
     Assumes we are in the directory with all .unw files
     """
     import apertools.sario
+
     igram_rsc = apertools.sario.load("dem.rsc")
     width = igram_rsc["width"]
 
@@ -369,6 +384,7 @@ def run_sbas_inversion(
 
     Assumes we are in the directory with all .unw files"""
     import insar.prepare
+
     igram_path = os.path.realpath(os.getcwd())
 
     # Note: with overwrite=False, this will only take a long time once
