@@ -140,17 +140,13 @@ def _make_symlinks(geofiles):
             logger.info(f"{new_name} already exists: skipping ({e})")
 
 
-def _reorganize_files(new_dir="extra_files"):
-    """Records current file names for Sentinel dir, renames to short names"""
-
-
 def _cleanup_bad_dates(new_dir="extra_files", bad_dir_name="bad_files"):
     """Moves dates with missing data to separate folder"""
     from apertools import stitching, utils
 
     mkdir_p(bad_dir_name)
     with utils.chdir_then_revert(new_dir):
-        bad_dates = stitching.find_safes_with_missing_data(".", "elevation.dem")
+        bad_dates = stitching.find_safes_with_missing_data(".", "../elevation.dem")
         for d in bad_dates:
             dstr = d.strftime("%Y%m%d")
             for f in glob.glob(f"*{dstr}*"):

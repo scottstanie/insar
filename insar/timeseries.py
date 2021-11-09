@@ -232,7 +232,7 @@ def run_inversion(
         )
         # mean_cor = ts_utils.get_cor_mean(defo_fname=outfile, cor_fname=cor_stack_file)
         cor_mean = get_cor_mean(
-            valid_ifg_idxs, cor_fname=cor_stack_file, cor_dset=sario.STACK_MEAN_DSET,
+            valid_ifg_idxs, cor_fname=cor_stack_file, cor_dset=sario.STACK_DSET,
         )
         with h5py.File(outfile, "a") as hf:
             hf[cor_dset] = cor_mean

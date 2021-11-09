@@ -56,14 +56,30 @@ OUTFILE {outname}
     if corname:
         # cmd += f" -c {corname}"
         conf_string += f"CORRFILE	{corname}\n"
+    
+    # Calculate the tiles sizes/number of procs to use, separate for width/height
+    nprocs = 1
     if width > 1000:
-        conf_string += "NTILEROW 3\nNTILECOL 3\nROWOVRLP 400\nCOLOVRLP 400\n"
-        conf_string += "NPROC 9\n"
+        conf_string += "NTILECOL 3\nCOLOVRLP 400\n"
+        nprocs *= 3
         # cmd += " -S --tile 3 3 400 400 --nproc 9"
     elif width > 500:
-        conf_string += "NTILEROW 2\nNTILECOL 2\nROWOVRLP 400\nCOLOVRLP 400\n"
-        conf_string += "NPROC 4\n"
+        conf_string += "NTILECOL 2\nCOLOVRLP 400\n"
+        nprocs *= 2
         # cmd += " -S --tile 2 2 400 400 --nproc 4"
+
+    height = os.path.getsize(intfile) / width / 8
+    if height > 1000:
+        conf_string += "NTILEROW 3\nROWOVRLP 400\n"
+        nprocs *= 3
+        conf_string += "NPROC 9\n"
+    elif height > 500:
+        conf_string += "NTILEROW 2\nROWOVRLP 400\n"
+        nprocs *= 2
+        conf_string += "NPROC 4\n"
+    if nprocs > 1:
+        conf_string += f"NPROC {nprocs}\n"
+
     with open(conf_name, "w") as f:
         f.write(conf_string)
 
