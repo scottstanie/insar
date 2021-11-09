@@ -228,10 +228,11 @@ def run_inversion(
             "Saving correlation from %s to %s/%s",
             cor_stack_file,
             outfile,
+            cor_dset,
         )
         # mean_cor = ts_utils.get_cor_mean(defo_fname=outfile, cor_fname=cor_stack_file)
         cor_mean = get_cor_mean(
-            valid_ifg_idxs, cor_fname=cor_stack_file, cor_dset=cor_dset
+            valid_ifg_idxs, cor_fname=cor_stack_file, cor_dset=sario.STACK_MEAN_DSET,
         )
         with h5py.File(outfile, "a") as hf:
             hf[cor_dset] = cor_mean
@@ -248,12 +249,12 @@ def run_inversion(
             sario.save_latlon_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
             sario.attach_latlon(outfile, output_dset, depth_dim="date")
             if mean_cor is not None:
-                sario.attach_latlon(outfile, cor_ds)
+                sario.attach_latlon(outfile, cor_dset)
         else:
             sario.save_latlon_2d_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
             sario.attach_latlon_2d(outfile, output_dset, depth_dim="date")
             if mean_cor is not None:
-                sario.attach_latlon_2d(outfile, cor_ds)
+                sario.attach_latlon_2d(outfile, cor_dset)
 
     # TODO: just use the h5?
     if save_as_netcdf:
