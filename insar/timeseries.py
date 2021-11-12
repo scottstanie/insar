@@ -139,8 +139,11 @@ def run_inversion(
         full_shape = hf[input_dset].shape
         nstack, nrows, ncols = full_shape
         nbytes = hf[input_dset].dtype.itemsize
-        chunk_size = list(hf[input_dset].chunks) or [nstack, 10, 10]
-        chunk_size[0] = nstack  # always load a full depth slice at once
+        try:
+            chunk_size = list(hf[input_dset].chunks) or [nstack, 10, 10]
+            chunk_size[0] = nstack  # always load a full depth slice at once
+        except:
+            chunk_size = [nstack, 100, 100]
         # The attrs set by HDF5/xarray have keys that are capitalized. skip those
         # Note: .tolist() needed to convert numpy objects into lists/ints
         attrs_to_copy = {
@@ -230,7 +233,7 @@ def run_inversion(
             outfile,
             cor_dset,
         )
-        # mean_cor = ts_utils.get_cor_mean(defo_fname=outfile, cor_fname=cor_stack_file)
+        # cor_mean = ts_utils.get_cor_mean(defo_fname=outfile, cor_fname=cor_stack_file)
         cor_mean = get_cor_mean(
             valid_ifg_idxs, cor_fname=cor_stack_file, cor_dset=sario.STACK_DSET,
         )
@@ -239,7 +242,7 @@ def run_inversion(
             for k, v in attrs_to_copy.items():
                 hf[output_dset].attrs[k] = v
     else:
-        mean_cor = None
+        cor_mean = None
 
     if sario.attach_latlon:
         with h5py.File(unw_stack_file) as hf:
@@ -248,12 +251,12 @@ def run_inversion(
         if coordinates == "geo":
             sario.save_latlon_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
             sario.attach_latlon(outfile, output_dset, depth_dim="date")
-            if mean_cor is not None:
+            if cor_mean is not None:
                 sario.attach_latlon(outfile, cor_dset)
         else:
             sario.save_latlon_2d_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
             sario.attach_latlon_2d(outfile, output_dset, depth_dim="date")
-            if mean_cor is not None:
+            if cor_mean is not None:
                 sario.attach_latlon_2d(outfile, cor_dset)
 
     # TODO: just use the h5?

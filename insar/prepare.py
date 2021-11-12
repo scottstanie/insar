@@ -907,6 +907,7 @@ def redo_reference(
     ref_row=None,
     ref_col=None,
     ref_station=None,
+    deramp_order=None,
     dset_name=STACK_FLAT_SHIFTED_DSET,
     geom_dir=ISCE_GEOM_DIR,
     coordinates="geo",
@@ -920,8 +921,11 @@ def redo_reference(
 
         nimages, rows, cols = f[dset_name].shape
         chunk_shape = f[dset_name].chunks
-        # chunk_layers, chunk_rows, chunk_cols = chunk_shape
-        chunk_layers = chunk_shape[0]
+        try:
+            chunk_layers, chunk_rows, chunk_cols = chunk_shape
+            # chunk_layers = chunk_shape[0]
+        except TypeError:  # If no chunks
+            chunk_layers = 100
 
     buf = np.zeros((chunk_layers, rows, cols), dtype=np.float32)
     ref_row, ref_col, ref_lat, ref_lon, ref_station = get_reference(
@@ -952,6 +956,9 @@ def redo_reference(
             logger.info(f"Recentering {cur_slice}")
             buf *= 0
             dset.read_direct(buf, cur_slice, dest_slice)
+            if deramp_order:
+                logger.info(f"Removing ramp order {deramp_order}")
+                buf = deramp.remove_ramp(buf, deramp_order=deramp_order)
             # Now center it on the shift window
             buf = _shift(buf, ref_row, ref_col, win)
 
