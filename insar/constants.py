@@ -2,6 +2,7 @@
 DEFO_FILENAME = "deformation.h5"
 DEFO_FILENAME_NC = "deformation.nc"
 DEFO_NOISY_DSET = "defo_noisy"
+DEFO_LOWESS_DSET = "defo_lowess"
 LINEAR_VELO_DSET = "linear_velocity"
 MODEL_DEFO_DSET = "defo_{model}"
 ATMO_DAY1_DSET = "atmo_day1"

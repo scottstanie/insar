@@ -420,6 +420,7 @@ def closure_integer_ambiguity(unw_stack, ifg_date_pairs):
 # TODO
 def _run_lowess(ts, xs, frac, it):
     import statsmodels.api as sm
+
     lowess = sm.nonparametric.lowess
     return lowess(ts, xs, frac=frac, it=it)[:, 1]
 
@@ -434,6 +435,7 @@ def lowess_stack(stack, xs, frac=0.5, it=1, workers=None):
             _run_lowess, timeseries, repeat(xs), repeat(frac), repeat(it)
         )
     return np.array(outputs).reshape(stack.shape)
+
 
 # def plot_bootstrap(x, y, frac=.4, K=100, pct_bootstrap=0.75):
 #     # from scipy import stats
@@ -450,11 +452,41 @@ def lowess_stack(stack, xs, frac=0.5, it=1, workers=None):
 #     ax.set_title(f"{frac = :.2f}, {K = }, {pct_bootstrap = :.2f}")
 #     return bootstraps, ax
 
-# def smooth(x, y, frac=.3, K=1, pct_bootstrap=0.75):
-#     if K > 1:
-#         return np.stack([smooth(x, y, K=1, frac=frac, pct_bootstrap=pct_bootstrap) for k in range(K)]).T
-#     nboot = int(pct_bootstrap * len(x))
-#     sample_idxs = np.random.choice(len(x), nboot, replace=True)
-#     y_s = y[sample_idxs]
-#     x_s = x[sample_idxs]
-#     return sm_lowess(y_s, x_s, frac=frac, it=1, xvals=x)
+
+def smooth(x, y, frac=0.3, K=1, pct_bootstrap=1.0):
+    from statsmodels.nonparametric.smoothers_lowess import lowess as sm_lowess
+
+    if K > 1:
+        return np.stack(
+            [
+                smooth(x, y, K=1, frac=frac, pct_bootstrap=pct_bootstrap)
+                for k in range(K)
+            ]
+        ).T
+    nboot = int(pct_bootstrap * len(x))
+    sample_idxs = np.random.choice(len(x), nboot, replace=True)
+    y_s = y[sample_idxs]
+    x_s = x[sample_idxs]
+    return sm_lowess(y_s, x_s, frac=frac, it=1, xvals=x)
+
+
+def plot_bootstrap_std(x, y, frac=0.4, K=100, pct_bootstrap=1.0, xplot=None):
+    bootstraps = smooth(x, y, K=K, pct_bootstrap=pct_bootstrap, frac=frac)
+    mean = np.nanmean(bootstraps, axis=1)
+    # stderr = stats.sem(bootstraps, axis=1, nan_policy='omit')
+    stderr = np.nanstd(bootstraps, axis=1, ddof=0)
+    xplot = xplot if xplot is not None else x
+    fig, ax = plt.subplots()
+    ax.fill_between(xplot, mean - 1.96 * stderr, mean + 1.96 * stderr, alpha=0.25)
+    # ax.plot(ts.date, bootstraps,  color='tomato', alpha=0.25)
+    ax.plot(xplot, mean, color="red")
+    ax.plot(xplot, ts, ".-")
+    ax.set_title(f"{frac = :.2f}, {K = }, {pct_bootstrap = :.2f}")
+    return bootstraps, ax
+
+
+# out = [_run_lowess(tt,  xs, .6, 2) if np.sum(tt) != 0 else np.zeros_like(xs) for tt in stack_cols.T]
+def _run_lowess(ts, xs, frac, it):
+    from statsmodels.nonparametric.smoothers_lowess import lowess as sm_lowess
+
+    return sm_lowess(ts, xs, frac=frac, it=it)[:, 1]

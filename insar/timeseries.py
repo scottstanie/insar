@@ -235,7 +235,9 @@ def run_inversion(
         )
         # cor_mean = ts_utils.get_cor_mean(defo_fname=outfile, cor_fname=cor_stack_file)
         cor_mean = get_cor_mean(
-            valid_ifg_idxs, cor_fname=cor_stack_file, cor_dset=sario.STACK_DSET,
+            valid_ifg_idxs,
+            cor_fname=cor_stack_file,
+            cor_dset=sario.STACK_DSET,
         )
         with h5py.File(outfile, "a") as hf:
             hf[cor_dset] = cor_mean
@@ -514,7 +516,7 @@ def calc_model_fit_deformation(
         reweight_by_atmo_var (bool): default True. Performs weighted least squares
             to refit model from residual variances. See `Notes` for details.
         outname (str): Name of dataset to save atmo estimattion within `defo_fname`
-            (default= constants.ATMO_DAY1_DSET)
+            (default= `constants.ATMO_DAY1_DSET`)
         overwrite (bool): If True, delete (if exists) the output
 
     Returns:
@@ -736,3 +738,71 @@ class DummyExecutor(Executor):
     def shutdown(self, wait=True):
         with self._shutdownLock:
             self._shutdown = True
+
+
+def lowess(
+    defo_fname=constants.DEFO_FILENAME_NC,
+    orig_dset=constants.DEFO_NOISY_DSET,
+    out_dset=constants.DEFO_LOWESS_DSET,
+    frac=0.7,
+    it=2,
+    remove_day1_atmo=True,
+    outname=None,
+    overwrite=False,
+):
+    from statsmodels.nonparametric.smoothers_lowess import lowess as sm_lowess
+
+    _confirm_closed(defo_fname)
+
+    if sario.check_dset(defo_fname, outname, overwrite) is False:  # already exists:
+        with xr.open_dataset(defo_fname) as ds:
+            # TODO: save the poly, also load that
+            return ds[outname]
+
+    with xr.open_dataset(defo_fname) as ds:
+        ts = date2num(ds["date"].values)
+        noisy_da = ds[orig_dset]
+
+        logger.info("Running lowess on %s/%s", defo_fname, orig_dset)
+        # Run the "lowess" on each pixel separately
+        # add the `transpose` since `apply_ufunc` moves the axis to the end
+        out_da = run_lowess_xr(noisy_da, frac, it).transpose("date", ...)
+
+    _confirm_closed(defo_fname)
+    if remove_day1_atmo:
+        out = constants.ATMO_DAY1_DSET
+        logger.info("Saving day1 atmo estimation to %s", out)
+        # The first date will be a good estimate of that day's atmo
+        day1_atmo = out_da.isel(date=0)
+        if sario.check_dset(defo_fname, out, overwrite):
+            day1_atmo.to_dataset(name=out).to_netcdf(
+                defo_fname,
+                mode="a",
+                engine="h5netcdf",
+            )
+        out_da = out_da - day1_atmo
+
+    _confirm_closed(defo_fname)
+    logger.info("Saving lowess-smoothed deformation to %s/%s", outname, out_dset)
+    out_da.to_dataset(name=out_dset).to_netcdf(defo_fname, mode="a", engine="h5netcdf")
+
+
+def run_lowess_xr(da, it=2, frac=0.7):
+    from statsmodels.nonparametric.smoothers_lowess import lowess as sm_lowess
+    from matplotlib.dates import date2num
+
+    def _run_pixel(pixel):
+        return sm_lowess(ts, pixel, frac=frac, it=it)[:, 1]
+
+    ts = date2num(da["date"].values)
+
+    return xr.apply_ufunc(
+        _run_pixel,
+        da,
+        input_core_dims=[["date"]],
+        output_core_dims=[["date"]],
+        dask="parallelized",
+        output_dtypes=["float32"],
+        # exclude_dims=set(("date",)),
+        parallelize=True,
+    )
