@@ -789,6 +789,8 @@ def run_lowess_xr(da, frac=0.7, it=2):
     from matplotlib.dates import date2num
 
     def _run_pixel(pixel):
+        if np.any(np.isnan(pixel)) or np.all(pixel == 0):
+            return pixel
         return sm_lowess(ts, pixel, frac=frac, it=it)[:, 1]
 
     ts = date2num(da["date"].values)
