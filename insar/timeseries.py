@@ -801,5 +801,5 @@ def run_lowess_xr(da, it=2, frac=0.7):
         dask="parallelized",
         output_dtypes=["float32"],
         # exclude_dims=set(("date",)),
-        parallelize=True,
+        vectorize=True,
     )
