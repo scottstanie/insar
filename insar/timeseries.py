@@ -757,7 +757,7 @@ def lowess(
             return ds[out_dset]
 
     with xr.open_dataset(defo_fname) as ds:
-        ts = date2num(ds["date"].values)
+        # ts = date2num(ds["date"].values)
         noisy_da = ds[orig_dset]
 
         logger.info("Running lowess on %s/%s", defo_fname, orig_dset)
@@ -780,11 +780,11 @@ def lowess(
         out_da = out_da - day1_atmo
 
     _confirm_closed(defo_fname)
-    logger.info("Saving lowess-smoothed deformation to %s/%s", outname, out_dset)
+    logger.info("Saving lowess-smoothed deformation to %s/%s", defo_fname, out_dset)
     out_da.to_dataset(name=out_dset).to_netcdf(defo_fname, mode="a", engine="h5netcdf")
 
 
-def run_lowess_xr(da, it=2, frac=0.7):
+def run_lowess_xr(da, frac=0.7, it=2):
     from statsmodels.nonparametric.smoothers_lowess import lowess as sm_lowess
     from matplotlib.dates import date2num
 
