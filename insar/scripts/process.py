@@ -269,6 +269,9 @@ def run_form_igrams(xlooks=1, ylooks=1, **kwargs):
     from insar import form_igrams
 
     form_igrams.create_igrams(ylooks, xlooks)
+    add_int_rsc = """find . -name "*.int" -print0 | \
+xargs -0 -n1 -I{} --max-procs=50 cp dem.rsc {}.rsc """
+    _log_and_run(add_int_rsc, check=False)
 
 
 def record_los_vectors(path=".", **kwargs):
