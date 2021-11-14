@@ -792,12 +792,12 @@ def run_lowess_xr(da, frac=0.7, it=2):
     from statsmodels.nonparametric.smoothers_lowess import lowess as sm_lowess
     from matplotlib.dates import date2num
 
+    times = date2num(da["date"].values)
+
     def _run_pixel(pixel):
         if np.any(np.isnan(pixel)) or np.all(pixel == 0):
             return pixel
-        return sm_lowess(ts, pixel, frac=frac, it=it)[:, 1]
-
-    ts = date2num(da["date"].values)
+        return sm_lowess(pixel, times, frac=frac, it=it)[:, 1]
 
     return xr.apply_ufunc(
         _run_pixel,
