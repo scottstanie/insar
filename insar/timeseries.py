@@ -492,6 +492,7 @@ def get_cor_mean(idxs, cor_fname=sario.COR_FILENAME, cor_dset=sario.STACK_DSET):
         return np.mean(hf[cor_dset][idxs], axis=0)
 
 
+@log_runtime
 def calc_model_fit_deformation(
     defo_fname=constants.DEFO_FILENAME_NC,
     orig_dset=constants.DEFO_NOISY_DSET,
@@ -740,6 +741,7 @@ class DummyExecutor(Executor):
             self._shutdown = True
 
 
+@log_runtime
 def lowess(
     defo_fname=constants.DEFO_FILENAME_NC,
     orig_dset=constants.DEFO_NOISY_DSET,
@@ -782,8 +784,10 @@ def lowess(
     _confirm_closed(defo_fname)
     logger.info("Saving lowess-smoothed deformation to %s/%s", defo_fname, out_dset)
     out_da.to_dataset(name=out_dset).to_netcdf(defo_fname, mode="a", engine="h5netcdf")
+    return out_da
 
 
+@log_runtime
 def run_lowess_xr(da, frac=0.7, it=2):
     from statsmodels.nonparametric.smoothers_lowess import lowess as sm_lowess
     from matplotlib.dates import date2num
