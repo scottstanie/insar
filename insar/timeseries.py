@@ -747,17 +747,14 @@ def lowess(
     frac=0.7,
     it=2,
     remove_day1_atmo=True,
-    outname=None,
     overwrite=False,
 ):
-    from statsmodels.nonparametric.smoothers_lowess import lowess as sm_lowess
-
     _confirm_closed(defo_fname)
 
-    if sario.check_dset(defo_fname, outname, overwrite) is False:  # already exists:
+    if sario.check_dset(defo_fname, out_dset, overwrite) is False:  # already exists:
         with xr.open_dataset(defo_fname) as ds:
             # TODO: save the poly, also load that
-            return ds[outname]
+            return ds[out_dset]
 
     with xr.open_dataset(defo_fname) as ds:
         ts = date2num(ds["date"].values)
