@@ -1,5 +1,7 @@
 import numpy as np
 from matplotlib.dates import date2num
+from concurrent.futures import Future, Executor
+from threading import Lock
 from itertools import chain, combinations
 from apertools import sario
 
@@ -485,8 +487,28 @@ def plot_bootstrap_std(x, y, frac=0.4, K=100, pct_bootstrap=1.0, xplot=None):
     return bootstraps, ax
 
 
-# out = [_run_lowess(tt,  xs, .6, 2) if np.sum(tt) != 0 else np.zeros_like(xs) for tt in stack_cols.T]
-def _run_lowess(ts, xs, frac, it):
-    from statsmodels.nonparametric.smoothers_lowess import lowess as sm_lowess
+class DummyExecutor(Executor):
+    def __init__(self, *args, **kwargs):
+        self._shutdown = False
+        self._shutdownLock = Lock()
 
-    return sm_lowess(ts, xs, frac=frac, it=it)[:, 1]
+    def submit(self, fn, *args, **kwargs):
+        with self._shutdownLock:
+            if self._shutdown:
+                raise RuntimeError("cannot schedule new futures after shutdown")
+
+            f = Future()
+            try:
+                result = fn(*args, **kwargs)
+            except KeyboardInterrupt:
+                raise
+            except BaseException as e:
+                f.set_exception(e)
+            else:
+                f.set_result(result)
+
+            return f
+
+    def shutdown(self, wait=True):
+        with self._shutdownLock:
+            self._shutdown = True

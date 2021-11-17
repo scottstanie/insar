@@ -15,8 +15,7 @@ scott@lidar igrams]$ head slclist
 
 """
 import os
-from concurrent.futures import ProcessPoolExecutor, as_completed, Future, Executor
-from threading import Lock
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 # try:
 #     import hdf5plugin  # noqa : for the possiblity of HDF5 blosc filter
@@ -35,8 +34,8 @@ from . import constants
 from apertools.constants import PHASE_TO_CM_MAP, WAVELENGTH_MAP
 
 # from .ts_utils import get_cor_mean, ptp_by_date, ptp_by_date_pct
-from .ts_utils import ptp_by_date_pct
-from insar import ts_utils
+# from insar import ts_utils
+from .ts_utils import ptp_by_date_pct, DummyExecutor
 
 PARALLEL = True  # With false, uses dummy Executor (for debugging)
 MAX_WORKERS = 6
@@ -479,6 +478,9 @@ def _get_block_shape(full_shape, chunk_size, block_size_max=10e6, nbytes=4):
     """Find a size of a data cube less than `block_size_max` in increments of `chunk_size`"""
     import copy
 
+    if chunk_size is None:
+        chunk_size = full_shape
+
     chunks_per_block = block_size_max / (np.prod(chunk_size) * nbytes)
     row_chunks, col_chunks = 1, 1
     cur_block_shape = copy.copy(chunk_size)
@@ -723,34 +725,9 @@ def _record_run_params(paramfile, **kwargs):
 def _confirm_closed(fname):
     """Weird hack to make sure file handles are closed
     https://github.com/h5py/h5py/issues/1090#issuecomment-608485873"""
-    xr.open_dataset(fname).close()
-
-
-class DummyExecutor(Executor):
-    def __init__(self, *args, **kwargs):
-        self._shutdown = False
-        self._shutdownLock = Lock()
-
-    def submit(self, fn, *args, **kwargs):
-        with self._shutdownLock:
-            if self._shutdown:
-                raise RuntimeError("cannot schedule new futures after shutdown")
-
-            f = Future()
-            try:
-                result = fn(*args, **kwargs)
-            except KeyboardInterrupt:
-                raise
-            except BaseException as e:
-                f.set_exception(e)
-            else:
-                f.set_result(result)
-
-            return f
-
-    def shutdown(self, wait=True):
-        with self._shutdownLock:
-            self._shutdown = True
+    xr.open_dataset(fname, engine="h5netcdf").close()
+    with h5py.File(fname, "r") as f:
+        pass
 
 
 @log_runtime
@@ -759,27 +736,57 @@ def lowess(
     orig_dset=constants.DEFO_NOISY_DSET,
     out_dset=constants.DEFO_LOWESS_DSET,
     frac=0.7,
-    it=2,
+    n_iter=2,
     remove_day1_atmo=True,
     overwrite=False,
 ):
+    import apertools.lowess
+
     _confirm_closed(defo_fname)
 
     if sario.check_dset(defo_fname, out_dset, overwrite) is False:  # already exists:
-        with xr.open_dataset(defo_fname) as ds:
+        with xr.open_dataset(defo_fname, engine="h5netcdf") as ds:
             # TODO: save the poly, also load that
             return ds[out_dset]
 
-    with xr.open_dataset(defo_fname) as ds:
+    with xr.open_dataset(defo_fname, engine="h5netcdf") as ds:
         # ts = date2num(ds["date"].values)
         noisy_da = ds[orig_dset]
+        # nstack, nrows, ncols = noisy_da.shape
+        # nbytes = noisy_da.dtype.itemsize
+        # chunk_size = noisy_da.chunks or [nstack, min(100, nrows), min(100, ncols)]
+        # block_shape = _get_block_shape(
+        # noisy_da.shape, chunk_size, block_size_max=100e6, nbytes=nbytes
+        # )
 
         logger.info("Running lowess on %s/%s", defo_fname, orig_dset)
         # Run the "lowess" on each pixel separately
         # add the `transpose` since `apply_ufunc` moves the axis to the end
-        out_da = run_lowess_xr(noisy_da, frac, it).transpose("date", ...)
+        # out_da = run_lowess_xr(noisy_da, frac, n_iter).transpose("date", ...)
+
+        # x = date2num(noisy_da['date'])
+        # blk_slices = utils.block_iterator((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
+        # out_stack = np.zeros_like(noisy_da.values)
+        # for (rows, cols) in blk_slices:
+        #     cur_block = noisy_da[:, rows, cols]
+        #     cur_out = lowess.lowess_stack(noisy_da.values, x, frac=frac, n_iter=n_iter)
+        #     out_stack[:, rows[0] : rows[1], cols[0] : cols[1]] = cur_out
+        out_da = apertools.lowess.lowess_xr(
+            noisy_da, x_dset="date", frac=frac, n_iter=n_iter
+        )
 
     _confirm_closed(defo_fname)
+    day1_atmo = out_da.isel(date=0)
+    out_da = out_da - day1_atmo
+    out_name = defo_fname.replace(".nc", "_tmp.nc")
+    out_da.to_dataset(name=out_dset).to_netcdf(
+        out_name, mode="a", engine="h5netcdf"
+    )
+    day1_atmo.to_dataset(name=constants.ATMO_DAY1_DSET).to_netcdf(
+        out_name,
+        mode="a",
+        engine="h5netcdf",
+    )
     if remove_day1_atmo:
         out = constants.ATMO_DAY1_DSET
         logger.info("Saving day1 atmo estimation to %s", out)
@@ -797,50 +804,3 @@ def lowess(
     logger.info("Saving lowess-smoothed deformation to %s/%s", defo_fname, out_dset)
     out_da.to_dataset(name=out_dset).to_netcdf(defo_fname, mode="a", engine="h5netcdf")
     return out_da
-
-
-from apertools import lowess
-
-# def _lowess(y, x, f=2.0 / 3.0, n_iter=3):  # pragma: no cover
-from numba import guvectorize
-
-
-@guvectorize(
-    "(float64[:], float64[:], float64, int64, float64[:])",
-    "(n),(n),(),()->(n)",
-    nopython=True,
-)
-def _run_pixel(y, x, frac, it, out):
-    if not (np.any(np.isnan(y)) or np.all(y == 0)):
-        out[:] = lowess._lowess(y, x, frac, it)
-
-
-@log_runtime
-def run_lowess_xr(da, frac=0.7, it=2):
-    from matplotlib.dates import date2num
-
-    times = date2num(da["date"].values)
-    # def _run_pixel(pixel):
-    #     from statsmodels.nonparametric.smoothers_lowess import lowess as sm_lowess
-
-    #     if np.any(np.isnan(pixel)) or np.all(pixel == 0):
-    #         return pixel
-    #     return sm_lowess(pixel, times, frac=frac, it=it)[:, 1]
-    # def _run_pixel(pixel):
-    # if np.any(np.isnan(pixel)) or np.all(pixel == 0):
-    # return pixel
-    # return lowess._lowess(pixel, times, frac, it)
-
-    return xr.apply_ufunc(
-        _run_pixel,
-        da.chunk({"lat": 10, "lon": 10}),
-        times,
-        frac,
-        it,
-        input_core_dims=[["date"], [], [], []],
-        output_core_dims=[["date"]],
-        dask="parallelized",
-        output_dtypes=["float32"],
-        # exclude_dims=set(("date",)),
-        # vectorize=True,
-    )

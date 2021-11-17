@@ -182,3 +182,19 @@ def lowess(stack, x, frac, n_iter, out, n, h, w, yest, delta, b, A, weights):
         delta = (1 - delta ** 2) ** 2
 
     out[:, i, j] = yest
+
+from apertools import lowess
+
+# def _lowess(y, x, f=2.0 / 3.0, n_iter=3):  # pragma: no cover
+from numba import guvectorize
+
+
+@guvectorize(
+    "(float64[:], float64[:], float64, int64, float64[:])",
+    "(n),(n),(),()->(n)",
+    nopython=True,
+    # parallel=True,
+)
+def _run_pixel(y, x, frac, it, out):
+    if not (np.any(np.isnan(y)) or np.all(y == 0)):
+        out[:] = lowess._lowess(y, x, frac, it)
