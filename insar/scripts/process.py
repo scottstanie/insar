@@ -370,12 +370,13 @@ def run_sbas_inversion(
     ref_row=None,
     ref_col=None,
     ref_station=None,
+    max_temporal=None,
     window=None,
     alpha=0,
     constant_velocity=False,
     difference=False,
     deramp_order=2,
-    ignore_geos=False,
+    # ignore_geos=False,
     stackavg=False,
     **kwargs,
 ):
@@ -383,6 +384,7 @@ def run_sbas_inversion(
 
     Assumes we are in the directory with all .unw files"""
     import insar.prepare
+    from insar import timeseries
 
     igram_path = os.path.realpath(os.getcwd())
 
@@ -394,7 +396,12 @@ def run_sbas_inversion(
         ref_station=ref_station,
         overwrite=False,
         deramp_order=deramp_order,
+        window=window,
     )
+
+    # TODO: coordinates, platform,...
+    timeseries.run_inversion(max_temporal_baseline=max_temporal)
+    timeseries.lowess()
 
     # Now this happens in prepare
     # insar.stackavg.run_stack(

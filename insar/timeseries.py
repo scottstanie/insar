@@ -65,6 +65,7 @@ def run_inversion(
     outfile=constants.DEFO_FILENAME,
     output_dset=constants.DEFO_NOISY_DSET,
     cor_stack_file=sario.COR_FILENAME,
+    los_file=constants.LOS_ENU_FILENAME,
     overwrite=False,
     min_date=None,
     max_date=None,
@@ -244,7 +245,16 @@ def run_inversion(
             for k, v in attrs_to_copy.items():
                 hf[output_dset].attrs[k] = v
     else:
-        cor_mean = None
+        cor_mean, cor_dset = None, None
+
+    if los_file:
+        los_dset = constants.LOS_ENU_DSET
+        logger.info("Saving line of sight to %s/%s", outfile, los_dset)
+        los_map = sario.load(los_file)
+        with h5py.File(outfile, "a") as hf:
+            hf[los_dset] = los_map
+    else:
+        los_map, los_dset = None, None
 
     if sario.attach_latlon:
         with h5py.File(unw_stack_file) as hf:
@@ -255,6 +265,8 @@ def run_inversion(
             sario.attach_latlon(outfile, output_dset, depth_dim="date")
             if cor_mean is not None:
                 sario.attach_latlon(outfile, cor_dset)
+            if los_map is not None:
+                sario.attach_latlon(outfile, los_dset)
         else:
             sario.save_latlon_2d_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
             sario.attach_latlon_2d(outfile, output_dset, depth_dim="date")
