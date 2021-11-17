@@ -1,5 +1,11 @@
 import numpy as np
+from math import ceil
+import numba
 from numba import njit, cuda
+
+from apertools.log import get_log
+
+log = get_log()
 
 
 @njit
@@ -81,3 +87,98 @@ def subset_A(A, full_slclist, full_ifglist, slclist, ifglist, valid_ifg):
     # TODO: valid_ifg in here...
     valid_slc = np.searchsorted(full_slclist[1:], slclist)
     return A[valid_ifg][:, valid_slc][:, 1:]
+
+
+def run_lowess_gpu(da, frac=0.7, n_iter=2):
+    from matplotlib.dates import date2num
+
+    x = date2num(da["date"].values)
+
+    stack = da.data
+    rows, cols = stack.shape[-2:]
+    # TODO: launch kernel
+    threadsperblock = (16, 16)
+    blockspergrid_x = ceil(rows / threadsperblock[0])
+    blockspergrid_y = ceil(cols / threadsperblock[1])
+    blockspergrid = (blockspergrid_x, blockspergrid_y)
+    log.info("Lowess smooothing on GPU.")
+    log.info(
+        "(blocks per grid, threads per block) = ((%s, %s), (%s, %s))",
+        *blockspergrid,
+        *threadsperblock
+    )
+
+    n = len(x)
+    h = np.zeros(n, dtype=np.float64)
+    w = np.zeros((n, n), dtype=np.float64)
+    yest = np.zeros(n)
+    delta = np.ones(n)
+    b = np.zeros(2, dtype=np.float64)
+    A = np.zeros((2, 2), dtype=np.float64)
+    weights = np.zeros(2, dtype=np.float64)
+
+    out = np.zeros(stack.shape, dtype=stack.dtype)
+    lowess[blockspergrid, threadsperblock](
+        stack, x, frac, n_iter, out, n, h, w, yest, delta, b, A, weights
+    )
+    return out
+
+
+import math
+import cupy
+from cupy import linalg
+# import cupy
+
+
+@cuda.jit
+def lowess(stack, x, frac, n_iter, out, n, h, w, yest, delta, b, A, weights):
+    i, j = cuda.grid(2)
+    if not (0 <= i < stack.shape[1] and 0 <= j < stack.shape[2]):
+        return
+    y = stack[:, i, j]
+
+    # Check whether any nans exist, or if the entire column is zero
+    all0 = True
+    for idx in range(len(y)):
+        if math.isnan(y[idx]):
+            return
+        if y[idx] != 0:
+            all0 = False
+    if all0:
+        return
+
+    n = len(x)
+    r = int(math.ceil(frac * n))
+
+    # h = np.array([np.sort(np.abs(x - x[i]))[r] for i in range(n)])
+    for i in range(n):
+        h[i] = cupy.sort(np.abs(x - x[i]))[r]
+
+    w = np.minimum(
+        1.0, np.maximum(np.abs((x.reshape((-1, 1)) - x.reshape((1, -1))) / h), 0.0)
+    )
+    w = (1 - w ** 3) ** 3
+    yest = 0.0
+    delta = 1.0
+
+    for _ in range(n_iter):
+        for i in range(n):
+            weights = delta * w[:, i]
+            # b = np.array([np.sum(weights * y), np.sum(weights * y * x)])
+            b[0] = np.sum(weights * y)
+            b[1] = np.sum(weights * y * x)
+            A[0, 0] = np.sum(weights)
+            A[0, 1] = np.sum(weights * x)
+            A[1, 0] = A[0, 1]
+            A[1, 1] = np.sum(weights * x * x)
+
+            beta = linalg.lstsq(A, b)[0]
+            yest[i] = beta[0] + beta[1] * x[i]
+
+        residuals = y - yest
+        s = np.median(np.abs(residuals))
+        # delta = np.clip(residuals / (6.0 * s), -1.0, 1.0)
+        delta = np.minimum(1.0, np.maximum(residuals / (6.0 * s), -1.0))
+        delta = (1 - delta ** 2) ** 2
+
+    out[:, i, j] = yest

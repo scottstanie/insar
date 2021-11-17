@@ -787,25 +787,48 @@ def lowess(
     return out_da
 
 
+from apertools import lowess
+
+# def _lowess(y, x, f=2.0 / 3.0, n_iter=3):  # pragma: no cover
+from numba import guvectorize
+
+
+@guvectorize(
+    "(float64[:], float64[:], float64, int64, float64[:])",
+    "(n),(n),(),()->(n)",
+    nopython=True,
+)
+def _run_pixel(y, x, frac, it, out):
+    if not (np.any(np.isnan(y)) or np.all(y == 0)):
+        out[:] = lowess._lowess(y, x, frac, it)
+
+
 @log_runtime
 def run_lowess_xr(da, frac=0.7, it=2):
-    from statsmodels.nonparametric.smoothers_lowess import lowess as sm_lowess
     from matplotlib.dates import date2num
 
     times = date2num(da["date"].values)
+    # def _run_pixel(pixel):
+    #     from statsmodels.nonparametric.smoothers_lowess import lowess as sm_lowess
 
-    def _run_pixel(pixel):
-        if np.any(np.isnan(pixel)) or np.all(pixel == 0):
-            return pixel
-        return sm_lowess(pixel, times, frac=frac, it=it)[:, 1]
+    #     if np.any(np.isnan(pixel)) or np.all(pixel == 0):
+    #         return pixel
+    #     return sm_lowess(pixel, times, frac=frac, it=it)[:, 1]
+    # def _run_pixel(pixel):
+    # if np.any(np.isnan(pixel)) or np.all(pixel == 0):
+    # return pixel
+    # return lowess._lowess(pixel, times, frac, it)
 
     return xr.apply_ufunc(
         _run_pixel,
-        da,
-        input_core_dims=[["date"]],
+        da.chunk({"lat": 10, "lon": 10}),
+        times,
+        frac,
+        it,
+        input_core_dims=[["date"], [], [], []],
         output_core_dims=[["date"]],
         dask="parallelized",
         output_dtypes=["float32"],
         # exclude_dims=set(("date",)),
-        vectorize=True,
+        # vectorize=True,
     )
