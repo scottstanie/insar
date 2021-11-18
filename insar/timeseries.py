@@ -681,12 +681,11 @@ def calc_model_fit_deformation(
     if remove_day1_atmo:
         out = constants.ATMO_DAY1_DSET
         logger.info("Saving day1 atmo estimation to %s", out)
-        if sario.check_dset(defo_fname, out, overwrite):
-            avg_atmo.to_dataset(name=out).to_netcdf(
-                defo_fname,
-                mode="a",
-                engine="h5netcdf",
-            )
+        avg_atmo.to_dataset(name=out).to_netcdf(
+            defo_fname,
+            mode="a",
+            engine="h5netcdf",
+        )
 
     if save_linear_fit:
         # out = constants.ATMO_DAY1_DSET
@@ -743,15 +742,14 @@ def lowess(
     import apertools.lowess
 
     _confirm_closed(defo_fname)
-
     if sario.check_dset(defo_fname, out_dset, overwrite) is False:  # already exists:
         with xr.open_dataset(defo_fname, engine="h5netcdf") as ds:
-            # TODO: save the poly, also load that
             return ds[out_dset]
 
-    with xr.open_dataset(defo_fname, engine="h5netcdf") as ds:
+    with xr.open_dataset(defo_fname, engine="h5netcdf", lock=False) as ds:
         # ts = date2num(ds["date"].values)
         noisy_da = ds[orig_dset]
+        # TODO: for when it's too big to run in memory
         # nstack, nrows, ncols = noisy_da.shape
         # nbytes = noisy_da.dtype.itemsize
         # chunk_size = noisy_da.chunks or [nstack, min(100, nrows), min(100, ncols)]
@@ -761,44 +759,30 @@ def lowess(
 
         logger.info("Running lowess on %s/%s", defo_fname, orig_dset)
         # Run the "lowess" on each pixel separately
-        # add the `transpose` since `apply_ufunc` moves the axis to the end
-        # out_da = run_lowess_xr(noisy_da, frac, n_iter).transpose("date", ...)
 
-        # x = date2num(noisy_da['date'])
+        # x = date2num(noisy_da['date'].values)
+        # stack = noisy_da.values
         # blk_slices = utils.block_iterator((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
         # out_stack = np.zeros_like(noisy_da.values)
         # for (rows, cols) in blk_slices:
         #     cur_block = noisy_da[:, rows, cols]
         #     cur_out = lowess.lowess_stack(noisy_da.values, x, frac=frac, n_iter=n_iter)
         #     out_stack[:, rows[0] : rows[1], cols[0] : cols[1]] = cur_out
-        out_da = apertools.lowess.lowess_xr(
-            noisy_da, x_dset="date", frac=frac, n_iter=n_iter
-        )
-
-    _confirm_closed(defo_fname)
-    day1_atmo = out_da.isel(date=0)
-    out_da = out_da - day1_atmo
-    out_name = defo_fname.replace(".nc", "_tmp.nc")
-    out_da.to_dataset(name=out_dset).to_netcdf(
-        out_name, mode="a", engine="h5netcdf"
+    out_da = apertools.lowess.lowess_xr(
+        noisy_da, x_dset="date", frac=frac, n_iter=n_iter
     )
+
+    # Now save the first day atmosphere/ full smoothed deformation to same file
+    _confirm_closed(defo_fname)
+    logger.info("Saving day1 atmo estimation to %s", constants.ATMO_DAY1_DSET)
+    # The first date will be a good estimate of that day's atmo
+    day1_atmo = out_da.isel(date=0)
     day1_atmo.to_dataset(name=constants.ATMO_DAY1_DSET).to_netcdf(
-        out_name,
+        defo_fname,
         mode="a",
         engine="h5netcdf",
     )
-    if remove_day1_atmo:
-        out = constants.ATMO_DAY1_DSET
-        logger.info("Saving day1 atmo estimation to %s", out)
-        # The first date will be a good estimate of that day's atmo
-        day1_atmo = out_da.isel(date=0)
-        if sario.check_dset(defo_fname, out, overwrite):
-            day1_atmo.to_dataset(name=out).to_netcdf(
-                defo_fname,
-                mode="a",
-                engine="h5netcdf",
-            )
-        out_da = out_da - day1_atmo
+    out_da = out_da - day1_atmo
 
     _confirm_closed(defo_fname)
     logger.info("Saving lowess-smoothed deformation to %s/%s", defo_fname, out_dset)
