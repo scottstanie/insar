@@ -764,18 +764,21 @@ def lowess(
 
         logger.info("Running lowess on %s/%s", defo_fname, orig_dset)
         # Run the "lowess" on each pixel separately
+        x = date2num(noisy_da["date"].values)
+        stack = noisy_da.values
+    out_stack = apertools.lowess.lowess_stack(stack, x, frac=frac, n_iter=2)
+    out_da = xr.DataArray(out_stack, coords=noisy_da.coords, dims=noisy_da.dims)
 
-        # x = date2num(noisy_da['date'].values)
-        # stack = noisy_da.values
-        # blk_slices = utils.block_iterator((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
-        # out_stack = np.zeros_like(noisy_da.values)
-        # for (rows, cols) in blk_slices:
-        #     cur_block = noisy_da[:, rows, cols]
-        #     cur_out = lowess.lowess_stack(noisy_da.values, x, frac=frac, n_iter=n_iter)
-        #     out_stack[:, rows[0] : rows[1], cols[0] : cols[1]] = cur_out
-    out_da = apertools.lowess.lowess_xr(
-        noisy_da, x_dset="date", frac=frac, n_iter=n_iter
-    )
+    # x = date2num(noisy_da['date'].values)
+    # stack = noisy_da.values
+    # blk_slices = utils.block_iterator((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
+    # out_stack = np.zeros_like(noisy_da.values)
+    # for (rows, cols) in blk_slices:
+    #     cur_block = noisy_da[:, rows, cols]
+    #     cur_out = lowess.lowess_stack(noisy_da.values, x, frac=frac, n_iter=n_iter)
+    #     out_stack[:, rows[0] : rows[1], cols[0] : cols[1]] = cur_out
+
+    # out_da = apertools.lowess.lowess_xr( noisy_da, x_dset="date", frac=frac, n_iter=n_iter)
     # The first date will be a good estimate of that day's atmo
     day1_atmo = out_da.isel(date=0)
     out_da = out_da - day1_atmo
