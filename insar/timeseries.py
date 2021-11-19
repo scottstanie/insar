@@ -64,6 +64,7 @@ def run_inversion(
     outfile=constants.DEFO_FILENAME,
     output_dset=constants.DEFO_NOISY_DSET,
     cor_stack_file=sario.COR_FILENAME,
+    cor_dset=constants.COR_MEAN_DSET,
     los_file=constants.LOS_ENU_FILENAME,
     overwrite=False,
     min_date=None,
@@ -226,7 +227,6 @@ def run_inversion(
     # Also copy over the metadata from the unw stack
 
     if cor_stack_file:
-        cor_dset = constants.COR_MEAN_DSET
         logger.info(
             "Saving correlation from %s to %s/%s",
             cor_stack_file,
@@ -240,9 +240,10 @@ def run_inversion(
             cor_dset=sario.STACK_DSET,
         )
         with h5py.File(outfile, "a") as hf:
-            hf[cor_dset] = cor_mean
-            for k, v in attrs_to_copy.items():
-                hf[output_dset].attrs[k] = v
+            if cor_dset not in hf:
+                hf[cor_dset] = cor_mean
+                for k, v in attrs_to_copy.items():
+                    hf[output_dset].attrs[k] = v
     else:
         cor_mean, cor_dset = None, None
 
@@ -251,7 +252,8 @@ def run_inversion(
         logger.info("Saving line of sight to %s/%s", outfile, los_dset)
         los_map = sario.load(los_file)
         with h5py.File(outfile, "a") as hf:
-            hf[los_dset] = los_map
+            if los_dset not in hf:
+                hf[los_dset] = los_map
     else:
         los_map, los_dset = None, None
 
@@ -733,20 +735,23 @@ def _confirm_closed(fname):
 def lowess(
     defo_fname=constants.DEFO_FILENAME_NC,
     orig_dset=constants.DEFO_NOISY_DSET,
+    out_fname=None,
     out_dset=constants.DEFO_LOWESS_DSET,
     frac=0.7,
     n_iter=2,
-    remove_day1_atmo=True,
     overwrite=False,
 ):
     import apertools.lowess
+
+    if not out_fname:
+        out_fname = defo_fname
 
     _confirm_closed(defo_fname)
     if sario.check_dset(defo_fname, out_dset, overwrite) is False:  # already exists:
         with xr.open_dataset(defo_fname, engine="h5netcdf") as ds:
             return ds[out_dset]
 
-    with xr.open_dataset(defo_fname, engine="h5netcdf", lock=False) as ds:
+    with xr.open_dataset(defo_fname, engine="h5netcdf") as ds:
         # ts = date2num(ds["date"].values)
         noisy_da = ds[orig_dset]
         # TODO: for when it's too big to run in memory
@@ -771,20 +776,32 @@ def lowess(
     out_da = apertools.lowess.lowess_xr(
         noisy_da, x_dset="date", frac=frac, n_iter=n_iter
     )
+    # The first date will be a good estimate of that day's atmo
+    day1_atmo = out_da.isel(date=0)
+    out_da = out_da - day1_atmo
+
+    out_ds = out_da.to_dataset(name=out_dset)
+    atmo_ds = day1_atmo.to_dataset(name=constants.ATMO_DAY1_DSET)
+
+    # save to a tmp file in case if fails due to dumb locking problems
+    tmp_file = defo_fname.replace(".nc", ".tmp.nc")
+    # Write first so that date gets overwritten for full date set
+    atmo_ds.to_netcdf(
+        tmp_file,
+        mode="a",
+        engine="h5netcdf",
+    )
+    out_ds.to_netcdf(tmp_file, engine="h5netcdf")
 
     # Now save the first day atmosphere/ full smoothed deformation to same file
     _confirm_closed(defo_fname)
     logger.info("Saving day1 atmo estimation to %s", constants.ATMO_DAY1_DSET)
-    # The first date will be a good estimate of that day's atmo
-    day1_atmo = out_da.isel(date=0)
-    day1_atmo.to_dataset(name=constants.ATMO_DAY1_DSET).to_netcdf(
+    atmo_ds.to_netcdf(
         defo_fname,
         mode="a",
         engine="h5netcdf",
     )
-    out_da = out_da - day1_atmo
-
     _confirm_closed(defo_fname)
     logger.info("Saving lowess-smoothed deformation to %s/%s", defo_fname, out_dset)
-    out_da.to_dataset(name=out_dset).to_netcdf(defo_fname, mode="a", engine="h5netcdf")
+    out_ds.to_netcdf(defo_fname, mode="a", engine="h5netcdf")
     return out_da

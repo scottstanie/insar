@@ -375,7 +375,7 @@ def run_sbas_inversion(
     alpha=0,
     constant_velocity=False,
     difference=False,
-    deramp_order=2,
+    deramp_order=1,
     # ignore_geos=False,
     stackavg=False,
     **kwargs,

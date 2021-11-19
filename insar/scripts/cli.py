@@ -192,7 +192,7 @@ def parse_steps(ctx, param, value):
 )
 @click.option(
     "--deramp-order",
-    default=2,
+    default=1,
     help="Order of 2D polynomial to use to remove residual phase from unwrapped interferograms",
     show_default=True,
 )
