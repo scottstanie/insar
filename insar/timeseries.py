@@ -294,31 +294,17 @@ def run_sbas(
     unw_stack_file,
     input_dset,
     valid_ifg_idxs,
+    cor_stack_file,
+    cor_dset,
     outfile,
     output_dset,
     block_shape,
     slclist,
     ifglist,
-    # constant_velocity,
     alpha,
     phase_to_cm,
-    # L1,
-    # outlier_sigma=0,
 ):
     """Performs and SBAS inversion on each pixel of unw_stack to find deformation
-
-    Solves the least squares equation Bv = dphi
-
-    Args:
-
-        constant_velocity (bool): force solution to have constant velocity
-            mutually exclusive with `alpha` option
-        alpha (float): nonnegative Tikhonov regularization parameter.
-            If alpha > 0, then the equation is instead to minimize
-            ||B*v - dphi||^2 + ||alpha*I*v||^2
-            See https://en.wikipedia.org/wiki/Tikhonov_regularization
-        difference (bool): for regularization, penalize differences in velocity
-            Used to make a smoother final solution
 
     Returns:
         ndarray: solution velocity arrary
@@ -344,6 +330,8 @@ def run_sbas(
                 unw_stack_file,
                 input_dset,
                 valid_ifg_idxs,
+                cor_stack_file,
+                cor_dset,
                 slclist,
                 ifglist,
                 # constant_velocity,
@@ -363,6 +351,8 @@ def _load_and_run(
     unw_stack_file,
     input_dset,
     valid_ifg_idxs,
+    cor_stack_file,
+    cor_dset,
     slclist,
     ifglist,
     # constant_velocity,
@@ -372,16 +362,25 @@ def _load_and_run(
     with h5py.File(unw_stack_file) as hf:
         logger.info(f"Loading chunk {rows}, {cols}")
         unw_chunk = hf[input_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
-        # TODO: get rid of nan pixels at edge! dont let it ruin the whole chunk
-        out_chunk = _calc_soln(
-            # out_chunk = _calc_soln_pixelwise(
-            unw_chunk,
-            slclist,
-            ifglist,
-            # alpha,
-            # constant_velocity,
-            phase_to_cm,
-        )
+        if cor_stack_file and cor_dset:
+            cor_chunk = hf[cor_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
+            out_chunk = _calc_soln_cor_weighted(
+                unw_chunk,
+                cor_chunk,
+                slclist,
+                ifglist,
+                phase_to_cm,
+            )
+        else:
+            out_chunk = _calc_soln(
+                # out_chunk = _calc_soln_pixelwise(
+                unw_chunk,
+                slclist,
+                ifglist,
+                # alpha,
+                # constant_velocity,
+                phase_to_cm,
+            )
         return out_chunk
 
 
@@ -436,6 +435,60 @@ def _calc_soln(
     # stack = cols_to_stack(pA @ stack_to_cols(unw_subset), *unw_subset.shape[1:])
     # equiv:
     stack = (pA @ unw_cols_nonan).reshape((-1, nrow, ncol)).astype(dtype)
+
+    # Add a 0 image for the first date
+    stack = np.concatenate((np.zeros((1, nrow, ncol), dtype=dtype), stack), axis=0)
+    stack *= phase_to_cm
+    return stack
+
+
+@jit_decorator
+def _calc_soln_cor_weighted(
+    unw_chunk,
+    cor_chunk,
+    slclist,
+    ifglist,
+    phase_to_cm,
+):
+    slcs_clean, ifglist_clean, unw_clean = slclist, ifglist, unw_chunk
+    dtype = unw_clean.dtype
+
+    nifg, nrow, ncol = unw_clean.shape
+    unw_cols = unw_clean.reshape((nifg, -1))  # Shape: (nifg, npixels)
+    nan_idxs = np.isnan(unw_cols)
+    unw_cols_nonan = np.where(nan_idxs, 0, unw_cols).astype(dtype)
+    # skip any all 0 blocks:
+    if unw_cols_nonan.sum() == 0:
+        return np.zeros((len(slcs_clean), nrow, ncol), dtype=dtype)
+
+    # To solve all, with different A matrix for each pixel:
+    # a.shape: npixels, nifg, nsar (aka nsar = ndates)
+    # b.shape: npixels, nifg
+    # In [116]: a.shape, bb.shape
+    # Out[116]: ((4, 3, 2), (4, 3))
+    # pa = np.linalg.pinv(a)
+    # In [119]: np.squeeze(pa @ bb[:, :, None]).shape
+    # Out[119]: (4, 2)
+
+    # igram_count = len(unw_clean)
+    A = build_A_matrix(slcs_clean, ifglist_clean)  # shape: (nifg, nsar)
+    # Weight by correlation for each pixel
+    cor_cols = cor_chunk.reshape((nifg, -1))  # shape: (nifg, npixels)
+    # Do i need this...
+    # nan_idxs = np.isnan(cor_cols)
+    # cor_cols = np.where(nan_idxs, 0, cor_cols).astype(dtype)
+
+    # Need the 3D A matrix to be (npixels, nifg, nsar)
+    # A = A[None, :, :]  # shape: (1, nifg, nsar)
+    # cor_cols.T[:, :, None].shape: (npixels, nifg, 1)
+    A_weighted = A[None, :, :] * cor_cols.T[:, :, None]
+    pA = np.linalg.pinv(A_weighted).astype(dtype)  # shape: (npixels, nsar, nifg)
+
+    # Also weight the b vector by the correlation
+    b_weighted = unw_cols_nonan * cor_cols
+    # b_weighted[:, :, None].shape: (npixels, nifg, 1)
+    sol_cols = np.squeeze(pA @ b_weighted[:, :, None])
+    stack = sol_cols.reshape((-1, nrow, ncol)).astype(dtype)
 
     # Add a 0 image for the first date
     stack = np.concatenate((np.zeros((1, nrow, ncol), dtype=dtype), stack), axis=0)
