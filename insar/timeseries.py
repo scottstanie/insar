@@ -37,7 +37,7 @@ from apertools.constants import PHASE_TO_CM_MAP, WAVELENGTH_MAP
 # from insar import ts_utils
 from .ts_utils import ptp_by_date_pct, DummyExecutor
 
-PARALLEL = True  # With false, uses dummy Executor (for debugging)
+PARALLEL = False  # With false, uses dummy Executor (for debugging)
 MAX_WORKERS = 6
 logger = get_log()
 
@@ -64,7 +64,8 @@ def run_inversion(
     outfile=constants.DEFO_FILENAME,
     output_dset=constants.DEFO_NOISY_DSET,
     cor_stack_file=sario.COR_FILENAME,
-    cor_dset=constants.COR_MEAN_DSET,
+    cor_mean_dset=constants.COR_MEAN_DSET,
+    cor_stack_dset=sario.STACK_DSET,
     los_file=constants.LOS_ENU_FILENAME,
     overwrite=False,
     min_date=None,
@@ -163,7 +164,7 @@ def run_inversion(
 
     # Figure out how much to load at 1 time, staying at ~`block_size_max` bytes of RAM
     block_shape = _get_block_shape(
-        full_shape, chunk_size, block_size_max=100e6, nbytes=nbytes
+        full_shape, chunk_size, block_size_max=10e6, nbytes=nbytes
     )
 
     # TODO: platform = standardize(..)
@@ -208,6 +209,8 @@ def run_inversion(
         unw_stack_file,
         input_dset,
         valid_ifg_idxs,
+        cor_stack_file,
+        cor_stack_dset,
         outfile,
         output_dset,
         block_shape,
@@ -231,21 +234,21 @@ def run_inversion(
             "Saving correlation from %s to %s/%s",
             cor_stack_file,
             outfile,
-            cor_dset,
+            cor_mean_dset,
         )
         # cor_mean = ts_utils.get_cor_mean(defo_fname=outfile, cor_fname=cor_stack_file)
         cor_mean = get_cor_mean(
             valid_ifg_idxs,
             cor_fname=cor_stack_file,
-            cor_dset=sario.STACK_DSET,
+            cor_dset=cor_stack_dset,
         )
         with h5py.File(outfile, "a") as hf:
-            if cor_dset not in hf:
-                hf[cor_dset] = cor_mean
+            if cor_mean_dset not in hf:
+                hf[cor_mean_dset] = cor_mean
                 for k, v in attrs_to_copy.items():
                     hf[output_dset].attrs[k] = v
     else:
-        cor_mean, cor_dset = None, None
+        cor_mean, cor_mean_dset = None, None
 
     if los_file:
         los_dset = constants.LOS_ENU_DSET
@@ -265,14 +268,14 @@ def run_inversion(
             sario.save_latlon_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
             sario.attach_latlon(outfile, output_dset, depth_dim="date")
             if cor_mean is not None:
-                sario.attach_latlon(outfile, cor_dset)
+                sario.attach_latlon(outfile, cor_mean_dset)
             if los_map is not None:
                 sario.attach_latlon(outfile, los_dset)
         else:
             sario.save_latlon_2d_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
             sario.attach_latlon_2d(outfile, output_dset, depth_dim="date")
             if cor_mean is not None:
-                sario.attach_latlon_2d(outfile, cor_dset)
+                sario.attach_latlon_2d(outfile, cor_mean_dset)
 
     # TODO: just use the h5?
     if save_as_netcdf:
@@ -295,7 +298,7 @@ def run_sbas(
     input_dset,
     valid_ifg_idxs,
     cor_stack_file,
-    cor_dset,
+    cor_stack_dset,
     outfile,
     output_dset,
     block_shape,
@@ -318,7 +321,7 @@ def run_sbas(
         # print(nrows, ncols, block_shape)
 
     blk_slices = utils.block_iterator((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
-    # blk_slices = list(blk_slices)[:6]  # Test small area
+    blk_slices = list(blk_slices)[:2]  # Test small area
 
     ExecutorClass = ProcessPoolExecutor if PARALLEL else DummyExecutor
     with ExecutorClass(max_workers=MAX_WORKERS) as executor:
@@ -331,7 +334,7 @@ def run_sbas(
                 input_dset,
                 valid_ifg_idxs,
                 cor_stack_file,
-                cor_dset,
+                cor_stack_dset,
                 slclist,
                 ifglist,
                 # constant_velocity,
@@ -352,7 +355,7 @@ def _load_and_run(
     input_dset,
     valid_ifg_idxs,
     cor_stack_file,
-    cor_dset,
+    cor_stack_dset,
     slclist,
     ifglist,
     # constant_velocity,
@@ -362,8 +365,9 @@ def _load_and_run(
     with h5py.File(unw_stack_file) as hf:
         logger.info(f"Loading chunk {rows}, {cols}")
         unw_chunk = hf[input_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
-        if cor_stack_file and cor_dset:
-            cor_chunk = hf[cor_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
+        if cor_stack_file and cor_stack_dset:
+            with h5py.File(cor_stack_file) as chf:
+                cor_chunk = chf[cor_stack_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
             out_chunk = _calc_soln_cor_weighted(
                 unw_chunk,
                 cor_chunk,
@@ -442,7 +446,7 @@ def _calc_soln(
     return stack
 
 
-@jit_decorator
+# @jit_decorator
 def _calc_soln_cor_weighted(
     unw_chunk,
     cor_chunk,
@@ -454,7 +458,8 @@ def _calc_soln_cor_weighted(
     dtype = unw_clean.dtype
 
     nifg, nrow, ncol = unw_clean.shape
-    unw_cols = unw_clean.reshape((nifg, -1))  # Shape: (nifg, npixels)
+    npixels = nrow * ncol
+    unw_cols = unw_clean.reshape((nifg, npixels))  # Shape: (nifg, npixels)
     nan_idxs = np.isnan(unw_cols)
     unw_cols_nonan = np.where(nan_idxs, 0, unw_cols).astype(dtype)
     # skip any all 0 blocks:
@@ -472,22 +477,41 @@ def _calc_soln_cor_weighted(
 
     # igram_count = len(unw_clean)
     A = build_A_matrix(slcs_clean, ifglist_clean)  # shape: (nifg, nsar)
+    nsar = A.shape[1]
     # Weight by correlation for each pixel
-    cor_cols = cor_chunk.reshape((nifg, -1))  # shape: (nifg, npixels)
+    cor_cols = cor_chunk.reshape((nifg, npixels))  # shape: (nifg, npixels)
     # Do i need this...
     # nan_idxs = np.isnan(cor_cols)
     # cor_cols = np.where(nan_idxs, 0, cor_cols).astype(dtype)
 
+    # TODO
+    # %time np.linalg.pinv(np.transpose(A, axes=(0, 2, 1)) @ A)
+    # CPU times: user 12min 53s, sys: 18min 33s, total: 31min 27s
+    # Wall time: 31.9 s
+
     # Need the 3D A matrix to be (npixels, nifg, nsar)
     # A = A[None, :, :]  # shape: (1, nifg, nsar)
     # cor_cols.T[:, :, None].shape: (npixels, nifg, 1)
-    A_weighted = A[None, :, :] * cor_cols.T[:, :, None]
-    pA = np.linalg.pinv(A_weighted).astype(dtype)  # shape: (npixels, nsar, nifg)
+    # A_weighted = A[None, :, :] * cor_cols.T[:, :, None]
+    A_weighted = A.reshape((1, nifg, nsar)) * cor_cols.T.reshape((npixels, nifg, 1))
+    print(A_weighted.shape)
+    # print("Pinv:")
+    # pA = np.linalg.pinv(A_weighted).astype(dtype)  # shape: (npixels, nsar, nifg)
+    # print(pA.shape)
+    AtA = np.transpose(A_weighted, axes=(0, 2, 1)) @ A_weighted
 
     # Also weight the b vector by the correlation
     b_weighted = unw_cols_nonan * cor_cols
+    Atb = np.transpose(A_weighted, axes=(0, 2, 1)) @ b_weighted.reshape(npixels, nifg, 1)
+    print(Atb.shape)
+    print("inverting")
+    print("Pinv:")
+    pAtA = np.linalg.pinv(AtA)
+    print(pAtA.shape)
     # b_weighted[:, :, None].shape: (npixels, nifg, 1)
-    sol_cols = np.squeeze(pA @ b_weighted[:, :, None])
+    # sol_cols = np.squeeze(pA @ b_weighted[:, :, None])
+    sol_cols = np.squeeze(pAtA @ Atb)
+    print(sol_cols.shape)
     stack = sol_cols.reshape((-1, nrow, ncol)).astype(dtype)
 
     # Add a 0 image for the first date
