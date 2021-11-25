@@ -37,8 +37,6 @@ from apertools.constants import PHASE_TO_CM_MAP, WAVELENGTH_MAP
 # from insar import ts_utils
 from .ts_utils import ptp_by_date_pct, DummyExecutor
 
-PARALLEL = False  # With false, uses dummy Executor (for debugging)
-MAX_WORKERS = 6
 logger = get_log()
 
 # Import numba if available; otherwise, just use python-only version
@@ -70,7 +68,7 @@ def run_inversion(
     overwrite=False,
     min_date=None,
     max_date=None,
-    stack_average=False,
+    # stack_average=False,
     # constant_velocity=False,
     max_temporal_baseline=None,
     max_temporal_bandwidth=None,  # TODO
@@ -84,6 +82,7 @@ def run_inversion(
     save_as_netcdf=True,
     coordinates=None,  # geo, rdr
     platform="s1",
+    max_workers=6,
 ):
     """Runs SBAS inversion on all unwrapped igrams
 
@@ -197,6 +196,7 @@ def run_inversion(
         platform=platform,
         wavelength=WAVELENGTH_MAP[platform],
         coordinates=coordinates,
+        max_workers=max_workers,
         **attrs_to_copy,
     )
 
@@ -221,6 +221,7 @@ def run_inversion(
         # L1,
         phase_to_cm,
         # outlier_sigma,
+        max_workers=max_workers,
     )
 
     # Now save the ifg/slc information
@@ -306,6 +307,7 @@ def run_sbas(
     ifglist,
     alpha,
     phase_to_cm,
+    max_workers=6,
 ):
     """Performs and SBAS inversion on each pixel of unw_stack to find deformation
 
@@ -321,10 +323,11 @@ def run_sbas(
         # print(nrows, ncols, block_shape)
 
     blk_slices = utils.block_iterator((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
-    blk_slices = list(blk_slices)[:2]  # Test small area
+    # # TESTING: small area
+    # blk_slices = list(blk_slices)[:2]
 
-    ExecutorClass = ProcessPoolExecutor if PARALLEL else DummyExecutor
-    with ExecutorClass(max_workers=MAX_WORKERS) as executor:
+    ExecutorClass = ProcessPoolExecutor if max_workers > 1 else DummyExecutor
+    with ExecutorClass(max_workers=max_workers) as executor:
         # for (rows, cols) in blk_slices:
         future_to_block = {
             executor.submit(
@@ -365,7 +368,7 @@ def _load_and_run(
     with h5py.File(unw_stack_file) as hf:
         logger.info(f"Loading chunk {rows}, {cols}")
         unw_chunk = hf[input_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
-        if cor_stack_file and cor_stack_dset:
+        if False and cor_stack_file and cor_stack_dset:
             with h5py.File(cor_stack_file) as chf:
                 cor_chunk = chf[cor_stack_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
             out_chunk = _calc_soln_cor_weighted(
@@ -863,15 +866,15 @@ def lowess(
     out_ds = out_da.to_dataset(name=out_dset)
     atmo_ds = day1_atmo.to_dataset(name=constants.ATMO_DAY1_DSET)
 
-    # save to a tmp file in case if fails due to dumb locking problems
-    tmp_file = defo_fname.replace(".nc", ".tmp.nc")
-    # Write first so that date gets overwritten for full date set
-    atmo_ds.to_netcdf(
-        tmp_file,
-        mode="a",
-        engine="h5netcdf",
-    )
-    out_ds.to_netcdf(tmp_file, engine="h5netcdf")
+    # # save to a tmp file in case if fails due to dumb locking problems
+    # tmp_file = defo_fname.replace(".nc", ".tmp.nc")
+    # # Write first so that date gets overwritten for full date set
+    # atmo_ds.to_netcdf(
+    #     tmp_file,
+    #     mode="a",
+    #     engine="h5netcdf",
+    # )
+    # out_ds.to_netcdf(tmp_file, engine="h5netcdf")
 
     # Now save the first day atmosphere/ full smoothed deformation to same file
     _confirm_closed(defo_fname)

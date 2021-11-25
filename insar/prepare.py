@@ -48,7 +48,7 @@ logger = get_log()
 
 @log_runtime
 def prepare_stacks(
-    igram_path,
+    igram_path=".",
     unw_filename=UNW_FILENAME,
     cor_filename=COR_FILENAME,
     mask_filename=MASK_FILENAME,
