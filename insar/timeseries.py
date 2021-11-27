@@ -370,7 +370,9 @@ def _load_and_run(
         unw_chunk = hf[input_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
         if False and cor_stack_file and cor_stack_dset:
             with h5py.File(cor_stack_file) as chf:
-                cor_chunk = chf[cor_stack_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
+                cor_chunk = chf[cor_stack_dset][
+                    valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]
+                ]
             out_chunk = _calc_soln_cor_weighted(
                 unw_chunk,
                 cor_chunk,
@@ -505,7 +507,9 @@ def _calc_soln_cor_weighted(
 
     # Also weight the b vector by the correlation
     b_weighted = unw_cols_nonan * cor_cols
-    Atb = np.transpose(A_weighted, axes=(0, 2, 1)) @ b_weighted.reshape(npixels, nifg, 1)
+    Atb = np.transpose(A_weighted, axes=(0, 2, 1)) @ b_weighted.reshape(
+        npixels, nifg, 1
+    )
     print(Atb.shape)
     print("inverting")
     print("Pinv:")
@@ -817,7 +821,8 @@ def lowess(
     orig_dset=constants.DEFO_NOISY_DSET,
     out_fname=None,
     out_dset=constants.DEFO_LOWESS_DSET,
-    frac=0.7,
+    min_days_weighted=3 * 365.25,
+    frac=None,
     n_iter=2,
     overwrite=False,
 ):
@@ -843,10 +848,14 @@ def lowess(
         # )
 
         logger.info("Running lowess on %s/%s", defo_fname, orig_dset)
-        # Run the "lowess" on each pixel separately
+        # Convert days to days, using matplotlib's functions
         x = date2num(noisy_da["date"].values)
         stack = noisy_da.values
-    out_stack = apertools.lowess.lowess_stack(stack, x, frac=frac, n_iter=2)
+
+    # Run the "lowess" on each pixel separately
+    out_stack = apertools.lowess.lowess_stack(
+        stack, x, frac=frac, min_x_weighted=min_days_weighted, n_iter=n_iter
+    )
     out_da = xr.DataArray(out_stack, coords=noisy_da.coords, dims=noisy_da.dims)
 
     # x = date2num(noisy_da['date'].values)
