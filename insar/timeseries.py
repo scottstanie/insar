@@ -40,7 +40,6 @@ from apertools.constants import PHASE_TO_CM_MAP, WAVELENGTH_MAP
 from .ts_utils import ptp_by_date_pct, DummyExecutor
 
 logger = get_log()
-print() h5py.h5z.filter_avail(blosc_id):
 
 # Import numba if available; otherwise, just use python-only version
 try:
@@ -254,7 +253,7 @@ def run_inversion(
     else:
         cor_mean, cor_mean_dset = None, None
 
-    if los_file:
+    if los_file and os.path.exists(los_file):
         los_dset = constants.LOS_ENU_DSET
         logger.info("Saving line of sight to %s/%s", outfile, los_dset)
         los_map = sario.load(los_file)
@@ -262,6 +261,7 @@ def run_inversion(
             if los_dset not in hf:
                 hf[los_dset] = los_map
     else:
+        logger.info("Not saving line of sight file: %s", los_file)
         los_map, los_dset = None, None
 
     if sario.attach_latlon:
@@ -462,17 +462,16 @@ def _calc_soln_cor_weighted(
     ifglist,
     phase_to_cm,
 ):
-    slcs_clean, ifglist_clean, unw_clean = slclist, ifglist, unw_chunk
-    dtype = unw_clean.dtype
+    dtype = unw_chunk.dtype
 
-    nifg, nrow, ncol = unw_clean.shape
+    nifg, nrow, ncol = unw_chunk.shape
     npixels = nrow * ncol
-    unw_cols = unw_clean.reshape((nifg, npixels))  # Shape: (nifg, npixels)
+    unw_cols = unw_chunk.reshape((nifg, npixels))  # Shape: (nifg, npixels)
     nan_idxs = np.isnan(unw_cols)
     unw_cols_nonan = np.where(nan_idxs, 0, unw_cols).astype(dtype)
     # skip any all 0 blocks:
     if unw_cols_nonan.sum() == 0:
-        return np.zeros((len(slcs_clean), nrow, ncol), dtype=dtype)
+        return np.zeros((len(slclist), nrow, ncol), dtype=dtype)
 
     # To solve all, with different A matrix for each pixel:
     # a.shape: npixels, nifg, nsar (aka nsar = ndates)
@@ -483,9 +482,10 @@ def _calc_soln_cor_weighted(
     # In [119]: np.squeeze(pa @ bb[:, :, None]).shape
     # Out[119]: (4, 2)
 
-    # igram_count = len(unw_clean)
-    A = build_A_matrix(slcs_clean, ifglist_clean)  # shape: (nifg, nsar)
+    # igram_count = len(unw_chunk)
+    A = build_A_matrix(slclist, ifglist)  # shape: (nifg, nsar)
     nsar = A.shape[1]
+    # assert A.shape[1] == nsar
     # Weight by correlation for each pixel
     cor_cols = cor_chunk.reshape((nifg, npixels))  # shape: (nifg, npixels)
     # Do i need this...
@@ -502,27 +502,30 @@ def _calc_soln_cor_weighted(
     # cor_cols.T[:, :, None].shape: (npixels, nifg, 1)
     # A_weighted = A[None, :, :] * cor_cols.T[:, :, None]
     A_weighted = A.reshape((1, nifg, nsar)) * cor_cols.T.reshape((npixels, nifg, 1))
-    print(A_weighted.shape)
-    # print("Pinv:")
+    # A_weighted = np.ascontiguousarray(A_weighted)
     # pA = np.linalg.pinv(A_weighted).astype(dtype)  # shape: (npixels, nsar, nifg)
-    # print(pA.shape)
-    AtA = np.transpose(A_weighted, axes=(0, 2, 1)) @ A_weighted
+    print(A_weighted.flags)
+    AT = np.transpose(A_weighted, axes=(0, 2, 1))
+    # AT = np.ascontiguousarray(np.transpose(A_weighted, axes=(0, 2, 1)))
+    print(AT.flags)
+    AtA = AT @ A_weighted
 
     # Also weight the b vector by the correlation
     b_weighted = unw_cols_nonan * cor_cols
-    Atb = np.transpose(A_weighted, axes=(0, 2, 1)) @ b_weighted.reshape(
-        npixels, nifg, 1
-    )
-    print(Atb.shape)
-    print("inverting")
-    print("Pinv:")
+    # Need the transpose of the b vector before reshaping
+    print(b_weighted)
+    b2 = b_weighted.T.reshape(npixels, nifg, 1)
+    # b2 = np.ascontiguousarray(b_weighted.T.reshape(npixels, nifg, 1))
+
+    Atb = AT @ b2
+    print("inverting with pinv")
     pAtA = np.linalg.pinv(AtA)
     print(pAtA.shape)
     # b_weighted[:, :, None].shape: (npixels, nifg, 1)
     # sol_cols = np.squeeze(pA @ b_weighted[:, :, None])
     sol_cols = np.squeeze(pAtA @ Atb)
-    print(sol_cols.shape)
-    stack = sol_cols.reshape((-1, nrow, ncol)).astype(dtype)
+    # Need to transpose the solution before reshaping
+    stack = sol_cols.T.reshape((-1, nrow, ncol)).astype(dtype)
 
     # Add a 0 image for the first date
     stack = np.concatenate((np.zeros((1, nrow, ncol), dtype=dtype), stack), axis=0)
