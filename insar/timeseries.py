@@ -76,6 +76,8 @@ def run_inversion(
     max_temporal_bandwidth=None,  # TODO
     min_temporal_bandwidth=None,  # TODO
     include_annual=False,
+    weight_by_cor=True,
+    cor_thresh=0.1,
     # outlier_sigma=0,  # TODO: outlier outlier_sigma. Use trodi
     alpha=0,
     # L1=False, # TODO
@@ -100,6 +102,9 @@ def run_inversion(
         max_date (datetime.date): only take ifgs from `unw_stack_file` *before* this date
         max_temporal_baseline (int): limit ifgs from `unw_stack_file` to be
             shorter in temporal baseline
+        cor_thresh (float): threshold for setting all correlation values below to 0.
+            Used since the correlation estimates are biased, meaning ~0 correlation
+            can show up as 0.05-0.15 sometimes.
         alpha (float): nonnegative Tikhonov regularization parameter.
             See https://en.wikipedia.org/wiki/Tikhonov_regularization
         difference (bool): for regularization, penalize differences in velocity
@@ -192,6 +197,7 @@ def run_inversion(
         max_date=max_date,
         max_temporal_baseline=max_temporal_baseline,
         max_bandwidth=max_temporal_bandwidth,
+        cor_thresh=cor_thresh,
         alpha=alpha,
         slclist_ignore=open(slclist_ignore_file).read().splitlines(),
         block_shape=block_shape,
@@ -221,8 +227,10 @@ def run_inversion(
         # constant_velocity,
         alpha,
         # L1,
-        phase_to_cm,
+        weight_by_cor,
+        cor_thresh,
         # outlier_sigma,
+        phase_to_cm,
         max_workers=max_workers,
     )
 
@@ -309,6 +317,8 @@ def run_sbas(
     slclist,
     ifglist,
     alpha,
+    weight_by_cor,
+    cor_thresh,
     phase_to_cm,
     max_workers=6,
 ):
@@ -344,6 +354,8 @@ def run_sbas(
                 slclist,
                 ifglist,
                 # constant_velocity,
+                weight_by_cor,
+                cor_thresh,
                 phase_to_cm,
             ): blk
             for blk in blk_slices
@@ -365,17 +377,22 @@ def _load_and_run(
     slclist,
     ifglist,
     # constant_velocity,
+    weight_by_cor,
+    cor_thresh,
     phase_to_cm,
 ):
     rows, cols = blk
     with h5py.File(unw_stack_file) as hf:
         logger.info(f"Loading chunk {rows}, {cols}")
         unw_chunk = hf[input_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
-        if False and cor_stack_file and cor_stack_dset:
+        if weight_by_cor and cor_stack_file and cor_stack_dset:
             with h5py.File(cor_stack_file) as chf:
                 cor_chunk = chf[cor_stack_dset][
                     valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]
                 ]
+                if cor_thresh and cor_thresh > 0:
+                    cor_chunk[cor_chunk < cor_thresh] = 0
+            logger.info("Weighting SBAS by correlation")
             out_chunk = _calc_soln_cor_weighted(
                 unw_chunk,
                 cor_chunk,
@@ -384,6 +401,7 @@ def _load_and_run(
                 phase_to_cm,
             )
         else:
+            logger.info("Using unweighting SBAS")
             out_chunk = _calc_soln(
                 # out_chunk = _calc_soln_pixelwise(
                 unw_chunk,
@@ -485,12 +503,14 @@ def _calc_soln_cor_weighted(
     # igram_count = len(unw_chunk)
     A = build_A_matrix(slclist, ifglist)  # shape: (nifg, nsar)
     nsar = A.shape[1]
-    # assert A.shape[1] == nsar
     # Weight by correlation for each pixel
     cor_cols = cor_chunk.reshape((nifg, npixels))  # shape: (nifg, npixels)
-    # Do i need this...
-    # nan_idxs = np.isnan(cor_cols)
-    # cor_cols = np.where(nan_idxs, 0, cor_cols).astype(dtype)
+    # Force any nans to 0
+    nan_idxs = np.isnan(cor_cols)
+    cor_cols = np.where(nan_idxs, 0, cor_cols).astype(dtype)
+    # Note that we need to take the square root for the squared residuals to have
+    # weights equal to the correlation.
+    cor_cols = np.sqrt(cor_cols)
 
     # TODO
     # %time np.linalg.pinv(np.transpose(A, axes=(0, 2, 1)) @ A)
@@ -504,23 +524,20 @@ def _calc_soln_cor_weighted(
     A_weighted = A.reshape((1, nifg, nsar)) * cor_cols.T.reshape((npixels, nifg, 1))
     # A_weighted = np.ascontiguousarray(A_weighted)
     # pA = np.linalg.pinv(A_weighted).astype(dtype)  # shape: (npixels, nsar, nifg)
-    print(A_weighted.flags)
     AT = np.transpose(A_weighted, axes=(0, 2, 1))
     # AT = np.ascontiguousarray(np.transpose(A_weighted, axes=(0, 2, 1)))
-    print(AT.flags)
     AtA = AT @ A_weighted
 
     # Also weight the b vector by the correlation
     b_weighted = unw_cols_nonan * cor_cols
     # Need the transpose of the b vector before reshaping
-    print(b_weighted)
     b2 = b_weighted.T.reshape(npixels, nifg, 1)
     # b2 = np.ascontiguousarray(b_weighted.T.reshape(npixels, nifg, 1))
 
     Atb = AT @ b2
-    print("inverting with pinv")
+    # print("inverting with pinv")
     pAtA = np.linalg.pinv(AtA)
-    print(pAtA.shape)
+    # print(pAtA.shape)
     # b_weighted[:, :, None].shape: (npixels, nifg, 1)
     # sol_cols = np.squeeze(pA @ b_weighted[:, :, None])
     sol_cols = np.squeeze(pAtA @ Atb)
