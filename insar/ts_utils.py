@@ -373,6 +373,11 @@ def rewrap_to_2pi(phase):
     return np.mod(phase + np.pi, 2 * np.pi) - np.pi
 
 
+def wrap_phase(ph):
+    ph = ph - np.round(ph / (2 * np.pi)) * 2 * np.pi
+    return ph
+
+
 def closure_phase(ifg_stack, ifg_date_pairs, rewrap=True):
     """Compute a stack of closure phase values for a stack of interferograms
 
@@ -391,7 +396,7 @@ def closure_phase(ifg_stack, ifg_date_pairs, rewrap=True):
 
     num_imgs, rows, cols = ifg_stack.shape
     closures = C @ ifg_phase.reshape((num_imgs, -1))
-    closures = closures.reshape = (-1, rows, cols)
+    closures = closures.reshape(-1, rows, cols)
     if rewrap:
         return rewrap_to_2pi(closures)
     else:

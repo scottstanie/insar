@@ -7,13 +7,15 @@ Forms stacks as .h5 files for easy access to depth-wise slices
 import os
 import glob
 import itertools
-import h5py
 from tqdm import tqdm
 
-# try:
-#     import hdf5plugin  # noqa
-# except ImportError:
-#     print("Failed to load hdf5plugin: may not save/load using blosc")
+try:
+    import hdf5plugin  # noqa
+except ImportError:
+    blosc_id = 32001
+    if not h5py.h5z.filter_avail(blosc_id):
+        print("Failed to load hdf5plugin: may not save/load using blosc")
+import h5py
 import numpy as np
 from scipy.ndimage.morphology import binary_opening
 import rasterio as rio

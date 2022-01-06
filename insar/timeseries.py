@@ -17,10 +17,12 @@ scott@lidar igrams]$ head slclist
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-# try:
-#     import hdf5plugin  # noqa : for the possiblity of HDF5 blosc filter
-# except ImportError:
-#     print("Cant import hdf5plugin. wont read Blosc compressed files")
+try:
+    import hdf5plugin  # noqa
+except ImportError:
+    blosc_id = 32001
+    if not h5py.h5z.filter_avail(blosc_id):
+        print("Failed to load hdf5plugin: may not save/load using blosc")
 
 import h5py
 import xarray as xr
@@ -38,6 +40,7 @@ from apertools.constants import PHASE_TO_CM_MAP, WAVELENGTH_MAP
 from .ts_utils import ptp_by_date_pct, DummyExecutor
 
 logger = get_log()
+print() h5py.h5z.filter_avail(blosc_id):
 
 # Import numba if available; otherwise, just use python-only version
 try:
