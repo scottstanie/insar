@@ -392,7 +392,6 @@ def _load_and_run(
                 ]
                 if cor_thresh and cor_thresh > 0:
                     cor_chunk[cor_chunk < cor_thresh] = 0
-            logger.info("Weighting SBAS by correlation")
             out_chunk = _calc_soln_cor_weighted(
                 unw_chunk,
                 cor_chunk,
@@ -401,7 +400,6 @@ def _load_and_run(
                 phase_to_cm,
             )
         else:
-            logger.info("Using unweighting SBAS")
             out_chunk = _calc_soln(
                 # out_chunk = _calc_soln_pixelwise(
                 unw_chunk,
