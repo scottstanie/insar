@@ -44,13 +44,13 @@ logger = get_log()
 # Import numba if available; otherwise, just use python-only version
 try:
     import numba
-    from .ts_numba import build_A_matrix
+    from .ts_numba import build_A_matrix, build_B_matrix, integrate_velocities
 
     jit_decorator = numba.njit
 
 except:
-    logger.info("Numba not avialable, falling back to python-only")
-    from .ts_utils import build_A_matrix
+    logger.warning("Numba not avialable, falling back to python-only", exc_info=True)
+    from .ts_utils import build_A_matrix, build_B_matrix, integrate_velocities
 
     # Identity decorator if the numba.jit ones fail
     def jit_decorator(func):
@@ -77,7 +77,7 @@ def run_inversion(
     min_temporal_bandwidth=None,  # TODO
     include_annual=False,
     weight_by_cor=True,
-    cor_thresh=0.1,
+    cor_thresh=0.15,
     # outlier_sigma=0,  # TODO: outlier outlier_sigma. Use trodi
     alpha=0,
     # L1=False, # TODO
@@ -86,7 +86,7 @@ def run_inversion(
     save_as_netcdf=True,
     coordinates=None,  # geo, rdr
     platform="s1",
-    max_workers=6,
+    max_workers=3,
 ):
     """Runs SBAS inversion on all unwrapped igrams
 
@@ -212,6 +212,7 @@ def run_inversion(
         raise ValueError(f"{outfile}:/{output_dset} exists, {overwrite = }")
 
     create_dset(outfile, output_dset, output_shape, np.float32, chunks=True)
+    create_dset(outfile, cor_mean_dset, output_shape[1:], np.float32, chunks=True)
 
     run_sbas(
         unw_stack_file,
@@ -219,6 +220,7 @@ def run_inversion(
         valid_ifg_idxs,
         cor_stack_file,
         cor_stack_dset,
+        cor_mean_dset,
         outfile,
         output_dset,
         block_shape,
@@ -240,26 +242,26 @@ def run_inversion(
     # Add the mean correlation of interferograms used in this network
     # Also copy over the metadata from the unw stack
 
-    if cor_stack_file:
-        logger.info(
-            "Saving correlation from %s to %s/%s",
-            cor_stack_file,
-            outfile,
-            cor_mean_dset,
-        )
-        # cor_mean = ts_utils.get_cor_mean(defo_fname=outfile, cor_fname=cor_stack_file)
-        cor_mean = get_cor_mean(
-            valid_ifg_idxs,
-            cor_fname=cor_stack_file,
-            cor_dset=cor_stack_dset,
-        )
-        with h5py.File(outfile, "a") as hf:
-            if cor_mean_dset not in hf:
-                hf[cor_mean_dset] = cor_mean
-                for k, v in attrs_to_copy.items():
-                    hf[output_dset].attrs[k] = v
-    else:
-        cor_mean, cor_mean_dset = None, None
+    # if cor_stack_file:
+    #     logger.info(
+    #         "Saving correlation from %s to %s/%s",
+    #         cor_stack_file,
+    #         outfile,
+    #         cor_mean_dset,
+    #     )
+    #     # cor_mean = ts_utils.get_cor_mean(defo_fname=outfile, cor_fname=cor_stack_file)
+    #     cor_mean = get_cor_mean(
+    #         valid_ifg_idxs,
+    #         cor_fname=cor_stack_file,
+    #         cor_dset=cor_stack_dset,
+    #     )
+    with h5py.File(outfile, "a") as hf:
+        # if cor_mean_dset not in hf:
+            # hf[cor_mean_dset] = cor_mean
+        for k, v in attrs_to_copy.items():
+            hf[output_dset].attrs[k] = v
+    # else:
+        # cor_mean, cor_mean_dset = None, None
 
     if los_file and os.path.exists(los_file):
         los_dset = constants.LOS_ENU_DSET
@@ -279,15 +281,15 @@ def run_inversion(
         if coordinates == "geo":
             sario.save_latlon_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
             sario.attach_latlon(outfile, output_dset, depth_dim="date")
-            if cor_mean is not None:
-                sario.attach_latlon(outfile, cor_mean_dset)
+            # if cor_mean is not None:
+            sario.attach_latlon(outfile, cor_mean_dset)
             if los_map is not None:
                 sario.attach_latlon(outfile, los_dset)
         else:
             sario.save_latlon_2d_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
             sario.attach_latlon_2d(outfile, output_dset, depth_dim="date")
-            if cor_mean is not None:
-                sario.attach_latlon_2d(outfile, cor_mean_dset)
+            # if cor_mean is not None:
+            sario.attach_latlon_2d(outfile, cor_mean_dset)
 
     # TODO: just use the h5?
     if save_as_netcdf:
@@ -311,6 +313,7 @@ def run_sbas(
     valid_ifg_idxs,
     cor_stack_file,
     cor_stack_dset,
+    cor_mean_dset,
     outfile,
     output_dset,
     block_shape,
@@ -320,7 +323,7 @@ def run_sbas(
     weight_by_cor,
     cor_thresh,
     phase_to_cm,
-    max_workers=6,
+    max_workers,
 ):
     """Performs and SBAS inversion on each pixel of unw_stack to find deformation
 
@@ -362,9 +365,10 @@ def run_sbas(
         }
         for future in as_completed(future_to_block):
             blk = future_to_block[future]
-            out_chunk = future.result()
+            out_chunk, cor_mean = future.result()
             rows, cols = blk
             write_out_chunk(out_chunk, outfile, output_dset, rows, cols)
+            write_out_chunk(cor_mean, outfile, cor_mean_dset, rows, cols)
 
 
 def _load_and_run(
@@ -382,16 +386,19 @@ def _load_and_run(
     phase_to_cm,
 ):
     rows, cols = blk
-    with h5py.File(unw_stack_file) as hf:
+    with h5py.File(unw_stack_file) as hf, h5py.File(cor_stack_file) as hf_c:
         logger.info(f"Loading chunk {rows}, {cols}")
         unw_chunk = hf[input_dset][valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]]
-        if weight_by_cor and cor_stack_file and cor_stack_dset:
-            with h5py.File(cor_stack_file) as chf:
-                cor_chunk = chf[cor_stack_dset][
-                    valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]
-                ]
-                if cor_thresh and cor_thresh > 0:
-                    cor_chunk[cor_chunk < cor_thresh] = 0
+        cor_chunk = hf_c[cor_stack_dset][
+            valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]
+        ]
+        if cor_thresh and cor_thresh > 0:
+            zero_idxs = cor_chunk < cor_thresh
+            cor_chunk[zero_idxs] = 0.0
+            cor_mean = cor_chunk[~zero_idxs].mean(axis=0)
+            unw_chunk[zero_idxs] = 0.0
+        
+        if weight_by_cor:
             out_chunk = _calc_soln_cor_weighted(
                 unw_chunk,
                 cor_chunk,
@@ -409,7 +416,7 @@ def _load_and_run(
                 # constant_velocity,
                 phase_to_cm,
             )
-        return out_chunk
+        return out_chunk, cor_mean
 
 
 def write_out_chunk(chunk, outfile, output_dset, rows=None, cols=None):
@@ -417,7 +424,11 @@ def write_out_chunk(chunk, outfile, output_dset, rows=None, cols=None):
     cols = cols or [0, None]
     logger.info(f"Writing out ({rows = }, {cols = }) chunk to {outfile}:/{output_dset}")
     with h5py.File(outfile, "r+") as hf:
-        hf[output_dset][:, rows[0] : rows[1], cols[0] : cols[1]] = chunk
+        dset = hf[output_dset]
+        if dset.ndim == 3:
+            dset[:, rows[0] : rows[1], cols[0] : cols[1]] = chunk
+        else:
+            dset[rows[0] : rows[1], cols[0] : cols[1]] = chunk
 
 
 @jit_decorator
@@ -506,15 +517,22 @@ def _calc_soln_cor_weighted(
     # Force any nans to 0
     nan_idxs = np.isnan(cor_cols)
     cor_cols = np.where(nan_idxs, 0, cor_cols).astype(dtype)
-    # Note that we need to take the square root for the squared residuals to have
-    # weights equal to the correlation.
-    cor_cols = np.sqrt(cor_cols)
+    # # Note that we need to take the square root for the squared residuals to have
+    # # weights equal to the correlation.
+    # cor_cols = np.sqrt(cor_cols)
 
     # TODO
     # %time np.linalg.pinv(np.transpose(A, axes=(0, 2, 1)) @ A)
     # CPU times: user 12min 53s, sys: 18min 33s, total: 31min 27s
     # Wall time: 31.9 s
 
+    # weight the b vector by the correlation
+    b_weighted = unw_cols_nonan * cor_cols
+    # Need the transpose of the b vector before reshaping
+    b2 = b_weighted.T.reshape(npixels, nifg, 1)
+    # b2 = np.ascontiguousarray(b_weighted.T.reshape(npixels, nifg, 1))
+
+    # Version with the A matrix
     # Need the 3D A matrix to be (npixels, nifg, nsar)
     # A = A[None, :, :]  # shape: (1, nifg, nsar)
     # cor_cols.T[:, :, None].shape: (npixels, nifg, 1)
@@ -525,26 +543,32 @@ def _calc_soln_cor_weighted(
     AT = np.transpose(A_weighted, axes=(0, 2, 1))
     # AT = np.ascontiguousarray(np.transpose(A_weighted, axes=(0, 2, 1)))
     AtA = AT @ A_weighted
-
-    # Also weight the b vector by the correlation
-    b_weighted = unw_cols_nonan * cor_cols
-    # Need the transpose of the b vector before reshaping
-    b2 = b_weighted.T.reshape(npixels, nifg, 1)
-    # b2 = np.ascontiguousarray(b_weighted.T.reshape(npixels, nifg, 1))
-
     Atb = AT @ b2
     # print("inverting with pinv")
     pAtA = np.linalg.pinv(AtA)
     # print(pAtA.shape)
     # b_weighted[:, :, None].shape: (npixels, nifg, 1)
-    # sol_cols = np.squeeze(pA @ b_weighted[:, :, None])
-    sol_cols = np.squeeze(pAtA @ Atb)
+    # soln_cols = np.squeeze(pA @ b_weighted[:, :, None])
+    soln_cols = np.squeeze(pAtA @ Atb)
     # Need to transpose the solution before reshaping
-    stack = sol_cols.T.reshape((-1, nrow, ncol)).astype(dtype)
-
+    stack = soln_cols.T.reshape((-1, nrow, ncol)).astype(dtype)
     # Add a 0 image for the first date
     stack = np.concatenate((np.zeros((1, nrow, ncol), dtype=dtype), stack), axis=0)
     stack *= phase_to_cm
+
+    # # Version with B (velo diffs)
+    # B = build_B_matrix(slclist, ifglist)
+    # B_weighted = B.reshape((1, nifg, nsar)) * cor_cols.T.reshape((npixels, nifg, 1))
+    # BT = np.transpose(B_weighted, axes=(0, 2, 1))
+    # BtB = BT @ B_weighted
+    # timediffs = np.diff(slclist)
+    # Btb = BT @ b2
+    # pBtB = np.linalg.pinv(BtB)
+    # soln_cols = np.squeeze(pBtB @ Btb)
+    # phi_soln = integrate_velocities(soln_cols.T, timediffs)
+    # stack = phi_soln.reshape((-1, nrow, ncol))
+    # stack *= phase_to_cm
+
     return stack
 
 

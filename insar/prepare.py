@@ -71,6 +71,7 @@ def prepare_stacks(
     coordinates="geo",
     geom_dir=ISCE_GEOM_DIR,
     mask_from_slcs=True,
+    cor_thresh="auto",
     compute_water_mask=False,
     mask_dem=True,
 ):
@@ -176,6 +177,7 @@ def prepare_stacks(
         search_term=search_term,
         coordinates=coordinates,
         water_mask=water_mask,
+        cor_thresh=cor_thresh,
         overwrite=overwrite,
     )
     if ref_lat is None:
@@ -993,6 +995,24 @@ def get_reference(
     unw_stack_file,
     geom_dir,
 ):
+    """Convert reference provided in different formarts to each of the others
+
+    Args:
+        ref_row (int): row (or None)
+        ref_col (int): column (or None)
+        ref_lat (float): latitude (or None)
+        ref_lon (float): longitude (or None)
+        ref_station (str): GPS station (or None, optional)
+        coordinates (str): coordinates system of the reference (rdr or geo)
+        unw_stack_file (str): name of HDF5 stack file
+        geom_dir (str): if rdr, path to the directory containing the geom files
+
+    Raises:
+        ValueError: if no reference is provided
+
+    Returns:
+        tuple: ref_row, ref_col, ref_lat, ref_lon, ref_station
+    """
     import apertools.latlon
     import apertools.gps
 
