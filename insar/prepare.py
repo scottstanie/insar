@@ -325,8 +325,9 @@ def deramp_and_shift_unws(
             # In case other pixels were already nans
             nan_mask = np.isnan(deramped_phase)
 
-            # Now center it on the shift window
-            deramped_phase = _shift(deramped_phase, ref_row, ref_col, win)
+            if ref_row is not None and ref_col is not None:
+                # Now center it on the shift window
+                deramped_phase = _shift(deramped_phase, ref_row, ref_col, win)
 
             # now store this in the buffer until emptied
             curidx = idx % chunk_depth
