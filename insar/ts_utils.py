@@ -1,4 +1,5 @@
 import numpy as np
+from datetime import datetime, date
 from matplotlib.dates import date2num
 from concurrent.futures import Future, Executor
 from threading import Lock
@@ -6,11 +7,11 @@ from itertools import chain, combinations
 from apertools import sario
 
 
-def build_A_matrix(sar_date_list, ifg_date_pairs):
+def build_A_matrix(sar_dates, ifg_date_pairs):
     """Takes the list of igram dates and builds the SBAS A matrix
 
     Args:
-        sar_date_list (list[date]): datetimes of the acquisitions
+        sar_dates (list[date]): datetimes of the acquisitions
         ifg_date_pairs (list[tuple(date, date)])
 
     Returns:
@@ -18,23 +19,26 @@ def build_A_matrix(sar_date_list, ifg_date_pairs):
             Each row corresponds to an igram, each column to a SAR date
             value will be -1 on the early (reference) igrams, +1 on later (secondary)
     """
+    if isinstance(sar_dates[0], datetime) or isinstance(sar_dates[0], date):
+        sar_dates = date2num(sar_dates)
+    if isinstance(ifg_date_pairs[0][0], datetime) or isinstance(
+        ifg_date_pairs[0][0], date
+    ):
+        ifg_date_pairs = date2num(ifg_date_pairs)
     # We take the first .geo to be time 0, leave out of matrix
     # Match on date (not time) to find indices
-    sar_date_list = sar_date_list[1:]
     M = len(ifg_date_pairs)  # Number of igrams, number of rows
-    N = len(sar_date_list)
+    N = len(sar_dates) - 1
     A = np.zeros((M, N))
     for j in range(M):
         early_igram, late_igram = ifg_date_pairs[j]
 
-        try:
-            idx_early = sar_date_list.index(early_igram)
-            A[j, idx_early] = -1
-        except ValueError:  # The first SLC will not be in the matrix
-            pass
-
-        idx_late = sar_date_list.index(late_igram)
-        A[j, idx_late] = 1
+        for idx in range(N):
+            sd = sar_dates[idx + 1]
+            if early_igram == sd:
+                A[j, idx] = -1
+            elif late_igram == sd:
+                A[j, idx] = 1
 
     return A
 
@@ -43,7 +47,7 @@ def build_B_matrix(sar_dates, ifg_date_pairs, model=None):
     """Takes the list of igram dates and builds the SBAS B (velocity coeff) matrix
 
     Args:
-        sar_date_list (list[date]): dates of the SAR acquisitions
+        sar_dates (list[date]): dates of the SAR acquisitions
         ifg_date_pairs (list[tuple(date, date)])
         model (str): If "linear", creates the M x 1 matrix for linear velo model
 
@@ -54,27 +58,34 @@ def build_B_matrix(sar_dates, ifg_date_pairs, model=None):
             value will be t_k+1 - t_k for columns after the -1 in A,
             up to and including the +1 entry
     """
-    try:
-        sar_dates = sar_dates.date
-    except AttributeError:
-        pass
-    timediffs = np.array([difference.days for difference in np.diff(sar_dates)])
+    if isinstance(sar_dates[0], datetime) or isinstance(sar_dates[0], date):
+        sar_dates = date2num(sar_dates)
+    if isinstance(ifg_date_pairs[0][0], datetime) or isinstance(
+        ifg_date_pairs[0][0], date
+    ):
+        ifg_date_pairs = date2num(ifg_date_pairs)
+
+    timediffs = np.diff(sar_dates)
 
     A = build_A_matrix(sar_dates, ifg_date_pairs)
     B = np.zeros_like(A)
 
     for j, row in enumerate(A):
         # if no -1 entry, start at index 0. Otherwise, add 1 to exclude the -1 index
-        start_idx = list(row).index(-1) + 1 if (-1 in row) else 0
-        # End index is inclusive of the +1
-        end_idx = np.where(row == 1)[0][0] + 1  # +1 will always exist in row
+        start_idx = 0
+        for idx, item in enumerate(row):
+            if item == -1:
+                start_idx = idx + 1
+            elif item == 1:
+                end_idx = idx + 1
 
         # Now only fill in the time diffs in the range from the early igram index
         # to the later igram index
         B[j][start_idx:end_idx] = timediffs[start_idx:end_idx]
 
     if model == "linear":
-        return B.sum(axis=1, keepdims=True)
+        BB = B.sum(axis=1)
+        return BB.reshape((-1, 1))
     else:
         return B
 
@@ -86,7 +97,7 @@ def A_polynomial(sar_dates, degree=1):
         sar_dates (iterable[date]): dates of the SAR acquisitions
 
     Returns:
-        A, size=(len(sar_date_list)) 2D Vandermonde array to solve for the polynomial coefficients
+        A, size=(len(sar_dates)) 2D Vandermonde array to solve for the polynomial coefficients
     """
     date_nums = date2num(sar_dates)
     return np.polynomial.polynomial.polyvander(date_nums, degree)
@@ -298,8 +309,8 @@ def build_closure_matrix(ifg_date_pairs):
 
     """
     # Get the unique SAR dates present in the interferogram list
-    sar_date_list = sorted(set(chain.from_iterable(ifg_date_pairs)))
-    closure_list = combinations(sar_date_list, 3)
+    sar_dates = sorted(set(chain.from_iterable(ifg_date_pairs)))
+    closure_list = combinations(sar_dates, 3)
 
     # Create an inverse map from tuple(date1, date1) -> index in ifg list
     ifg_to_idx = {tuple(ifg): idx for idx, ifg in enumerate(ifg_date_pairs)}
@@ -403,7 +414,7 @@ def closure_phase(ifg_stack, ifg_date_pairs, rewrap=True):
         return closures
 
 
-def closure_integer_ambiguity(unw_stack, ifg_date_pairs):
+def closure_integer_ambiguity(unw_stack, ifg_date_pairs, do_sum=False):
     """Compute the integer ambiguity from the closure phase of unwrapped ifgs
 
     Can be used to detect unwrapping errors, as a 2pi jump in one interferogram
@@ -421,7 +432,11 @@ def closure_integer_ambiguity(unw_stack, ifg_date_pairs):
     """
     closures = closure_phase(unw_stack, ifg_date_pairs, rewrap=False)
     # Eq 9, Yunjun 2019
-    return (closures - rewrap_to_2pi(closures)) / (2 * np.pi)
+    closure_ambiguities = (closures - rewrap_to_2pi(closures)) / (2 * np.pi)
+    if do_sum:
+        return (closure_ambiguities != 0).sum(axis=0)
+    else:
+        return closure_ambiguities
 
 
 # TODO
@@ -517,3 +532,42 @@ class DummyExecutor(Executor):
     def shutdown(self, wait=True):
         with self._shutdownLock:
             self._shutdown = True
+
+
+def solve_l1(
+    unw_chunk,
+    slclist,
+    ifglist,
+    phase_to_cm,
+    use_B_matrix=False,
+):
+    import cvxpy as cp
+
+    nifg, nrow, ncol = unw_chunk.shape
+    nsar = len(slclist)
+    bb = cp.Parameter(shape=nifg)
+    if use_B_matrix:
+        M = build_B_matrix(slclist, ifglist)
+    else:
+        M = build_A_matrix(slclist, ifglist)
+
+    x = cp.Variable(shape=M.shape[1])
+    objective = cp.Minimize(cp.norm1(M @ x - bb))
+    # objective = cp.Minimize(cp.sum_squares(M @ x - bb))
+    prob = cp.Problem(objective)
+
+    xs = np.zeros((nsar, nrow * ncol), dtype=np.float32)
+    unw_cols = unw_chunk.reshape(nifg, -1)
+    for idx in range(nrow * ncol):
+        bb.value = unw_cols[:, idx]
+        prob.solve()
+        xs[1:, idx] = x.value
+
+    if use_B_matrix:
+        # the xs are velocities
+        timediffs = np.diff(slclist)
+        phi_cols = integrate_velocities(xs[1:], timediffs)
+        stack = phi_cols.reshape((nsar, nrow, ncol)).astype(np.float32)
+    else:
+        stack = xs.reshape((nsar, nrow, ncol))
+    return stack * phase_to_cm

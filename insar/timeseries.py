@@ -76,7 +76,7 @@ def run_inversion(
     max_temporal_bandwidth=None,  # TODO
     min_temporal_bandwidth=None,  # TODO
     include_annual=False,
-    weight_by_cor=True,
+    weight_by_cor=False,
     cor_thresh=0.15,
     # outlier_sigma=0,  # TODO: outlier outlier_sigma. Use trodi
     alpha=0,
@@ -87,6 +87,7 @@ def run_inversion(
     coordinates=None,  # geo, rdr
     platform="s1",
     max_workers=3,
+    use_B_matrix=False,
 ):
     """Runs SBAS inversion on all unwrapped igrams
 
@@ -205,6 +206,7 @@ def run_inversion(
         wavelength=WAVELENGTH_MAP[platform],
         coordinates=coordinates,
         max_workers=max_workers,
+        use_B_matrix=use_B_matrix,
         **attrs_to_copy,
     )
 
@@ -234,6 +236,7 @@ def run_inversion(
         # outlier_sigma,
         phase_to_cm,
         max_workers=max_workers,
+        use_B_matrix=use_B_matrix,
     )
 
     # Now save the ifg/slc information
@@ -257,11 +260,11 @@ def run_inversion(
     #     )
     with h5py.File(outfile, "a") as hf:
         # if cor_mean_dset not in hf:
-            # hf[cor_mean_dset] = cor_mean
+        # hf[cor_mean_dset] = cor_mean
         for k, v in attrs_to_copy.items():
             hf[output_dset].attrs[k] = v
     # else:
-        # cor_mean, cor_mean_dset = None, None
+    # cor_mean, cor_mean_dset = None, None
 
     if los_file and os.path.exists(los_file):
         los_dset = constants.LOS_ENU_DSET
@@ -324,6 +327,7 @@ def run_sbas(
     cor_thresh,
     phase_to_cm,
     max_workers,
+    use_B_matrix=False,
 ):
     """Performs and SBAS inversion on each pixel of unw_stack to find deformation
 
@@ -340,7 +344,7 @@ def run_sbas(
 
     blk_slices = utils.block_iterator((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
     # # TESTING: small area
-    # blk_slices = list(blk_slices)[:2]
+    # blk_slices = list(blk_slices)[:3]
 
     ExecutorClass = ProcessPoolExecutor if max_workers > 1 else DummyExecutor
     with ExecutorClass(max_workers=max_workers) as executor:
@@ -360,6 +364,7 @@ def run_sbas(
                 weight_by_cor,
                 cor_thresh,
                 phase_to_cm,
+                use_B_matrix=use_B_matrix,
             ): blk
             for blk in blk_slices
         }
@@ -384,6 +389,7 @@ def _load_and_run(
     weight_by_cor,
     cor_thresh,
     phase_to_cm,
+    use_B_matrix=False,
 ):
     rows, cols = blk
     with h5py.File(unw_stack_file) as hf, h5py.File(cor_stack_file) as hf_c:
@@ -392,12 +398,15 @@ def _load_and_run(
         cor_chunk = hf_c[cor_stack_dset][
             valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]
         ]
-        if cor_thresh and cor_thresh > 0:
+        if weight_by_cor and cor_thresh is not None:
             zero_idxs = cor_chunk < cor_thresh
             cor_chunk[zero_idxs] = 0.0
-            cor_mean = cor_chunk[~zero_idxs].mean(axis=0)
             unw_chunk[zero_idxs] = 0.0
-        
+            # Only count nonzero- we'll ignore those
+            cor_mean = cor_chunk[~zero_idxs].mean(axis=0)
+        else:
+            cor_mean = cor_chunk.mean(axis=0)
+
         if weight_by_cor:
             out_chunk = _calc_soln_cor_weighted(
                 unw_chunk,
@@ -415,14 +424,18 @@ def _load_and_run(
                 # alpha,
                 # constant_velocity,
                 phase_to_cm,
+                use_B_matrix=use_B_matrix,
             )
         return out_chunk, cor_mean
 
 
-def write_out_chunk(chunk, outfile, output_dset, rows=None, cols=None):
+def write_out_chunk(chunk, outfile, output_dset, rows=None, cols=None, verbose=True):
     rows = rows or [0, None]
     cols = cols or [0, None]
-    logger.info(f"Writing out ({rows = }, {cols = }) chunk to {outfile}:/{output_dset}")
+    if verbose:
+        logger.info(
+            f"Writing out ({rows = }, {cols = }) chunk to {outfile}:/{output_dset}"
+        )
     with h5py.File(outfile, "r+") as hf:
         dset = hf[output_dset]
         if dset.ndim == 3:
@@ -438,9 +451,10 @@ def _calc_soln(
     ifglist,
     # alpha,
     # constant_velocity,
-    # L1 = True,
     # outlier_sigma=4,
     phase_to_cm,
+    use_B_matrix=False,
+    L1=False,
 ):
     # TODO: this is where i'd get rid of specific dates/ifgs
     slcs_clean, ifglist_clean, unw_clean = slclist, ifglist, unw_chunk
@@ -454,30 +468,30 @@ def _calc_soln(
     if unw_cols_nonan.sum() == 0:
         return np.zeros((len(slcs_clean), nrow, ncol), dtype=dtype)
 
-    # if outlier_sigma > 0:
-    #     slc_clean, ifglist_clean, unw_clean = remove_outliers(
-    #         slc_clean, ifglist_clean, unw_clean, mean_sigma_cutoff=sigma
-    #     )
-    # igram_count = len(unw_clean)
-
     # Last, pad with zeros if doing Tikh. regularization
     # unw_final = alpha > 0 ? augment_zeros(B, unw_clean) : unw_clean
 
-    # # Prepare B matrix and timediffs used for each pixel inversion
-    # # B = prepB(slc_clean, ifglist_clean, constant_velocity, alpha)
-    # B = build_B_matrix(
-    #     slcs_clean, ifglist_clean, model="linear" if constant_velocity else None
-    # )
-    # timediffs = np.array([d.days for d in np.diff(slclist)])
-    A = build_A_matrix(slcs_clean, ifglist_clean)
-    pA = np.linalg.pinv(A).astype(dtype)
-    # stack = cols_to_stack(pA @ stack_to_cols(unw_subset), *unw_subset.shape[1:])
-    # equiv:
-    stack = (pA @ unw_cols_nonan).reshape((-1, nrow, ncol)).astype(dtype)
+    if use_B_matrix:
+        # # Version with B (velo diffs)
+        B = build_B_matrix(slclist, ifglist)
 
-    # Add a 0 image for the first date
-    stack = np.concatenate((np.zeros((1, nrow, ncol), dtype=dtype), stack), axis=0)
+        pB = np.linalg.pinv(B).astype(dtype)
+        soln_cols = pB @ unw_cols_nonan
+
+        timediffs = np.diff(slclist)
+        phi_cols = integrate_velocities(soln_cols, timediffs)
+        stack = phi_cols.reshape((-1, nrow, ncol)).astype(dtype)
+
+    else:
+        A = build_A_matrix(slcs_clean, ifglist_clean)
+        pA = np.linalg.pinv(A).astype(dtype)
+        # equiv:
+        stack = (pA @ unw_cols_nonan).reshape((-1, nrow, ncol)).astype(dtype)
+        # Add a 0 image for the first date
+        stack = np.concatenate((np.zeros((1, nrow, ncol), dtype=dtype), stack), axis=0)
+
     stack *= phase_to_cm
+
     return stack
 
 

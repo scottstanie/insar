@@ -82,12 +82,12 @@ def build_B_matrix(sar_dates, ifg_dates, model=None):
 
 
 @njit
-def integrate_velocities(velocity_array, timediffs):
+def integrate_velocities(velocity_cols, timediffs):
     """Takes SBAS velocity output and finds phases
 
     Args:
-        velocity_array (ndarray): output of run_sbas, velocities at
-            each point in time
+        velocity_cols (ndarray): output of run_sbas, velocities at
+            each point in time, where each column is one pixel
         timediffs (np.array): dtype=int, days between each SAR acquisitions
             length will be 1 less than num SAR acquisitions
 
@@ -95,13 +95,13 @@ def integrate_velocities(velocity_array, timediffs):
         ndarray: integrated phase array
 
     """
-    nrows, ncols = velocity_array.shape
+    nrows, ncols = velocity_cols.shape
     # Add 0 as first entry of phase array to match slclist length on each col
     phi_arr = np.zeros((nrows + 1, ncols))
     # multiply each column of vel array: each col is a separate solution
-    for j in range(velocity_array.shape[1]):
+    for j in range(velocity_cols.shape[1]):
         # the final phase results are the cumulative sum of delta phis
-        phi_arr[1:, j] = np.cumsum(velocity_array[:, j] * timediffs)
+        phi_arr[1:, j] = np.cumsum(velocity_cols[:, j] * timediffs)
 
     return phi_arr
 
