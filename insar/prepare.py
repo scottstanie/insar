@@ -441,6 +441,7 @@ def create_cor_stack(
     geom_dir=ISCE_GEOM_DIR,
     coordinates="geo",
     float_cor=False,
+    max_temp_baseline=180,
 ):
 
     if not sario.check_dset(cor_stack_file, dset_name, overwrite):
@@ -467,6 +468,10 @@ def create_cor_stack(
     # While we're iterating, save a stacked average
     stack_sum = np.zeros((rows, cols), dtype="float32")
     stack_counts = np.zeros((rows, cols), dtype="float32")
+    # And a short-baseline correlation average
+    stack_sum_sb = np.zeros((rows, cols), dtype="float32")
+    stack_counts_sb = np.zeros((rows, cols), dtype="float32")
+    mean_short_baseline_dset = STACK_MEAN_DSET + f"_maxtemp{max_temp_baseline}"
 
     buf = np.empty((chunk_depth, rows, cols), dtype=dtype)
     lastidx = 0
@@ -494,6 +499,9 @@ def create_cor_stack(
         mask = np.isnan(cor)
         stack_sum[~mask] += cor[~mask]
         stack_counts[~mask] += 1
+        if temporal_baseline(in_fname) <= max_temp_baseline:
+            stack_sum_sb[~mask] += cor[~mask]
+            stack_counts_sb[~mask] += 1
 
     if cur_chunk_size > 0:
         # Write the final part of the buffer:
@@ -504,6 +512,7 @@ def create_cor_stack(
     # Also save the stack mean
     with h5py.File(cor_stack_file, "r+") as f:
         f[STACK_MEAN_DSET] = stack_sum / (stack_counts + 1e-6)
+        f[mean_short_baseline_dset] = stack_sum_sb / (stack_counts_sb + 1e-6)
 
     # Save the lat/lon datasets, attach to main data files
     if coordinates == "geo":
@@ -512,6 +521,7 @@ def create_cor_stack(
         sario.save_latlon_to_h5(cor_stack_file, rsc_data=rsc_data)
         sario.attach_latlon(cor_stack_file, dset_name, depth_dim="ifg_idx")
         sario.attach_latlon(cor_stack_file, STACK_MEAN_DSET, depth_dim=None)
+        sario.attach_latlon(cor_stack_file, mean_short_baseline_dset, depth_dim=None)
     else:
         lat, lon = sario.load_rdr_latlon(geom_dir=geom_dir)
         sario.save_latlon_2d_to_h5(
@@ -519,6 +529,7 @@ def create_cor_stack(
         )
         sario.attach_latlon_2d(cor_stack_file, dset_name, depth_dim="ifg_idx")
         sario.attach_latlon_2d(cor_stack_file, STACK_MEAN_DSET, depth_dim=None)
+        sario.attach_latlon_2d(cor_stack_file, mean_short_baseline_dset, depth_dim=None)
 
 
 @log_runtime
@@ -814,7 +825,6 @@ def prepare_isce(
 
 def reference_by_elevation(
     unw_stack_file,
-    deramp_order=1,
     dset_name=STACK_FLAT_SHIFTED_DSET,
     cor_filename=COR_FILENAME,
     # cor_filename="cor_stack_filt.h5",  # TODO: change
@@ -822,8 +832,9 @@ def reference_by_elevation(
     dem_filename="elevation_looked.dem",
     cur_layer=0,
     subfactor=5,
-    cor_thresh=0.4,
+    cor_thresh=0.5,
     coordinates="geo",
+    # deramp_order=1,
 ):
     # cur_layer = 0
     if coordinates == "geo":
@@ -833,10 +844,17 @@ def reference_by_elevation(
     dem_sub = utils.take_looks(dem, subfactor, subfactor)
 
     with h5py.File(cor_filename) as hf:
+        # for name in hf:
+        #     # Prefer the short-baseline mean correlation estimate
+        #     if name.startswith(STACK_MEAN_DSET + "_maxtemp"):
+        #         cor_mean = hf[name][()]
+        #         break
+        # else:
+        #     # otherwise, use the total mean
         cor_mean = hf[STACK_MEAN_DSET][()]
 
-    # TODO: hardcode bad
     if coordinates == "rdr":
+        # TODO: hardcode bad
         shadow = sario.load(
             "geom_reference/shadowMask.rdr", use_gdal=True, band=1
         ).astype(bool)
