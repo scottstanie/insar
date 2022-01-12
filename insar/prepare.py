@@ -124,36 +124,17 @@ def prepare_stacks(
         coordinates=coordinates,
         float_cor=float_cor,
     )
-
-    if ref_station is not None:
-        rsc_data = sario.load(os.path.join(igram_path, "dem.rsc"))
-        ref_row, ref_col = apertools.gps.station_rowcol(
-            station_name=ref_station,
-            rsc_data=rsc_data,
-        )
-    elif ref_lat is not None and ref_lon is not None:
-        # TODO: getting this from radar coord?
-
-        if coordinates == "geo":
-            rsc_file = os.path.join(igram_path, "dem.rsc")
-            if os.path.exists(rsc_file):
-                rsc_data = sario.load(rsc_file)
-                filename = None
-            else:
-                filename = mask_file
-            ref_row, ref_col = apertools.latlon.latlon_to_rowcol(
-                rsc_data=rsc_data,
-                filename=filename,
-            )
-        else:
-            ref_row, ref_col = apertools.latlon.latlon_to_rowcol_rdr(
-                ref_lat, ref_lon, geom_dir=geom_dir
-            )
-            print(ref_row, ref_col)
-
-    if ref_row is None or ref_col is None:
-        # ref_row, ref_col, ref_station = find_reference_location(
-        raise ValueError("Need ref_row, ref_col or ref_station")
+    ref_row, ref_col, ref_lat, ref_lon, ref_station = get_reference(
+        ref_row,
+        ref_col,
+        ref_lat,
+        ref_lon,
+        ref_station,
+        coordinates,
+        unw_stack_file,
+        geom_dir,
+        using_elevation=remove_elevation,
+    )
 
     try:
         water_mask = sario.load(
@@ -180,23 +161,14 @@ def prepare_stacks(
         cor_thresh=cor_thresh,
         overwrite=overwrite,
     )
-    if ref_lat is None:
-        if coordinates == "geo":
-            ref_lat, ref_lon = apertools.latlon.rowcol_to_latlon(
-                ref_row, ref_col, filename=unw_stack_file
-            )
-        else:
-            ref_lat, ref_lon = apertools.latlon.rowcol_to_latlon_rdr(
-                ref_row, ref_col, geom_dir=geom_dir
-            )
+
     # Now record attrs of the dataset
     with h5py.File(unw_stack_file, "r+") as f:
         f[STACK_FLAT_SHIFTED_DSET].attrs["deramp_order"] = deramp_order
         f[STACK_FLAT_SHIFTED_DSET].attrs["reference"] = [ref_row, ref_col]
         f[STACK_FLAT_SHIFTED_DSET].attrs["reference_latlon"] = [ref_lat, ref_lon]
         f[STACK_FLAT_SHIFTED_DSET].attrs["reference_window"] = window
-        if ref_station is not None:
-            f[STACK_FLAT_SHIFTED_DSET].attrs["reference_station"] = ref_station
+        f[STACK_FLAT_SHIFTED_DSET].attrs["reference_station"] = ref_station
 
 
 def create_dset(
@@ -891,13 +863,13 @@ def reference_by_elevation(
             buf *= 0
             dset.read_direct(buf, cur_slice, dest_slice)
             # out = deramp.remove_ramp(buf[dest_slice], deramp_order=deramp_order)
-            out = remove_elevation(buf[dest_slice], dem, dem_sub, mask_sub, subfactor)
+            out = fit_remove_elevation(buf[dest_slice], dem, dem_sub, mask_sub, subfactor)
 
             # # Now center it on the shift window
             # win = window // 2
             # phase = _shift(phase, ref_row, ref_col, win)
 
-            logger.info(f"Writing {cur_slice} back to dataset")
+            tqdm.write(f"Writing {cur_slice} back to dataset")
             dset.write_direct(out[dest_slice], dest_sel=cur_slice)
 
             cur_layer += chunk_layers
@@ -1012,6 +984,7 @@ def get_reference(
     coordinates,
     unw_stack_file,
     geom_dir,
+    using_elevation=False,
 ):
     """Convert reference provided in different formarts to each of the others
 
@@ -1024,6 +997,8 @@ def get_reference(
         coordinates (str): coordinates system of the reference (rdr or geo)
         unw_stack_file (str): name of HDF5 stack file
         geom_dir (str): if rdr, path to the directory containing the geom files
+        using_elevation (bool): if True, use elevation to compute the reference, and 
+            return all empty strings
 
     Raises:
         ValueError: if no reference is provided
@@ -1033,6 +1008,8 @@ def get_reference(
     """
     import apertools.latlon
     import apertools.gps
+    if using_elevation:
+        return (None, None, None, None, None)
 
     if coordinates == "geo":
         if ref_station is not None:
@@ -1078,7 +1055,7 @@ def get_reference(
 
 
 # def remove_elevation(dem_da_sub, ifg_stack_sub, dem, ifg_stack, subfactor=5):
-def remove_elevation(ifg_stack, dem, dem_sub, mask=None, subfactor=5, deramp_order=0):
+def fit_remove_elevation(ifg_stack, dem, dem_sub, mask=None, subfactor=5, deramp_order=0):
     if mask is None:
         mask = np.zeros(dem.shape, dtype=bool)
 
