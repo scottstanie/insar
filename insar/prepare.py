@@ -325,7 +325,7 @@ def deramp_and_shift_unws(
             # In case other pixels were already nans
             nan_mask = np.isnan(deramped_phase)
 
-            if ref_row is not None and ref_col is not None:
+            if ref_row and ref_col:
                 # Now center it on the shift window
                 deramped_phase = _shift(deramped_phase, ref_row, ref_col, win)
 
@@ -1010,7 +1010,7 @@ def get_reference(
     import apertools.latlon
     import apertools.gps
     if using_elevation:
-        return (None, None, None, None, None)
+        return ("", "", "", "", "")
 
     if coordinates == "geo":
         if ref_station is not None:
