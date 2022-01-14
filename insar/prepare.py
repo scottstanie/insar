@@ -131,7 +131,7 @@ def prepare_stacks(
         ref_lon,
         ref_station,
         coordinates,
-        unw_stack_file,
+        cor_stack_file,
         geom_dir,
         using_elevation=remove_elevation,
     )

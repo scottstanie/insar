@@ -183,6 +183,7 @@ def run_inversion(
     # else:
     # proc_func = proc_pixel_daily
     output_shape = (len(slclist), nrows, ncols)
+    logger.info("Target output shape: %s", output_shape)
 
     paramfile = (
         "{}_{}_run_params".format(outfile, output_dset).replace(".", "_") + ".yml"
