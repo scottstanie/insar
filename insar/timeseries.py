@@ -189,7 +189,7 @@ def run_inversion(
         "{}_{}_run_params".format(outfile, output_dset).replace(".", "_") + ".yml"
     )
     # Saves all desried run variables and objects into a yaml file
-    _record_run_params(
+    utils.record_params_as_yaml(
         paramfile,
         outfile=outfile,
         output_dset=output_dset,
@@ -855,16 +855,6 @@ def calc_model_fit_deformation(
 
     return model_defo
 
-
-def _record_run_params(paramfile, **kwargs):
-    from ruamel.yaml import YAML
-
-    print(kwargs)
-
-    yaml = YAML()
-
-    with open(paramfile, "w") as f:
-        yaml.dump(kwargs, f)
 
 
 def _confirm_closed(fname):
