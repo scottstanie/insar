@@ -46,6 +46,7 @@ class LOS:
     # GPS comparison
     gps_window_size: int = 5
     ref_station: str = None
+    gps_max_nan_pct: float = 0.5
 
     # Masking
     mask_filename: str = "masks.h5"
@@ -58,7 +59,9 @@ class LOS:
     deramp_order = 2
 
     # Output options:
+    outfile_template = "cumulative_los_path{path_num}_{dt}.tif"
     freq: str = "6M"
+    crs: str = "EPSG:4326"
 
     # Figure saving
     figure_directory: str = "figures"
@@ -69,10 +72,10 @@ class LOS:
 
     def run(self):
         self.figsize = (self.figwidth, self.figheight)
+
         if self.out_directory is None:
-            self.out_directory = (
-                Path(self.directory) / f"los_out_{self.path_num}/"
-            ).resolve()
+            p = Path(self.directory) / f"los_out_{self.path_num}/"
+            self.out_directory = p.resolve()
             utils.mkdir_p(self.out_directory)
         else:
             self.out_directory = Path(self.out_directory).resolve()
@@ -97,9 +100,17 @@ class LOS:
             logger.info("Finding correction from GPS station %s", self.ref_station)
             self.reference_to_gps()
             self.compare_gps(self.shifted_dset_name)
-        self.set_mask()
+        else:
+            logger.info("No GPS reference station specified")
+            self.ds[self.shifted_dset_name] = self.ds[self.dset_name]
 
-        # Save a plot of the mask and final deformation
+        # Apply the mask
+        self.set_mask()
+        # Save output tifs
+        self.save_output()
+
+        # Also save a quicklook plot of the mask and final deformation
+        logger.info("Saving quicklook plots")
         self.plot_cor_mask(self.figure_directory / "cor_mask.png")
         self.plot_img(idx=-1)
 
@@ -111,6 +122,9 @@ class LOS:
         self.defo_filename = self._set_abs_path(self.defo_filename)
         self.los_map_filename = self._set_abs_path(self.los_map_filename)
         self.mask_filename = self._set_abs_path(self.mask_filename)
+        self.outfile_template = self._set_abs_path(
+            self.out_directory / self.outfile_template
+        )
         self.figure_directory = self._set_abs_path(
             self.out_directory / self.figure_directory
         )
@@ -147,7 +161,9 @@ class LOS:
     def plot_cor_mask(self, figname, **figkwargs):
         import proplot as pplt
 
-        fig, axes = pplt.subplots(ncols=3, figsize=(self.figsize))
+        fig, axes = pplt.subplots(
+            ncols=3, figsize=(2 * self.figwidth, 0.7 * self.figheight)
+        )
 
         ax = axes[0]
         cor = self.ds["cor_mean"]
@@ -199,12 +215,12 @@ class LOS:
 
     def compare_gps(self, dset_name):
         igc = gps.InsarGPSCompare(
-            #     insar_filename=data78 + defo_fname,
             insar_ds=self.ds,
             dset=dset_name,
             los_dset=self.los_dset,
             los_map_file=self.los_map_filename,
             window_size=self.gps_window_size,
+            max_nan_pct=self.gps_max_nan_pct,
         )
         df, df_diff = igc.run()
         df.to_csv(self.out_directory / "insar_gps.csv")
@@ -244,32 +260,40 @@ class LOS:
             ref_gps_sm = ref_gps.rolling(50, min_periods=1, center=True).mean()
             correction = (ref_gps_sm - ref_win_ts_sm).to_xarray()
 
+        if np.any(np.isnan(correction.values)):
+            logger.error("NaN in correction")
+            logger.error("Skipping the correction")
+            correction = 0
         self.ds[self.shifted_dset_name] = self.ds[self.dset_name] + correction
 
     def set_mask(self):
         """Get the missing data, correlation mask and apply to the shifted dataset"""
         mask_missing = self.get_mask()
-        # mask_zeros = np.logical_or(self.ds[self.dset_name].values == 0, mask_missing)
-        cor_mask = self.get_cor_mask()
+        # mask_missing = np.logical_or(self.ds[self.dset_name].values == 0, mask_missing)
 
+        cor_mask = self.get_cor_mask()
         mask = np.logical_or(mask_missing, cor_mask.data)
-        self.ds[self.shifted_dset_name].values[mask] = 0
+
+        self.ds[self.shifted_dset_name].values[:, mask] = 0
 
     def save_output(self):
+        from apertools import sario
+
         ds_interp = utils.interpolate_xr(
             self.ds, dset_name=self.shifted_dset_name, freq=self.freq, col="date"
         )
 
-        outfiles = []
-        for d in ds_interp.date[1:]:
-            # outfile = f"cumulative_path_path85_east_up_{pd.to_datetime(d.item()).strftime('%Y%m%d')}.tif"
-            outfile = self.outfile_template.format(
-                dt=pd.to_datetime(d.item()).strftime("%Y%m%d")
+        for layer in ds_interp[self.shifted_dset_name][1:]:
+            dt_str = pd.to_datetime(layer.date.item()).strftime("%Y%m%d")
+            outfile = str(self.outfile_template).format(
+                path_num=self.path_num, dt=dt_str
             )
-            outfile = os.path.join(data, outfile)
-            print(f"Computing {outfile}")
-            outfiles.append(outfile)
-        #     e, u = los.solve_east_up(asc_xr=dsinterp, desc_xr=ds85interp, date=d, outfile=outfile)
+            logger.info(f"Saving {outfile}")
+            layer.rio.set_spatial_dims("lon", "lat").rio.set_crs(
+                self.crs
+            ).rio.to_raster(outfile)
+            # Set the units to cm
+            sario.set_unit(outfile, unit="cm")
 
 
 @log_runtime
