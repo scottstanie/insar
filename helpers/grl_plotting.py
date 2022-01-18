@@ -8,7 +8,7 @@ import numpy as np
 import h5py
 
 from insar import timeseries
-from apertools import sario, gps, plotting, latlon
+from apertools import sario, gps, plotting, latlon, gps_plots
 from apertools.colors import MATLAB_COLORS
 from apertools.log import get_log
 
@@ -182,7 +182,7 @@ def plot_l1_vs_stack(
     #
     # Plot timeseries with-outlier cases:
     ms = 4
-    fig, ax = gps.plot_gps_los(
+    fig, ax = gps_plots.plot_gps_los(
         station,
         end_date=date(yy, 1, 1),
         offset=offset,
@@ -217,7 +217,7 @@ def plot_l1_vs_stack(
     print(f"Difference: {abs(stack - l1)}")
 
     # Plot linear with-outlier cases
-    fig, ax = gps.plot_gps_los(
+    fig, ax = gps_plots.plot_gps_los(
         station,
         end_date=date(yy, 1, 1),
         insar_mm_list=[l1, l2],
@@ -268,7 +268,7 @@ def plot_l1_vs_stack(
     stack2, l22, l12 = prunesolve(slclist, ifglist, unw_vals, Blin, 4, shrink=False)
 
     # PLOT:
-    fig, ax = gps.plot_gps_los(
+    fig, ax = gps_plots.plot_gps_los(
         station,
         end_date=date(yy, 1, 1),
         insar_mm_list=[l12, l22],
@@ -428,7 +428,7 @@ def _subtract_reference(
 
 
 def plot_quals_version():
-    fig, ax = gps.plot_gps_los(
+    fig, ax = gps_plots.plot_gps_los(
         "TXSO",
         end_date=date(2018, 1, 1),
         insar_mm_list=[-5.2],

@@ -75,8 +75,6 @@ def prepare_stacks(
     compute_water_mask=False,
     mask_dem=True,
 ):
-    import apertools.latlon
-
     if coordinates is None:
         coordinates = detect_rdr_coordinates(igram_path)
     if coordinates not in COORDINATES_CHOICES:
@@ -131,7 +129,7 @@ def prepare_stacks(
         ref_lon,
         ref_station,
         coordinates,
-        cor_stack_file,
+        mask_file,
         geom_dir,
         using_elevation=remove_elevation,
     )
@@ -167,8 +165,8 @@ def prepare_stacks(
         f[STACK_FLAT_SHIFTED_DSET].attrs["deramp_order"] = deramp_order
         f[STACK_FLAT_SHIFTED_DSET].attrs["reference"] = [ref_row, ref_col]
         f[STACK_FLAT_SHIFTED_DSET].attrs["reference_latlon"] = [ref_lat, ref_lon]
-        f[STACK_FLAT_SHIFTED_DSET].attrs["reference_window"] = window
-        f[STACK_FLAT_SHIFTED_DSET].attrs["reference_station"] = ref_station
+        f[STACK_FLAT_SHIFTED_DSET].attrs["reference_window"] = window or ""
+        f[STACK_FLAT_SHIFTED_DSET].attrs["reference_station"] = ref_station or ""
 
 
 def create_dset(
@@ -490,7 +488,7 @@ def create_cor_stack(
     # Save the lat/lon datasets, attach to main data files
     if coordinates == "geo":
         # TODO: best way to check for radar coords? wouldn't want any lat/lon...
-        rsc_data = sario.load(os.path.join(directory, "dem.rsc"))
+        rsc_data = _load_rsc_data(directory)
         sario.save_latlon_to_h5(cor_stack_file, rsc_data=rsc_data)
         sario.attach_latlon(cor_stack_file, dset_name, depth_dim="ifg_idx")
         sario.attach_latlon(cor_stack_file, STACK_MEAN_DSET, depth_dim=None)
@@ -504,6 +502,8 @@ def create_cor_stack(
         sario.attach_latlon_2d(cor_stack_file, STACK_MEAN_DSET, depth_dim=None)
         sario.attach_latlon_2d(cor_stack_file, mean_short_baseline_dset, depth_dim=None)
 
+def _load_rsc_data(directory):
+    return sario.load(os.path.join(directory, glob.glob("*unw.rsc")[0]))
 
 @log_runtime
 def create_mask_stacks(
@@ -532,7 +532,7 @@ def create_mask_stacks(
 
     if coordinates == "geo":
         # Save the extra files too
-        rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
+        rsc_data = _load_rsc_data(igram_path)
         # .save_dem_to_h5( mask_file, rsc_data, dset_name=DEM_RSC_DSET, overwrite=overwrite
         if slc_path is None:
             slc_path = utils.get_parent_dir(igram_path)
@@ -589,7 +589,7 @@ def create_mask_stacks(
 
     # Finally, attach the latitude/longitude datasets
     if coordinates == "geo":
-        rsc_data = sario.load(sario.find_rsc_file(os.path.join(igram_path, "dem.rsc")))
+        rsc_data = _load_rsc_data(igram_path)
         sario.save_latlon_to_h5(mask_file, rsc_data=rsc_data)
         attach_func = sario.attach_latlon
     else:
