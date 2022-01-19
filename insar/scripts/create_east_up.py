@@ -3,20 +3,20 @@
 
 python ~/repos/insar/helpers/create_east_up.py --directory /data1/scott/pecos/path78-bbox2/igrams_looked --path_num 78 run
 """
+import glob
 import os
 import re
-import glob
-import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Tuple
 
 import fire
 import h5py
 import numpy as np
 import pandas as pd
-import tqdm
+import toml
 import xarray as xr
-from apertools import deramp, los, gps, gps_plots, utils, subset
+from apertools import deramp, gps, gps_plots, los, subset, utils
 from apertools.log import get_log, log_runtime
 
 logger = get_log()
@@ -46,7 +46,8 @@ class LOS:
     shifted_dset_name: str = "defo_lowess_shifted"
     los_dset: str = "los_enu"  # contained in `defo_filename`
     los_map_filename: str = "los_enu.tif"
-    cor_mean_filename: str = "cor_mean.tif"
+    cor_mean_dset = "cor_mean"  # contained in `defo_filename`
+    cor_mean_filename: str = "cor_mean.tif"  # Name to save as tif
 
     out_directory: str = None
 
@@ -73,15 +74,13 @@ class LOS:
     # Figure saving
     figure_directory: str = "figures"
     vm: float = 7  # Color limits (vmin, vmax)
-    figheight: float = 6
-    figwidth: float = 8
+    figsize: Tuple = (8, 6)
     defo_cmap: str = "seismic_wide_y_r"
 
     def run(self):
-        self.figsize = (self.figwidth, self.figheight)
 
         if self.out_directory is None:
-            p = Path(self.directory) / f"los_out_{self.path_num}/"
+            p = Path(self.directory) / f"los_path_{self.path_num}/"
             self.out_directory = p.resolve()
             utils.mkdir_p(self.out_directory)
         else:
@@ -162,18 +161,18 @@ class LOS:
         self._save_figure(fig, f"{self.figure_directory}/deformation.pdf")
 
     def get_cor_mask(self):
-        cor = self.ds["cor_mean"]
+        cor = self.ds[self.cor_mean_dset]
         return cor < self.cor_thresh
 
     def plot_cor_mask(self, figname, **figkwargs):
         import proplot as pplt
 
-        fig, axes = pplt.subplots(
-            ncols=3, figsize=(2 * self.figwidth, 0.7 * self.figheight)
-        )
+        width, height = self.figsize
+
+        fig, axes = pplt.subplots(ncols=3, figsize=(2 * width, 0.7 * height))
 
         ax = axes[0]
-        cor = self.ds["cor_mean"]
+        cor = self.ds[self.cor_mean_dset]
         cor.plot.imshow(cmap="gray", ax=ax)
         cor_mask = self.get_cor_mask()
 
@@ -301,16 +300,20 @@ class LOS:
             sario.set_unit(outfile, unit="cm")
 
         # Copy the LOS file for the east/up decomposition
+        fname = self.out_directory / self.los_map_filename.name
+        logger.info(f"Save LOS file to {fname}")
         sario.save_xr_tif(
             self.ds[self.los_dset],
             crs=self.crs,
-            outfile=self.out_directory / self.los_map_filename,
+            outname=fname,
         )
         # And save the mean correlation for reference
+        fname = self.out_directory / self.cor_mean_filename
+        logger.info("Saving mean correlation to {fname}")
         sario.save_xr_tif(
-            self.ds[self.cor_dset],
+            self.ds[self.cor_mean_dset],
             crs=self.crs,
-            outfile=self.out_directory / self.cor_mean_filename,
+            outname=fname
         )
 
 
@@ -414,21 +417,109 @@ class Merger:
 
         record(self, Path(self.out_directory) / "run_params.yaml")
         # return merged_imgs, merged_outfiles
+        return self.out_directory
 
 
-@dataclass
-class Pipeline:
-    """Wrapper to call either `los`, `decomp`, or `merge` commands"""
+class Runner:
+    """Wrapper to call `los`, `decomp`, and `merge` commands"""
 
-    def __init__(self):
+    def __init__(self, config_file, overwrite=False):
+        self.overwrite = overwrite
+        # To run just one at a time, use the `run` method of each
         self.los = LOS
         self.decomp = Decomp
-        self.merge = Merger
+        self.merger = Merger
 
-    # def run(self, *args, **kwargs):
-    #     self.los.run()
-    #     self.merger.run()
-    #     return "Pipeline complete"
+        self.config = config = toml.load(config_file)
+        self.project_out_directory = config["project_out_directory"]
+
+        self.path_options = config["paths"]
+        los_common_options = config["los"]
+        self.los_out_directory_template = los_common_options.pop(
+            "out_directory_template"
+        )
+        self.los_common_options = los_common_options
+
+        decomp_common_options = config["decomp"].pop("common", {})
+        self.decomp_out_directory_template = decomp_common_options.pop(
+            "out_directory_template", "decomp_paths_{asc_path_num}_{desc_path_num}"
+        )
+        self.decomp_common_options = decomp_common_options
+
+    def run(self):
+        los_out_directories = self.run_los()
+        decomp_out_directories = self.run_decomp(los_out_directories)
+        self.run_merger(decomp_out_directories)
+
+    def run_los(self):
+        los_out_directories = {}
+        for path_num, cfg in self.path_options.items():
+            path_num = int(path_num)
+            out_directory = self.los_out_directory_template.format(path_num=path_num)
+            out_directory = Path(self.project_out_directory) / out_directory
+            # Save for the Decomp class
+            los_out_directories[path_num] = out_directory
+
+            # TODO: maybe a little better way to check within the directory...
+            if out_directory.exists() and not self.overwrite:
+                logger.info("Skipping {}, exists.".format(out_directory))
+                continue
+            los_options = cfg["los"]
+
+            logger.info("Running LOS for path {}".format(path_num))
+            los = LOS(
+                path_num=path_num,
+                out_directory=out_directory,
+                **self.los_common_options,
+                **los_options,
+            )
+            los.run()
+        return los_out_directories
+
+    def run_decomp(self, los_out_directories):
+        out_directories = []
+
+        for options in self.config["decomp"].values():
+            # {"asc_path_num": 151, "desc_path_num": 85},
+            asc_path_num = options["asc_path_num"]
+            desc_path_num = options["desc_path_num"]
+            out_directory = self.decomp_out_directory_template.format(
+                asc_path_num=asc_path_num, desc_path_num=desc_path_num
+            )
+            out_directory = Path(self.project_out_directory) / out_directory
+            out_directories.append(out_directory)
+            if out_directory.exists() and not self.overwrite:
+                logger.info("Skipping {}, exists.".format(out_directory))
+                continue
+
+            logger.info(
+                "Running decomp for {} and {}".format(asc_path_num, desc_path_num)
+            )
+            merger = Decomp(
+                asc_directory=los_out_directories[asc_path_num],
+                desc_directory=los_out_directories[desc_path_num],
+                asc_path_num=asc_path_num,
+                desc_path_num=desc_path_num,
+                out_directory=out_directory,
+                **self.decomp_common_options,
+            )
+            merger.run()
+        return out_directories
+
+    def run_merger(self, decomp_out_directories):
+        # TODO: if i ever need more than 2 merged... figure that out at the time
+        merger_options = self.config["merger"]
+        in_dir1, in_dir2 = decomp_out_directories
+        merged_out_directory = Path(self.project_out_directory) / merger_options.pop(
+            "out_directory", "merged_east_up"
+        )
+        merger = Merger(
+            in_dir1=in_dir1,
+            in_dir2=in_dir2,
+            out_directory=merged_out_directory,
+            **merger_options,
+        )
+        merger.run()
 
 
 def _get_date(filename):
@@ -444,13 +535,16 @@ def record(obj, filename):
     for k, v in self_dict.items():
         if isinstance(v, Path):
             self_dict[k] = str(v)
-    utils.record_params_as_yaml(filename, **self_dict)
+    if str(filename).endswith(".yaml"):
+        utils.record_params_as_yaml(filename, **self_dict)
+    elif str(filename).endswith(".toml"):
+        utils.record_params_as_toml(filename, **self_dict)
 
 
 @log_runtime
 def main():
     # fire.Fire(LOS)
-    fire.Fire(Pipeline)
+    fire.Fire(Runner)
 
 
 if __name__ == "__main__":

@@ -317,6 +317,17 @@ def view_masks(
     )
 
 
+# COMMAND: view-masks
+@cli.command("create-east-ups")
+@click.argument("config-file")
+@click.option("--overwrite", is_flag=True, help="Erase current files and reprocess")
+def create_east_ups(config_file, overwrite):
+    from . import create_east_up
+
+    r = create_east_up.Runner(config_file, overwrite=overwrite)
+    r.run()
+
+
 # COMMAND: blob
 @cli.command(context_settings=dict(ignore_unknown_options=True))
 @click.option("--load/--no-load", default=True, help="Load last calculated blobs")

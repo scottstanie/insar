@@ -1,10 +1,13 @@
-# Directory holding all LOS and east/up solutions
-directory = /data6/scott/full_path151/7year_merged_solutions/
+# Output directory holding all LOS and east/up solutions
+project_out_directory = "/data6/scott/full_path151/7year_merged_solutions/"
 
+# Common options to all LOS saving
+[los]
 # Output options:
 outfile_template = "cumulative_los_path{path_num}_{dt}.tif"
 freq = "6M"
 crs = "EPSG:4326"
+out_directory_template = "los_path{path_num}"
 
 # Figure saving
 # figure_directory = "figures"
@@ -16,8 +19,8 @@ defo_cmap = "seismic_wide_y_r"
 # Path specific options
 
 [paths.151.los]
-directory = /data6/scott/full_path151/igrams_looked_18/
-defo_filename = deformation_elevation1.nc
+directory = "/data6/scott/full_path151/igrams_looked_18/"
+defo_filename = "deformation_elevation1.nc"
 dset_name = "defo_lowess"
 shifted_dset_name = "defo_lowess_shifted"
 los_dset = "los_enu"
@@ -35,7 +38,7 @@ cor_thresh = 0.11
 max_abs_val_masking = 2
 
 # deramping
-do_final_deramp = True
+do_final_deramp = true
 deramp_order = 2
 
 [paths.151.decomp]
@@ -47,9 +50,9 @@ direction = "ascending"
 
 
 [paths.85.los]
-directory = /data4/scott/path85/stitched/igrams_looked_18/
-# defo_filename = deformation_elevation1.nc
-defo_filename = deformation_elevation0.nc
+directory = "/data4/scott/path85/stitched/igrams_looked_18/"
+# defo_filename = "deformation_elevation1.nc"
+defo_filename = "deformation_elevation0.nc"
 dset_name = "defo_lowess"
 shifted_dset_name = "defo_lowess_shifted"
 los_dset = "los_enu"
@@ -57,7 +60,7 @@ los_map_filename = "los_enu.tif"
 
 # GPS comparison
 gps_window_size = 9
-ref_station = TXKM
+ref_station = "TXKM"
 gps_max_nan_pct = 0.7
 
 # Masking
@@ -67,18 +70,18 @@ cor_thresh = 0.11
 max_abs_val_masking = 2
 
 # deramping
-do_final_deramp = True
+do_final_deramp = true
 deramp_order = 2
 
 [paths.85.decomp]
 # Position from west to east
 position = 1
-direction = descending
+direction = "descending"
 
 
 [paths.78.los]
-directory = /data1/scott/pecos/path78-bbox2/igrams_looked_18/
-defo_filename = deformation_elevation1.nc
+directory = "/data1/scott/pecos/path78-bbox2/igrams_looked_18/"
+defo_filename = "deformation_elevation1.nc"
 dset_name = "defo_lowess"
 shifted_dset_name = "defo_lowess_shifted"
 los_dset = "los_enu"
@@ -86,7 +89,7 @@ los_map_filename = "los_enu.tif"
 
 # GPS comparison
 gps_window_size = 9
-ref_station = TXKM
+ref_station = "TXKM"
 gps_max_nan_pct = 0.5
 
 # Masking
@@ -96,17 +99,18 @@ cor_thresh = 0.11
 max_abs_val_masking = 2
 
 # deramping
-do_final_deramp = True
+do_final_deramp = true
 deramp_order = 2
 
 [paths.78.decomp]
 # Position from west to east
 position = 2
-direction = ascending
+direction = "ascending"
 
-[decomp]
+[decomp.common]
 outfile_template = "cumulative_east_up_paths_{asc_path_num}_{desc_path_num}_{dt}.tif"
-los_map_filename = los_enu.tif
+los_map_filename = "los_enu.tif"
+out_directory_template = "decomp_paths_{asc_path_num}_{desc_path_num}"
 
 [decomp.1]
 # TODO: get these from the previous config
