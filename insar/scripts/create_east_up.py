@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Save the deformation outputs to a series of TIF files
 
-python ~/repos/insar/helpers/create_east_up.py --directory /data1/scott/pecos/path78-bbox2/igrams_looked --path_num 78 run
+python ~/repos/insar/helpers/create_east_up.py --directory . --path_num 78 run
 """
 import glob
 import os
@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import toml
 import xarray as xr
-from apertools import deramp, gps, gps_plots, los, subset, utils
+from apertools import deramp, gps, gps_plots, los, sario, subset, utils
 from apertools.log import get_log, log_runtime
 
 logger = get_log()
@@ -283,8 +283,6 @@ class LOS:
         self.ds[self.shifted_dset_name].values[:, mask] = 0
 
     def save_output(self):
-        from apertools import sario
-
         ds_interp = utils.interpolate_xr(
             self.ds, dset_name=self.shifted_dset_name, freq=self.freq, col="date"
         )
@@ -297,10 +295,10 @@ class LOS:
             logger.info(f"Saving {outfile}")
             sario.save_xr_tif(layer, crs=self.crs, outname=outfile)
             # Set the units to cm
-            sario.set_unit(outfile, unit="cm")
+            sario.set_unit(outfile, unit="centimeters")
 
         # Copy the LOS file for the east/up decomposition
-        fname = self.out_directory / self.los_map_filename.name
+        fname = self.out_directory / Path(self.los_map_filename).name
         logger.info(f"Save LOS file to {fname}")
         sario.save_xr_tif(
             self.ds[self.los_dset],
@@ -308,13 +306,9 @@ class LOS:
             outname=fname,
         )
         # And save the mean correlation for reference
-        fname = self.out_directory / self.cor_mean_filename
-        logger.info("Saving mean correlation to {fname}")
-        sario.save_xr_tif(
-            self.ds[self.cor_mean_dset],
-            crs=self.crs,
-            outname=fname
-        )
+        fname = self.out_directory / Path(self.cor_mean_filename).name
+        logger.info(f"Saving mean correlation to {fname}")
+        sario.save_xr_tif(self.ds[self.cor_mean_dset], crs=self.crs, outname=fname)
 
 
 @dataclass
@@ -365,6 +359,7 @@ class Decomp:
                 desc_enu_fname=self.desc_los_map_filename,
                 outfile=outfile,
             )
+            sario.set_unit(outfile, unit="centimeters")
             outfiles.append(outfile)
 
         record(self, self.out_directory / "run_params.yaml")
@@ -412,6 +407,7 @@ class Merger:
                 m = subset.create_merged_files(
                     f1, f2, band1=band, band2=band, outfile=outfile
                 )
+                sario.set_unit(outfile, unit="centimeters")
                 merged_imgs.append(m)
                 merged_outfiles.append(outfile)
 
@@ -423,8 +419,9 @@ class Merger:
 class Runner:
     """Wrapper to call `los`, `decomp`, and `merge` commands"""
 
-    def __init__(self, config_file, overwrite=False):
+    def __init__(self, config_file, overwrite=False, shift_pixels=False):
         self.overwrite = overwrite
+        self.shift_pixels = shift_pixels
         # To run just one at a time, use the `run` method of each
         self.los = LOS
         self.decomp = Decomp
@@ -450,6 +447,9 @@ class Runner:
         los_out_directories = self.run_los()
         decomp_out_directories = self.run_decomp(los_out_directories)
         self.run_merger(decomp_out_directories)
+        # Make a down/right pixel shift of all tiffs
+        if self.shift_pixels:
+            shift_all_pixels(self.project_out_directory)
 
     def run_los(self):
         los_out_directories = {}
@@ -540,6 +540,28 @@ def record(obj, filename):
     elif str(filename).endswith(".toml"):
         utils.record_params_as_toml(filename, **self_dict)
 
+
+def shift_all_pixels(project_dir):
+    for f in glob.glob(str(Path(project_dir) / "**/*.tif")):
+        logger.info("Shifting {} down and right half a pixel".format(f))
+        tmp_out = f.replace(".tif", "_tmp.tif")
+        sario.shift_by_pixel(f, tmp_out, full_pixel=False, down_right=True)
+        os.rename(tmp_out, f)
+
+
+def set_all_units(project_dir, unit="centimeters"):
+    for f in glob.glob(str(Path(project_dir) / "**/*.tif")):
+        if "los_enu" in f or "cor_mean" in f:
+            continue
+        sario.set_unit(f, "centimeters")
+
+def set_all_nodata(project_dir, unit="centimeters"):
+    # TODO
+    pass
+    # for f in glob.glob(str(Path(project_dir) / "**/*.tif")):
+    #     if "los_enu" in f or "cor_mean" in f:
+    #         continue
+    #     sario.set_unit(f, "centimeters")
 
 @log_runtime
 def main():

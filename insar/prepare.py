@@ -502,8 +502,10 @@ def create_cor_stack(
         sario.attach_latlon_2d(cor_stack_file, STACK_MEAN_DSET, depth_dim=None)
         sario.attach_latlon_2d(cor_stack_file, mean_short_baseline_dset, depth_dim=None)
 
+
 def _load_rsc_data(directory):
     return sario.load(os.path.join(directory, glob.glob("*unw.rsc")[0]))
+
 
 @log_runtime
 def create_mask_stacks(
@@ -864,7 +866,9 @@ def reference_by_elevation(
             buf *= 0
             dset.read_direct(buf, cur_slice, dest_slice)
             # out = deramp.remove_ramp(buf[dest_slice], deramp_order=deramp_order)
-            out = fit_remove_elevation(buf[dest_slice], dem, dem_sub, mask_sub, subfactor)
+            out = fit_remove_elevation(
+                buf[dest_slice], dem, dem_sub, mask_sub, subfactor
+            )
 
             # # Now center it on the shift window
             # win = window // 2
@@ -998,7 +1002,7 @@ def get_reference(
         coordinates (str): coordinates system of the reference (rdr or geo)
         unw_stack_file (str): name of HDF5 stack file
         geom_dir (str): if rdr, path to the directory containing the geom files
-        using_elevation (bool): if True, use elevation to compute the reference, and 
+        using_elevation (bool): if True, use elevation to compute the reference, and
             return all empty strings
 
     Raises:
@@ -1009,6 +1013,7 @@ def get_reference(
     """
     import apertools.latlon
     import apertools.gps
+
     if using_elevation:
         return ("", "", "", "", "")
 
@@ -1056,7 +1061,9 @@ def get_reference(
 
 
 # def remove_elevation(dem_da_sub, ifg_stack_sub, dem, ifg_stack, subfactor=5):
-def fit_remove_elevation(ifg_stack, dem, dem_sub, mask=None, subfactor=5, deramp_order=0):
+def fit_remove_elevation(
+    ifg_stack, dem, dem_sub, mask=None, subfactor=5, deramp_order=0
+):
     if mask is None:
         mask = np.zeros(dem.shape, dtype=bool)
 
@@ -1246,3 +1253,44 @@ def create_ifg_stack(
             ifg_stack_file, lat=lat, lon=lon, overwrite=overwrite
         )
         sario.attach_latlon_2d(ifg_stack_file, dset_name, depth_dim="ifg_idx")
+
+
+@log_runtime
+def create_ifg_residue_stack(
+    ifg_stack_file="ifg_residue_stack.h5",
+    dset_name=STACK_DSET,
+    directory=".",
+    search_term="*.int",
+    out_directory="ps_data",
+    overwrite=False,
+    max_temp=400,
+):
+    from psinsar.cal_scr import phase_residue
+
+    utils.mkdir_p(out_directory)
+    if not sario.check_dset(
+        os.path.join(out_directory, ifg_stack_file), dset_name, overwrite
+    ):
+        return
+    # First make the empty dataset and save aux info
+    file_list = sario.find_ifgs(
+        directory=directory, search_term=search_term, parse=False
+    )
+    ifg_date_list = sario.find_ifgs(directory=directory, search_term=search_term)
+
+    logger.info(f"Found {len(file_list)} total files")
+    tuple_list = [
+        (f, d)
+        for (f, d) in zip(file_list, ifg_date_list)
+        if temporal_baseline(f) < max_temp
+    ]
+    file_list, ifg_date_list = zip(*tuple_list)
+    logger.info(f"Creating {ifg_stack_file} of {len(file_list)} files")
+    band = 1
+    load_func = _get_load_func(file_list[0], band=band)
+    rows, cols = load_func(file_list[0]).shape
+
+    logger.info("Running phase_residue")
+    phase_residue(file_list, rows, cols, filepath=out_directory)
+    with utils.chdir_then_revert(out_directory):
+        create_ifg_stack()

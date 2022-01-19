@@ -571,3 +571,36 @@ def solve_l1(
     else:
         stack = xs.reshape((nsar, nrow, ncol))
     return stack * phase_to_cm
+
+
+def _temporal_coherence_pixel(pixel):
+    return np.abs(np.sum(np.exp(1j * np.angle(pixel)), axis=-1)) / pixel.shape[-1]
+
+
+def temporal_coherence_xr(
+    ifg_stack_filename="ifg_stack.h5",
+    dset_name="stack",
+    outname="temporal_coherence.nc",
+):
+    import xarray as xr
+
+    # The way to do this in memory:
+    # temp_coh = np.abs(np.sum(da / np.abs(da), axis=0)) / da.shape[0]
+    # temp_coh = np.abs(np.sum(np.exp(1j * np.angle(da), axis=0)) / da.shape[0]
+    with xr.open_dataset(
+        ifg_stack_filename, engine="h5netcdf", phony_dims="sort"
+    ) as ds:
+        da = ds[dset_name]
+        stackdim, ydim, xdim = da.dims
+        print(stackdim)
+        out_da = xr.apply_ufunc(
+            _temporal_coherence_pixel,
+            da.chunk({ydim: 30, xdim: 30}),
+            # input_core_dims=[[ydim, xdim]],
+            # output_core_dims=[[ydim, xdim]],
+            input_core_dims=[[stackdim]],
+            dask="parallelized",
+        )
+    if outname:
+        out_da.to_dataset().to_netcdf(outname, engine="h5netcdf")
+    return out_da

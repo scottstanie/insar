@@ -321,10 +321,11 @@ def view_masks(
 @cli.command("create-east-ups")
 @click.argument("config-file")
 @click.option("--overwrite", is_flag=True, help="Erase current files and reprocess")
-def create_east_ups(config_file, overwrite):
+@click.option("--shift-pixels", is_flag=True, help="Shift final tifs down and right half a pixel.")
+def create_east_ups(config_file, overwrite, shift_pixels):
     from . import create_east_up
 
-    r = create_east_up.Runner(config_file, overwrite=overwrite)
+    r = create_east_up.Runner(config_file, overwrite=overwrite, shift_pixels=shift_pixels)
     r.run()
 
 
