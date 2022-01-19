@@ -1,8 +1,12 @@
+#!/usr/bin/env python
 """Save the deformation outputs to a series of TIF files
 
 python ~/repos/insar/helpers/create_east_up.py --directory /data1/scott/pecos/path78-bbox2/igrams_looked --path_num 78 run
 """
 import os
+import re
+import glob
+import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -12,12 +16,12 @@ import numpy as np
 import pandas as pd
 import tqdm
 import xarray as xr
-from apertools import deramp, gps, gps_plots, utils
+from apertools import deramp, los, gps, gps_plots, utils, subset
 from apertools.log import get_log, log_runtime
 
 logger = get_log()
 
-
+# TODO: ignore this bad stations
 BAD_GPS_STATIONS = [
     # http://geodesy.unr.edu/NGLStationPages/stations/RG08.sta
     # equipment change caused a big jump
@@ -29,6 +33,8 @@ BAD_GPS_STATIONS = [
     "TXPC",
 ]
 
+# TODO: load a previous YAML file to redo without all the CLI args
+
 
 # TODO: save attrs from the deformation.nc?
 @dataclass
@@ -38,8 +44,9 @@ class LOS:
     defo_filename: str = "deformation.nc"
     dset_name: str = "defo_lowess"
     shifted_dset_name: str = "defo_lowess_shifted"
-    los_dset: str = "los_enu"  # contained in the defo_filename
+    los_dset: str = "los_enu"  # contained in `defo_filename`
     los_map_filename: str = "los_enu.tif"
+    cor_mean_filename: str = "cor_mean.tif"
 
     out_directory: str = None
 
@@ -56,19 +63,19 @@ class LOS:
 
     # deramping
     do_final_deramp: bool = True
-    deramp_order = 2
+    deramp_order: int = 2
 
     # Output options:
-    outfile_template = "cumulative_los_path{path_num}_{dt}.tif"
+    outfile_template: str = "cumulative_los_path{path_num}_{dt}.tif"
     freq: str = "6M"
     crs: str = "EPSG:4326"
 
     # Figure saving
     figure_directory: str = "figures"
     vm: float = 7  # Color limits (vmin, vmax)
-    figheight = 6
-    figwidth = 8
-    defo_cmap = "seismic_wide_y_r"
+    figheight: float = 6
+    figwidth: float = 8
+    defo_cmap: str = "seismic_wide_y_r"
 
     def run(self):
         self.figsize = (self.figwidth, self.figheight)
@@ -111,7 +118,7 @@ class LOS:
 
         # Also save a quicklook plot of the mask and final deformation
         logger.info("Saving quicklook plots")
-        self.plot_cor_mask(self.figure_directory / "cor_mask.png")
+        self.plot_cor_mask(self.figure_directory / "cor_mask.pdf")
         self.plot_img(idx=-1)
 
         # record all aspects of the run
@@ -152,7 +159,7 @@ class LOS:
             da = self.ds[dset_name][idx]
         fig, ax = pplt.subplots(figsize=self.figsize)
         da.plot.imshow(cmap=self.defo_cmap, vmin=-self.vm, vmax=self.vm, ax=ax)
-        self._save_figure(fig, f"{self.figure_directory}/deformation.png")
+        self._save_figure(fig, f"{self.figure_directory}/deformation.pdf")
 
     def get_cor_mask(self):
         cor = self.ds["cor_mean"]
@@ -289,16 +296,161 @@ class LOS:
                 path_num=self.path_num, dt=dt_str
             )
             logger.info(f"Saving {outfile}")
-            layer.rio.set_spatial_dims("lon", "lat").rio.set_crs(
-                self.crs
-            ).rio.to_raster(outfile)
+            sario.save_xr_tif(layer, crs=self.crs, outname=outfile)
             # Set the units to cm
             sario.set_unit(outfile, unit="cm")
+
+        # Copy the LOS file for the east/up decomposition
+        sario.save_xr_tif(
+            self.ds[self.los_dset],
+            crs=self.crs,
+            outfile=self.out_directory / self.los_map_filename,
+        )
+        # And save the mean correlation for reference
+        sario.save_xr_tif(
+            self.ds[self.cor_dset],
+            crs=self.crs,
+            outfile=self.out_directory / self.cor_mean_filename,
+        )
+
+
+@dataclass
+class Decomp:
+    asc_directory: str
+    desc_directory: str
+    asc_path_num: int
+    desc_path_num: int
+    out_directory: str
+    infile_glob: str = "cumulative_los_*.tif"
+    outfile_template: str = (
+        "cumulative_east_up_paths_{asc_path_num}_{desc_path_num}_{dt}.tif"
+    )
+    los_map_filename: str = "los_enu.tif"
+
+    def run(self):
+        # TODO: factor out the repeated directory stuff here
+        if self.out_directory is None:
+            p = Path(self.directory) / f"los_out_{self.path_num}/"
+            self.out_directory = p.resolve()
+        else:
+            self.out_directory = Path(self.out_directory).resolve()
+        utils.mkdir_p(self.out_directory)
+        self._set_full_paths()
+
+        asc_filenames = sorted(glob.glob(str(self.asc_directory / self.infile_glob)))
+        desc_filenames = sorted(glob.glob(str(self.desc_directory / self.infile_glob)))
+
+        outfiles = []
+        for af, df in zip(asc_filenames, desc_filenames):
+            date_a = _get_date(af)
+            date_d = _get_date(df)
+            assert date_a == date_d
+            logger.info("Solving {} and {}".format(af, df))
+
+            outfile = str(self.outfile_template).format(
+                asc_path_num=self.asc_path_num,
+                desc_path_num=self.desc_path_num,
+                dt=date_a,
+            )
+            outfile = Path(self.out_directory) / outfile
+            logger.info("Saving to {}".format(outfile))
+
+            east, up = los.solve_east_up(
+                asc_img_fname=af,
+                desc_img_fname=df,
+                asc_enu_fname=self.asc_los_map_filename,
+                desc_enu_fname=self.desc_los_map_filename,
+                outfile=outfile,
+            )
+            outfiles.append(outfile)
+
+        record(self, self.out_directory / "run_params.yaml")
+        return outfiles
+
+    def _set_full_paths(self):
+        self.asc_directory = Path(self.asc_directory).resolve()
+        self.desc_directory = Path(self.desc_directory).resolve()
+        self.asc_los_map_filename = self.asc_directory / self.los_map_filename
+        self.desc_los_map_filename = self.desc_directory / self.los_map_filename
+        self.outfile_template = self.out_directory / self.outfile_template
+
+    def _set_abs_path(self, filename):
+        """Allows a fully qualified path through; otherwise, appends to the directory"""
+        if os.path.abspath(filename) != filename:
+            return (Path(self.directory) / filename).resolve()
+        return filename
+
+
+@dataclass
+class Merger:
+    in_dir1: str
+    in_dir2: str
+    infile_glob: str = "cumulative_east_up_paths_*.tif"
+    east_template: str = "merged_east_{date}.tif"
+    up_template: str = "merged_vertical_{date}.tif"
+    out_directory: str = "merged_east_up"
+
+    def run(self):
+        utils.mkdir_p(self.out_directory)
+        outfiles1 = glob.glob(str(Path(self.in_dir1) / self.infile_glob))
+        outfiles2 = glob.glob(str(Path(self.in_dir2) / self.infile_glob))
+
+        merged_imgs = []
+        merged_outfiles = []
+
+        out_templates = [self.east_template, self.up_template]
+        bands = [1, 2]
+        for f1, f2 in zip(outfiles1, outfiles2):
+            for t, band in zip(out_templates, bands):
+                cur_date = re.search(r"\d{8}", f1).group()
+                assert cur_date == re.search(r"\d{8}", f2).group()
+                outfile = Path(self.out_directory) / t.format(date=cur_date)
+                print(f"creating {outfile}")
+                m = subset.create_merged_files(
+                    f1, f2, band1=band, band2=band, outfile=outfile
+                )
+                merged_imgs.append(m)
+                merged_outfiles.append(outfile)
+
+        record(self, Path(self.out_directory) / "run_params.yaml")
+        # return merged_imgs, merged_outfiles
+
+
+@dataclass
+class Pipeline:
+    """Wrapper to call either `los`, `decomp`, or `merge` commands"""
+
+    def __init__(self):
+        self.los = LOS
+        self.decomp = Decomp
+        self.merge = Merger
+
+    # def run(self, *args, **kwargs):
+    #     self.los.run()
+    #     self.merger.run()
+    #     return "Pipeline complete"
+
+
+def _get_date(filename):
+    m = re.search(r"\d{8}", filename)
+    try:
+        return m.group()
+    except AttributeError:
+        raise ValueError(f"Could not find date in filename {filename}")
+
+
+def record(obj, filename):
+    self_dict = asdict(obj)
+    for k, v in self_dict.items():
+        if isinstance(v, Path):
+            self_dict[k] = str(v)
+    utils.record_params_as_yaml(filename, **self_dict)
 
 
 @log_runtime
 def main():
-    fire.Fire(LOS)
+    # fire.Fire(LOS)
+    fire.Fire(Pipeline)
 
 
 if __name__ == "__main__":
