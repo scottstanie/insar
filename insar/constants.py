@@ -10,6 +10,8 @@ LINEAR_VELO_DSET = "linear_velocity"
 MODEL_DEFO_DSET = "defo_{model}"
 ATMO_DAY1_DSET = "atmo_day1"
 COR_MEAN_DSET = "cor_mean"
+COR_STD_DSET = "cor_std"
+TEMP_COH_DSET = "temp_coh"
 
 LOS_ENU_FILENAME = "los_enu.tif"
 LOS_ENU_DSET = "los_enu"

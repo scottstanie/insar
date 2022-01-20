@@ -64,7 +64,6 @@ def run_inversion(
     outfile=constants.DEFO_FILENAME,
     output_dset=constants.DEFO_NOISY_DSET,
     cor_stack_file=sario.COR_FILENAME,
-    cor_mean_dset=constants.COR_MEAN_DSET,
     cor_stack_dset=sario.STACK_DSET,
     los_file=constants.LOS_ENU_FILENAME,
     overwrite=False,
@@ -215,7 +214,9 @@ def run_inversion(
         raise ValueError(f"{outfile}:/{output_dset} exists, {overwrite = }")
 
     create_dset(outfile, output_dset, output_shape, np.float32, chunks=True)
-    create_dset(outfile, cor_mean_dset, output_shape[1:], np.float32, chunks=True)
+    create_dset(outfile, constants.COR_MEAN_DSET, output_shape[1:], np.float32, chunks=True)
+    create_dset(outfile, constants.COR_STD_DSET, output_shape[1:], np.float32, chunks=True)
+    create_dset(outfile, constants.TEMP_COH_DSET, output_shape[1:], np.float32, chunks=True)
 
     run_sbas(
         unw_stack_file,
@@ -223,7 +224,6 @@ def run_inversion(
         valid_ifg_idxs,
         cor_stack_file,
         cor_stack_dset,
-        cor_mean_dset,
         outfile,
         output_dset,
         block_shape,
@@ -286,14 +286,18 @@ def run_inversion(
             sario.save_latlon_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
             sario.attach_latlon(outfile, output_dset, depth_dim="date")
             # if cor_mean is not None:
-            sario.attach_latlon(outfile, cor_mean_dset)
+            sario.attach_latlon(outfile, constants.COR_MEAN_DSET)
+            sario.attach_latlon(outfile, constants.COR_STD_DSET)
+            sario.attach_latlon(outfile, constants.TEMP_COH_DSET)
             if los_map is not None:
                 sario.attach_latlon(outfile, los_dset)
         else:
             sario.save_latlon_2d_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
             sario.attach_latlon_2d(outfile, output_dset, depth_dim="date")
             # if cor_mean is not None:
-            sario.attach_latlon_2d(outfile, cor_mean_dset)
+            sario.attach_latlon_2d(outfile, constants.COR_MEAN_DSET)
+            sario.attach_latlon_2d(outfile, constants.COR_STD_DSET)
+            sario.attach_latlon_2d(outfile, constants.TEMP_COH_DSET)
 
     # TODO: just use the h5?
     if save_as_netcdf:
@@ -317,7 +321,6 @@ def run_sbas(
     valid_ifg_idxs,
     cor_stack_file,
     cor_stack_dset,
-    cor_mean_dset,
     outfile,
     output_dset,
     block_shape,
@@ -345,7 +348,7 @@ def run_sbas(
 
     blk_slices = utils.block_iterator((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
     # # TESTING: small area
-    # blk_slices = list(blk_slices)[:3]
+    # blk_slices = list(blk_slices)[:25]
 
     ExecutorClass = ProcessPoolExecutor if max_workers > 1 else DummyExecutor
     with ExecutorClass(max_workers=max_workers) as executor:
@@ -371,10 +374,12 @@ def run_sbas(
         }
         for future in as_completed(future_to_block):
             blk = future_to_block[future]
-            out_chunk, cor_mean = future.result()
+            out_chunk, cor_mean, cor_std, temp_coh = future.result()
             rows, cols = blk
             write_out_chunk(out_chunk, outfile, output_dset, rows, cols)
-            write_out_chunk(cor_mean, outfile, cor_mean_dset, rows, cols)
+            write_out_chunk(cor_mean, outfile, constants.COR_MEAN_DSET, rows, cols, verbose=False)
+            write_out_chunk(cor_std, outfile, constants.COR_STD_DSET, rows, cols, verbose=False)
+            write_out_chunk(temp_coh, outfile, constants.TEMP_COH_DSET, rows, cols, verbose=False)
 
 
 def _load_and_run(
@@ -405,8 +410,10 @@ def _load_and_run(
             unw_chunk[zero_idxs] = 0.0
             # Only count nonzero- we'll ignore those
             cor_mean = cor_chunk[~zero_idxs].mean(axis=0)
+            cor_std = cor_chunk[~zero_idxs].std(axis=0)
         else:
             cor_mean = cor_chunk.mean(axis=0)
+            cor_std = cor_chunk.std(axis=0)
 
         if weight_by_cor:
             out_chunk = _calc_soln_cor_weighted(
@@ -417,7 +424,7 @@ def _load_and_run(
                 phase_to_cm,
             )
         else:
-            out_chunk = _calc_soln(
+            out_chunk, temp_coh = _calc_soln(
                 # out_chunk = _calc_soln_pixelwise(
                 unw_chunk,
                 slclist,
@@ -427,7 +434,7 @@ def _load_and_run(
                 phase_to_cm,
                 use_B_matrix=use_B_matrix,
             )
-        return out_chunk, cor_mean
+        return out_chunk, cor_mean, cor_std, temp_coh
 
 
 def write_out_chunk(chunk, outfile, output_dset, rows=None, cols=None, verbose=True):
@@ -467,33 +474,42 @@ def _calc_soln(
     unw_cols_nonan = np.where(nan_idxs, 0, unw_cols).astype(dtype)
     # skip any all 0 blocks:
     if unw_cols_nonan.sum() == 0:
-        return np.zeros((len(slcs_clean), nrow, ncol), dtype=dtype)
+        out = np.zeros((len(slcs_clean), nrow, ncol), dtype=dtype)
+        temp_coh = np.zeros((nrow, ncol), dtype=dtype)
+        return out, temp_coh
 
     # Last, pad with zeros if doing Tikh. regularization
     # unw_final = alpha > 0 ? augment_zeros(B, unw_clean) : unw_clean
 
     if use_B_matrix:
         # # Version with B (velo diffs)
-        B = build_B_matrix(slclist, ifglist)
+        B = build_B_matrix(slclist, ifglist).astype(dtype)
 
-        pB = np.linalg.pinv(B).astype(dtype)
+        pB = np.linalg.pinv(B)
         soln_cols = pB @ unw_cols_nonan
+        residual_cols = unw_cols_nonan - B @ soln_cols
 
         timediffs = np.diff(slclist)
         phi_cols = integrate_velocities(soln_cols, timediffs)
         stack = phi_cols.reshape((-1, nrow, ncol)).astype(dtype)
 
     else:
-        A = build_A_matrix(slcs_clean, ifglist_clean)
-        pA = np.linalg.pinv(A).astype(dtype)
-        # equiv:
-        stack = (pA @ unw_cols_nonan).reshape((-1, nrow, ncol)).astype(dtype)
+        A = build_A_matrix(slcs_clean, ifglist_clean).astype(dtype)
+        pA = np.linalg.pinv(A)
+        soln_cols = pA @ unw_cols_nonan
+        residual_cols = unw_cols_nonan - A @ soln_cols
+        
+        stack = soln_cols.reshape((-1, nrow, ncol)).astype(dtype)
         # Add a 0 image for the first date
         stack = np.concatenate((np.zeros((1, nrow, ncol), dtype=dtype), stack), axis=0)
+    
+    temp_coh_cols = np.abs(np.sum(np.exp(1j * residual_cols), axis=0)) / residual_cols.shape[0]
+    temp_coh_cols[np.sum(unw_cols_nonan, axis=0) == 0] = 0.0
+    temp_coh = temp_coh_cols.reshape((nrow, ncol)).astype(dtype)
 
     stack *= phase_to_cm
 
-    return stack
+    return stack, temp_coh
 
 
 # @jit_decorator

@@ -293,7 +293,7 @@ class LOS:
                 path_num=self.path_num, dt=dt_str
             )
             logger.info(f"Saving {outfile}")
-            sario.save_xr_tif(layer, crs=self.crs, outname=outfile)
+            sario.save_xr_tif(outfile, layer, crs=self.crs)
             # Set the units to cm
             sario.set_unit(outfile, unit="centimeters")
 
@@ -301,14 +301,14 @@ class LOS:
         fname = self.out_directory / Path(self.los_map_filename).name
         logger.info(f"Save LOS file to {fname}")
         sario.save_xr_tif(
+            fname,
             self.ds[self.los_dset],
             crs=self.crs,
-            outname=fname,
         )
         # And save the mean correlation for reference
         fname = self.out_directory / Path(self.cor_mean_filename).name
         logger.info(f"Saving mean correlation to {fname}")
-        sario.save_xr_tif(self.ds[self.cor_mean_dset], crs=self.crs, outname=fname)
+        sario.save_xr_tif(fname, self.ds[self.cor_mean_dset], crs=self.crs)
 
 
 @dataclass

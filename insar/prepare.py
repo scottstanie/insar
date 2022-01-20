@@ -7,6 +7,7 @@ Forms stacks as .h5 files for easy access to depth-wise slices
 import os
 import glob
 import itertools
+import shutil
 from tqdm import tqdm
 
 try:
@@ -1293,4 +1294,7 @@ def create_ifg_residue_stack(
     logger.info("Running phase_residue")
     phase_residue(file_list, rows, cols, filepath=out_directory)
     with utils.chdir_then_revert(out_directory):
-        create_ifg_stack()
+        for f in glob.glob("*.rephase"):
+            os.rename(f, f + ".int")
+            shutil.copy("../dem.rsc", f + ".int.rsc")
+        create_ifg_stack(ifg_stack_file=ifg_stack_file, dset_name=dset_name, overwrite=overwrite)
