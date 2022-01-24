@@ -87,6 +87,7 @@ def run_inversion(
     platform="s1",
     max_workers=3,
     use_B_matrix=False,
+    weight_by_temp_baseline=False,
 ):
     """Runs SBAS inversion on all unwrapped igrams
 
@@ -207,6 +208,7 @@ def run_inversion(
         coordinates=coordinates,
         max_workers=max_workers,
         use_B_matrix=use_B_matrix,
+        weight_by_temp_baseline=weight_by_temp_baseline,
         **attrs_to_copy,
     )
 
@@ -214,9 +216,15 @@ def run_inversion(
         raise ValueError(f"{outfile}:/{output_dset} exists, {overwrite = }")
 
     create_dset(outfile, output_dset, output_shape, np.float32, chunks=True)
-    create_dset(outfile, constants.COR_MEAN_DSET, output_shape[1:], np.float32, chunks=True)
-    create_dset(outfile, constants.COR_STD_DSET, output_shape[1:], np.float32, chunks=True)
-    create_dset(outfile, constants.TEMP_COH_DSET, output_shape[1:], np.float32, chunks=True)
+    create_dset(
+        outfile, constants.COR_MEAN_DSET, output_shape[1:], np.float32, chunks=True
+    )
+    create_dset(
+        outfile, constants.COR_STD_DSET, output_shape[1:], np.float32, chunks=True
+    )
+    create_dset(
+        outfile, constants.TEMP_COH_DSET, output_shape[1:], np.float32, chunks=True
+    )
 
     run_sbas(
         unw_stack_file,
@@ -238,6 +246,7 @@ def run_inversion(
         phase_to_cm,
         max_workers=max_workers,
         use_B_matrix=use_B_matrix,
+        weight_by_temp_baseline=weight_by_temp_baseline,
     )
 
     # Now save the ifg/slc information
@@ -332,6 +341,7 @@ def run_sbas(
     phase_to_cm,
     max_workers,
     use_B_matrix=False,
+    weight_by_temp_baseline=False,
 ):
     """Performs and SBAS inversion on each pixel of unw_stack to find deformation
 
@@ -347,7 +357,7 @@ def run_sbas(
         # print(nrows, ncols, block_shape)
 
     blk_slices = utils.block_iterator((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
-    # # TESTING: small area
+    # TESTING: small area
     # blk_slices = list(blk_slices)[:25]
 
     ExecutorClass = ProcessPoolExecutor if max_workers > 1 else DummyExecutor
@@ -369,6 +379,7 @@ def run_sbas(
                 cor_thresh,
                 phase_to_cm,
                 use_B_matrix=use_B_matrix,
+                weight_by_temp_baseline=weight_by_temp_baseline,
             ): blk
             for blk in blk_slices
         }
@@ -377,9 +388,15 @@ def run_sbas(
             out_chunk, cor_mean, cor_std, temp_coh = future.result()
             rows, cols = blk
             write_out_chunk(out_chunk, outfile, output_dset, rows, cols)
-            write_out_chunk(cor_mean, outfile, constants.COR_MEAN_DSET, rows, cols, verbose=False)
-            write_out_chunk(cor_std, outfile, constants.COR_STD_DSET, rows, cols, verbose=False)
-            write_out_chunk(temp_coh, outfile, constants.TEMP_COH_DSET, rows, cols, verbose=False)
+            write_out_chunk(
+                cor_mean, outfile, constants.COR_MEAN_DSET, rows, cols, verbose=False
+            )
+            write_out_chunk(
+                cor_std, outfile, constants.COR_STD_DSET, rows, cols, verbose=False
+            )
+            write_out_chunk(
+                temp_coh, outfile, constants.TEMP_COH_DSET, rows, cols, verbose=False
+            )
 
 
 def _load_and_run(
@@ -396,6 +413,7 @@ def _load_and_run(
     cor_thresh,
     phase_to_cm,
     use_B_matrix=False,
+    weight_by_temp_baseline=False,
 ):
     rows, cols = blk
     with h5py.File(unw_stack_file) as hf, h5py.File(cor_stack_file) as hf_c:
@@ -433,6 +451,7 @@ def _load_and_run(
                 # constant_velocity,
                 phase_to_cm,
                 use_B_matrix=use_B_matrix,
+                weight_by_temp_baseline=weight_by_temp_baseline,
             )
         return out_chunk, cor_mean, cor_std, temp_coh
 
@@ -462,48 +481,58 @@ def _calc_soln(
     # outlier_sigma=4,
     phase_to_cm,
     use_B_matrix=False,
-    L1=False,
+    # L1=False,
+    weight_by_temp_baseline=False,
 ):
-    # TODO: this is where i'd get rid of specific dates/ifgs
-    slcs_clean, ifglist_clean, unw_clean = slclist, ifglist, unw_chunk
-    dtype = unw_clean.dtype
+    dtype = unw_chunk.dtype
 
-    nstack, nrow, ncol = unw_clean.shape
-    unw_cols = unw_clean.reshape((nstack, -1))
+    nstack, nrow, ncol = unw_chunk.shape
+    unw_cols = unw_chunk.reshape((nstack, -1))
     nan_idxs = np.isnan(unw_cols)
     unw_cols_nonan = np.where(nan_idxs, 0, unw_cols).astype(dtype)
     # skip any all 0 blocks:
     if unw_cols_nonan.sum() == 0:
-        out = np.zeros((len(slcs_clean), nrow, ncol), dtype=dtype)
+        out = np.zeros((len(slclist), nrow, ncol), dtype=dtype)
         temp_coh = np.zeros((nrow, ncol), dtype=dtype)
         return out, temp_coh
 
-    # Last, pad with zeros if doing Tikh. regularization
-    # unw_final = alpha > 0 ? augment_zeros(B, unw_clean) : unw_clean
+    if use_B_matrix:
+        G = build_B_matrix(slclist, ifglist)
+    else:
+        G = build_A_matrix(slclist, ifglist)
+    G = G.astype(dtype)
+
+    if weight_by_temp_baseline:
+        temp_baselines = np.array([ifg[1] - ifg[0] for ifg in ifglist])
+        # Use square root of temp baseline as weighting,
+        # assuming that the variance of each ifg is proportional to the baseline
+        weights = 1 / np.sqrt(temp_baselines).reshape((-1, 1))
+        # make closer to 1, so that the weights are not too small (numerical issues)
+        weights /= np.max(weights)
+        unw_cols_nonan *= weights
+        G *= weights
+
+    pG = np.linalg.pinv(G)
+    # Each column will be one pixel's solution
+    soln_cols = pG @ unw_cols_nonan
+    residual_cols = unw_cols_nonan - G @ soln_cols
 
     if use_B_matrix:
-        # # Version with B (velo diffs)
-        B = build_B_matrix(slclist, ifglist).astype(dtype)
-
-        pB = np.linalg.pinv(B)
-        soln_cols = pB @ unw_cols_nonan
-        residual_cols = unw_cols_nonan - B @ soln_cols
-
+        # Version with B (velo diffs)
         timediffs = np.diff(slclist)
-        phi_cols = integrate_velocities(soln_cols, timediffs)
-        stack = phi_cols.reshape((-1, nrow, ncol)).astype(dtype)
-
+        # zero for first date added in integration
+        phi_cols = integrate_velocities(soln_cols, timediffs).astype(dtype)
     else:
-        A = build_A_matrix(slcs_clean, ifglist_clean).astype(dtype)
-        pA = np.linalg.pinv(A)
-        soln_cols = pA @ unw_cols_nonan
-        residual_cols = unw_cols_nonan - A @ soln_cols
-        
-        stack = soln_cols.reshape((-1, nrow, ncol)).astype(dtype)
         # Add a 0 image for the first date
-        stack = np.concatenate((np.zeros((1, nrow, ncol), dtype=dtype), stack), axis=0)
-    
-    temp_coh_cols = np.abs(np.sum(np.exp(1j * residual_cols), axis=0)) / residual_cols.shape[0]
+        phi_cols = np.vstack((np.zeros((1, soln_cols.shape[1]), dtype=dtype), soln_cols))
+        phi_cols = phi_cols.astype(dtype)
+
+    stack = phi_cols.reshape((-1, nrow, ncol))
+
+    # Compute the temporal coherence as one solution quality metric
+    temp_coh_cols = (
+        np.abs(np.sum(np.exp(1j * residual_cols), axis=0)) / residual_cols.shape[0]
+    )
     temp_coh_cols[np.sum(unw_cols_nonan, axis=0) == 0] = 0.0
     temp_coh = temp_coh_cols.reshape((nrow, ncol)).astype(dtype)
 
@@ -870,7 +899,6 @@ def calc_model_fit_deformation(
         polyfit_lin.to_netcdf(defo_fname, group=group, mode="a", engine="h5netcdf")
 
     return model_defo
-
 
 
 def _confirm_closed(fname):
