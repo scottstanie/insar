@@ -5,7 +5,7 @@ project_out_directory = "/data6/scott/full_path151/7year_merged_solutions/"
 [los]
 # Output options:
 outfile_template = "cumulative_los_path{path_num}_{dt}.tif"
-freq = "6M"
+freq = "1Y"
 crs = "EPSG:4326"
 out_directory_template = "los_path{path_num}"
 
@@ -129,9 +129,10 @@ desc_path_num = 85
 
 
 [merger]
-# in_dir1
-# in_dir2
-# infile_glob = "cumulative_east_up_paths_*.tif"
 east_template = "merged_east_{date}.tif"
 up_template = "merged_vertical_{date}.tif"
-out_directory = "merged_east_up"
+out_directory = "merged_cumulative_east_up"
+
+[diff]
+outfile_template = "merged_vertical_diff_{d1}_{d2}.tif"
+out_directory = "merged_diffs_east_up"

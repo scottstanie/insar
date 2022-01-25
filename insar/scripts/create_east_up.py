@@ -16,6 +16,8 @@ import numpy as np
 import pandas as pd
 import toml
 import xarray as xr
+import rasterio as rio
+
 from apertools import deramp, gps, gps_plots, los, sario, subset, utils
 from apertools.log import get_log, log_runtime
 
@@ -46,8 +48,11 @@ class LOS:
     shifted_dset_name: str = "defo_lowess_shifted"
     los_dset: str = "los_enu"  # contained in `defo_filename`
     los_map_filename: str = "los_enu.tif"
-    cor_mean_dset = "cor_mean"  # contained in `defo_filename`
-    cor_mean_filename: str = "cor_mean.tif"  # Name to save as tif
+    # contained in `defo_filename`
+    cor_mean_dset = "cor_mean"
+    cor_std_dset = "cor_std"
+    temp_coh_dset = "temp_coh"
+    dem_filename: str = "elevation_looked.dem"
 
     out_directory: str = None
 
@@ -68,7 +73,7 @@ class LOS:
 
     # Output options:
     outfile_template: str = "cumulative_los_path{path_num}_{dt}.tif"
-    freq: str = "6M"
+    freq: str = "1Y"
     crs: str = "EPSG:4326"
 
     # Figure saving
@@ -128,6 +133,7 @@ class LOS:
         self.defo_filename = self._set_abs_path(self.defo_filename)
         self.los_map_filename = self._set_abs_path(self.los_map_filename)
         self.mask_filename = self._set_abs_path(self.mask_filename)
+        self.dem_filename = self._set_abs_path(self.dem_filename)
         self.outfile_template = self._set_abs_path(
             self.out_directory / self.outfile_template
         )
@@ -305,10 +311,18 @@ class LOS:
             self.ds[self.los_dset],
             crs=self.crs,
         )
-        # And save the mean correlation for reference
-        fname = self.out_directory / Path(self.cor_mean_filename).name
-        logger.info(f"Saving mean correlation to {fname}")
-        sario.save_xr_tif(fname, self.ds[self.cor_mean_dset], crs=self.crs)
+        # And save the mean correlation/other coherence images for reference
+        for dset_name in [self.cor_mean_dset, self.cor_std_dset, self.temp_coh_dset]:
+            # Save the xarray dataset as a tif in the output dir
+            fname = self.out_directory / Path(dset_name + ".tif").name
+            logger.info(f"Saving {dset_name} to {fname}")
+            sario.save_xr_tif(fname, self.ds[dset_name], crs=self.crs)
+
+        # Save the DEM too
+        fname = self.out_directory / Path(self.dem_filename).name
+        with rio.open(self.dem_filename) as src:
+            with rio.open(fname, mode="w", **src.meta) as dst:
+                dst.write(src.read(1), 1)
 
 
 @dataclass
@@ -390,8 +404,8 @@ class Merger:
 
     def run(self):
         utils.mkdir_p(self.out_directory)
-        outfiles1 = glob.glob(str(Path(self.in_dir1) / self.infile_glob))
-        outfiles2 = glob.glob(str(Path(self.in_dir2) / self.infile_glob))
+        outfiles1 = sorted(glob.glob(str(Path(self.in_dir1) / self.infile_glob)))
+        outfiles2 = sorted(glob.glob(str(Path(self.in_dir2) / self.infile_glob)))
 
         merged_imgs = []
         merged_outfiles = []
@@ -412,16 +426,21 @@ class Merger:
                 merged_outfiles.append(outfile)
 
         record(self, Path(self.out_directory) / "run_params.yaml")
+        return merged_outfiles
+        # return self.out_directory
         # return merged_imgs, merged_outfiles
-        return self.out_directory
 
 
 class Runner:
     """Wrapper to call `los`, `decomp`, and `merge` commands"""
 
-    def __init__(self, config_file, overwrite=False, shift_pixels=False):
+    def __init__(
+        self, config_file, diff_images=True, overwrite=False, shift_pixels=False
+    ):
         self.overwrite = overwrite
         self.shift_pixels = shift_pixels
+        self.diff_images = diff_images
+
         # To run just one at a time, use the `run` method of each
         self.los = LOS
         self.decomp = Decomp
@@ -446,7 +465,10 @@ class Runner:
     def run(self):
         los_out_directories = self.run_los()
         decomp_out_directories = self.run_decomp(los_out_directories)
-        self.run_merger(decomp_out_directories)
+        outfiles = self.run_merger(decomp_out_directories)
+        if self.diff_images:
+            self.run_diff(outfiles)
+
         # Make a down/right pixel shift of all tiffs
         if self.shift_pixels:
             shift_all_pixels(self.project_out_directory)
@@ -519,7 +541,36 @@ class Runner:
             out_directory=merged_out_directory,
             **merger_options,
         )
-        merger.run()
+        outfiles = merger.run()
+        return outfiles
+
+    def run_diff(self, outfiles, skip_intervals=[1, 2]):
+        diff_options = self.config["diff"]
+        diff_out_directory = Path(self.project_out_directory) / diff_options.pop(
+            "out_directory", "diffs_east_up"
+        )
+        outfile_template = diff_options.pop(
+            "outfile_template", "merged_vertical_diff_{d1}_{d2}.tif"
+        )
+        merged_ups = [f for f in outfiles if "vertical" in str(f)]
+        merged_easts = [f for f in outfiles if "east" in str(f)]
+        diff_outfiles = []
+        for i in skip_intervals:
+            for merged_files in [merged_easts, merged_ups]:
+                for f1, f2 in zip(merged_files[:-i], merged_files[i:]):
+                    d1 = re.search(r"\d{8}", f1).group()
+                    d2 = re.search(r"\d{8}", f2).group()
+                    outfile = diff_out_directory / outfile_template.format(d1=d1, d2=d2)
+                    with rio.open(f1) as src1, rio.open(f2) as src2:
+                        diff_img = src2.read(1) - src1.read(1)
+
+                    with rio.open(outfile, mode="w", **src1.meta) as dst:
+                        dst.write(diff_img, 1)
+                        dst.set_band_unit(1, src1.units[0])
+
+                    diff_outfiles.append(outfiles)
+
+        return diff_outfiles
 
 
 def _get_date(filename):
@@ -549,11 +600,16 @@ def shift_all_pixels(project_dir):
         os.rename(tmp_out, f)
 
 
-def set_all_units(project_dir, unit="centimeters"):
+def set_all_units(
+    project_dir,
+    unit="centimeters",
+    ignore_phrases=["los_enu", "cor_", "temp_coh", "elevation"],
+):
     for f in glob.glob(str(Path(project_dir) / "**/*.tif")):
-        if "los_enu" in f or "cor_mean" in f:
+        if any(phrase in f for phrase in ignore_phrases):
             continue
         sario.set_unit(f, "centimeters")
+
 
 def set_all_nodata(project_dir, unit="centimeters"):
     # TODO
@@ -562,6 +618,7 @@ def set_all_nodata(project_dir, unit="centimeters"):
     #     if "los_enu" in f or "cor_mean" in f:
     #         continue
     #     sario.set_unit(f, "centimeters")
+
 
 @log_runtime
 def main():
