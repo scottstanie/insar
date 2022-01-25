@@ -289,7 +289,7 @@ def ptp_by_date_pct(da, low=0.05, high=0.95):
     return high_q - low_q
 
 
-def build_closure_matrix(ifg_date_pairs):
+def build_closure_matrix(ifg_date_pairs, chain_length=1):
     """Takes the list of igram dates and builds the SBAS A matrix
 
     Args:
@@ -604,3 +604,21 @@ def temporal_coherence_xr(
     if outname:
         out_da.to_dataset().to_netcdf(outname, engine="h5netcdf")
     return out_da
+
+
+# def load_baselines(ifglist):
+    # import pandas as pd
+    # unw_pix = unw_subset_pecos_0_90.sel(lat=lat, lon=lon, method='nearest')
+    # df_ifglist = pd.DataFrame(ifglist, columns=['slc1', 'slc2'])
+    # df_ifglist.head()
+    # df_baselines = pd.read_csv("../sbas_list", header=None, sep=r"\s+", names=["slc1", "slc2", "temporal", "spatial"])
+
+    # # df_baselines.shape
+    # df_baselines['slc1'] = pd.to_datetime(sario.parse_slclist_strings(df_baselines.slc1), utc=True)
+    # df_baselines['slc2'] = pd.to_datetime(sario.parse_slclist_strings(df_baselines.slc2), utc=True)
+    # print(df_baselines.shape)
+    # df_baselines.head()
+    # df_baselines2 = pd.merge(df_baselines, df_ifglist, on=("slc1", "slc2"))
+    # df_baselines2.head()
+    # df_baselines2['phase'] = unw_pix.values
+    # df_baselines2.head()
