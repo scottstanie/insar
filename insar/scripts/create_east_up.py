@@ -401,45 +401,45 @@ class Merger:
     east_template: str = "merged_east_{date}.tif"
     up_template: str = "merged_vertical_{date}.tif"
     out_directory: str = "merged_east_up"
+    overwrite: bool = False
 
     def run(self):
         utils.mkdir_p(self.out_directory)
         outfiles1 = sorted(glob.glob(str(Path(self.in_dir1) / self.infile_glob)))
         outfiles2 = sorted(glob.glob(str(Path(self.in_dir2) / self.infile_glob)))
 
-        merged_imgs = []
-        merged_outfiles = []
+        # merged_imgs = []
+        merged_outfiles = {"east": [], "up": []}
 
         out_templates = [self.east_template, self.up_template]
-        bands = [1, 2]
+        bands = {"east": 1, "up": 2}
         for f1, f2 in zip(outfiles1, outfiles2):
-            for t, band in zip(out_templates, bands):
-                cur_date = re.search(r"\d{8}", f1).group()
-                assert cur_date == re.search(r"\d{8}", f2).group()
+            for t, band_name in zip(out_templates, bands):
+                cur_date = _get_date(f1)
+                assert cur_date == _get_date(f2)
                 outfile = Path(self.out_directory) / t.format(date=cur_date)
+                merged_outfiles[band_name].append(outfile)
+                if outfile.exists() and not self.overwrite:
+                    print(f"{outfile} exists")
+                    continue
+
                 print(f"creating {outfile}")
                 m = subset.create_merged_files(
-                    f1, f2, band1=band, band2=band, outfile=outfile
+                    f1, f2, band1=bands[band_name], band2=bands[band_name], outfile=outfile
                 )
                 sario.set_unit(outfile, unit="centimeters")
-                merged_imgs.append(m)
-                merged_outfiles.append(outfile)
+                # merged_imgs.append(m)
 
         record(self, Path(self.out_directory) / "run_params.yaml")
         return merged_outfiles
-        # return self.out_directory
-        # return merged_imgs, merged_outfiles
 
 
 class Runner:
     """Wrapper to call `los`, `decomp`, and `merge` commands"""
 
-    def __init__(
-        self, config_file, diff_images=True, overwrite=False, shift_pixels=False
-    ):
+    def __init__(self, config_file, overwrite=False, shift_pixels=False):
         self.overwrite = overwrite
         self.shift_pixels = shift_pixels
-        self.diff_images = diff_images
 
         # To run just one at a time, use the `run` method of each
         self.los = LOS
@@ -466,8 +466,7 @@ class Runner:
         los_out_directories = self.run_los()
         decomp_out_directories = self.run_decomp(los_out_directories)
         outfiles = self.run_merger(decomp_out_directories)
-        if self.diff_images:
-            self.run_diff(outfiles)
+        self.run_diff(outfiles)
 
         # Make a down/right pixel shift of all tiffs
         if self.shift_pixels:
@@ -539,42 +538,58 @@ class Runner:
             in_dir1=in_dir1,
             in_dir2=in_dir2,
             out_directory=merged_out_directory,
+            overwrite=self.overwrite,
             **merger_options,
         )
-        outfiles = merger.run()
-        return outfiles
+        outfiles_dict = merger.run()
+        return outfiles_dict
 
-    def run_diff(self, outfiles, skip_intervals=[1, 2]):
+    def run_diff(self, outfiles_dict):
         diff_options = self.config["diff"]
+        skip_intervals = diff_options.pop("skip_intervals", [1, 2])
+        if isinstance(skip_intervals, int):
+            skip_intervals = [skip_intervals]
         diff_out_directory = Path(self.project_out_directory) / diff_options.pop(
             "out_directory", "diffs_east_up"
         )
-        outfile_template = diff_options.pop(
-            "outfile_template", "merged_vertical_diff_{d1}_{d2}.tif"
+
+        utils.mkdir_p(diff_out_directory)
+        vertical_template = diff_options.pop(
+            "vertical_template", "merged_vertical_diff_{d1}_{d2}.tif"
         )
-        merged_ups = [f for f in outfiles if "vertical" in str(f)]
-        merged_easts = [f for f in outfiles if "east" in str(f)]
-        diff_outfiles = []
+        east_template = diff_options.pop(
+            "east_template", "merged_east_diff_{d1}_{d2}.tif"
+        )
+        templates = {"east": east_template, "up": vertical_template}
+        
         for i in skip_intervals:
-            for merged_files in [merged_easts, merged_ups]:
+            for key in templates.keys():
+                template = templates[key]
+                merged_files = outfiles_dict[key]
+            
                 for f1, f2 in zip(merged_files[:-i], merged_files[i:]):
-                    d1 = re.search(r"\d{8}", f1).group()
-                    d2 = re.search(r"\d{8}", f2).group()
-                    outfile = diff_out_directory / outfile_template.format(d1=d1, d2=d2)
+                    d1 = _get_date(f1)
+                    d2 = _get_date(f2)
+                    outfile = diff_out_directory / template.format(
+                        d1=d1, d2=d2
+                    )
+                    if outfile.exists() and not self.overwrite:
+                        logger.info("Skipping {}, exists.".format(outfile))
+                        continue
+                    else:
+                        logger.info("Creating {}".format(outfile))
+
                     with rio.open(f1) as src1, rio.open(f2) as src2:
                         diff_img = src2.read(1) - src1.read(1)
 
-                    with rio.open(outfile, mode="w", **src1.meta) as dst:
-                        dst.write(diff_img, 1)
-                        dst.set_band_unit(1, src1.units[0])
+                        with rio.open(outfile, mode="w", **src1.meta) as dst:
+                            dst.write(diff_img, 1)
+                            dst.set_band_unit(1, src1.units[0])
 
-                    diff_outfiles.append(outfiles)
-
-        return diff_outfiles
 
 
 def _get_date(filename):
-    m = re.search(r"\d{8}", filename)
+    m = re.search(r"\d{8}", str(filename))
     try:
         return m.group()
     except AttributeError:

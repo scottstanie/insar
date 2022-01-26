@@ -136,3 +136,4 @@ out_directory = "merged_cumulative_east_up"
 [diff]
 outfile_template = "merged_vertical_diff_{d1}_{d2}.tif"
 out_directory = "merged_diffs_east_up"
+skip_intervals = [1, 2]
