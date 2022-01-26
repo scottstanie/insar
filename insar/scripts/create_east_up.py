@@ -425,7 +425,7 @@ class Merger:
 
                 print(f"creating {outfile}")
                 m = subset.create_merged_files(
-                    f1, f2, band1=bands[band_name], band2=bands[band_name], outfile=outfile
+                    f1, f2, band_left=bands[band_name], band_right=bands[band_name], outfile=outfile, blend=True
                 )
                 sario.set_unit(outfile, unit="centimeters")
                 # merged_imgs.append(m)
@@ -561,7 +561,7 @@ class Runner:
             "east_template", "merged_east_diff_{d1}_{d2}.tif"
         )
         templates = {"east": east_template, "up": vertical_template}
-        
+
         for i in skip_intervals:
             for key in templates.keys():
                 template = templates[key]
