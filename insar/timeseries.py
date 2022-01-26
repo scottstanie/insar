@@ -360,6 +360,11 @@ def run_sbas(
     # TESTING: small area
     # blk_slices = list(blk_slices)[:25]
 
+    if weight_by_temp_baseline:
+        weights = _temp_baseline_weights(ifglist)
+    else:
+        weights = np.ones(len(ifglist))
+
     ExecutorClass = ProcessPoolExecutor if max_workers > 1 else DummyExecutor
     with ExecutorClass(max_workers=max_workers) as executor:
         # for (rows, cols) in blk_slices:
@@ -379,7 +384,8 @@ def run_sbas(
                 cor_thresh,
                 phase_to_cm,
                 use_B_matrix=use_B_matrix,
-                weight_by_temp_baseline=weight_by_temp_baseline,
+                weights=weights,
+                # weight_by_temp_baseline=weight_by_temp_baseline,
             ): blk
             for blk in blk_slices
         }
@@ -413,7 +419,8 @@ def _load_and_run(
     cor_thresh,
     phase_to_cm,
     use_B_matrix=False,
-    weight_by_temp_baseline=False,
+    weights=None,
+    # weight_by_temp_baseline=False,
 ):
     rows, cols = blk
     with h5py.File(unw_stack_file) as hf, h5py.File(cor_stack_file) as hf_c:
@@ -422,6 +429,7 @@ def _load_and_run(
         cor_chunk = hf_c[cor_stack_dset][
             valid_ifg_idxs, rows[0] : rows[1], cols[0] : cols[1]
         ]
+
         if weight_by_cor and cor_thresh is not None:
             zero_idxs = cor_chunk < cor_thresh
             cor_chunk[zero_idxs] = 0.0
@@ -430,7 +438,7 @@ def _load_and_run(
             cor_mean = cor_chunk[~zero_idxs].mean(axis=0)
             cor_std = cor_chunk[~zero_idxs].std(axis=0)
         else:
-            cor_mean = cor_chunk.mean(axis=0)
+            cor_mean = np.average(cor_chunk, weights=weights, axis=0)
             cor_std = cor_chunk.std(axis=0)
 
         if weight_by_cor:
@@ -450,8 +458,9 @@ def _load_and_run(
                 # alpha,
                 # constant_velocity,
                 phase_to_cm,
+                weights=weights,
                 use_B_matrix=use_B_matrix,
-                weight_by_temp_baseline=weight_by_temp_baseline,
+                # weight_by_temp_baseline=weight_by_temp_baseline,
             )
         return out_chunk, cor_mean, cor_std, temp_coh
 
@@ -471,6 +480,16 @@ def write_out_chunk(chunk, outfile, output_dset, rows=None, cols=None, verbose=T
             dset[rows[0] : rows[1], cols[0] : cols[1]] = chunk
 
 
+def _temp_baseline_weights(ifglist):
+    temp_baselines = np.array([ifg[1] - ifg[0] for ifg in ifglist])
+    # Use square root of temp baseline as weighting,
+    # assuming that the variance of each ifg is proportional to the baseline
+    weights = 1 / np.sqrt(temp_baselines)
+    # make closer to 1, so that the weights are not too small (numerical issues)
+    weights /= np.max(weights)
+    return weights
+
+
 @jit_decorator
 def _calc_soln(
     unw_chunk,
@@ -482,7 +501,8 @@ def _calc_soln(
     phase_to_cm,
     use_B_matrix=False,
     # L1=False,
-    weight_by_temp_baseline=False,
+    weights=None,
+    # weight_by_temp_baseline=False,
 ):
     dtype = unw_chunk.dtype
 
@@ -502,13 +522,8 @@ def _calc_soln(
         G = build_A_matrix(slclist, ifglist)
     G = G.astype(dtype)
 
-    if weight_by_temp_baseline:
-        temp_baselines = np.array([ifg[1] - ifg[0] for ifg in ifglist])
-        # Use square root of temp baseline as weighting,
-        # assuming that the variance of each ifg is proportional to the baseline
-        weights = 1 / np.sqrt(temp_baselines).reshape((-1, 1))
-        # make closer to 1, so that the weights are not too small (numerical issues)
-        weights /= np.max(weights)
+    if weights is not None:
+        weights = weights.reshape((-1, 1))
         unw_cols_nonan *= weights
         G *= weights
 
@@ -524,7 +539,9 @@ def _calc_soln(
         phi_cols = integrate_velocities(soln_cols, timediffs).astype(dtype)
     else:
         # Add a 0 image for the first date
-        phi_cols = np.vstack((np.zeros((1, soln_cols.shape[1]), dtype=dtype), soln_cols))
+        phi_cols = np.vstack(
+            (np.zeros((1, soln_cols.shape[1]), dtype=dtype), soln_cols)
+        )
         phi_cols = phi_cols.astype(dtype)
 
     stack = phi_cols.reshape((-1, nrow, ncol))
