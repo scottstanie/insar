@@ -49,9 +49,9 @@ class LOS:
     los_dset: str = "los_enu"  # contained in `defo_filename`
     los_map_filename: str = "los_enu.tif"
     # contained in `defo_filename`
-    cor_mean_dset = "cor_mean"
-    cor_std_dset = "cor_std"
-    temp_coh_dset = "temp_coh"
+    cor_mean_dset: str = "cor_mean"
+    cor_std_dset: str = "cor_std"
+    temp_coh_dset: str = "temp_coh"
     dem_filename: str = "elevation_looked.dem"
 
     out_directory: str = None
@@ -64,7 +64,8 @@ class LOS:
     # Masking
     mask_filename: str = "masks.h5"
     mask_missing_threshold: int = 8
-    cor_thresh: float = 0.11
+    cor_mean_thresh: float = 0.11
+    temp_coh_thresh: float = 0.7
     max_abs_val_masking: float = 2
 
     # deramping
@@ -81,6 +82,7 @@ class LOS:
     vm: float = 7  # Color limits (vmin, vmax)
     figsize: Tuple = (8, 6)
     defo_cmap: str = "seismic_wide_y_r"
+    long_name: str = "Cumulative line-of-sight deformation"
 
     def run(self):
 
@@ -94,7 +96,7 @@ class LOS:
         logger.info("Saving output to %s", self.out_directory)
 
         self.ds = xr.open_dataset(Path(self.directory) / self.defo_filename)
-        self.mask_missing = self.get_mask()
+        self.mask_missing = self.get_missing_mask()
         if self.do_final_deramp:
             logger.info("Deramping deformation")
             ds_deramped = self.remove_ramp(self.ds, self.dset_name, self.deramp_order)
@@ -123,7 +125,7 @@ class LOS:
         # Also save a quicklook plot of the mask and final deformation
         logger.info("Saving quicklook plots")
         self.plot_cor_mask(self.figure_directory / "cor_mask.pdf")
-        self.plot_img(idx=-1)
+        self.plot_img(idx=-1, dset_name=self.shifted_dset_name)
 
         # record all aspects of the run
         self.record(self.out_directory / "run_params.yaml")
@@ -168,14 +170,18 @@ class LOS:
 
     def get_cor_mask(self):
         cor = self.ds[self.cor_mean_dset]
-        return cor < self.cor_thresh
+        return cor < self.cor_mean_thresh
+
+    def get_temp_coh_mask(self):
+        cor = self.ds[self.temp_coh_dset]
+        return cor < self.temp_coh_thresh
 
     def plot_cor_mask(self, figname, **figkwargs):
         import proplot as pplt
 
         width, height = self.figsize
 
-        fig, axes = pplt.subplots(ncols=3, figsize=(2 * width, 0.7 * height))
+        fig, axes = pplt.subplots(ncols=4, figsize=(3 * width, 0.7 * height))
 
         ax = axes[0]
         cor = self.ds[self.cor_mean_dset]
@@ -186,13 +192,18 @@ class LOS:
         cor_mask.astype(int).plot.imshow(ax=ax)
 
         ax = axes[2]
+        temp_coh_mask = self.get_temp_coh_mask()
+        temp_coh_mask.astype(int).plot.imshow(ax=ax)
+
+        ax = axes[3]
         test_img = self.ds[self.dset_name][-1].copy()
         test_img.data[cor_mask.data] = np.nan
+        test_img.data[temp_coh_mask.data] = np.nan
         test_img.plot.imshow(cmap=self.defo_cmap, vmin=-self.vm, vmax=self.vm, ax=ax)
 
         self._save_figure(fig, figname, **figkwargs)
 
-    def get_mask(self):
+    def get_missing_mask(self):
         # with h5py.File(self.data78 + "masks.h5") as hf:
         with h5py.File(self.mask_filename) as hf:
             msum = hf["slc_sum"][()]
@@ -280,11 +291,14 @@ class LOS:
 
     def set_mask(self):
         """Get the missing data, correlation mask and apply to the shifted dataset"""
-        mask_missing = self.get_mask()
+        mask_missing = self.get_missing_mask()
         # mask_missing = np.logical_or(self.ds[self.dset_name].values == 0, mask_missing)
 
         cor_mask = self.get_cor_mask()
         mask = np.logical_or(mask_missing, cor_mask.data)
+
+        temp_coh_mask = self.get_temp_coh_mask()
+        mask = np.logical_or(mask, temp_coh_mask.data)
 
         self.ds[self.shifted_dset_name].values[:, mask] = 0
 
@@ -299,9 +313,13 @@ class LOS:
                 path_num=self.path_num, dt=dt_str
             )
             logger.info(f"Saving {outfile}")
-            sario.save_xr_tif(outfile, layer, crs=self.crs)
-            # Set the units to cm
-            sario.set_unit(outfile, unit="centimeters")
+            sario.save_xr_tif(
+                outfile,
+                layer,
+                crs=self.crs,
+                long_name=self.long_name,
+                units="centimeters",
+            )
 
         # Copy the LOS file for the east/up decomposition
         fname = self.out_directory / Path(self.los_map_filename).name
@@ -310,13 +328,21 @@ class LOS:
             fname,
             self.ds[self.los_dset],
             crs=self.crs,
+            long_name="East-north-up coefficients for line of sight vectors",
         )
         # And save the mean correlation/other coherence images for reference
-        for dset_name in [self.cor_mean_dset, self.cor_std_dset, self.temp_coh_dset]:
+        descriptions = [
+            "Mean spatial correlation",
+            "Standard deviation of correlation",
+            "Temporal coherence",
+        ]
+        for desc, dset_name in zip(
+            descriptions, [self.cor_mean_dset, self.cor_std_dset, self.temp_coh_dset]
+        ):
             # Save the xarray dataset as a tif in the output dir
             fname = self.out_directory / Path(dset_name + ".tif").name
             logger.info(f"Saving {dset_name} to {fname}")
-            sario.save_xr_tif(fname, self.ds[dset_name], crs=self.crs)
+            sario.save_xr_tif(fname, self.ds[dset_name], crs=self.crs, long_name=desc)
 
         # Save the DEM too
         fname = self.out_directory / Path(self.dem_filename).name
@@ -373,7 +399,11 @@ class Decomp:
                 desc_enu_fname=self.desc_los_map_filename,
                 outfile=outfile,
             )
-            sario.set_unit(outfile, unit="centimeters")
+            descs = [
+                "Cumulative eastward deformation",
+                "Cumulative vertical deformation",
+            ]
+            sario.set_description(outfile, descs)
             outfiles.append(outfile)
 
         record(self, self.out_directory / "run_params.yaml")
@@ -425,9 +455,16 @@ class Merger:
 
                 print(f"creating {outfile}")
                 m = subset.create_merged_files(
-                    f1, f2, band_left=bands[band_name], band_right=bands[band_name], outfile=outfile, blend=True
+                    f1,
+                    f2,
+                    band_left=bands[band_name],
+                    band_right=bands[band_name],
+                    outfile=outfile,
+                    blend=True,
                 )
-                sario.set_unit(outfile, unit="centimeters")
+
+                desc = f"Cumulative {'eastward' if band_name == 'east' else 'vertical'} deformation"
+                sario.set_description(outfile, desc)
                 # merged_imgs.append(m)
 
         record(self, Path(self.out_directory) / "run_params.yaml")
@@ -468,6 +505,7 @@ class Runner:
         outfiles = self.run_merger(decomp_out_directories)
         self.run_diff(outfiles)
 
+        set_all_metadata(self.project_out_directory)
         # Make a down/right pixel shift of all tiffs
         if self.shift_pixels:
             shift_all_pixels(self.project_out_directory)
@@ -566,13 +604,11 @@ class Runner:
             for key in templates.keys():
                 template = templates[key]
                 merged_files = outfiles_dict[key]
-            
+
                 for f1, f2 in zip(merged_files[:-i], merged_files[i:]):
                     d1 = _get_date(f1)
                     d2 = _get_date(f2)
-                    outfile = diff_out_directory / template.format(
-                        d1=d1, d2=d2
-                    )
+                    outfile = diff_out_directory / template.format(d1=d1, d2=d2)
                     if outfile.exists() and not self.overwrite:
                         logger.info("Skipping {}, exists.".format(outfile))
                         continue
@@ -584,8 +620,10 @@ class Runner:
 
                         with rio.open(outfile, mode="w", **src1.meta) as dst:
                             dst.write(diff_img, 1)
-                            dst.set_band_unit(1, src1.units[0])
-
+                            # dst.set_band_unit(1, src1.units[0])
+                    dir_ = "Eastward" if key == "east" else "Vertical"
+                    desc = f"{dir_} deformation between {d1} and {d2}"
+                    sario.set_description(outfile, desc)
 
 
 def _get_date(filename):
@@ -615,24 +653,17 @@ def shift_all_pixels(project_dir):
         os.rename(tmp_out, f)
 
 
-def set_all_units(
+def set_all_metadata(
     project_dir,
     unit="centimeters",
+    nodata=0.0,
     ignore_phrases=["los_enu", "cor_", "temp_coh", "elevation"],
 ):
     for f in glob.glob(str(Path(project_dir) / "**/*.tif")):
+        sario.set_nodata(f, nodata)
         if any(phrase in f for phrase in ignore_phrases):
             continue
-        sario.set_unit(f, "centimeters")
-
-
-def set_all_nodata(project_dir, unit="centimeters"):
-    # TODO
-    pass
-    # for f in glob.glob(str(Path(project_dir) / "**/*.tif")):
-    #     if "los_enu" in f or "cor_mean" in f:
-    #         continue
-    #     sario.set_unit(f, "centimeters")
+        sario.set_unit(f, unit)
 
 
 @log_runtime

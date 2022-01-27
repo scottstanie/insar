@@ -34,7 +34,8 @@ gps_max_nan_pct = 0.7
 # Masking
 mask_filename = "masks.h5"
 mask_missing_threshold = 8
-cor_thresh = 0.11
+cor_mean_thresh = 0.11
+temp_coh_thresh = 0.7
 max_abs_val_masking = 2
 
 # deramping
@@ -66,7 +67,8 @@ gps_max_nan_pct = 0.7
 # Masking
 mask_filename = "masks.h5"
 mask_missing_threshold = 8
-cor_thresh = 0.11
+cor_mean_thresh = 0.11
+temp_coh_thresh = 0.7
 max_abs_val_masking = 2
 
 # deramping
@@ -95,7 +97,8 @@ gps_max_nan_pct = 0.5
 # Masking
 mask_filename = "masks.h5"
 mask_missing_threshold = 8
-cor_thresh = 0.11
+cor_mean_thresh = 0.11
+temp_coh_thresh = 0.7
 max_abs_val_masking = 2
 
 # deramping
