@@ -146,7 +146,7 @@ def _cleanup_bad_dates(new_dir="extra_files", bad_dir_name="bad_files"):
 
     mkdir_p(bad_dir_name)
     with utils.chdir_then_revert(new_dir):
-        bad_dates = stitching.find_safes_with_missing_data(".", "../elevation.dem")
+        bad_dates = stitching.find_safes_with_missing_data("../", "../elevation.dem")
         for d in bad_dates:
             dstr = d.strftime("%Y%m%d")
             for f in glob.glob(f"*{dstr}*"):

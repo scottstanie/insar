@@ -606,22 +606,30 @@ def temporal_coherence_xr(
     return out_da
 
 
-# def load_baselines(ifglist):
-# import pandas as pd
-# unw_pix = unw_subset_pecos_0_90.sel(lat=lat, lon=lon, method='nearest')
-# df_ifglist = pd.DataFrame(ifglist, columns=['slc1', 'slc2'])
-# df_ifglist.head()
-# df_baselines = pd.read_csv("../sbas_list", header=None, sep=r"\s+", names=["slc1", "slc2", "temporal", "spatial"])
+def load_baselines(sbas_list_file, ifglist=None, unw_values=None):
+    import pandas as pd
 
-# # df_baselines.shape
-# df_baselines['slc1'] = pd.to_datetime(sario.parse_slclist_strings(df_baselines.slc1), utc=True)
-# df_baselines['slc2'] = pd.to_datetime(sario.parse_slclist_strings(df_baselines.slc2), utc=True)
-# print(df_baselines.shape)
-# df_baselines.head()
-# df_baselines2 = pd.merge(df_baselines, df_ifglist, on=("slc1", "slc2"))
-# df_baselines2.head()
-# df_baselines2['phase'] = unw_pix.values
-# df_baselines2.head()
+    df_baselines = pd.read_csv(
+        sbas_list_file,
+        header=None,
+        sep=r"\s+",
+        names=["slc1", "slc2", "temporal", "spatial"],
+    )
+    df_baselines["slc1"] = pd.to_datetime(
+        sario.parse_slclist_strings(df_baselines.slc1), utc=True
+    )
+    df_baselines["slc2"] = pd.to_datetime(
+        sario.parse_slclist_strings(df_baselines.slc2), utc=True
+    )
+    if ifglist is not None:
+        df_ifglist = pd.DataFrame(ifglist, columns=["slc1", "slc2"])
+        df = pd.merge(df_baselines, df_ifglist, on=("slc1", "slc2"))
+    else:
+        df = df_baselines
+    if unw_values:
+        # unw_pix = unw_subset_pecos_0_90.sel(lat=lat, lon=lon, method='nearest')
+        df["phase"] = unw_values
+    return df
 
 
 def unwrapping_error(phase, mask):
