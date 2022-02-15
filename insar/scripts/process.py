@@ -190,7 +190,7 @@ def prep_igrams_dir(cleanup=False, **kwargs):
             logger.info(f"{geofile + '.rsc'} already exists: skipping ({e})")
 
     # Now stitch together duplicate dates of .geos
-    stitching.stitch_same_dates(
+    stitched_acq_times = stitching.stitch_same_dates(
         geo_path="extra_files/", output_path=".", overwrite=False
     )
 
