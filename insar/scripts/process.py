@@ -156,7 +156,7 @@ def _cleanup_bad_dates(new_dir="extra_files", bad_dir_name="bad_files"):
 
 def prep_igrams_dir(cleanup=False, **kwargs):
     """4. Reorganize and rename .geo files, stitches .geos, prepare for igrams"""
-    from apertools import stitching
+    from apertools import stitching, sario
 
     new_dir = "extra_files"
     if cleanup:
@@ -204,6 +204,15 @@ def prep_igrams_dir(cleanup=False, **kwargs):
     # Make vrts of files
     cmd = "aper save-vrt --rsc-file elevation.dem.rsc *geo"
     _log_and_run(cmd)
+
+    # Save the acquisition times of the stitched files to the VRTs
+    for f in stitched_acq_times:
+        vrt_name = f + ".vrt"
+        metadata_dict = {
+            "acquisition_datetime": stitched_acq_times[f][0],
+            "acquisition_datetime_stop": stitched_acq_times[f][1],
+        }
+        sario.save_vrt_metadata(vrt_name, metadata_dict, metadata_domain=None)
 
     mkdir_p("igrams")
     os.chdir("igrams")
