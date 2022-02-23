@@ -232,9 +232,9 @@ class LOS:
         )
         return ds_deramped
 
-    def _save_figure(self, fig, fname, figkwargs={}):
+    def _save_figure(self, fig, fname, dpi=100, figkwargs={}):
         utils.mkdir_p(self.figure_directory)
-        fig.savefig(fname, **figkwargs)
+        fig.savefig(fname, dpi=dpi, **figkwargs)
 
     def compare_gps(self, dset_name):
         igc = gps.InsarGPSCompare(
@@ -265,29 +265,54 @@ class LOS:
             # self.shifted_dset_name = self.dset_name
             correction = 0
         else:
-            ref_cols = [f"{self.ref_station}_gps", f"{self.ref_station}_insar"]
             lon, lat = gps.station_lonlat(self.ref_station)
 
             # Get the insar in the reference spot
-            ref_win_ts = utils.window_stack_xr(
-                self.ds.defo_noisy, lon=lon, lat=lat, window_size=self.gps_window_size
+            ref_win_ts_sm = utils.window_stack_xr(
+                self.ds[self.dset_name],
+                lon=lon,
+                lat=lat,
+                window_size=self.gps_window_size
+                # self.ds.defo_noisy, lon=lon, lat=lat, window_size=self.gps_window_size
             )
-            ref_win_ts_sm = ref_win_ts.rolling(
-                {"date": 50}, min_periods=1, center=True
-            ).mean()
+            # ref_win_ts_sm = ref_win_ts.rolling(
+            # {"date": 50}, min_periods=1, center=True
+            # ).mean()
 
             # Get the gps in the reference spot
-            ref_gps = self.insar_gps_df[ref_cols].dropna(subset=[ref_cols[1]])[
-                ref_cols[0]
-            ]
-            ref_gps_sm = ref_gps.rolling(50, min_periods=1, center=True).mean()
-            correction = (ref_gps_sm - ref_win_ts_sm).to_xarray()
+            # ref_cols = [f"{self.ref_station}_gps", f"{self.ref_station}_insar"]
+            # ref_gps = self.insar_gps_df[ref_cols].dropna(subset=[ref_cols[1]])[
+            # ref_cols[0]
+            # ]
+            ref_gps = gps.load_gps_los(
+                self.ref_station,
+                los_map_file=self.los_map_filename,
+                start_date=self.ds.indexes["date"][0],
+                end_date=self.ds.indexes["date"][-1],
+            )
+            ref_gps = ref_gps.reindex(
+                pd.date_range(ref_gps.index[0], ref_gps.index[-1]), method="ffill"
+            )
+            ref_gps_sm = ref_gps.rolling(720, min_periods=1, center=True).mean()
+            ref_gps_xr = ref_gps_sm.to_xarray().rename({"index": "date"})
+
+            gpsmerged = xr.merge((ref_gps_xr, ref_win_ts_sm), join="inner")
+            # correction = GPS - InSAR
+            # correction = (ref_gps_sm - ref_win_ts_sm).to_xarray()
+            correction = gpsmerged["los"] - gpsmerged[self.dset_name]
+            correction.to_dataset(name=f"correction{self.path_num}").to_netcdf(
+                self.out_directory / "reference_to_gps.nc"
+            )
 
         if np.any(np.isnan(correction.values)):
             logger.error("NaN in correction")
             logger.error("Skipping the correction")
             correction = 0
+
+        # Keep the places that had zeros as 0 after shifting
+        zero_mask = self.ds[self.dset_name].data == 0
         self.ds[self.shifted_dset_name] = self.ds[self.dset_name] + correction
+        self.ds[self.shifted_dset_name].data[zero_mask] = 0
 
     def set_mask(self):
         """Get the missing data, correlation mask and apply to the shifted dataset"""
@@ -664,6 +689,17 @@ def set_all_metadata(
         if any(phrase in f for phrase in ignore_phrases):
             continue
         sario.set_unit(f, unit)
+
+
+def clip_to_shape(project_dir, shapefile):
+    import subprocess
+
+    cmd = """gdalwarp -overwrite -of GTiff -cutline {shapefile}
+    -cl {layer_name} -crop_to_cutline 
+    {raster_name} {output_name}"""
+    for f in glob.glob(str(Path(project_dir) / "**/*.tif")):
+        logger.info("Clipping {} to {}".format(f, shapefile))
+        subprocess.run(cmd.format)
 
 
 @log_runtime
