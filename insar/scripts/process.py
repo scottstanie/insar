@@ -146,7 +146,7 @@ def _cleanup_bad_dates(new_dir="extra_files", bad_dir_name="bad_files"):
 
     mkdir_p(bad_dir_name)
     with utils.chdir_then_revert(new_dir):
-        bad_dates = stitching.find_safes_with_missing_data(".", "../elevation.dem")
+        bad_dates = stitching.find_safes_with_missing_data("../", "../elevation.dem")
         for d in bad_dates:
             dstr = d.strftime("%Y%m%d")
             for f in glob.glob(f"*{dstr}*"):
@@ -156,7 +156,7 @@ def _cleanup_bad_dates(new_dir="extra_files", bad_dir_name="bad_files"):
 
 def prep_igrams_dir(cleanup=False, **kwargs):
     """4. Reorganize and rename .geo files, stitches .geos, prepare for igrams"""
-    from apertools import stitching
+    from apertools import stitching, sario
 
     new_dir = "extra_files"
     if cleanup:
@@ -190,7 +190,7 @@ def prep_igrams_dir(cleanup=False, **kwargs):
             logger.info(f"{geofile + '.rsc'} already exists: skipping ({e})")
 
     # Now stitch together duplicate dates of .geos
-    stitching.stitch_same_dates(
+    stitched_acq_times = stitching.stitch_same_dates(
         geo_path="extra_files/", output_path=".", overwrite=False
     )
 
@@ -204,6 +204,15 @@ def prep_igrams_dir(cleanup=False, **kwargs):
     # Make vrts of files
     cmd = "aper save-vrt --rsc-file elevation.dem.rsc *geo"
     _log_and_run(cmd)
+
+    # Save the acquisition times of the stitched files to the VRTs
+    for f in stitched_acq_times:
+        vrt_name = f + ".vrt"
+        metadata_dict = {
+            "acquisition_datetime": stitched_acq_times[f][0],
+            "acquisition_datetime_stop": stitched_acq_times[f][1],
+        }
+        sario.save_vrt_metadata(vrt_name, metadata_dict, metadata_domain=None)
 
     mkdir_p("igrams")
     os.chdir("igrams")

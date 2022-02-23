@@ -45,7 +45,7 @@ def _snaphu_cmd(intfile, width, corname, outname, conncomp_name, float_cor=False
 INFILE {intfile}
 LINELENGTH {width}
 OUTFILE {outname}
-# CONNCOMPFILE {conncomp_name} # TODO: snaphu has a bug for tiling conncomps
+CONNCOMPFILE {conncomp_name} # TODO: snaphu has a bug for tiling conncomps
 """
     if float_cor:
         # Need to specify the input file format in a config file
@@ -72,11 +72,9 @@ OUTFILE {outname}
     if height > 1000:
         conf_string += "NTILEROW 3\nROWOVRLP 400\n"
         nprocs *= 3
-        conf_string += "NPROC 9\n"
     elif height > 500:
         conf_string += "NTILEROW 2\nROWOVRLP 400\n"
         nprocs *= 2
-        conf_string += "NPROC 4\n"
     if nprocs > 1:
         conf_string += f"NPROC {nprocs}\n"
 

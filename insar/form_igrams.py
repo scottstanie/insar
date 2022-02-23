@@ -149,11 +149,6 @@ except ImportError:
 from apertools.utils import read_blocks, block_iterator
 
 
-def softplus(x):
-    xp = cp.get_array_module(x)
-    return xp.maximum(0, x) + xp.log1p(xp.exp(-abs(x)))
-
-
 def make_igram_gpu(
     early_filename,
     late_filename,
@@ -259,14 +254,27 @@ def make_igram_blocks(
     block_rows=1000,
     out_ifg="out.int",
     out_cor="out.cor",
+    wsize=5,
 ):
 
     blks1 = memmap_blocks(early_filename, full_shape, block_rows, "complex64")
     blks2 = memmap_blocks(late_filename, full_shape, block_rows, "complex64")
 
-    with open("testifg.int", "wb") as f:
+    w = _get_weights_square(wsize)
+    with open("testifg.int", "wb") as f, open("testcor.cor", "wb") as g:
         for idx, (slc1, slc2) in enumerate(zip(blks1, blks2)):
             print(f"Forming {idx = }")
 
             ifg = slc1 * slc2.conj()
             take_looks(ifg, *looks).tofile(f)
+
+            # Correlation
+            amp1 = slc1.real ** 2 + slc1.imag ** 2
+            amp2 = slc2.real ** 2 + slc2.imag ** 2
+            denom = correlate_gpu(cp.sqrt(amp1 * amp2), w)
+            numer = correlate_gpu(cp.abs(ifg), w)
+            # denom = correlate(np.sqrt(amp1 * amp2), w)
+            # numer = correlate(np.abs(ifg), w)
+            cor = numer / (EPS + denom)
+            take_looks(cor, *looks).tofile(g)
+
