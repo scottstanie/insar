@@ -932,7 +932,7 @@ def lowess(
     orig_dset=constants.DEFO_NOISY_DSET,
     out_fname=None,
     out_dset=constants.DEFO_LOWESS_DSET,
-    min_days_weighted=3 * 365.25,
+    min_days_weighted=2. * 365.25,
     frac=None,
     n_iter=2,
     overwrite=False,
