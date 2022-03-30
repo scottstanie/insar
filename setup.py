@@ -7,7 +7,7 @@ setuptools.setup(
     name="insar",
     version="1.2.0",
     author="Scott Staniewicz",
-    author_email="scott.stanie@utexas.com",
+    author_email="scott.stanie@gmail.com",
     description="Tools for gathering and preprocessing InSAR data",
     long_description=long_description,
     long_description_content_type="text/markdown",
