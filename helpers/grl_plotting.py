@@ -8,17 +8,17 @@ import numpy as np
 import h5py
 
 from insar import timeseries
-from apertools import sario, gps, plotting, latlon, gps_plots
+from apertools import sario, gps, plotting, latlon, gps_plots, constants
 from apertools.colors import MATLAB_COLORS
 from apertools.log import get_log
 
 logger = get_log()
 
-p2c = timeseries.PHASE_TO_CM
-p2mm = timeseries.PHASE_TO_CM * 365 * 10
+p2c = constants.PHASE_TO_CM
+p2mm = constants.PHASE_TO_CM * 365 * 10
 
 # TODO: MOVE THESE!!!
-from insar import constants
+from apertools.sario import STACK_FLAT_SHIFTED_DSET
 
 
 station_name_list = [
@@ -363,7 +363,7 @@ def get_stack_vals(
     valid_indices=None,
     station_name=None,
     window=5,
-    dset=constants.STACK_FLAT_DSET,
+    dset=STACK_FLAT_SHIFTED_DSET,
     reference_station=None,
 ):
     dem_rsc = sario.load("dem.rsc")
@@ -392,7 +392,7 @@ def _read_vals(
     col,
     valid_indices,
     window=5,
-    dset=constants.STACK_FLAT_DSET,
+    dset=STACK_FLAT_SHIFTED_DSET,
 ):
     # println("Loading $row, $col from $dset, avging window $window")
     halfwin = max(window // 2, 1)
