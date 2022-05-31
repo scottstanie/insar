@@ -1,11 +1,12 @@
 # InSAR processing and timeseries analysis tools 
 
+
 Utilities for Synthetic Apeture Radar (SAR) and Interferometric SAR (InSAR) processing.
 Early processing steps use the Stanford Sentinel-1 geocoded SLC processor (not included here).
 
 
 Many of the utilities have been split off into the [apertools](https://github.com/scottstanie/apertools) repo.
-Note that the upsampled DEM creator has moved to the [sardem](https://github.com/scottstanie/sardem) repo, and the Sentinel 1 EOF downloader has moved to the [sentineleof](https://github.com/scottstanie/sentineleof) repo, both pip installable.
+Note that the upsampled DEM creator has moved to the [sardem](https://github.com/scottstanie/sardem) repo, and the Sentinel 1 precise orbit downloader has moved to the [sentineleof](https://github.com/scottstanie/sentineleof) repo, both pip installable.
 
 
 ## Setup and installation
