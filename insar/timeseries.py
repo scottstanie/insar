@@ -25,25 +25,25 @@ except ImportError:
         print("Failed to load hdf5plugin: may not save/load using blosc")
 
 import h5py
-import xarray as xr
 import numpy as np
+import xarray as xr
+from apertools import sario, utils
+from apertools.constants import PHASE_TO_CM_MAP, WAVELENGTH_MAP
+from apertools.log import get_log, log_runtime
 from matplotlib.dates import date2num
 
-from apertools import sario, utils
-from apertools.log import get_log, log_runtime
-from .prepare import create_dset, detect_rdr_coordinates
 from . import constants
-from apertools.constants import PHASE_TO_CM_MAP, WAVELENGTH_MAP
-
+from .prepare import create_dset, detect_rdr_coordinates
 # from .ts_utils import get_cor_mean, ptp_by_date, ptp_by_date_pct
 # from insar import ts_utils
-from .ts_utils import ptp_by_date_pct, DummyExecutor
+from .ts_utils import DummyExecutor, ptp_by_date_pct
 
 logger = get_log()
 
 # Import numba if available; otherwise, just use python-only version
 try:
     import numba
+
     from .ts_numba import build_A_matrix, build_B_matrix, integrate_velocities
 
     jit_decorator = numba.njit
@@ -287,26 +287,25 @@ def run_inversion(
         logger.info("Not saving line of sight file: %s", los_file)
         los_map, los_dset = None, None
 
-    if sario.attach_latlon:
-        with h5py.File(unw_stack_file) as hf:
-            lat = hf["lat"][()]
-            lon = hf["lon"][()]
-        if coordinates == "geo":
-            sario.save_latlon_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
-            sario.attach_latlon(outfile, output_dset, depth_dim="date")
-            # if cor_mean is not None:
-            sario.attach_latlon(outfile, constants.COR_MEAN_DSET)
-            sario.attach_latlon(outfile, constants.COR_STD_DSET)
-            sario.attach_latlon(outfile, constants.TEMP_COH_DSET)
-            if los_map is not None:
-                sario.attach_latlon(outfile, los_dset)
-        else:
-            sario.save_latlon_2d_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
-            sario.attach_latlon_2d(outfile, output_dset, depth_dim="date")
-            # if cor_mean is not None:
-            sario.attach_latlon_2d(outfile, constants.COR_MEAN_DSET)
-            sario.attach_latlon_2d(outfile, constants.COR_STD_DSET)
-            sario.attach_latlon_2d(outfile, constants.TEMP_COH_DSET)
+    with h5py.File(unw_stack_file) as hf:
+        lat = hf["lat"][()]
+        lon = hf["lon"][()]
+    if coordinates == "geo":
+        sario.save_latlon_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
+        sario.attach_latlon(outfile, output_dset, depth_dim="date")
+        # if cor_mean is not None:
+        sario.attach_latlon(outfile, constants.COR_MEAN_DSET)
+        sario.attach_latlon(outfile, constants.COR_STD_DSET)
+        sario.attach_latlon(outfile, constants.TEMP_COH_DSET)
+        if los_map is not None:
+            sario.attach_latlon(outfile, los_dset)
+    else:
+        sario.save_latlon_2d_to_h5(outfile, lat=lat, lon=lon, overwrite=overwrite)
+        sario.attach_latlon_2d(outfile, output_dset, depth_dim="date")
+        # if cor_mean is not None:
+        sario.attach_latlon_2d(outfile, constants.COR_MEAN_DSET)
+        sario.attach_latlon_2d(outfile, constants.COR_STD_DSET)
+        sario.attach_latlon_2d(outfile, constants.TEMP_COH_DSET)
 
     # TODO: just use the h5?
     if save_as_netcdf:
@@ -683,7 +682,7 @@ def _calc_soln_pixelwise(
 
 
 def _get_block_shape(full_shape, chunk_size, block_size_max=10e6, nbytes=4):
-    """Find a size of a data cube less than `block_size_max` in increments of `chunk_size`"""
+    """Find size of data cube less than `block_size_max` in increments of `chunk_size`"""
     import copy
 
     if chunk_size is None:
