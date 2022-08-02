@@ -176,6 +176,12 @@ def parse_steps(ctx, param, value):
     "(saved to slclist_ignore.txt from `view-masks`",
 )
 @click.option(
+    "--no-tile",
+    is_flag=True,
+    show_default=True,
+    help="Don't use SNAPHU tiling mode, no matter how big the ifgs are",
+)
+@click.option(
     "--constant-velocity",
     "-c",
     is_flag=True,

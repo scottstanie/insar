@@ -10,13 +10,13 @@ import itertools
 import shutil
 from tqdm import tqdm
 
+import h5py
 try:
     import hdf5plugin  # noqa
 except ImportError:
     blosc_id = 32001
     if not h5py.h5z.filter_avail(blosc_id):
         print("Failed to load hdf5plugin: may not save/load using blosc")
-import h5py
 import numpy as np
 from scipy.ndimage.morphology import binary_opening
 import rasterio as rio

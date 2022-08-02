@@ -23,13 +23,14 @@ def unwrap(
     ext_cor=".cor",
     float_cor=False,
     skip_cor=False,
+    do_tile=True,
 ):
     corname = intfile.replace(ext_int, ext_cor) if ext_cor else None
     if skip_cor:
         corname = None
     conncomp_name = intfile.replace(ext_int, ".conncomp")
     cmd = _snaphu_cmd(
-        intfile, width, corname, outfile, conncomp_name, float_cor=float_cor
+        intfile, width, corname, outfile, conncomp_name, float_cor=float_cor, do_tile=do_tile
     )
     print(cmd)
     subprocess.check_call(cmd, shell=True)
@@ -38,7 +39,7 @@ def unwrap(
     set_unw_zeros(outfile, intfile)
 
 
-def _snaphu_cmd(intfile, width, corname, outname, conncomp_name, float_cor=False):
+def _snaphu_cmd(intfile, width, corname, outname, conncomp_name, float_cor=False, do_tile=True):
     conf_name = outname + ".snaphu_conf"
     # Need to specify the conncomp file format in a config file
     conf_string = f"""STATCOSTMODE SMOOTH
@@ -59,22 +60,23 @@ CONNCOMPFILE {conncomp_name} # TODO: snaphu has a bug for tiling conncomps
     
     # Calculate the tiles sizes/number of procs to use, separate for width/height
     nprocs = 1
-    if width > 1000:
-        conf_string += "NTILECOL 3\nCOLOVRLP 400\n"
-        nprocs *= 3
-        # cmd += " -S --tile 3 3 400 400 --nproc 9"
-    elif width > 500:
-        conf_string += "NTILECOL 2\nCOLOVRLP 400\n"
-        nprocs *= 2
-        # cmd += " -S --tile 2 2 400 400 --nproc 4"
+    if do_tile:
+        if width > 1000:
+            conf_string += "NTILECOL 3\nCOLOVRLP 400\n"
+            nprocs *= 3
+            # cmd += " -S --tile 3 3 400 400 --nproc 9"
+        elif width > 500:
+            conf_string += "NTILECOL 2\nCOLOVRLP 400\n"
+            nprocs *= 2
+            # cmd += " -S --tile 2 2 400 400 --nproc 4"
 
-    height = os.path.getsize(intfile) / width / 8
-    if height > 1000:
-        conf_string += "NTILEROW 3\nROWOVRLP 400\n"
-        nprocs *= 3
-    elif height > 500:
-        conf_string += "NTILEROW 2\nROWOVRLP 400\n"
-        nprocs *= 2
+        height = os.path.getsize(intfile) / width / 8
+        if height > 1000:
+            conf_string += "NTILEROW 3\nROWOVRLP 400\n"
+            nprocs *= 3
+        elif height > 500:
+            conf_string += "NTILEROW 2\nROWOVRLP 400\n"
+            nprocs *= 2
     if nprocs > 1:
         conf_string += f"NPROC {nprocs}\n"
 
@@ -128,6 +130,9 @@ def main():
     parser.add_argument(
         "--skip-cor", action="store_true", help="Skip the use of correlation files."
     )
+    parser.add_argument(
+        "--no-tile", help="Don't use tiling mode no matter how big the image is.", action="store_true"
+    )
     parser.add_argument("--create-isce-headers", action="store_true")
     parser.add_argument(
         "--overwrite", help="Overwrite existing unwrapped file", action="store_true"
@@ -180,6 +185,7 @@ def main():
                 args.ext_cor,
                 args.float_cor,
                 args.skip_cor,
+                not args.no_tile,
             )
             for inf, outf in zip(in_files, out_files)
         ]

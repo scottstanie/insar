@@ -299,7 +299,7 @@ def record_los_vectors(path=".", **kwargs):
     # np.save("los_enu_midpoint_vector.npy", enu_coeffs)
 
 
-def run_snaphu(max_jobs=None, **kwargs):
+def run_snaphu(max_jobs=None, no_tile=False, **kwargs):
     """8. run snaphu to unwrap all .int files
 
     Assumes we are in the directory with all .unw files
@@ -310,7 +310,9 @@ def run_snaphu(max_jobs=None, **kwargs):
     width = igram_rsc["width"]
 
     snaphu_script = os.path.join(SCRIPTS_DIR, "run_snaphu.py")
-    snaphu_cmd = f"{snaphu_script} --path . --ext-cor '.cc' --cols {width} "
+    snaphu_cmd = f"{snaphu_script} --path . --ext-cor '.cc' --cols {width}"
+    if no_tile is True:
+        snaphu_cmd += " --no-tile"
     if max_jobs is not None:
         snaphu_cmd += f" --max-jobs {max_jobs}"
     _log_and_run(snaphu_cmd)
