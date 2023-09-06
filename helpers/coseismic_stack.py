@@ -26,8 +26,8 @@ def stack_igrams(
 
     gi_file = "slclist_ignore.txt" if ignore_geos else None
     slclist, ifglist = sario.load_slclist_ifglist(".", slclist_ignore_file=gi_file)
-    # stack_igrams = select_igrams(slclist, ifglist, event_date, num_igrams=num_igrams)
-    stack_igrams = select_pre_event(slclist, ifglist, event_date)
+    stack_igrams = select_igrams(slclist, ifglist, event_date, num_igrams=num_igrams)
+    # stack_igrams = select_pre_event(slclist, ifglist, event_date)
     # stack_igrams = select_post_event(slclist, ifglist, event_date)
 
     stack_fnames = sario.ifglist_to_filenames(stack_igrams, ".unw")

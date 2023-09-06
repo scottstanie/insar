@@ -166,7 +166,7 @@ def prep_igrams_dir(cleanup=False, **kwargs):
         else:
             # Save all sentinel_stack output to new_dir
             mkdir_p(new_dir)
-            _cleanup_bad_dates(new_dir)
+            # _cleanup_bad_dates(new_dir)
             subprocess.call("mv ./* {}/".format(new_dir), shell=True)
 
     # Then bring back the useful ones to the cur dir as symlinks renamed
