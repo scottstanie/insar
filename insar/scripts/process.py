@@ -19,6 +19,7 @@ import subprocess
 import os
 import glob
 from multiprocessing import cpu_count
+from pathlib import Path
 
 # import numpy as np
 # from click import BadOptionUsage
@@ -26,7 +27,7 @@ from multiprocessing import cpu_count
 # import apertools.los
 
 from apertools.log import get_log, log_runtime
-from apertools.utils import mkdir_p, force_symlink
+from apertools.utils import force_symlink
 from apertools.parsers import Sentinel
 
 logger = get_log()
@@ -144,7 +145,7 @@ def _cleanup_bad_dates(new_dir="extra_files", bad_dir_name="bad_files"):
     """Moves dates with missing data to separate folder"""
     from apertools import stitching, utils
 
-    mkdir_p(bad_dir_name)
+    Path(bad_dir_name).mkdir(exist_ok=True, parents=True)
     with utils.chdir_then_revert(new_dir):
         bad_dates = stitching.find_safes_with_missing_data("../", "../elevation.dem")
         for d in bad_dates:
@@ -165,7 +166,7 @@ def prep_igrams_dir(cleanup=False, **kwargs):
             logger.info("%s exists already, skipping reorganize files", new_dir)
         else:
             # Save all sentinel_stack output to new_dir
-            mkdir_p(new_dir)
+            Path(new_dir).mkdir(exist_ok=True, parents=True)
             _cleanup_bad_dates(new_dir)
             subprocess.call("mv ./* {}/".format(new_dir), shell=True)
 
@@ -214,7 +215,7 @@ def prep_igrams_dir(cleanup=False, **kwargs):
         }
         sario.save_vrt_metadata(vrt_name, metadata_dict, metadata_domain=None)
 
-    mkdir_p("igrams")
+    Path("igrams").mkdir(exist_ok=True, parents=True)
     os.chdir("igrams")
     logger.info("Changed directory to %s", os.path.realpath(os.getcwd()))
 
