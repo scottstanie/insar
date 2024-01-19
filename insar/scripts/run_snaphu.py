@@ -1,11 +1,12 @@
 #!/usr/bin/env python
+import argparse
 import os
 import shutil
-from glob import glob
-import argparse
 import subprocess
-from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from glob import glob
+
+from tqdm import tqdm
 
 # TODO: pass in the path: currently only runs on the current directory
 # Wrapper to run in parallel:
@@ -13,6 +14,7 @@ PHASE_UNWRAP_DIR = os.path.expanduser("~/phase_unwrap/bin")
 
 
 from apertools.log import get_log, log_runtime
+
 logger = get_log()
 
 def unwrap(
