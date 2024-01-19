@@ -1,7 +1,7 @@
 import numpy as np
 from numpy import sqrt, real, conj
 from glob import glob
-from apertools.utils import take_looks
+from apertools.utils import take_looks, iter_blocks, block_slices
 import apertools.sario as sario
 from apertools.log import get_log
 
@@ -146,7 +146,6 @@ try:
     from scipy.ndimage import correlate
 except ImportError:
     print("cupy/numba not installed, no gpu")
-from apertools.utils import read_blocks, block_iterator
 
 
 def make_igram_gpu(
@@ -167,9 +166,9 @@ def make_igram_gpu(
     out_cor = "testcor.tif"
     with rio.open(early_filename) as src:
         full_shape = src.shape
-    blks1 = read_blocks(early_filename, window_shape=block_size, overlaps=overlaps)
-    blks2 = read_blocks(late_filename, window_shape=block_size, overlaps=overlaps)
-    blk_slices = block_iterator(src.shape, block_size, overlaps=overlaps)
+    blks1 = iter_blocks(early_filename, window_shape=block_size, overlaps=overlaps)
+    blks2 = iter_blocks(late_filename, window_shape=block_size, overlaps=overlaps)
+    blk_slices = block_slices(src.shape, block_size, overlaps=overlaps)
     # Write empty file
     _write(out_ifg, None, early_filename, "ROI_PAC", dtype=np.complex64)
     _write(out_cor, None, early_filename, "GTiff", dtype=np.float32)

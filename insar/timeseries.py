@@ -17,6 +17,7 @@ scott@lidar igrams]$ head slclist
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
+import h5py
 try:
     import hdf5plugin  # noqa
 except ImportError:
@@ -24,7 +25,6 @@ except ImportError:
     if not h5py.h5z.filter_avail(blosc_id):
         print("Failed to load hdf5plugin: may not save/load using blosc")
 
-import h5py
 import numpy as np
 import xarray as xr
 from apertools import sario, utils
@@ -355,7 +355,7 @@ def run_sbas(
         nstack, nrows, ncols = hf[input_dset].shape
         # print(nrows, ncols, block_shape)
 
-    blk_slices = utils.block_iterator((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
+    blk_slices = utils.block_slices((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
     # TESTING: small area
     # blk_slices = list(blk_slices)[:25]
 
@@ -970,7 +970,7 @@ def lowess(
 
     # x = date2num(noisy_da['date'].values)
     # stack = noisy_da.values
-    # blk_slices = utils.block_iterator((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
+    # blk_slices = utils.block_slices((nrows, ncols), block_shape[-2:], overlaps=(0, 0))
     # out_stack = np.zeros_like(noisy_da.values)
     # for (rows, cols) in blk_slices:
     #     cur_block = noisy_da[:, rows, cols]

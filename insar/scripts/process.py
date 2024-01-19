@@ -167,7 +167,7 @@ def prep_igrams_dir(cleanup=False, **kwargs):
         else:
             # Save all sentinel_stack output to new_dir
             Path(new_dir).mkdir(exist_ok=True, parents=True)
-            _cleanup_bad_dates(new_dir)
+            # _cleanup_bad_dates(new_dir)
             subprocess.call("mv ./* {}/".format(new_dir), shell=True)
 
     # Then bring back the useful ones to the cur dir as symlinks renamed
@@ -345,9 +345,7 @@ xargs -0 -n1 -I{} --max-procs=50 cp dem.rsc {}.rsc """
     igram_rsc = apertools.sario.load("dem.rsc")
     # "shopt -s nullglob" skips the for-loop when nothing matches
     convert_ints = """find . -name "*.int" -print0 | \
-xargs -0 -n1 -I{} --max-procs=50 dismphfile {} %s """ % (
-        igram_rsc["width"]
-    )
+xargs -0 -n1 -I{} --max-procs=50 dismphfile {} %s """ % (igram_rsc["width"])
     _log_and_run(convert_ints)
 
     convert_unws = """find . -name "*.unw" -print0 | \
