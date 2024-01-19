@@ -89,7 +89,7 @@ class LOS:
         if self.out_directory is None:
             p = Path(self.directory) / f"los_path_{self.path_num}/"
             self.out_directory = p.resolve()
-            utils.mkdir_p(self.out_directory)
+            Path(self.out_directory).mkdir(exist_ok=True, parents=True)
         else:
             self.out_directory = Path(self.out_directory).resolve()
         self._set_full_paths()
@@ -142,7 +142,7 @@ class LOS:
         self.figure_directory = self._set_abs_path(
             self.out_directory / self.figure_directory
         )
-        utils.mkdir_p(self.figure_directory)
+        Path(self.figure_directory).mkdir(exist_ok=True, parents=True)
 
     def _set_abs_path(self, filename):
         """Allows a fully qualified path through; otherwise, appends to the directory"""
@@ -233,7 +233,7 @@ class LOS:
         return ds_deramped
 
     def _save_figure(self, fig, fname, dpi=100, figkwargs={}):
-        utils.mkdir_p(self.figure_directory)
+        Path(self.figure_directory).mkdir(exist_ok=True, parents=True)
         fig.savefig(fname, dpi=dpi, **figkwargs)
 
     def compare_gps(self, dset_name):
@@ -396,7 +396,7 @@ class Decomp:
             self.out_directory = p.resolve()
         else:
             self.out_directory = Path(self.out_directory).resolve()
-        utils.mkdir_p(self.out_directory)
+        Path(self.out_directory).mkdir(exist_ok=True, parents=True)
         self._set_full_paths()
 
         asc_filenames = sorted(glob.glob(str(self.asc_directory / self.infile_glob)))
@@ -459,7 +459,7 @@ class Merger:
     overwrite: bool = False
 
     def run(self):
-        utils.mkdir_p(self.out_directory)
+        Path(self.out_directory).mkdir(exist_ok=True, parents=True)
         outfiles1 = sorted(glob.glob(str(Path(self.in_dir1) / self.infile_glob)))
         outfiles2 = sorted(glob.glob(str(Path(self.in_dir2) / self.infile_glob)))
 
@@ -616,7 +616,7 @@ class Runner:
             "out_directory", "diffs_east_up"
         )
 
-        utils.mkdir_p(diff_out_directory)
+        Path(diff_out_directory).mkdir(exist_ok=True, parents=True)
         vertical_template = diff_options.pop(
             "vertical_template", "merged_vertical_diff_{d1}_{d2}.tif"
         )
