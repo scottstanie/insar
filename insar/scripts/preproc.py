@@ -1,6 +1,7 @@
 import os
 import json
 import subprocess
+from pathlib import Path
 
 import apertools.utils
 from apertools.log import get_log
@@ -71,7 +72,7 @@ def create_tile_directories(
 
     # new_dirs = []
     for tile in tile_grid:
-        apertools.utils.mkdir_p(tile.name)
+        Path(tile.name).mkdir(exist_ok=True, parents=True)
         filename = os.path.join(tile.name, "{}.geojson".format(tile.name))
         _write_geojson(filename, tile.geojson)
         # new_dirs.append(tile.name)
